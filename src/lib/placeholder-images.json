@@ -1,3 +1,58 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "store-pizza",
+      "description": "An overhead shot of a freshly baked pizza.",
+      "imageUrl": "https://picsum.photos/seed/pizza/600/400",
+      "imageHint": "pizza restaurant"
+    },
+    {
+      "id": "store-burger",
+      "description": "A close-up of a juicy cheeseburger.",
+      "imageUrl": "https://picsum.photos/seed/burger/600/400",
+      "imageHint": "burger joint"
+    },
+    {
+      "id": "store-sushi",
+      "description": "A platter of assorted sushi rolls.",
+      "imageUrl": "https://picsum.photos/seed/sushi/600/400",
+      "imageHint": "sushi bar"
+    },
+    {
+      "id": "store-taco",
+      "description": "A set of vibrant street tacos.",
+      "imageUrl": "https://picsum.photos/seed/taco/600/400",
+      "imageHint": "taco food"
+    },
+    {
+      "id": "store-salad",
+      "description": "A fresh and colorful salad in a bowl.",
+      "imageUrl": "https://picsum.photos/seed/salad/600/400",
+      "imageHint": "salad bowl"
+    },
+    {
+      "id": "store-dessert",
+      "description": "A delicious looking slice of cake.",
+      "imageUrl": "https://picsum.photos/seed/dessert/600/400",
+      "imageHint": "dessert cake"
+    },
+    {
+      "id": "item-pizza",
+      "description": "A slice of pepperoni pizza.",
+      "imageUrl": "https://picsum.photos/seed/itempizza/200/200",
+      "imageHint": "pizza slice"
+    },
+    {
+      "id": "item-burger",
+      "description": "A simple hamburger.",
+      "imageUrl": "https://picsum.photos/seed/itemburger/200/200",
+      "imageHint": "hamburger"
+    },
+    {
+      "id": "item-sushi",
+      "description": "A single sushi roll.",
+      "imageUrl": "https://picsum.photos/seed/itemsushi/200/200",
+      "imageHint": "sushi roll"
+    }
+  ]
 }
