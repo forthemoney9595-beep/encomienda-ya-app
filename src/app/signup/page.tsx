@@ -7,7 +7,7 @@ export default function SignupPage() {
   const roles = [
     {
       name: "Comprador",
-      description: "Crea una cuenta para pedir comida de tus tiendas favoritas.",
+      description: "Crea una cuenta para pedir de tus tiendas favoritas.",
       icon: <User className="h-12 w-12" />,
       href: "/signup/buyer"
     },
@@ -31,9 +31,9 @@ export default function SignupPage() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {roles.map((role) => (
           <Link href={role.href} key={role.name}>
-            <Card className="h-full transform transition-all hover:-translate-y-1 hover:shadow-lg">
+            <Card className="h-full transform transition-all hover:-translate-y-2 hover:shadow-xl hover:border-primary">
               <CardHeader className="flex flex-col items-center justify-center text-center p-8">
-                <div className="mb-4 text-primary">{role.icon}</div>
+                <div className="mb-4 text-primary transition-transform group-hover:scale-110">{role.icon}</div>
                 <CardTitle className="text-xl">{role.name}</CardTitle>
                 <CardDescription className="mt-2">{role.description}</CardDescription>
               </CardHeader>
@@ -43,7 +43,7 @@ export default function SignupPage() {
       </div>
       <div className="mt-8 text-center text-sm">
         ¿Ya tienes una cuenta?{" "}
-        <Link href="/login" className="underline">
+        <Link href="/login" className="underline hover:text-primary">
           Iniciar Sesión
         </Link>
       </div>
