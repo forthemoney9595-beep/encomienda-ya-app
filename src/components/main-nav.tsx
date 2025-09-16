@@ -27,7 +27,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 export function MainNav() {
   const pathname = usePathname();
   const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
-  const [isStoresOpen, setIsStoresOpen] = React.useState(pathname.startsWith('/stores'));
+  const [isStoresOpen, setIsStoresOpen] = React.useState(
+    pathname.startsWith('/stores') || pathname === '/'
+  );
 
   return (
     <SidebarMenu>
@@ -69,7 +71,7 @@ export function MainNav() {
           <SidebarMenuSub>
             <SidebarMenuSubItem>
               <SidebarMenuSubButton asChild isActive={pathname === '/stores/food'}>
-                <Link href="#">
+                <Link href="/stores/food">
                   <Utensils />
                   <span>Comida</span>
                 </Link>
@@ -77,7 +79,7 @@ export function MainNav() {
             </SidebarMenuSubItem>
             <SidebarMenuSubItem>
               <SidebarMenuSubButton asChild isActive={pathname === '/stores/clothing'}>
-                <Link href="#">
+                <Link href="/stores/clothing">
                   <Shirt />
                   <span>Ropa</span>
                 </Link>
@@ -85,7 +87,7 @@ export function MainNav() {
             </SidebarMenuSubItem>
             <SidebarMenuSubItem>
               <SidebarMenuSubButton asChild isActive={pathname === '/stores/other'}>
-                <Link href="#">
+                <Link href="/stores/other">
                   <ShoppingBag />
                   <span>Otros</span>
                 </Link>
