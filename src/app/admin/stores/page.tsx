@@ -9,28 +9,28 @@ import Image from 'next/image';
 export default function AdminStoresPage() {
   return (
     <div className="container mx-auto">
-      <PageHeader title="Store Management" description="Add, edit, or remove store accounts.">
+      <PageHeader title="Gestión de Tiendas" description="Agrega, edita o elimina cuentas de tiendas.">
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add New Store
+          Agregar Nueva Tienda
         </Button>
       </PageHeader>
       <Card>
         <CardHeader>
-          <CardTitle>All Stores</CardTitle>
+          <CardTitle>Todas las Tiendas</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="hidden w-[100px] sm:table-cell">
-                  <span className="sr-only">Image</span>
+                  <span className="sr-only">Imagen</span>
                 </TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="hidden md:table-cell">Address</TableHead>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Categoría</TableHead>
+                <TableHead className="hidden md:table-cell">Dirección</TableHead>
                 <TableHead>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">Acciones</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -51,7 +51,7 @@ export default function AdminStoresPage() {
                   <TableCell>{store.category}</TableCell>
                   <TableCell className="hidden md:table-cell">{store.address}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm">Edit</Button>
+                    <Button variant="outline" size="sm">Editar</Button>
                   </TableCell>
                 </TableRow>
               ))}

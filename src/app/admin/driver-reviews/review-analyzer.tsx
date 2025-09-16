@@ -18,8 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 
 const formSchema = z.object({
-  driverName: z.string().min(1, 'Please select a driver.'),
-  reviewText: z.string().min(10, 'Review must be at least 10 characters.'),
+  driverName: z.string().min(1, 'Por favor selecciona un conductor.'),
+  reviewText: z.string().min(10, 'La reseña debe tener al menos 10 caracteres.'),
 });
 
 export function ReviewAnalyzer() {
@@ -42,11 +42,11 @@ export function ReviewAnalyzer() {
       const result = await analyzeDriverReviews(values);
       setAnalysis(result);
     } catch (error) {
-      console.error("Error analyzing review:", error);
+      console.error("Error al analizar la reseña:", error);
       toast({
         variant: "destructive",
-        title: "Analysis Failed",
-        description: "There was an error processing the review. Please try again.",
+        title: "Análisis Fallido",
+        description: "Hubo un error al procesar la reseña. Por favor, inténtalo de nuevo.",
       });
     } finally {
       setIsLoading(false);
@@ -55,9 +55,9 @@ export function ReviewAnalyzer() {
   
   const SentimentIcon = ({ sentiment }: { sentiment: string }) => {
     switch (sentiment.toLowerCase()) {
-      case 'positive':
+      case 'positivo':
         return <ThumbsUp className="h-6 w-6 text-green-500" />;
-      case 'negative':
+      case 'negativo':
         return <ThumbsDown className="h-6 w-6 text-red-500" />;
       default:
         return <Meh className="h-6 w-6 text-yellow-500" />;
@@ -68,8 +68,8 @@ export function ReviewAnalyzer() {
     <div className="grid gap-8 md:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Submit a Review</CardTitle>
-          <CardDescription>Enter a customer's review for a driver to analyze it.</CardDescription>
+          <CardTitle>Enviar una Reseña</CardTitle>
+          <CardDescription>Ingresa la reseña de un cliente sobre un conductor para analizarla.</CardDescription>
         </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -79,11 +79,11 @@ export function ReviewAnalyzer() {
                 name="driverName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Driver</FormLabel>
+                    <FormLabel>Conductor</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a driver" />
+                          <SelectValue placeholder="Selecciona un conductor" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -103,9 +103,9 @@ export function ReviewAnalyzer() {
                 name="reviewText"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Customer Review Text</FormLabel>
+                    <FormLabel>Texto de la Reseña del Cliente</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="e.g., 'The driver was very fast and friendly!'" {...field} rows={6} />
+                      <Textarea placeholder="Ej., '¡El conductor fue muy rápido y amable!'" {...field} rows={6} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -119,7 +119,7 @@ export function ReviewAnalyzer() {
                 ) : (
                   <Wand2 className="mr-2 h-4 w-4" />
                 )}
-                Analyze Review
+                Analizar Reseña
               </Button>
             </CardFooter>
           </form>
@@ -128,33 +128,33 @@ export function ReviewAnalyzer() {
 
       <Card className="flex flex-col">
         <CardHeader>
-          <CardTitle>Analysis Result</CardTitle>
-          <CardDescription>The AI-powered analysis of the review will appear here.</CardDescription>
+          <CardTitle>Resultado del Análisis</CardTitle>
+          <CardDescription>El análisis de la reseña por IA aparecerá aquí.</CardDescription>
         </CardHeader>
         <CardContent className="flex-grow">
           {isLoading && (
             <div className="flex h-full items-center justify-center">
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p>Analyzing...</p>
+                <p>Analizando...</p>
               </div>
             </div>
           )}
           {!isLoading && analysis && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Sentiment</h3>
+                <h3 className="text-sm font-medium text-muted-foreground">Sentimiento</h3>
                 <div className="flex items-center gap-2 mt-1">
                   <SentimentIcon sentiment={analysis.sentiment} />
                   <p className="text-lg font-semibold capitalize">{analysis.sentiment}</p>
                 </div>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Summary</h3>
+                <h3 className="text-sm font-medium text-muted-foreground">Resumen</h3>
                 <p className="mt-1">{analysis.summary}</p>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Performance Tags</h3>
+                <h3 className="text-sm font-medium text-muted-foreground">Etiquetas de Desempeño</h3>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {analysis.tags.map((tag, index) => (
                     <Badge key={index} variant="secondary" className="text-base">
@@ -168,7 +168,7 @@ export function ReviewAnalyzer() {
            {!isLoading && !analysis && (
             <div className="flex h-full items-center justify-center">
               <div className="text-center text-muted-foreground">
-                <p>Results will be shown here once a review is submitted.</p>
+                <p>Los resultados se mostrarán aquí una vez que se envíe una reseña.</p>
               </div>
             </div>
           )}

@@ -14,8 +14,8 @@ import {z} from 'genkit';
 const AnalyzeDriverReviewsInputSchema = z.object({
   reviewText: z
     .string()
-    .describe('The text of the customer review for a delivery driver.'),
-  driverName: z.string().describe('The name of the delivery driver.'),
+    .describe('El texto de la reseña del cliente para un conductor de reparto.'),
+  driverName: z.string().describe('El nombre del conductor de reparto.'),
 });
 export type AnalyzeDriverReviewsInput = z.infer<
   typeof AnalyzeDriverReviewsInputSchema
@@ -25,15 +25,15 @@ const AnalyzeDriverReviewsOutputSchema = z.object({
   sentiment: z
     .string()
     .describe(
-      'The sentiment of the review (e.g., positive, negative, neutral)'
+      'El sentimiento de la reseña (ej. positivo, negativo, neutral)'
     ),
   summary: z
     .string()
-    .describe('A short summary of the review, highlighting key points.'),
+    .describe('Un breve resumen de la reseña, destacando los puntos clave.'),
   tags: z
     .array(z.string())
     .describe(
-      'Tags extracted from the review, such as \'speed\', \'friendliness\', \'accuracy\', etc.'
+      'Etiquetas extraídas de la reseña, como \'velocidad\', \'amabilidad\', \'precisión\', etc.'
     ),
 });
 export type AnalyzeDriverReviewsOutput = z.infer<
@@ -50,18 +50,18 @@ const analyzeDriverReviewsPrompt = ai.definePrompt({
   name: 'analyzeDriverReviewsPrompt',
   input: {schema: AnalyzeDriverReviewsInputSchema},
   output: {schema: AnalyzeDriverReviewsOutputSchema},
-  prompt: `You are an AI assistant tasked with analyzing customer reviews of delivery drivers.
+  prompt: `Eres un asistente de IA encargado de analizar las reseñas de los clientes sobre los conductores de reparto.
 
-  Driver Name: {{driverName}}
+Nombre del conductor: {{driverName}}
 
-  Analyze the following customer review:
-  {{{reviewText}}}
+Analiza la siguiente reseña de cliente:
+{{{reviewText}}}
 
-  Determine the sentiment of the review (positive, negative, or neutral).
-  Create a short summary of the review, highlighting the key points mentioned by the customer.
-  Extract relevant tags from the review that describe the driver's performance.  Some example tags are: speed, friendliness, accuracy, communication, professionalism.
+Determina el sentimiento de la reseña (positivo, negativo o neutral).
+Crea un breve resumen de la reseña, destacando los puntos clave mencionados por el cliente.
+Extrae etiquetas relevantes de la reseña que describan el desempeño del conductor. Algunos ejemplos de etiquetas son: velocidad, amabilidad, precisión, comunicación, profesionalismo.
 
-  Return the sentiment, summary, and tags in the specified JSON format. Make sure the 'tags' field is an array of strings.
+Devuelve el sentimiento, el resumen y las etiquetas en el formato JSON especificado. Asegúrate de que el campo 'tags' sea un array de strings.
   `,
 });
 

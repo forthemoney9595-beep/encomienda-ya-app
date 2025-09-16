@@ -6,40 +6,40 @@ import { deliveryPersonnel, stores, orders } from '@/lib/placeholder-data';
 export default function AdminDashboard() {
   const totalStores = stores.length;
   const totalDrivers = deliveryPersonnel.length;
-  const pendingOrders = orders.filter(o => o.status !== 'Delivered').length;
+  const pendingOrders = orders.filter(o => o.status !== 'Entregado').length;
 
   return (
     <div className="container mx-auto">
-      <PageHeader title="Admin Dashboard" description="Platform overview and statistics." />
+      <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Stores</CardTitle>
+            <CardTitle className="text-sm font-medium">Tiendas Totales</CardTitle>
             <Store className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalStores}</div>
-            <p className="text-xs text-muted-foreground">managed stores</p>
+            <p className="text-xs text-muted-foreground">tiendas gestionadas</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Drivers</CardTitle>
+            <CardTitle className="text-sm font-medium">Conductores Totales</CardTitle>
             <Truck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalDrivers}</div>
-            <p className="text-xs text-muted-foreground">delivery personnel</p>
+            <p className="text-xs text-muted-foreground">personal de reparto</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+            <CardTitle className="text-sm font-medium">Pedidos Pendientes</CardTitle>
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{pendingOrders}</div>
-            <p className="text-xs text-muted-foreground">orders to be fulfilled</p>
+            <p className="text-xs text-muted-foreground">pedidos por completar</p>
           </CardContent>
         </Card>
       </div>

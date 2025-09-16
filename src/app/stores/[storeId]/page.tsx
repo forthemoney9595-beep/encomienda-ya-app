@@ -27,16 +27,16 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
         <div className="md:col-span-2">
             <Card>
                 <CardHeader>
-                    <CardTitle>Products</CardTitle>
+                    <CardTitle>Productos</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader>
                         <TableRow>
-                            <TableHead className="w-[80px]">Image</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Price</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            <TableHead className="w-[80px]">Imagen</TableHead>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Precio</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -60,11 +60,11 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem>
                                     <Edit className="mr-2 h-4 w-4" />
-                                    Edit
+                                    Editar
                                     </DropdownMenuItem>
                                     <DropdownMenuItem className="text-destructive">
                                     <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
+                                    Eliminar
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                                 </DropdownMenu>
@@ -79,7 +79,7 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
         <div className="md:col-span-1">
              <Card>
                 <CardHeader>
-                    <CardTitle>Store Information</CardTitle>
+                    <CardTitle>Información de la Tienda</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="relative h-48 w-full">
@@ -93,12 +93,12 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
                         />
                     </div>
                     <div>
-                        <h3 className="font-semibold">Address</h3>
+                        <h3 className="font-semibold">Dirección</h3>
                         <p className="text-muted-foreground">{store.address}</p>
                     </div>
                     <div>
-                        <h3 className="font-semibold">Hours</h3>
-                        <p className="text-muted-foreground">Mon-Sun: 11:00 AM - 10:00 PM</p>
+                        <h3 className="font-semibold">Horario</h3>
+                        <p className="text-muted-foreground">Lun-Dom: 11:00 AM - 10:00 PM</p>
                     </div>
                 </CardContent>
             </Card>

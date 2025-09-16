@@ -16,38 +16,38 @@ export function AddItemDialog() {
       <DialogTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add New Item
+          Añadir Nuevo Artículo
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add New Item</DialogTitle>
+          <DialogTitle>Añadir Nuevo Artículo</DialogTitle>
           <DialogDescription>
-            Fill in the details for the new product. Click save when you're done.
+            Rellena los detalles del nuevo producto. Haz clic en guardar cuando hayas terminado.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="name" className="text-right">
-              Name
+              Nombre
             </Label>
-            <Input id="name" placeholder="Margherita Pizza" className="col-span-3" />
+            <Input id="name" placeholder="Pizza Margarita" className="col-span-3" />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="description" className="text-right">
-              Description
+              Descripción
             </Label>
-            <Textarea id="description" placeholder="Classic cheese and tomato" className="col-span-3" />
+            <Textarea id="description" placeholder="Queso clásico y tomate" className="col-span-3" />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="price" className="text-right">
-              Price
+              Precio
             </Label>
             <Input id="price" type="number" placeholder="12.99" className="col-span-3" />
           </div>
         </div>
         <DialogFooter>
-          <Button type="submit" onClick={() => setOpen(false)}>Save changes</Button>
+          <Button type="submit" onClick={() => setOpen(false)}>Guardar cambios</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

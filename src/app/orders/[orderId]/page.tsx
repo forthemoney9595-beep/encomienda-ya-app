@@ -13,19 +13,19 @@ export default function OrderTrackingPage({ params }: { params: { orderId: strin
   }
   
   const statuses = [
-    { name: 'Order Placed', icon: PackageCheck, completed: true },
-    { name: 'Preparing', icon: CookingPot, completed: order.status === 'Preparing' || order.status === 'Out for Delivery' || order.status === 'Delivered' },
-    { name: 'Out for Delivery', icon: Bike, completed: order.status === 'Out for Delivery' || order.status === 'Delivered' },
-    { name: 'Delivered', icon: Home, completed: order.status === 'Delivered' },
+    { name: 'Pedido Realizado', icon: PackageCheck, completed: true },
+    { name: 'En preparación', icon: CookingPot, completed: order.status === 'En preparación' || order.status === 'En reparto' || order.status === 'Entregado' },
+    { name: 'En reparto', icon: Bike, completed: order.status === 'En reparto' || order.status === 'Entregado' },
+    { name: 'Entregado', icon: Home, completed: order.status === 'Entregado' },
   ];
 
   return (
     <div className="container mx-auto">
-      <PageHeader title={`Order #${order.id}`} description={`Tracking your order from ${order.storeName}`} />
+      <PageHeader title={`Pedido #${order.id}`} description={`Siguiendo tu pedido de ${order.storeName}`} />
       <Card>
         <CardHeader>
-          <CardTitle>Order Status</CardTitle>
-          <CardDescription>Your order is currently: <span className="font-bold text-primary">{order.status}</span></CardDescription>
+          <CardTitle>Estado del Pedido</CardTitle>
+          <CardDescription>Tu pedido está actualmente: <span className="font-bold text-primary">{order.status}</span></CardDescription>
         </CardHeader>
         <CardContent>
           <div className="relative pl-8">

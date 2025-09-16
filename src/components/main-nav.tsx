@@ -32,11 +32,11 @@ export function MainNav() {
         <SidebarMenuButton
           asChild
           isActive={pathname === '/'}
-          tooltip="Dashboard"
+          tooltip="Principal"
         >
           <Link href="/">
             <LayoutGrid />
-            <span>Dashboard</span>
+            <span>Principal</span>
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -44,11 +44,11 @@ export function MainNav() {
         <SidebarMenuButton
           asChild
           isActive={pathname.startsWith('/orders')}
-          tooltip="Orders"
+          tooltip="Pedidos"
         >
           <Link href="/orders">
             <ClipboardList />
-            <span>Orders</span>
+            <span>Pedidos</span>
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -68,7 +68,7 @@ export function MainNav() {
               <SidebarMenuSubButton asChild isActive={pathname === '/admin/stores'}>
                 <Link href="/admin/stores">
                   <Store />
-                  <span>Stores</span>
+                  <span>Tiendas</span>
                 </Link>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
@@ -76,7 +76,7 @@ export function MainNav() {
               <SidebarMenuSubButton asChild isActive={pathname === '/admin/delivery'}>
                 <Link href="/admin/delivery">
                   <Truck />
-                  <span>Delivery</span>
+                  <span>Reparto</span>
                 </Link>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
@@ -84,7 +84,7 @@ export function MainNav() {
               <SidebarMenuSubButton asChild isActive={pathname === '/admin/driver-reviews'}>
                 <Link href="/admin/driver-reviews">
                   <MessageSquareQuote />
-                  <span>Driver Reviews</span>
+                  <span>Reseñas de Conductores</span>
                 </Link>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>

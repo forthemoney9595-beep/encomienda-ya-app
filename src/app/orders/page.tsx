@@ -8,11 +8,11 @@ import { ArrowRight } from 'lucide-react';
 export default function OrdersPage() {
   const getBadgeVariant = (status: string) => {
     switch (status) {
-      case 'Delivered':
+      case 'Entregado':
         return 'default';
-      case 'Out for Delivery':
+      case 'En reparto':
         return 'secondary';
-      case 'Preparing':
+      case 'En preparación':
         return 'destructive';
       default:
         return 'outline';
@@ -21,7 +21,7 @@ export default function OrdersPage() {
 
   return (
     <div className="container mx-auto">
-      <PageHeader title="My Orders" description="View your recent and ongoing orders." />
+      <PageHeader title="Mis Pedidos" description="Ve tus pedidos recientes y en curso." />
       <div className="space-y-4">
         {orders.map((order) => (
           <Link href={`/orders/${order.id}`} key={order.id}>
@@ -29,7 +29,7 @@ export default function OrdersPage() {
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div>
                   <CardTitle className="text-lg">{order.storeName}</CardTitle>
-                  <CardDescription>Order #{order.id} - {order.date}</CardDescription>
+                  <CardDescription>Pedido #{order.id} - {order.date}</CardDescription>
                 </div>
                 <Badge variant={getBadgeVariant(order.status)}>{order.status}</Badge>
               </CardHeader>

@@ -10,26 +10,26 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 export default function AdminDeliveryPage() {
   return (
     <div className="container mx-auto">
-      <PageHeader title="Delivery Management" description="Manage your delivery personnel accounts.">
+      <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto.">
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add New Driver
+          Agregar Nuevo Conductor
         </Button>
       </PageHeader>
       <Card>
         <CardHeader>
-          <CardTitle>Delivery Personnel</CardTitle>
+          <CardTitle>Personal de Reparto</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Vehicle</TableHead>
-                <TableHead className="hidden md:table-cell">Zone</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Vehículo</TableHead>
+                <TableHead className="hidden md:table-cell">Zona</TableHead>
+                <TableHead>Estado</TableHead>
                 <TableHead>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">Acciones</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -48,10 +48,10 @@ export default function AdminDeliveryPage() {
                   <TableCell>{driver.vehicle}</TableCell>
                   <TableCell className="hidden md:table-cell">{driver.zone}</TableCell>
                   <TableCell>
-                    <Badge variant={driver.status === 'Active' ? 'secondary' : 'outline'}>{driver.status}</Badge>
+                    <Badge variant={driver.status === 'Activo' ? 'secondary' : 'outline'}>{driver.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm">Edit</Button>
+                    <Button variant="outline" size="sm">Editar</Button>
                   </TableCell>
                 </TableRow>
               ))}

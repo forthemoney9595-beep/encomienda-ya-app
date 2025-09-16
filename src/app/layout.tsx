@@ -7,10 +7,11 @@ import { Toaster } from '@/components/ui/toaster';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Bell } from 'lucide-react';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'EncomiendaYA',
-  description: 'Your delivery solution',
+  description: 'Tu solución de entregas',
 };
 
 export default function RootLayout({
@@ -19,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="es" className="dark">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -53,13 +54,15 @@ export default function RootLayout({
             </Sidebar>
             <SidebarInset>
               <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-                <div className="flex-1">
-                  {/* Page-specific headers will go here or be managed by child pages */}
+                <div className="ml-auto flex items-center gap-4">
+                  <Button variant="ghost" size="icon" className="rounded-full">
+                    <Bell className="h-5 w-5" />
+                    <span className="sr-only">Ver notificaciones</span>
+                  </Button>
+                  <Link href="/login">
+                    <Button>Iniciar Sesión</Button>
+                  </Link>
                 </div>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Bell className="h-5 w-5" />
-                  <span className="sr-only">Toggle notifications</span>
-                </Button>
               </header>
               <main className="flex-1 p-4 md:p-6">
                 {children}
