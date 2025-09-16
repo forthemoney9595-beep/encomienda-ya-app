@@ -2,8 +2,16 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Store, Truck, ClipboardList } from 'lucide-react';
 import { deliveryPersonnel, stores, orders } from '@/lib/placeholder-data';
+import { getCurrentUser } from '@/lib/auth';
+import { redirect } from 'next/navigation';
 
 export default function AdminDashboard() {
+  const user = getCurrentUser();
+
+  if (user?.role !== 'admin') {
+    redirect('/login');
+  }
+
   const totalStores = stores.length;
   const totalDrivers = deliveryPersonnel.length;
   const pendingOrders = orders.filter(o => o.status !== 'Entregado').length;

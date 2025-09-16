@@ -23,9 +23,13 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { getCurrentUser } from '@/lib/auth';
 
 export function MainNav() {
   const pathname = usePathname();
+  const user = getCurrentUser();
+  const isAdmin = user?.role === 'admin';
+
   const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
   const [isStoresOpen, setIsStoresOpen] = React.useState(
     pathname.startsWith('/stores') || pathname === '/'
@@ -97,44 +101,54 @@ export function MainNav() {
         </CollapsibleContent>
       </Collapsible>
 
-      <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
-        <SidebarMenuItem>
-          <CollapsibleTrigger asChild>
-            <SidebarMenuButton>
-              <Shield />
-              <span>Admin</span>
-            </SidebarMenuButton>
-          </CollapsibleTrigger>
-        </SidebarMenuItem>
-        <CollapsibleContent>
-          <SidebarMenuSub>
-            <SidebarMenuSubItem>
-              <SidebarMenuSubButton asChild isActive={pathname === '/admin/stores'}>
-                <Link href="/admin/stores">
-                  <Store />
-                  <span>Tiendas</span>
-                </Link>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-            <SidebarMenuSubItem>
-              <SidebarMenuSubButton asChild isActive={pathname === '/admin/delivery'}>
-                <Link href="/admin/delivery">
-                  <Truck />
-                  <span>Reparto</span>
-                </Link>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-            <SidebarMenuSubItem>
-              <SidebarMenuSubButton asChild isActive={pathname === '/admin/driver-reviews'}>
-                <Link href="/admin/driver-reviews">
-                  <MessageSquareQuote />
-                  <span>Reseñas de Conductores</span>
-                </Link>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-          </SidebarMenuSub>
-        </CollapsibleContent>
-      </Collapsible>
+      {isAdmin && (
+        <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
+          <SidebarMenuItem>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton>
+                <Shield />
+                <span>Admin</span>
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+          </SidebarMenuItem>
+          <CollapsibleContent>
+            <SidebarMenuSub>
+              <SidebarMenuSubItem>
+              <SidebarMenuSubButton asChild isActive={pathname === '/admin'}>
+                  <Link href="/admin">
+                    <LayoutGrid />
+                    <span>Panel</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton asChild isActive={pathname === '/admin/stores'}>
+                  <Link href="/admin/stores">
+                    <Store />
+                    <span>Tiendas</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton asChild isActive={pathname === '/admin/delivery'}>
+                  <Link href="/admin/delivery">
+                    <Truck />
+                    <span>Reparto</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton asChild isActive={pathname === '/admin/driver-reviews'}>
+                  <Link href="/admin/driver-reviews">
+                    <MessageSquareQuote />
+                    <span>Reseñas de Conductores</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            </SidebarMenuSub>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </SidebarMenu>
   );
 }
