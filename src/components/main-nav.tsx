@@ -15,16 +15,19 @@ import {
   Store,
   ClipboardList,
   Shield,
-  Users,
   Truck,
   MessageSquareQuote,
-  LayoutGrid
+  LayoutGrid,
+  Utensils,
+  Shirt,
+  ShoppingBag
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 export function MainNav() {
   const pathname = usePathname();
   const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
+  const [isStoresOpen, setIsStoresOpen] = React.useState(pathname.startsWith('/stores'));
 
   return (
     <SidebarMenu>
@@ -52,6 +55,45 @@ export function MainNav() {
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
+
+      <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
+        <SidebarMenuItem>
+          <CollapsibleTrigger asChild>
+            <SidebarMenuButton>
+              <Store />
+              <span>Tiendas</span>
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
+        </SidebarMenuItem>
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton asChild isActive={pathname === '/stores/food'}>
+                <Link href="#">
+                  <Utensils />
+                  <span>Comida</span>
+                </Link>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton asChild isActive={pathname === '/stores/clothing'}>
+                <Link href="#">
+                  <Shirt />
+                  <span>Ropa</span>
+                </Link>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton asChild isActive={pathname === '/stores/other'}>
+                <Link href="#">
+                  <ShoppingBag />
+                  <span>Otros</span>
+                </Link>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </Collapsible>
 
       <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
         <SidebarMenuItem>
