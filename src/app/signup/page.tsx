@@ -1,43 +1,52 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
+import { User, Store, Bike } from "lucide-react";
+import PageHeader from "@/components/page-header";
 
 export default function SignupPage() {
+  const roles = [
+    {
+      name: "Comprador",
+      description: "Crea una cuenta para pedir comida de tus tiendas favoritas.",
+      icon: <User className="h-12 w-12" />,
+      href: "/signup/buyer"
+    },
+    {
+      name: "Tienda",
+      description: "Registra tu negocio para empezar a vender tus productos.",
+      icon: <Store className="h-12 w-12" />,
+      href: "/signup/store"
+    },
+    {
+      name: "Repartidor",
+      description: "Únete a nuestro equipo para empezar a entregar pedidos.",
+      icon: <Bike className="h-12 w-12" />,
+      href: "/signup/delivery"
+    }
+  ]
+
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Registrarse</CardTitle>
-          <CardDescription>
-            Crea una cuenta para empezar a hacer pedidos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-           <div className="grid gap-2">
-            <Label htmlFor="name">Nombre</Label>
-            <Input id="name" type="text" placeholder="Tu Nombre" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="email">Correo Electrónico</Label>
-            <Input id="email" type="email" placeholder="nombre@ejemplo.com" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Contraseña</Label>
-            <Input id="password" type="password" required />
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-col">
-          <Button className="w-full">Crear Cuenta</Button>
-           <div className="mt-4 text-center text-sm">
-            ¿Ya tienes una cuenta?{" "}
-            <Link href="/login" className="underline">
-              Iniciar Sesión
-            </Link>
-          </div>
-        </CardFooter>
-      </Card>
+    <div className="container mx-auto">
+      <PageHeader title="Únete a EncomiendaYA" description="Elige el tipo de cuenta que quieres crear." />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        {roles.map((role) => (
+          <Link href={role.href} key={role.name}>
+            <Card className="h-full transform transition-all hover:-translate-y-1 hover:shadow-lg">
+              <CardHeader className="flex flex-col items-center justify-center text-center p-8">
+                <div className="mb-4 text-primary">{role.icon}</div>
+                <CardTitle className="text-xl">{role.name}</CardTitle>
+                <CardDescription className="mt-2">{role.description}</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        ))}
+      </div>
+      <div className="mt-8 text-center text-sm">
+        ¿Ya tienes una cuenta?{" "}
+        <Link href="/login" className="underline">
+          Iniciar Sesión
+        </Link>
+      </div>
     </div>
   );
 }
