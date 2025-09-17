@@ -1,60 +1,149 @@
+'use client';
+
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import Link from "next/link";
+import { useToast } from '@/hooks/use-toast';
+
+const formSchema = z.object({
+  name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
+  email: z.string().email("Por favor ingresa un correo electrónico válido."),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
+  vehicleType: z.enum(["motocicleta", "automovil", "bicicleta"], {
+    required_error: "Debes seleccionar un tipo de vehículo.",
+  }),
+});
 
 export default function SignupDeliveryPage() {
+  const { toast } = useToast();
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+    },
+  });
+
+  function onSubmit(values: z.infer<typeof formSchema>) {
+    console.log(values);
+    toast({
+      title: "¡Cuenta de Repartidor Creada!",
+      description: "Tu cuenta ha sido creada exitosamente. Pronto nos pondremos en contacto.",
+    });
+  }
+
   return (
     <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center">
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Conviértete en Repartidor</CardTitle>
-          <CardDescription>
-            Regístrate para empezar a ganar dinero haciendo entregas.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-           <div className="grid gap-2">
-            <Label htmlFor="name">Nombre</Label>
-            <Input id="name" type="text" placeholder="Tu Nombre" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="email">Correo Electrónico</Label>
-            <Input id="email" type="email" placeholder="nombre@ejemplo.com" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Contraseña</Label>
-            <Input id="password" type="password" required />
-          </div>
-           <div className="grid gap-2">
-            <Label>Tipo de Vehículo</Label>
-            <RadioGroup defaultValue="motocicleta" className="flex gap-4 pt-2">
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="motocicleta" id="r1" />
-                <Label htmlFor="r1">Motocicleta</Label>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <CardHeader>
+              <CardTitle className="text-2xl">Conviértete en Repartidor</CardTitle>
+              <CardDescription>
+                Regístrate para empezar a ganar dinero haciendo entregas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Tu Nombre" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Correo Electrónico</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="nombre@ejemplo.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contraseña</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="vehicleType"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Tipo de Vehículo</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="motocicleta" />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            Motocicleta
+                          </FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="automovil" />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            Automóvil
+                          </FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="bicicleta" />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            Bicicleta
+                          </FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+            <CardFooter className="flex flex-col">
+              <Button type="submit" className="w-full">Crear Cuenta de Repartidor</Button>
+              <div className="mt-4 text-center text-sm">
+                ¿Ya tienes una cuenta?{" "}
+                <Link href="/login" className="underline">
+                  Iniciar Sesión
+                </Link>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="automovil" id="r2" />
-                <Label htmlFor="r2">Automóvil</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="bicicleta" id="r3" />
-                <Label htmlFor="r3">Bicicleta</Label>
-              </div>
-            </RadioGroup>
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-col">
-          <Button className="w-full">Crear Cuenta de Repartidor</Button>
-           <div className="mt-4 text-center text-sm">
-            ¿Ya tienes una cuenta?{" "}
-            <Link href="/login" className="underline">
-              Iniciar Sesión
-            </Link>
-          </div>
-        </CardFooter>
+            </CardFooter>
+          </form>
+        </Form>
       </Card>
     </div>
   );
