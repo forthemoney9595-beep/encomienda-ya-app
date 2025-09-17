@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AddItemDialog } from './add-item-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function StoreDetailPage({ params }: { params: { storeId: string } }) {
   const store = getStoreById(params.storeId);
@@ -16,6 +17,8 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
   if (!store) {
     notFound();
   }
+
+  const productCategories = Array.from(new Set(products.map(p => p.category)));
 
   return (
     <div className="container mx-auto">
@@ -30,49 +33,60 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
                     <CardTitle>Productos</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[80px]">Imagen</TableHead>
-                            <TableHead>Nombre</TableHead>
-                            <TableHead>Precio</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                        {products.map((product) => (
-                            <TableRow key={product.id}>
-                            <TableCell>
-                                <Image src={`https://picsum.photos/seed/${product.id}/64/64`} alt={product.name} width={64} height={64} className="rounded-md" data-ai-hint="food item" />
-                            </TableCell>
-                            <TableCell>
-                                <div className="font-medium">{product.name}</div>
-                                <div className="text-sm text-muted-foreground">{product.description}</div>
-                            </TableCell>
-                            <TableCell>${product.price.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">
-                                <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon">
-                                    <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Editar
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive">
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Eliminar
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                                </DropdownMenu>
-                            </TableCell>
+                  <Tabs defaultValue={productCategories[0] || 'all'}>
+                    <TabsList className="mb-4">
+                      {productCategories.map(category => (
+                        <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {productCategories.map(category => (
+                      <TabsContent key={category} value={category}>
+                        <Table>
+                            <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[80px]">Imagen</TableHead>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Precio</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
-                        ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                            {products.filter(p => p.category === category).map((product) => (
+                                <TableRow key={product.id}>
+                                <TableCell>
+                                    <Image src={`https://picsum.photos/seed/${product.id}/64/64`} alt={product.name} width={64} height={64} className="rounded-md" data-ai-hint="food item" />
+                                </TableCell>
+                                <TableCell>
+                                    <div className="font-medium">{product.name}</div>
+                                    <div className="text-sm text-muted-foreground">{product.description}</div>
+                                </TableCell>
+                                <TableCell>${product.price.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">
+                                    <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                        <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem>
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Editar
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="text-destructive">
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Eliminar
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                                </TableRow>
+                            ))}
+                            </TableBody>
+                        </Table>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
                 </CardContent>
             </Card>
         </div>

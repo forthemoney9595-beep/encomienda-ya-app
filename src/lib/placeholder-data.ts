@@ -14,33 +14,33 @@ export const stores = [
   { id: '6', name: 'Sueños de Postre', category: 'Dulces', address: 'Corte del Pastel 313', imageUrl: getImage('store-dessert').imageUrl, imageHint: getImage('store-dessert').imageHint },
 ];
 
-export const productsByStore = {
+export const productsByStore: { [key: string]: { id: string; name: string; description: string; price: number; category: string }[] } = {
   '1': [
-    { id: 'p1', name: 'Pizza Margarita', description: 'Queso clásico y tomate', price: 12.99 },
-    { id: 'p2', name: 'Pizza de Pepperoni', description: 'Cargada de pepperoni', price: 14.99 },
-    { id: 'p3', name: 'Pan de Ajo', description: 'Con queso mozzarella', price: 6.99 },
+    { id: 'p1', name: 'Pizza Margarita', description: 'Queso clásico y tomate', price: 12.99, category: 'Pizzas' },
+    { id: 'p2', name: 'Pizza de Pepperoni', description: 'Cargada de pepperoni', price: 14.99, category: 'Pizzas' },
+    { id: 'p3', name: 'Pan de Ajo', description: 'Con queso mozzarella', price: 6.99, category: 'Entrantes' },
   ],
   '2': [
-    { id: 'p4', name: 'Hamburguesa con Queso Clásica', description: 'Carne de res, queso, lechuga, tomate', price: 9.99 },
-    { id: 'p5', name: 'Hamburguesa con Tocino', description: 'Con crujientes tiras de tocino', price: 11.99 },
-    { id: 'p6', name: 'Papas Fritas', description: 'Papas fritas doradas y crujientes', price: 3.99 },
+    { id: 'p4', name: 'Hamburguesa con Queso Clásica', description: 'Carne de res, queso, lechuga, tomate', price: 9.99, category: 'Hamburguesas' },
+    { id: 'p5', name: 'Hamburguesa con Tocino', description: 'Con crujientes tiras de tocino', price: 11.99, category: 'Hamburguesas' },
+    { id: 'p6', name: 'Papas Fritas', description: 'Papas fritas doradas y crujientes', price: 3.99, category: 'Acompañamientos' },
   ],
   '3': [
-    { id: 'p7', name: 'Rollo California', description: 'Cangrejo, aguacate, pepino', price: 8.99 },
-    { id: 'p8', name: 'Rollo de Atún Picante', description: 'Atún con mayonesa picante', price: 9.99 },
-    { id: 'p9', name: 'Sopa Miso', description: 'Sopa tradicional japonesa', price: 2.99 },
+    { id: 'p7', name: 'Rollo California', description: 'Cangrejo, aguacate, pepino', price: 8.99, category: 'Rollos' },
+    { id: 'p8', name: 'Rollo de Atún Picante', description: 'Atún con mayonesa picante', price: 9.99, category: 'Rollos' },
+    { id: 'p9', name: 'Sopa Miso', description: 'Sopa tradicional japonesa', price: 2.99, category: 'Sopas' },
   ],
   '4': [
-    { id: 'p10', name: 'Tacos de Carne Asada', description: 'Tres tacos de carne asada a la parrilla', price: 10.99 },
-    { id: 'p11', name: 'Burrito de Pollo', description: 'Relleno de pollo, arroz y frijoles', price: 11.99 },
+    { id: 'p10', name: 'Tacos de Carne Asada', description: 'Tres tacos de carne asada a la parrilla', price: 10.99, category: 'Tacos' },
+    { id: 'p11', name: 'Burrito de Pollo', description: 'Relleno de pollo, arroz y frijoles', price: 11.99, category: 'Burritos' },
   ],
   '5': [
-    { id: 'p12', name: 'Ensalada César', description: 'Lechuga romana, crutones, parmesano', price: 9.50 },
-    { id: 'p13', name: 'Ensalada Griega', description: 'Queso feta, aceitunas, pepino, tomate', price: 10.50 },
+    { id: 'p12', name: 'Ensalada César', description: 'Lechuga romana, crutones, parmesano', price: 9.50, category: 'Ensaladas' },
+    { id: 'p13', name: 'Ensalada Griega', description: 'Queso feta, aceitunas, pepino, tomate', price: 10.50, category: 'Ensaladas' },
   ],
   '6': [
-    { id: 'p14', name: 'Pastel de Lava de Chocolate', description: 'Centro tibio y derretido', price: 7.99 },
-    { id: 'p15', name: 'Porción de Tarta de Queso', description: 'Tarta de queso estilo Nueva York', price: 6.99 },
+    { id: 'p14', name: 'Pastel de Lava de Chocolate', description: 'Centro tibio y derretido', price: 7.99, category: 'Postres' },
+    { id: 'p15', name: 'Porción de Tarta de Queso', description: 'Tarta de queso estilo Nueva York', price: 6.99, category: 'Postres' },
   ],
 };
 
