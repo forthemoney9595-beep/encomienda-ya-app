@@ -64,12 +64,12 @@ export function AddItemDialog() {
                 control={form.control}
                 name="name"
                 render={({ field }) => (
-                  <FormItem className="grid grid-cols-4 items-center gap-4">
-                    <FormLabel className="text-right">Nombre</FormLabel>
+                  <FormItem>
+                    <FormLabel>Nombre</FormLabel>
                     <FormControl>
-                      <Input placeholder="Pizza Margarita" className="col-span-3" {...field} />
+                      <Input placeholder="Pizza Margarita" {...field} />
                     </FormControl>
-                    <FormMessage className="col-span-4 col-start-2" />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -77,12 +77,12 @@ export function AddItemDialog() {
                 control={form.control}
                 name="description"
                 render={({ field }) => (
-                  <FormItem className="grid grid-cols-4 items-center gap-4">
-                    <FormLabel className="text-right">Descripción</FormLabel>
+                  <FormItem>
+                    <FormLabel>Descripción</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Queso clásico y tomate" className="col-span-3" {...field} />
+                      <Textarea placeholder="Queso clásico y tomate" {...field} />
                     </FormControl>
-                    <FormMessage className="col-span-4 col-start-2" />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -90,12 +90,12 @@ export function AddItemDialog() {
                 control={form.control}
                 name="price"
                 render={({ field }) => (
-                  <FormItem className="grid grid-cols-4 items-center gap-4">
-                    <FormLabel className="text-right">Precio</FormLabel>
+                  <FormItem>
+                    <FormLabel>Precio</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="12.99" className="col-span-3" {...field} />
+                      <Input type="number" placeholder="12.99" {...field} />
                     </FormControl>
-                    <FormMessage className="col-span-4 col-start-2" />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
