@@ -60,7 +60,6 @@ export async function createOrder(
         storeId: storeDetails.id,
         storeName: storeDetails.name,
         storeAddress: storeDetails.address,
-        shippingAddress: shippingInfo,
         customerName: customerName, 
     });
     return orderRef.id;
@@ -132,6 +131,27 @@ export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
             createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
         } as Order;
     });
+    return orders;
+}
+
+export async function getOrdersByDeliveryPerson(driverId: string): Promise<Order[]> {
+    const ordersRef = collection(db, 'orders');
+    const q = query(ordersRef, 
+        where('deliveryPersonId', '==', driverId),
+        where('status', '==', 'En reparto'),
+        orderBy('createdAt', 'asc')
+    );
+
+    const querySnapshot = await getDocs(q);
+    const orders: Order[] = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+        } as Order;
+    });
+
     return orders;
 }
 

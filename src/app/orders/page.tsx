@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import PageHeader from '@/components/page-header';
-import { getOrdersByUser, getOrdersByStore, getAvailableOrdersForDelivery } from '@/lib/order-service';
+import { getOrdersByUser, getOrdersByStore, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson } from '@/lib/order-service';
 import { db } from "@/lib/firebase";
 import { cookies } from "next/headers";
 import { redirect } from 'next/navigation';
@@ -40,6 +40,7 @@ export default async function OrdersPage() {
 
   const userRole = user.role;
   let orders: any[] = [];
+  let props: any = {};
   let pageTitle = "";
   let pageDescription = "";
 
@@ -48,27 +49,33 @@ export default async function OrdersPage() {
       orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
       pageTitle = "Gestión de Pedidos";
       pageDescription = "Gestiona los pedidos de tu tienda.";
+      props = { orders };
       break;
     case 'delivery':
-      orders = await getAvailableOrdersForDelivery();
-      pageTitle = "Pedidos Disponibles";
-      pageDescription = "Acepta pedidos para empezar a entregar.";
+      const [availableOrders, assignedOrders] = await Promise.all([
+        getAvailableOrdersForDelivery(),
+        getOrdersByDeliveryPerson(user.uid),
+      ]);
+      pageTitle = "Panel de Repartidor";
+      pageDescription = "Gestiona los pedidos disponibles y tus entregas activas.";
+      props = { availableOrders, assignedOrders };
       break;
     default: // 'buyer' and any other case
       orders = await getOrdersByUser(user.uid);
       pageTitle = "Mis Pedidos";
       pageDescription = "Ve tus pedidos recientes y en curso.";
+      props = { orders };
       break;
   }
   
   const renderView = () => {
     switch (userRole) {
       case 'store':
-        return <StoreOrdersView orders={orders} />;
+        return <StoreOrdersView {...props} />;
       case 'delivery':
-        return <DeliveryOrdersView orders={orders} />;
+        return <DeliveryOrdersView {...props} />;
       default:
-        return <BuyerOrdersView orders={orders} />;
+        return <BuyerOrdersView {...props} />;
     }
   }
 
