@@ -3,24 +3,30 @@
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Store, Truck, ClipboardList } from 'lucide-react';
-import { deliveryPersonnel, stores, orders } from '@/lib/placeholder-data';
+import { deliveryPersonnel, orders } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getStores } from '@/lib/data-service';
+import type { Store as StoreType } from '@/lib/placeholder-data';
+
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading } = useAuth();
   const router = useRouter();
+  const [totalStores, setTotalStores] = useState(0);
 
   useEffect(() => {
     if (!loading && !isAdmin) {
       router.push('/login');
     }
+    if (isAdmin) {
+      getStores().then(stores => setTotalStores(stores.length));
+    }
   }, [user, isAdmin, loading, router]);
 
 
-  const totalStores = stores.length;
   const totalDrivers = deliveryPersonnel.length;
   const pendingOrders = orders.filter(o => o.status !== 'Entregado').length;
   

@@ -5,6 +5,16 @@ const getImage = (id: string) => {
     return image || { imageUrl: 'https://picsum.photos/seed/placeholder/600/400', imageHint: 'placeholder' };
 }
 
+export type Store = {
+  id: string;
+  name: string;
+  category: string;
+  address: string;
+  imageUrl: string;
+  imageHint: string;
+  status: 'Aprobado' | 'Pendiente' | 'Rechazado';
+}
+
 export type Product = {
   id: string;
   name: string;
@@ -13,14 +23,9 @@ export type Product = {
   category: string;
 }
 
-export const stores = [
-  { id: '1', name: 'Paraíso de la Pizza', category: 'Italiana', address: 'Calle Pizza 123', imageUrl: getImage('store-pizza').imageUrl, imageHint: getImage('store-pizza').imageHint, status: 'Aprobado' },
-  { id: '2', name: 'Bonanza de Hamburguesas', category: 'Comida Rápida', address: 'Bulevar Hamburguesa 456', imageUrl: getImage('store-burger').imageUrl, imageHint: getImage('store-burger').imageHint, status: 'Aprobado' },
-  { id: '3', name: 'Estación de Sushi', category: 'Japonesa', address: 'Avenida Sushi 789', imageUrl: getImage('store-sushi').imageUrl, imageHint: getImage('store-sushi').imageHint, status: 'Aprobado' },
-  { id: '4', name: 'Pueblo del Taco', category: 'Mexicana', address: 'Terrada del Taco 101', imageUrl: getImage('store-taco').imageUrl, imageHint: getImage('store-taco').imageHint, status: 'Rechazado' },
-  { id: '5', name: 'Santuario de Ensaladas', category: 'Saludable', address: 'Camino de la Ensalada 212', imageUrl: getImage('store-salad').imageUrl, imageHint: getImage('store-salad').imageHint, status: 'Aprobado' },
-  { id: '6', name: 'Sueños de Postre', category: 'Dulces', address: 'Corte del Pastel 313', imageUrl: getImage('store-dessert').imageUrl, imageHint: getImage('store-dessert').imageHint, status: 'Aprobado' },
-  { id: '7', name: 'Café del Grano', category: 'Cafetería', address: 'Esquina del Café 42', imageUrl: 'https://picsum.photos/seed/coffee/600/400', imageHint: 'coffee shop', status: 'Pendiente' },
+export const stores: Store[] = [
+  // This data is now fetched from Firestore. See /lib/data-service.ts
+  // You can add stores to the Firestore 'stores' collection to see them on the home page.
 ];
 
 export const productsByStore: { [key: string]: Product[] } = {

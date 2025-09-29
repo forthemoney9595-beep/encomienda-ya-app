@@ -1,7 +1,6 @@
 'use client';
 
 import PageHeader from '@/components/page-header';
-import { stores } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,19 +10,34 @@ import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getStores } from '@/lib/data-service';
+import type { Store } from '@/lib/placeholder-data';
 
 export default function AdminStoresPage() {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
+  const [stores, setStores] = useState<Store[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !isAdmin) {
+    if (!authLoading && !isAdmin) {
       router.push('/login');
     }
-  }, [user, isAdmin, loading, router]);
+  }, [user, isAdmin, authLoading, router]);
 
+  useEffect(() => {
+    if (isAdmin) {
+      const fetchStores = async () => {
+        setLoading(true);
+        const storesFromDb = await getStores();
+        setStores(storesFromDb);
+        setLoading(false);
+      };
+      fetchStores();
+    }
+  }, [isAdmin]);
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -38,7 +52,7 @@ export default function AdminStoresPage() {
     }
   };
 
-  if (loading || !isAdmin) {
+  if (authLoading || loading || !isAdmin) {
     return (
        <div className="container mx-auto">
         <PageHeader title="Gestión de Tiendas" description="Agrega, edita o elimina cuentas de tiendas." />

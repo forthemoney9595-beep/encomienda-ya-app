@@ -1,14 +1,15 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { stores } from '@/lib/placeholder-data';
+import { stores as placeholderStores } from '@/lib/placeholder-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 
+// This page still uses placeholder data, it could be updated to fetch from Firestore.
 export default function FoodStoresPage() {
   const foodCategories = ['Italiana', 'Comida Rápida', 'Japonesa', 'Mexicana', 'Saludable', 'Dulces'];
-  const foodStores = stores.filter(store => foodCategories.includes(store.category));
+  const foodStores = placeholderStores.filter(store => foodCategories.includes(store.category));
 
   return (
     <div className="container mx-auto">

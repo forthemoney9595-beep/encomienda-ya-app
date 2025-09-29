@@ -1,16 +1,30 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { stores } from '@/lib/placeholder-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import PageHeader from '@/components/page-header';
+import { getStores } from '@/lib/data-service';
+import type { Store } from '@/lib/placeholder-data';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [stores, setStores] = useState<Store[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStores = async () => {
+      setLoading(true);
+      const storesFromDb = await getStores();
+      setStores(storesFromDb);
+      setLoading(false);
+    };
+    fetchStores();
+  }, []);
 
   const filteredStores = useMemo(() => {
     if (!searchTerm) {
@@ -20,7 +34,7 @@ export default function Home() {
       store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       store.category.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [searchTerm]);
+  }, [searchTerm, stores]);
 
   return (
     <div className="container mx-auto">
@@ -35,37 +49,54 @@ export default function Home() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {filteredStores.length > 0 ? (
-          filteredStores.map((store) => (
-            <Link href={`/stores/${store.id}`} key={store.id} className="group">
-              <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
-                <div className="relative h-48 w-full">
-                  <Image
-                    src={store.imageUrl}
-                    alt={store.name}
-                    fill
-                    style={{ objectFit: 'cover' }}
-                    className="transition-transform duration-300 group-hover:scale-105"
-                    data-ai-hint={store.imageHint}
-                  />
-                </div>
-                <CardHeader>
-                  <CardTitle>{store.name}</CardTitle>
-                  <CardDescription>{store.category}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{store.address}</p>
-                </CardContent>
-              </Card>
-            </Link>
-          ))
-        ) : (
-          <div className="col-span-full text-center text-muted-foreground py-10">
-            <p>No se encontraron tiendas con ese criterio de búsqueda.</p>
-          </div>
-        )}
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Card key={i} className="h-full overflow-hidden">
+              <Skeleton className="h-48 w-full" />
+              <CardHeader>
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-4 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredStores.length > 0 ? (
+            filteredStores.map((store) => (
+              <Link href={`/stores/${store.id}`} key={store.id} className="group">
+                <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
+                  <div className="relative h-48 w-full">
+                    <Image
+                      src={store.imageUrl}
+                      alt={store.name}
+                      fill
+                      style={{ objectFit: 'cover' }}
+                      className="transition-transform duration-300 group-hover:scale-105"
+                      data-ai-hint={store.imageHint}
+                    />
+                  </div>
+                  <CardHeader>
+                    <CardTitle>{store.name}</CardTitle>
+                    <CardDescription>{store.category}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">{store.address}</p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))
+          ) : (
+            <div className="col-span-full text-center text-muted-foreground py-10">
+              <p>No se encontraron tiendas con ese criterio de búsqueda.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
