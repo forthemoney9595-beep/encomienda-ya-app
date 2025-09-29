@@ -5,6 +5,14 @@ const getImage = (id: string) => {
     return image || { imageUrl: 'https://picsum.photos/seed/placeholder/600/400', imageHint: 'placeholder' };
 }
 
+export type Product = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+}
+
 export const stores = [
   { id: '1', name: 'Paraíso de la Pizza', category: 'Italiana', address: 'Calle Pizza 123', imageUrl: getImage('store-pizza').imageUrl, imageHint: getImage('store-pizza').imageHint },
   { id: '2', name: 'Bonanza de Hamburguesas', category: 'Comida Rápida', address: 'Bulevar Hamburguesa 456', imageUrl: getImage('store-burger').imageUrl, imageHint: getImage('store-burger').imageHint },
@@ -14,7 +22,7 @@ export const stores = [
   { id: '6', name: 'Sueños de Postre', category: 'Dulces', address: 'Corte del Pastel 313', imageUrl: getImage('store-dessert').imageUrl, imageHint: getImage('store-dessert').imageHint },
 ];
 
-export const productsByStore: { [key: string]: { id: string; name: string; description: string; price: number; category: string }[] } = {
+export const productsByStore: { [key: string]: Product[] } = {
   '1': [
     { id: 'p1', name: 'Pizza Margarita', description: 'Queso clásico y tomate', price: 12.99, category: 'Pizzas' },
     { id: 'p2', name: 'Pizza de Pepperoni', description: 'Cargada de pepperoni', price: 14.99, category: 'Pizzas' },

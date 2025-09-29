@@ -1,3 +1,5 @@
+'use client';
+
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import { getStoreById, getProductsByStoreId } from '@/lib/placeholder-data';
@@ -5,18 +7,31 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { MoreVertical, Edit, Trash2, ShoppingCart } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AddItemDialog } from './add-item-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCart } from '@/context/cart-context';
+import type { Product } from '@/context/cart-context';
+import { useToast } from '@/hooks/use-toast';
 
 export default function StoreDetailPage({ params }: { params: { storeId: string } }) {
   const store = getStoreById(params.storeId);
   const products = getProductsByStoreId(params.storeId);
+  const { addToCart } = useCart();
+  const { toast } = useToast();
 
   if (!store) {
     notFound();
   }
+
+  const handleAddToCart = (product: Product) => {
+    addToCart(product);
+    toast({
+      title: '¡Añadido al carrito!',
+      description: `${product.name} ha sido añadido a tu carrito.`,
+    });
+  };
 
   const productCategories = Array.from(new Set(products.map(p => p.category)));
 
@@ -41,49 +56,24 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
                     </TabsList>
                     {productCategories.map(category => (
                       <TabsContent key={category} value={category}>
-                        <Table>
-                            <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[80px]">Imagen</TableHead>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Precio</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                            </TableRow>
-                            </TableHeader>
-                            <TableBody>
+                        <div className="space-y-4">
                             {products.filter(p => p.category === category).map((product) => (
-                                <TableRow key={product.id}>
-                                <TableCell>
-                                    <Image src={`https://picsum.photos/seed/${product.id}/64/64`} alt={product.name} width={64} height={64} className="rounded-md" data-ai-hint="food item" />
-                                </TableCell>
-                                <TableCell>
-                                    <div className="font-medium">{product.name}</div>
-                                    <div className="text-sm text-muted-foreground">{product.description}</div>
-                                </TableCell>
-                                <TableCell>${product.price.toFixed(2)}</TableCell>
-                                <TableCell className="text-right">
-                                    <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon">
-                                        <MoreVertical className="h-4 w-4" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuItem>
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Editar
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem className="text-destructive">
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Eliminar
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                                </TableRow>
+                                <Card key={product.id}>
+                                  <CardContent className="flex items-center gap-4 p-4">
+                                      <Image src={`https://picsum.photos/seed/${product.id}/80/80`} alt={product.name} width={80} height={80} className="rounded-md" data-ai-hint="food item" />
+                                      <div className="flex-1">
+                                          <h3 className="font-semibold">{product.name}</h3>
+                                          <p className="text-sm text-muted-foreground">{product.description}</p>
+                                          <p className="font-semibold">${product.price.toFixed(2)}</p>
+                                      </div>
+                                      <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)}>
+                                        <ShoppingCart className="mr-2 h-4 w-4" />
+                                        Añadir
+                                      </Button>
+                                  </CardContent>
+                                </Card>
                             ))}
-                            </TableBody>
-                        </Table>
+                        </div>
                       </TabsContent>
                     ))}
                   </Tabs>
