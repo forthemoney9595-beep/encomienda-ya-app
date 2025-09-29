@@ -15,6 +15,7 @@ const AnalyzeDriverReviewsInputSchema = z.object({
   reviewText: z
     .string()
     .describe('El texto de la reseña del cliente para un conductor de reparto.'),
+  driverId: z.string().describe('El ID del conductor de reparto.'),
   driverName: z.string().describe('El nombre del conductor de reparto.'),
 });
 export type AnalyzeDriverReviewsInput = z.infer<
@@ -35,6 +36,7 @@ const AnalyzeDriverReviewsOutputSchema = z.object({
     .describe(
       'Etiquetas extraídas de la reseña, como \'velocidad\', \'amabilidad\', \'precisión\', etc.'
     ),
+  driverId: z.string().describe('El ID del conductor que está siendo reseñado.'),
 });
 export type AnalyzeDriverReviewsOutput = z.infer<
   typeof AnalyzeDriverReviewsOutputSchema
@@ -52,6 +54,7 @@ const analyzeDriverReviewsPrompt = ai.definePrompt({
   output: {schema: AnalyzeDriverReviewsOutputSchema},
   prompt: `Eres un asistente de IA encargado de analizar las reseñas de los clientes sobre los conductores de reparto.
 
+ID del conductor: {{driverId}}
 Nombre del conductor: {{driverName}}
 
 Analiza la siguiente reseña de cliente:
@@ -61,7 +64,7 @@ Determina el sentimiento de la reseña (positivo, negativo o neutral).
 Crea un breve resumen de la reseña, destacando los puntos clave mencionados por el cliente.
 Extrae etiquetas relevantes de la reseña que describan el desempeño del conductor. Algunos ejemplos de etiquetas son: velocidad, amabilidad, precisión, comunicación, profesionalismo.
 
-Devuelve el sentimiento, el resumen y las etiquetas en el formato JSON especificado. Asegúrate de que el campo 'tags' sea un array de strings.
+Devuelve el sentimiento, el resumen, las etiquetas y el ID del conductor en el formato JSON especificado. Asegúrate de que el campo 'tags' sea un array de strings y que devuelvas el 'driverId' que se te proporcionó.
   `,
 });
 

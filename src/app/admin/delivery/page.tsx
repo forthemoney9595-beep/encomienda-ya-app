@@ -60,6 +60,10 @@ export default function AdminDeliveryPage() {
     }
   };
 
+  const handleRowClick = (driverId: string) => {
+    router.push(`/admin/delivery/${driverId}`);
+  };
+
   const getStatusVariant = (status: string) => {
     switch (status) {
       case 'Activo':
@@ -122,7 +126,7 @@ export default function AdminDeliveryPage() {
             </TableHeader>
             <TableBody>
               {personnel.map((driver) => (
-                <TableRow key={driver.id}>
+                <TableRow key={driver.id} className="cursor-pointer" onClick={() => handleRowClick(driver.id)}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar>
@@ -137,7 +141,7 @@ export default function AdminDeliveryPage() {
                   <TableCell>
                     <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -158,11 +162,11 @@ export default function AdminDeliveryPage() {
                                 <DropdownMenuSeparator />
                               </>
                             )}
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); alert('Editar: Próximamente!')}}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
+                            <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); alert('Eliminar: Próximamente!')}}>
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Eliminar
                             </DropdownMenuItem>

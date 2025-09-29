@@ -13,18 +13,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { DeliveryPersonnel } from '@/lib/placeholder-data';
-import { getDeliveryPersonnel } from '@/lib/data-service';
+import { getDeliveryPersonnel, addDriverReview } from '@/lib/data-service';
 import { Loader2, Wand2, ThumbsUp, ThumbsDown, Meh } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 
+type AnalysisResult = Omit<AnalyzeDriverReviewsOutput, 'driverId'>;
+
 const formSchema = z.object({
-  driverName: z.string().min(1, 'Por favor selecciona un conductor.'),
+  driverId: z.string().min(1, 'Por favor selecciona un conductor.'),
   reviewText: z.string().min(10, 'La reseña debe tener al menos 10 caracteres.'),
 });
 
 export function ReviewAnalyzer() {
-  const [analysis, setAnalysis] = useState<AnalyzeDriverReviewsOutput | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const { toast } = useToast();
@@ -32,7 +34,7 @@ export function ReviewAnalyzer() {
   useEffect(() => {
     const fetchPersonnel = async () => {
         const personnelFromDb = await getDeliveryPersonnel();
-        setPersonnel(personnelFromDb);
+        setPersonnel(personnelFromDb.filter(p => p.status === 'Activo' || p.status === 'Pendiente'));
     };
     fetchPersonnel();
   }, []);
@@ -40,7 +42,7 @@ export function ReviewAnalyzer() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      driverName: '',
+      driverId: '',
       reviewText: '',
     },
   });
@@ -49,14 +51,41 @@ export function ReviewAnalyzer() {
     setIsLoading(true);
     setAnalysis(null);
     try {
-      const result = await analyzeDriverReviews(values);
-      setAnalysis(result);
+      const selectedDriver = personnel.find(p => p.id === values.driverId);
+      if (!selectedDriver) {
+        toast({ variant: "destructive", title: "Error", description: "Conductor no encontrado." });
+        setIsLoading(false);
+        return;
+      }
+
+      const analysisInput = {
+        reviewText: values.reviewText,
+        driverId: values.driverId,
+        driverName: selectedDriver.name,
+      };
+
+      const result = await analyzeDriverReviews(analysisInput);
+      
+      const { driverId, ...displayAnalysis } = result;
+
+      await addDriverReview(driverId, {
+        reviewText: values.reviewText,
+        analysis: displayAnalysis,
+      });
+      
+      setAnalysis(displayAnalysis);
+
+      toast({
+        title: "¡Análisis y Guardado Exitosos!",
+        description: "La reseña ha sido analizada por la IA y guardada en el perfil del conductor.",
+      });
+
     } catch (error) {
-      console.error("Error al analizar la reseña:", error);
+      console.error("Error en el proceso de análisis y guardado:", error);
       toast({
         variant: "destructive",
-        title: "Análisis Fallido",
-        description: "Hubo un error al procesar la reseña. Por favor, inténtalo de nuevo.",
+        title: "Proceso Fallido",
+        description: "Hubo un error al procesar o guardar la reseña. Por favor, inténtalo de nuevo.",
       });
     } finally {
       setIsLoading(false);
@@ -79,14 +108,14 @@ export function ReviewAnalyzer() {
       <Card>
         <CardHeader>
           <CardTitle>Enviar una Reseña</CardTitle>
-          <CardDescription>Ingresa la reseña de un cliente sobre un conductor para analizarla.</CardDescription>
+          <CardDescription>Ingresa la reseña de un cliente sobre un conductor para analizarla y guardarla.</CardDescription>
         </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-4">
               <FormField
                 control={form.control}
-                name="driverName"
+                name="driverId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Conductor</FormLabel>
@@ -98,7 +127,7 @@ export function ReviewAnalyzer() {
                       </FormControl>
                       <SelectContent>
                         {personnel.map((driver) => (
-                          <SelectItem key={driver.id} value={driver.name}>
+                          <SelectItem key={driver.id} value={driver.id}>
                             {driver.name}
                           </SelectItem>
                         ))}
@@ -129,7 +158,7 @@ export function ReviewAnalyzer() {
                 ) : (
                   <Wand2 className="mr-2 h-4 w-4" />
                 )}
-                Analizar Reseña
+                Analizar y Guardar Reseña
               </Button>
             </Footer>
           </form>
@@ -139,14 +168,14 @@ export function ReviewAnalyzer() {
       <Card className="flex flex-col">
         <CardHeader>
           <CardTitle>Resultado del Análisis</CardTitle>
-          <CardDescription>El análisis de la reseña por IA aparecerá aquí.</CardDescription>
+          <CardDescription>El análisis de la reseña por IA aparecerá aquí después de ser procesado y guardado.</CardDescription>
         </CardHeader>
         <CardContent className="flex-grow">
           {isLoading && (
             <div className="flex h-full items-center justify-center">
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p>Analizando...</p>
+                <p>Analizando y guardando...</p>
               </div>
             </div>
           )}
