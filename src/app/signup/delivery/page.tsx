@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { createUserProfile } from '@/lib/user';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -38,8 +39,15 @@ export default function SignupDeliveryPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      // Aquí deberíamos guardar los datos adicionales (nombre, vehículo, rol, estado 'pendiente') en Firestore
-      console.log('Usuario repartidor creado:', userCredential.user);
+      
+      await createUserProfile(userCredential.user.uid, {
+        name: values.name,
+        email: values.email,
+        role: 'delivery',
+        status: 'pending',
+        vehicle: values.vehicleType,
+      });
+
       toast({
         title: "¡Solicitud Enviada!",
         description: "Tu cuenta de repartidor ha sido creada y está pendiente de aprobación.",

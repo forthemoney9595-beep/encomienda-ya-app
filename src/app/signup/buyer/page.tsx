@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { createUserProfile } from '@/lib/user';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -34,8 +35,13 @@ export default function SignupBuyerPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      // Aquí podrías guardar 'name' y 'role' en Firestore
-      console.log('Usuario comprador creado:', userCredential.user);
+      
+      await createUserProfile(userCredential.user.uid, {
+        name: values.name,
+        email: values.email,
+        role: 'buyer',
+      });
+
       toast({
         title: "¡Cuenta Creada!",
         description: "Tu cuenta de comprador ha sido creada exitosamente.",

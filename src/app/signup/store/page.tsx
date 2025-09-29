@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { createUserProfile } from '@/lib/user';
 
 const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
@@ -40,14 +41,24 @@ export default function SignupStorePage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      // Aquí deberíamos guardar los datos de la tienda (nombre, categoría, dirección, etc) y el rol/estado en Firestore
-      console.log('Usuario de tienda creado:', userCredential.user);
+      
+      await createUserProfile(userCredential.user.uid, {
+        name: values.ownerName,
+        email: values.email,
+        role: 'store',
+        status: 'pending',
+        storeName: values.storeName,
+        storeCategory: values.category,
+        storeAddress: values.address,
+      });
+
       toast({
         title: "¡Solicitud de Registro Enviada!",
         description: "Tu tienda ha sido registrada y está pendiente de aprobación.",
       });
       router.push('/');
-    } catch (error: any) {
+    } catch (error: any)
+{
       console.error(error);
       toast({
         variant: "destructive",
