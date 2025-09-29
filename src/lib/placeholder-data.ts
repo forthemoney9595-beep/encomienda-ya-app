@@ -23,6 +23,15 @@ export type Product = {
   category: string;
 }
 
+export type DeliveryPersonnel = {
+  id: string;
+  name: string;
+  vehicle: string;
+  zone: string;
+  status: 'Activo' | 'Pendiente' | 'Inactivo' | 'Rechazado';
+};
+
+
 export const stores: Store[] = [
   // This data is now fetched from Firestore. See /lib/data-service.ts
   // You can add stores to the Firestore 'stores' collection to see them on the home page.
@@ -38,12 +47,8 @@ export const orders = [
   { id: 'ord3', storeName: 'Estación de Sushi', total: 12.98, status: 'En preparación', date: '2024-07-21' },
 ];
 
-export const deliveryPersonnel = [
-    { id: 'd1', name: 'Juan Pérez', vehicle: 'Motocicleta', zone: 'Norte', status: 'Activo' },
-    { id: 'd2', name: 'Ana Gómez', vehicle: 'Automóvil', zone: 'Sur', status: 'Activo' },
-    { id: 'd3', name: 'Luis Rodríguez', vehicle: 'Bicicleta', zone: 'Centro', status: 'Inactivo' },
-    { id: 'd4', name: 'Sofía Fernández', vehicle: 'Motocicleta', zone: 'Oeste', status: 'Activo' },
-    { id: 'd5', name: 'Carlos Marín', vehicle: 'Motocicleta', zone: 'Norte', status: 'Pendiente' },
+export const deliveryPersonnel: DeliveryPersonnel[] = [
+    // This data is now fetched from Firestore. See /lib/data-service.ts
 ];
 
 export const notifications = [

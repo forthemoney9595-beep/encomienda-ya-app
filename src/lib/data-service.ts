@@ -1,6 +1,6 @@
 import { db } from './firebase';
-import { collection, getDocs, query, doc, getDoc } from 'firebase/firestore';
-import type { Store, Product } from './placeholder-data';
+import { collection, getDocs, query, doc, getDoc, where } from 'firebase/firestore';
+import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 
 /**
  * Fetches all stores from the 'stores' collection in Firestore.
@@ -85,6 +85,33 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
     return products;
   } catch (error) {
     console.error(`Error fetching products for store ${storeId}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Fetches all delivery personnel from the 'users' collection in Firestore.
+ */
+export async function getDeliveryPersonnel(): Promise<DeliveryPersonnel[]> {
+  try {
+    const usersCollectionRef = collection(db, 'users');
+    const q = query(usersCollectionRef, where('role', '==', 'delivery'));
+    const querySnapshot = await getDocs(q);
+    
+    const personnel: DeliveryPersonnel[] = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name || '',
+        vehicle: data.vehicle || 'No especificado',
+        zone: data.zone || 'No asignada',
+        status: data.status === 'pending' ? 'Pendiente' : data.status === 'approved' ? 'Activo' : data.status === 'rejected' ? 'Rechazado' : 'Inactivo',
+      };
+    });
+    
+    return personnel;
+  } catch (error) {
+    console.error("Error fetching delivery personnel from Firestore: ", error);
     return [];
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -12,7 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { deliveryPersonnel } from '@/lib/placeholder-data';
+import type { DeliveryPersonnel } from '@/lib/placeholder-data';
+import { getDeliveryPersonnel } from '@/lib/data-service';
 import { Loader2, Wand2, ThumbsUp, ThumbsDown, Meh } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -25,7 +26,16 @@ const formSchema = z.object({
 export function ReviewAnalyzer() {
   const [analysis, setAnalysis] = useState<AnalyzeDriverReviewsOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchPersonnel = async () => {
+        const personnelFromDb = await getDeliveryPersonnel();
+        setPersonnel(personnelFromDb);
+    };
+    fetchPersonnel();
+  }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -87,7 +97,7 @@ export function ReviewAnalyzer() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {deliveryPersonnel.map((driver) => (
+                        {personnel.map((driver) => (
                           <SelectItem key={driver.id} value={driver.name}>
                             {driver.name}
                           </SelectItem>
@@ -121,7 +131,7 @@ export function ReviewAnalyzer() {
                 )}
                 Analizar Reseña
               </Button>
-            </CardFooter>
+            </Footer>
           </form>
         </Form>
       </Card>

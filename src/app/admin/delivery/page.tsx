@@ -1,7 +1,7 @@
 'use client';
 
 import PageHeader from '@/components/page-header';
-import { deliveryPersonnel } from '@/lib/placeholder-data';
+import type { DeliveryPersonnel } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,20 +11,33 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-
+import { getDeliveryPersonnel } from '@/lib/data-service';
 
 export default function AdminDeliveryPage() {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
+  const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !isAdmin) {
+    if (!authLoading && !isAdmin) {
       router.push('/login');
     }
-  }, [user, isAdmin, loading, router]);
+  }, [user, isAdmin, authLoading, router]);
 
+  useEffect(() => {
+    if (isAdmin) {
+      const fetchPersonnel = async () => {
+        setLoading(true);
+        const personnelFromDb = await getDeliveryPersonnel();
+        setPersonnel(personnelFromDb);
+        setLoading(false);
+      };
+      fetchPersonnel();
+    }
+  }, [isAdmin]);
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -33,13 +46,14 @@ export default function AdminDeliveryPage() {
       case 'Pendiente':
         return 'default';
       case 'Inactivo':
-        return 'outline';
-      default:
+      case 'Rechazado':
         return 'destructive';
+      default:
+        return 'outline';
     }
   };
 
-  if (loading || !isAdmin) {
+  if (authLoading || loading || !isAdmin) {
     return (
       <div className="container mx-auto">
          <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto." />
@@ -86,7 +100,7 @@ export default function AdminDeliveryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deliveryPersonnel.map((driver) => (
+              {personnel.map((driver) => (
                 <TableRow key={driver.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
