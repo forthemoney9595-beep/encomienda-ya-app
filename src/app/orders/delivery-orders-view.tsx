@@ -1,10 +1,52 @@
+'use client';
+
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, Store, PackageSearch } from 'lucide-react';
+import { MapPin, Store, PackageSearch, Loader2 } from 'lucide-react';
 import type { Order } from '@/lib/order-service';
+import { useAuth } from '@/context/auth-context';
+import { useToast } from '@/hooks/use-toast';
+import { assignOrderToDeliveryPerson } from '@/lib/order-service';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function DeliveryOrdersView({ orders }: { orders: Order[] }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const router = useRouter();
+  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
+
+  const handleAcceptOrder = async (orderId: string) => {
+    if (!user) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Debes iniciar sesión para aceptar un pedido.',
+      });
+      return;
+    }
+
+    setLoadingOrderId(orderId);
+    try {
+      await assignOrderToDeliveryPerson(orderId, user.uid, user.name);
+      toast({
+        title: '¡Pedido Aceptado!',
+        description: 'El pedido ha sido asignado a ti. ¡Hora de ponerse en marcha!',
+      });
+      router.refresh(); // Vuelve a cargar los datos del servidor para actualizar la lista.
+    } catch (error) {
+      console.error('Error accepting order:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo aceptar el pedido. Puede que ya haya sido tomado por otro repartidor.',
+      });
+    } finally {
+      setLoadingOrderId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {orders.length === 0 ? (
@@ -48,7 +90,10 @@ export default function DeliveryOrdersView({ orders }: { orders: Order[] }) {
                     <Button variant="outline" asChild>
                         <Link href={`/orders/${order.id}`}>Ver Detalles</Link>
                     </Button>
-                    <Button>Aceptar Pedido</Button>
+                    <Button onClick={() => handleAcceptOrder(order.id)} disabled={loadingOrderId === order.id}>
+                        {loadingOrderId === order.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Aceptar Pedido
+                    </Button>
                 </div>
             </CardContent>
           </Card>

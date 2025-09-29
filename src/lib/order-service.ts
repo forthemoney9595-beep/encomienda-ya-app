@@ -25,6 +25,8 @@ export interface Order {
     // Let's add customer info for the store view
     customerName?: string;
     storeAddress?: string; // Add store address for delivery personnel
+    deliveryPersonId?: string;
+    deliveryPersonName?: string;
 }
 
 export async function createOrder(
@@ -162,6 +164,26 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
     await updateDoc(orderRef, { status });
   } catch (error) {
     console.error(`Error updating order status for ${orderId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Assigns an order to a delivery person and updates its status.
+ * @param orderId The ID of the order to assign.
+ * @param driverId The ID of the delivery person.
+ * @param driverName The name of the delivery person.
+ */
+export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
+  try {
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, {
+      status: 'En reparto',
+      deliveryPersonId: driverId,
+      deliveryPersonName: driverName,
+    });
+  } catch (error) {
+    console.error(`Error assigning order ${orderId} to driver ${driverId}:`, error);
     throw error;
   }
 }
