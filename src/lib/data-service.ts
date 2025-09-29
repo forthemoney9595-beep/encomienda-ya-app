@@ -8,7 +8,7 @@ import type { Store, Product } from './placeholder-data';
 export async function getStores(): Promise<Store[]> {
   try {
     const storesCollectionRef = collection(db, 'stores');
-    const q = query(storesCollectionref); // You can add where clauses here, e.g., where('status', '==', 'Aprobado')
+    const q = query(storesCollectionRef); // You can add where clauses here, e.g., where('status', '==', 'Aprobado')
     const querySnapshot = await getDocs(q);
     
     const stores: Store[] = querySnapshot.docs.map(doc => {
