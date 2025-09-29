@@ -20,7 +20,8 @@ import {
   LayoutGrid,
   Utensils,
   Shirt,
-  ShoppingBag
+  ShoppingBag,
+  User
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { getCurrentUser } from '@/lib/auth';
@@ -58,6 +59,18 @@ export function MainNav() {
           <Link href="/orders">
             <ClipboardList />
             <span>Pedidos</span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          asChild
+          isActive={pathname === '/profile'}
+          tooltip="Perfil"
+        >
+          <Link href="/profile">
+            <User />
+            <span>Perfil</span>
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
