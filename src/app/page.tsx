@@ -20,7 +20,8 @@ export default function Home() {
     const fetchStores = async () => {
       setLoading(true);
       const storesFromDb = await getStores();
-      setStores(storesFromDb);
+      // Only show approved stores on the main page
+      setStores(storesFromDb.filter(s => s.status === 'Aprobado'));
       setLoading(false);
     };
     fetchStores();
