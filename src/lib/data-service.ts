@@ -21,6 +21,7 @@ export async function getStores(): Promise<Store[]> {
         imageUrl: data.imageUrl || 'https://picsum.photos/seed/placeholder/600/400',
         imageHint: data.imageHint || 'store',
         status: data.status || 'Pendiente',
+        ownerId: data.ownerId || '',
       };
     });
     
