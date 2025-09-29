@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { getOrderById } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { OrderStatusUpdater } from './order-status-updater';
 
 export default async function OrderTrackingPage({ params }: { params: { orderId: string } }) {
   const order = await getOrderById(params.orderId);
@@ -110,8 +111,10 @@ export default async function OrderTrackingPage({ params }: { params: { orderId:
                     </div>
                 </CardContent>
             </Card>
+            <OrderStatusUpdater order={order} />
         </div>
       </div>
     </div>
   );
 }
+

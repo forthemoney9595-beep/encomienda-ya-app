@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Product } from './placeholder-data';
 
 // A CartItem is a Product with a quantity.
@@ -36,7 +36,12 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
+    // This is a simplification. In a real app, you wouldn't query all stores.
+    // You'd likely have the storeId available in the cart or product object.
     const storeDetails = await getStoreDetailsFromProductId(items[0].id);
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    const customerName = userDoc.exists() ? userDoc.data().name : shippingInfo.name;
+
 
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,
@@ -54,7 +59,7 @@ export async function createOrder(
         storeId: storeDetails.id,
         storeName: storeDetails.name,
         shippingAddress: shippingInfo,
-        customerName: shippingInfo.name, // Store the customer name directly
+        customerName: customerName, 
     });
     return orderRef.id;
 }
@@ -65,9 +70,10 @@ async function getStoreDetailsFromProductId(productId: string): Promise<{id: str
     const storesSnapshot = await getDocs(q);
 
     for (const storeDoc of storesSnapshot.docs) {
+        // This is inefficient. In a real app, products might have a direct 'storeId' field.
         const productsRef = collection(db, "stores", storeDoc.id, "products");
-        const productDoc = await getDoc(doc(productsRef, productId));
-        if (productDoc.exists()) {
+        const productDocSnapshot = await getDoc(doc(productsRef, productId));
+        if (productDocSnapshot.exists()) {
             return { id: storeDoc.id, name: storeDoc.data().name || "Tienda sin nombre" };
         }
     }
@@ -126,4 +132,20 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
         console.log(`No order found with id: ${orderId}`);
         return null;
     }
+}
+
+
+/**
+ * Updates the status of an order.
+ * @param orderId The ID of the order to update.
+ * @param status The new status for the order.
+ */
+export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
+  try {
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, { status });
+  } catch (error) {
+    console.error(`Error updating order status for ${orderId}:`, error);
+    throw error;
+  }
 }
