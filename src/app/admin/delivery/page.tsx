@@ -3,12 +3,26 @@ import { deliveryPersonnel } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { PlusCircle, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { PlusCircle, MoreVertical, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function AdminDeliveryPage() {
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'Activo':
+        return 'secondary';
+      case 'Pendiente':
+        return 'default';
+      case 'Inactivo':
+        return 'outline';
+      default:
+        return 'destructive';
+    }
+  };
+
   return (
     <div className="container mx-auto">
       <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto.">
@@ -49,7 +63,7 @@ export default function AdminDeliveryPage() {
                   <TableCell>{driver.vehicle}</TableCell>
                   <TableCell className="hidden md:table-cell">{driver.zone}</TableCell>
                   <TableCell>
-                    <Badge variant={driver.status === 'Activo' ? 'secondary' : 'outline'}>{driver.status}</Badge>
+                    <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
@@ -59,6 +73,19 @@ export default function AdminDeliveryPage() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                            {driver.status === 'Pendiente' && (
+                              <>
+                                <DropdownMenuItem>
+                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                    Aprobar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive">
+                                    <XCircle className="mr-2 h-4 w-4" />
+                                    Rechazar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
                             <DropdownMenuItem>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar

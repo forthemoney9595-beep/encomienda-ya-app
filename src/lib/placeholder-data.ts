@@ -14,12 +14,13 @@ export type Product = {
 }
 
 export const stores = [
-  { id: '1', name: 'Paraíso de la Pizza', category: 'Italiana', address: 'Calle Pizza 123', imageUrl: getImage('store-pizza').imageUrl, imageHint: getImage('store-pizza').imageHint },
-  { id: '2', name: 'Bonanza de Hamburguesas', category: 'Comida Rápida', address: 'Bulevar Hamburguesa 456', imageUrl: getImage('store-burger').imageUrl, imageHint: getImage('store-burger').imageHint },
-  { id: '3', name: 'Estación de Sushi', category: 'Japonesa', address: 'Avenida Sushi 789', imageUrl: getImage('store-sushi').imageUrl, imageHint: getImage('store-sushi').imageHint },
-  { id: '4', name: 'Pueblo del Taco', category: 'Mexicana', address: 'Terrada del Taco 101', imageUrl: getImage('store-taco').imageUrl, imageHint: getImage('store-taco').imageHint },
-  { id: '5', name: 'Santuario de Ensaladas', category: 'Saludable', address: 'Camino de la Ensalada 212', imageUrl: getImage('store-salad').imageUrl, imageHint: getImage('store-salad').imageHint },
-  { id: '6', name: 'Sueños de Postre', category: 'Dulces', address: 'Corte del Pastel 313', imageUrl: getImage('store-dessert').imageUrl, imageHint: getImage('store-dessert').imageHint },
+  { id: '1', name: 'Paraíso de la Pizza', category: 'Italiana', address: 'Calle Pizza 123', imageUrl: getImage('store-pizza').imageUrl, imageHint: getImage('store-pizza').imageHint, status: 'Aprobado' },
+  { id: '2', name: 'Bonanza de Hamburguesas', category: 'Comida Rápida', address: 'Bulevar Hamburguesa 456', imageUrl: getImage('store-burger').imageUrl, imageHint: getImage('store-burger').imageHint, status: 'Aprobado' },
+  { id: '3', name: 'Estación de Sushi', category: 'Japonesa', address: 'Avenida Sushi 789', imageUrl: getImage('store-sushi').imageUrl, imageHint: getImage('store-sushi').imageHint, status: 'Aprobado' },
+  { id: '4', name: 'Pueblo del Taco', category: 'Mexicana', address: 'Terrada del Taco 101', imageUrl: getImage('store-taco').imageUrl, imageHint: getImage('store-taco').imageHint, status: 'Rechazado' },
+  { id: '5', name: 'Santuario de Ensaladas', category: 'Saludable', address: 'Camino de la Ensalada 212', imageUrl: getImage('store-salad').imageUrl, imageHint: getImage('store-salad').imageHint, status: 'Aprobado' },
+  { id: '6', name: 'Sueños de Postre', category: 'Dulces', address: 'Corte del Pastel 313', imageUrl: getImage('store-dessert').imageUrl, imageHint: getImage('store-dessert').imageHint, status: 'Aprobado' },
+  { id: '7', name: 'Café del Grano', category: 'Cafetería', address: 'Esquina del Café 42', imageUrl: 'https://picsum.photos/seed/coffee/600/400', imageHint: 'coffee shop', status: 'Pendiente' },
 ];
 
 export const productsByStore: { [key: string]: Product[] } = {
@@ -50,6 +51,7 @@ export const productsByStore: { [key: string]: Product[] } = {
     { id: 'p14', name: 'Pastel de Lava de Chocolate', description: 'Centro tibio y derretido', price: 7.99, category: 'Postres' },
     { id: 'p15', name: 'Porción de Tarta de Queso', description: 'Tarta de queso estilo Nueva York', price: 6.99, category: 'Postres' },
   ],
+  '7': [],
 };
 
 export const orders = [
@@ -63,6 +65,7 @@ export const deliveryPersonnel = [
     { id: 'd2', name: 'Ana Gómez', vehicle: 'Automóvil', zone: 'Sur', status: 'Activo' },
     { id: 'd3', name: 'Luis Rodríguez', vehicle: 'Bicicleta', zone: 'Centro', status: 'Inactivo' },
     { id: 'd4', name: 'Sofía Fernández', vehicle: 'Motocicleta', zone: 'Oeste', status: 'Activo' },
+    { id: 'd5', name: 'Carlos Marín', vehicle: 'Motocicleta', zone: 'Norte', status: 'Pendiente' },
 ];
 
 export const notifications = [

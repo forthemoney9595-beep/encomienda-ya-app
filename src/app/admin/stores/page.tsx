@@ -3,11 +3,27 @@ import { stores } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { PlusCircle, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { PlusCircle, MoreVertical, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
+import { cn } from '@/lib/utils';
 
 export default function AdminStoresPage() {
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'Aprobado':
+        return 'secondary';
+      case 'Pendiente':
+        return 'default';
+      case 'Rechazado':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
+
   return (
     <div className="container mx-auto">
       <PageHeader title="Gestión de Tiendas" description="Agrega, edita o elimina cuentas de tiendas.">
@@ -30,6 +46,7 @@ export default function AdminStoresPage() {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead className="hidden md:table-cell">Dirección</TableHead>
+                <TableHead>Estado</TableHead>
                 <TableHead>
                   <span className="sr-only">Acciones</span>
                 </TableHead>
@@ -51,6 +68,9 @@ export default function AdminStoresPage() {
                   <TableCell className="font-medium">{store.name}</TableCell>
                   <TableCell>{store.category}</TableCell>
                   <TableCell className="hidden md:table-cell">{store.address}</TableCell>
+                  <TableCell>
+                    <Badge variant={getStatusVariant(store.status)}>{store.status}</Badge>
+                  </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -59,6 +79,19 @@ export default function AdminStoresPage() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                            {store.status === 'Pendiente' && (
+                              <>
+                                <DropdownMenuItem>
+                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                    Aprobar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive">
+                                    <XCircle className="mr-2 h-4 w-4" />
+                                    Rechazar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
                             <DropdownMenuItem>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar
