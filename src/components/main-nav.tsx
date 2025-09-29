@@ -29,7 +29,7 @@ import { useAuth } from '@/context/auth-context';
 
 export function MainNav() {
   const pathname = usePathname();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading } = useAuth();
   
   const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
   const [isStoresOpen, setIsStoresOpen] = React.useState(
@@ -50,7 +50,7 @@ export function MainNav() {
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
-      { user && (
+      { !loading && user && (
         <>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -118,7 +118,7 @@ export function MainNav() {
         </CollapsibleContent>
       </Collapsible>
 
-      {isAdmin && (
+      {!loading && isAdmin && (
         <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>

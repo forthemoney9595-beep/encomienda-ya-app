@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,8 +10,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
-import { getCurrentUser } from '@/lib/auth';
+import { useAuth } from '@/context/auth-context';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { useRouter } from 'next/navigation';
+import { Skeleton } from '@/components/ui/skeleton';
+
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -19,15 +23,29 @@ const formSchema = z.object({
 
 export default function ProfilePage() {
   const { toast } = useToast();
-  const user = getCurrentUser();
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: user.name || "",
-      email: user.email || "",
+      name: "",
+      email: "",
     },
   });
+
+  useEffect(() => {
+    if (!loading && !user) {
+        router.push('/login');
+    }
+    if (user) {
+        form.reset({
+            name: user.name || "",
+            email: user.email || "",
+        });
+    }
+  }, [user, loading, router, form]);
+
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     console.log(values);
@@ -36,6 +54,36 @@ export default function ProfilePage() {
       title: "¡Perfil Actualizado!",
       description: "Tu información ha sido actualizada correctamente.",
     });
+  }
+
+  if (loading || !user) {
+    return (
+        <div className="container mx-auto">
+            <PageHeader title="Mi Perfil" description="Gestiona la información de tu cuenta." />
+            <Card className="w-full max-w-2xl mx-auto">
+                 <CardHeader className="flex-row items-center gap-4">
+                    <Skeleton className="h-20 w-20 rounded-full" />
+                    <div>
+                        <Skeleton className="h-7 w-40 mb-2" />
+                        <Skeleton className="h-5 w-48" />
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-6">
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                </CardContent>
+                <CardFooter>
+                    <Skeleton className="h-10 w-32" />
+                </CardFooter>
+            </Card>
+        </div>
+    )
   }
 
   return (
