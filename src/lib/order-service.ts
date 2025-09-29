@@ -1,6 +1,7 @@
 import { db } from './firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import type { Product } from './placeholder-data';
+import { getStoreById } from './data-service';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem extends Product {
@@ -39,13 +40,19 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    const storeDetails = await getStoreDetailsFromProductId(items[0].id);
+    // Assume all items are from the same store for this transaction
+    const firstProductId = items[0].id;
+    const storeInfo = await getStoreDetailsFromProductId(firstProductId);
+    if (!storeInfo) {
+        throw new Error(`Could not find a store for product id ${firstProductId}`);
+    }
+
     const userDoc = await getDoc(doc(db, 'users', userId));
     const customerName = userDoc.exists() ? userDoc.data().name : shippingInfo.name;
 
-
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,
+        customerName: customerName, 
         items: items.map(item => ({
             id: item.id,
             name: item.name,
@@ -57,30 +64,34 @@ export async function createOrder(
         total,
         status: 'Pedido Realizado',
         createdAt: serverTimestamp(),
-        storeId: storeDetails.id,
-        storeName: storeDetails.name,
-        storeAddress: storeDetails.address,
-        customerName: customerName, 
+        storeId: storeInfo.id,
+        storeName: storeInfo.name,
+        storeAddress: storeInfo.address,
+        shippingAddress: shippingInfo,
     });
     return orderRef.id;
 }
 
-async function getStoreDetailsFromProductId(productId: string): Promise<{id: string, name: string, address: string}> {
+async function getStoreDetailsFromProductId(productId: string): Promise<{id: string, name: string, address: string} | null> {
     const storesRef = collection(db, "stores");
-    const q = query(storesRef);
+    const q = query(storesRef, where('status', '==', 'Aprobado')); // Only search in approved stores
     const storesSnapshot = await getDocs(q);
 
     for (const storeDoc of storesSnapshot.docs) {
-        const productsRef = collection(db, "stores", storeDoc.id, "products");
-        const productDocSnapshot = await getDoc(doc(productsRef, productId));
+        const productDocRef = doc(db, "stores", storeDoc.id, "products", productId);
+        const productDocSnapshot = await getDoc(productDocRef);
         if (productDocSnapshot.exists()) {
             const storeData = storeDoc.data();
-            return { id: storeDoc.id, name: storeData.name || "Tienda sin nombre", address: storeData.address || "Dirección desconocida" };
+            return { 
+                id: storeDoc.id, 
+                name: storeData.name || "Tienda sin nombre", 
+                address: storeData.address || "Dirección desconocida" 
+            };
         }
     }
     
-    console.warn(`Could not find store for product ${productId}. Falling back to a default.`);
-    return { id: 'unknown_store', name: 'Tienda Desconocida', address: 'Dirección Desconocida' };
+    console.warn(`Could not find store for product ${productId}.`);
+    return null;
 }
 
 
@@ -120,7 +131,13 @@ export async function getOrdersByStore(storeId: string): Promise<Order[]> {
 
 export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
     const ordersRef = collection(db, 'orders');
-    const q = query(ordersRef, where('status', '==', 'En preparación'), orderBy('createdAt', 'asc'));
+    // Orders ready for pickup and not yet assigned
+    const q = query(
+        ordersRef, 
+        where('status', '==', 'En preparación'), 
+        where('deliveryPersonId', '==', null),
+        orderBy('createdAt', 'asc')
+    );
 
     const querySnapshot = await getDocs(q);
     const orders: Order[] = querySnapshot.docs.map(doc => {
@@ -197,6 +214,12 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
 export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
   try {
     const orderRef = doc(db, 'orders', orderId);
+    const orderSnap = await getDoc(orderRef);
+
+    if (!orderSnap.exists() || orderSnap.data().deliveryPersonId) {
+        throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
+    }
+
     await updateDoc(orderRef, {
       status: 'En reparto',
       deliveryPersonId: driverId,

@@ -39,14 +39,13 @@ export default async function OrdersPage() {
   }
 
   const userRole = user.role;
-  let orders: any[] = [];
   let props: any = {};
   let pageTitle = "";
   let pageDescription = "";
 
   switch (userRole) {
     case 'store':
-      orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
+      const orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
       pageTitle = "Gestión de Pedidos";
       pageDescription = "Gestiona los pedidos de tu tienda.";
       props = { orders };
@@ -61,10 +60,10 @@ export default async function OrdersPage() {
       props = { availableOrders, assignedOrders };
       break;
     default: // 'buyer' and any other case
-      orders = await getOrdersByUser(user.uid);
+      const buyerOrders = await getOrdersByUser(user.uid);
       pageTitle = "Mis Pedidos";
       pageDescription = "Ve tus pedidos recientes y en curso.";
-      props = { orders };
+      props = { orders: buyerOrders };
       break;
   }
   
