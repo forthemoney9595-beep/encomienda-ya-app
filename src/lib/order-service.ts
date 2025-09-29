@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp } from 'firebase/firestore';
 import type { Product } from './placeholder-data';
 
 // A CartItem is a Product with a quantity.
@@ -22,6 +22,8 @@ export interface Order {
         name: string;
         address: string;
     };
+    // Let's add customer info for the store view
+    customerName?: string;
 }
 
 export async function createOrder(
@@ -34,13 +36,10 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // In a more complex app, this would need validation or handling for multi-store orders.
-    // Here, we assume all items are from the same store based on the first item.
     const storeDetails = await getStoreDetailsFromProductId(items[0].id);
 
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,
-        // Convert CartItems to plain objects for Firestore.
         items: items.map(item => ({
             id: item.id,
             name: item.name,
@@ -55,14 +54,11 @@ export async function createOrder(
         storeId: storeDetails.id,
         storeName: storeDetails.name,
         shippingAddress: shippingInfo,
+        customerName: shippingInfo.name, // Store the customer name directly
     });
     return orderRef.id;
 }
 
-
-// Helper to find which store a product belongs to.
-// This is a simplification. In a real-world app, the productId might have a format
-// that includes the storeId, or the cartItem object itself might already hold the storeId.
 async function getStoreDetailsFromProductId(productId: string): Promise<{id: string, name: string}> {
     const storesRef = collection(db, "stores");
     const q = query(storesRef);
@@ -91,7 +87,24 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
         return {
             id: doc.id,
             ...data,
-            createdAt: data.createdAt?.toDate() || new Date(), // Handle server timestamp
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+        } as Order;
+    });
+
+    return orders;
+}
+
+export async function getOrdersByStore(storeId: string): Promise<Order[]> {
+    const ordersRef = collection(db, 'orders');
+    const q = query(ordersRef, where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
+
+    const querySnapshot = await getDocs(q);
+    const orders: Order[] = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
         } as Order;
     });
 
@@ -107,7 +120,7 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
         return {
             id: docSnap.id,
             ...data,
-            createdAt: data.createdAt?.toDate() || new Date(), // Handle server timestamp
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
         } as Order;
     } else {
         console.log(`No order found with id: ${orderId}`);

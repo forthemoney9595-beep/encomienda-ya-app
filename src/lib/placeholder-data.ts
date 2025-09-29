@@ -1,10 +1,3 @@
-import placeholderImages from './placeholder-images.json';
-
-const getImage = (id: string) => {
-    const image = placeholderImages.placeholderImages.find(img => img.id === id);
-    return image || { imageUrl: 'https://picsum.photos/seed/placeholder/600/400', imageHint: 'placeholder' };
-}
-
 export type Store = {
   id: string;
   name: string;
@@ -31,20 +24,6 @@ export type DeliveryPersonnel = {
   zone: string;
   status: 'Activo' | 'Pendiente' | 'Inactivo' | 'Rechazado';
 };
-
-
-export const stores: Store[] = [
-  // This data is now fetched from Firestore. See /lib/data-service.ts
-  // You can add stores to the Firestore 'stores' collection to see them on the home page.
-];
-
-export const productsByStore: { [key: string]: Product[] } = {
-  // This data is now fetched from Firestore. See /lib/data-service.ts
-};
-
-export const deliveryPersonnel: DeliveryPersonnel[] = [
-    // This data is now fetched from Firestore. See /lib/data-service.ts
-];
 
 export const notifications = [
   { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Bonanza de Hamburguesas está en camino.', date: 'hace 5 min' },
