@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, doc, getDoc } from 'firebase/firestore';
 import type { Store } from './placeholder-data';
 
 /**
@@ -28,5 +28,26 @@ export async function getStores(): Promise<Store[]> {
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
     return [];
+  }
+}
+
+
+/**
+ * Fetches a single store by its ID from Firestore.
+ * @param id The ID of the store to fetch.
+ */
+export async function getStoreById(id: string): Promise<Store | null> {
+  try {
+    const docRef = doc(db, "stores", id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() } as Store;
+    } else {
+      console.log(`No store found with id: ${id}`);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching store:", error);
+    return null;
   }
 }

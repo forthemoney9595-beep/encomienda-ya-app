@@ -107,5 +107,5 @@ export function AddItemDialog() {
         </Form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
