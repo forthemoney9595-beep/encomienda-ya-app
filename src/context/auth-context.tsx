@@ -2,15 +2,15 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { Skeleton } from '@/components/ui/skeleton';
 
 interface UserProfile {
     uid: string;
     name: string;
     email: string;
     role: 'buyer' | 'store' | 'delivery' | 'admin';
+    storeId?: string; // Add storeId for store owners
     [key: string]: any;
 }
 
@@ -33,14 +33,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const userDoc = await getDoc(userDocRef);
 
                 if (userDoc.exists()) {
-                    setUser({
+                    const userData = userDoc.data();
+                    let profile: UserProfile = {
                         uid: firebaseUser.uid,
                         email: firebaseUser.email!,
-                        ...userDoc.data()
-                    } as UserProfile);
+                        ...userData
+                    } as UserProfile;
+                    
+                    // If user is a store owner, find their storeId
+                    if (profile.role === 'store') {
+                        const storesRef = collection(db, 'stores');
+                        const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            // Assuming a user owns only one store
+                            profile.storeId = querySnapshot.docs[0].id;
+                        }
+                    }
+
+                    setUser(profile);
                 } else {
-                    // This case might happen if the user record in Firestore is deleted
-                    // but the auth record still exists.
                     setUser(null);
                 }
             } else {
@@ -56,12 +68,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const value = { user, loading, isAdmin };
     
-    // While loading, you might want to show a global spinner or a skeleton layout.
-    // For now, we'll just render children, but showing a loader is good practice.
-    // if (loading) {
-    //     return <div>Loading...</div>; // Or a more sophisticated loading component
-    // }
-
     return (
         <AuthContext.Provider value={value}>
             {children}

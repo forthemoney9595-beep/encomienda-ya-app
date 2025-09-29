@@ -3,15 +3,20 @@
 import { useAuth } from '@/context/auth-context';
 import { AddItemDialog } from './add-item-dialog';
 
-export function StoreOwnerTools({ storeId }: { storeId: string }) {
+interface StoreOwnerToolsProps {
+  storeId: string;
+  ownerId: string;
+  productCategories: string[];
+}
+
+export function StoreOwnerTools({ storeId, ownerId, productCategories }: StoreOwnerToolsProps) {
   const { user } = useAuth();
   
-  // Asumiendo que el perfil de usuario tiene un campo 'storeId' si su rol es 'store'
-  const isStoreOwner = user?.role === 'store' && user?.storeId === storeId;
+  const isStoreOwner = user?.uid === ownerId;
 
   if (!isStoreOwner) {
     return null;
   }
 
-  return <AddItemDialog />;
+  return <AddItemDialog storeId={storeId} productCategories={productCategories} />;
 }

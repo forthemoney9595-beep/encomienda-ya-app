@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection } from 'firebase/firestore';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -17,23 +17,30 @@ type UserProfileData = {
  */
 export async function createUserProfile(uid: string, data: UserProfileData) {
   try {
-    // Crea una referencia al documento del usuario en la colección 'users'.
-    // El ID del documento será el UID del usuario.
     const userDocRef = doc(db, 'users', uid);
     
-    // Usa setDoc para crear el documento. Si el documento ya existe, será sobrescrito.
-    // La opción { merge: true } podría ser útil si solo quieres actualizar ciertos campos,
-    // pero para la creación inicial, un setDoc directo es más claro.
     await setDoc(userDocRef, {
-      uid, // Guardar el uid también en el documento puede ser útil para queries
+      uid, 
       ...data,
-      createdAt: new Date(), // Sellar la fecha de creación es una buena práctica.
+      createdAt: new Date(),
     });
+
+    if (data.role === 'store') {
+        const storeCollectionRef = collection(db, 'stores');
+        await addDoc(storeCollectionRef, {
+            name: data.storeName,
+            category: data.storeCategory,
+            address: data.storeAddress,
+            ownerId: uid,
+            status: 'Pendiente',
+            imageUrl: `https://picsum.photos/seed/${data.storeName}/600/400`,
+            imageHint: 'store food',
+        });
+    }
     
     console.log(`Perfil de usuario creado/actualizado para UID: ${uid}`);
   } catch (error) {
     console.error("Error al crear el perfil de usuario en Firestore: ", error);
-    // Propaga el error para que la función que llama pueda manejarlo (e.j., mostrar un toast al usuario).
     throw new Error("No se pudo crear el perfil de usuario.");
   }
 }

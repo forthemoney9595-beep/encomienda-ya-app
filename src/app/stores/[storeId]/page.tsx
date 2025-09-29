@@ -15,12 +15,12 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
   }
 
   const products = await getProductsByStoreId(params.storeId);
-  const productCategories = Array.from(new Set(products.map(p => p.category)));
+  const productCategories = Array.from(new Set(products.map(p => p.category).concat(store.category)));
 
   return (
     <div className="container mx-auto">
       <PageHeader title={store.name} description={store.category}>
-        <StoreOwnerTools storeId={store.id} />
+        <StoreOwnerTools storeId={store.id} ownerId={store.ownerId} productCategories={productCategories} />
       </PageHeader>
       
       <div className="grid gap-6 md:grid-cols-3">

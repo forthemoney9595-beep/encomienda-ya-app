@@ -13,6 +13,7 @@ export type Store = {
   imageUrl: string;
   imageHint: string;
   status: 'Aprobado' | 'Pendiente' | 'Rechazado';
+  ownerId: string;
 }
 
 export type Product = {

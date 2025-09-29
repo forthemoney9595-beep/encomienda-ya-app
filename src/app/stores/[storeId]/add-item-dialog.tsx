@@ -7,20 +7,30 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusCircle } from "lucide-react";
+import { Loader2, PlusCircle } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { addProductToStore } from "@/lib/data-service";
+import { useRouter } from "next/navigation";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
+  category: z.string({ required_error: "Por favor selecciona una categoría." }),
 });
 
-export function AddItemDialog() {
+interface AddItemDialogProps {
+    storeId: string;
+    productCategories: string[];
+}
+
+export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -31,15 +41,24 @@ export function AddItemDialog() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // En una aplicación real, aquí llamarías a tu API para guardar los datos.
-    console.log(values);
-    toast({
-      title: "Artículo Guardado",
-      description: `El artículo "${values.name}" ha sido añadido correctamente.`,
-    });
-    setOpen(false);
-    form.reset();
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+      await addProductToStore(storeId, values);
+      toast({
+        title: "¡Artículo Guardado!",
+        description: `El artículo "${values.name}" ha sido añadido correctamente.`,
+      });
+      setOpen(false);
+      form.reset();
+      router.refresh(); // Vuelve a cargar los datos del servidor para esta ruta
+    } catch (error) {
+      console.error("Error al añadir el artículo:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo añadir el artículo. Por favor, inténtalo de nuevo.",
+      });
+    }
   }
 
   return (
@@ -65,7 +84,7 @@ export function AddItemDialog() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre</FormLabel>
+                    <FormLabel>Nombre del Producto</FormLabel>
                     <FormControl>
                       <Input placeholder="Pizza Margarita" {...field} />
                     </FormControl>
@@ -86,6 +105,31 @@ export function AddItemDialog() {
                   </FormItem>
                 )}
               />
+               <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Categoría</FormLabel>
+                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                            <SelectTrigger>
+                            <SelectValue placeholder="Selecciona una categoría para el producto" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            {productCategories.map((cat) => (
+                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            ))}
+                            <SelectItem value="nueva-categoria">
+                                <span className="text-primary">Crear nueva categoría... (próximamente)</span>
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="price"
@@ -93,7 +137,7 @@ export function AddItemDialog() {
                   <FormItem>
                     <FormLabel>Precio</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="12.99" {...field} />
+                      <Input type="number" step="0.01" placeholder="12.99" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -101,7 +145,10 @@ export function AddItemDialog() {
               />
             </div>
             <DialogFooter>
-              <Button type="submit">Guardar cambios</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar cambios
+              </Button>
             </DialogFooter>
           </form>
         </Form>

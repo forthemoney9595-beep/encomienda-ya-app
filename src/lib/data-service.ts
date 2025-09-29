@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, getDocs, query, doc, getDoc, where, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 
 /**
@@ -50,6 +50,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
         imageUrl: data.imageUrl || 'https://picsum.photos/seed/placeholder/600/400',
         imageHint: data.imageHint || 'store',
         status: data.status || 'Pendiente',
+        ownerId: data.ownerId || '',
       } as Store;
     } else {
       console.log(`No store found with id: ${id}`);
@@ -88,6 +89,22 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
     return [];
   }
 }
+
+/**
+ * Adds a new product to a store's 'products' subcollection.
+ * @param storeId The ID of the store.
+ * @param productData The data for the new product.
+ */
+export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
+    try {
+        const productsCollectionRef = collection(db, 'stores', storeId, 'products');
+        await addDoc(productsCollectionRef, productData);
+    } catch (error) {
+        console.error(`Error adding product to store ${storeId}:`, error);
+        throw error;
+    }
+}
+
 
 /**
  * Fetches all delivery personnel from the 'users' collection in Firestore.
