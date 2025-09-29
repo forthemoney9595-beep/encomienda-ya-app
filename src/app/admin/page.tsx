@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation';
 export default function AdminDashboard() {
   const user = getCurrentUser();
 
+  // Esta verificación ahora es más importante que nunca
   if (user?.role !== 'admin') {
     redirect('/login');
   }

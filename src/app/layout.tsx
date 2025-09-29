@@ -11,7 +11,7 @@ import { Notifications } from '@/components/notifications';
 import { CartProvider } from '@/context/cart-context';
 import { Cart } from '@/components/cart';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { User, LogOut } from 'lucide-react';
+import { User, LogOut, Shield } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 
 export const metadata: Metadata = {
@@ -25,6 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = getCurrentUser();
+  const isLoggedIn = user?.role !== 'buyer' || user.name !== 'Invitado'; // Simulación de login
+  const isAdmin = user?.role === 'admin';
 
   return (
     <html lang="es" className="dark">
@@ -47,47 +49,60 @@ export default function RootLayout({
                 <SidebarContent>
                   <MainNav />
                 </SidebarContent>
-                <SidebarFooter>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent/50 cursor-pointer rounded-md">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={`https://picsum.photos/seed/${user.name}/40/40`} alt={user.name} />
-                          <AvatarFallback>{user.name?.[0].toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                          <span className="text-sm font-semibold text-sidebar-foreground">{user.name}</span>
-                          <span className="text-xs text-sidebar-foreground/70">{user.email}</span>
+                {isLoggedIn && (
+                  <SidebarFooter>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent/50 cursor-pointer rounded-md">
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage src={`https://picsum.photos/seed/${user.name}/40/40`} alt={user.name} />
+                            <AvatarFallback>{user.name?.[0].toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+                            <span className="text-sm font-semibold text-sidebar-foreground">{user.name}</span>
+                            <span className="text-xs text-sidebar-foreground/70">{user.email}</span>
+                          </div>
                         </div>
-                      </div>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="top" align="start" className="w-56 mb-2 ml-2">
-                       <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-                       <DropdownMenuSeparator />
-                       <DropdownMenuItem asChild>
-                         <Link href="/profile">
-                          <User className="mr-2 h-4 w-4" />
-                          <span>Perfil</span>
-                         </Link>
-                       </DropdownMenuItem>
-                       <DropdownMenuItem asChild>
-                         <Link href="/login">
-                          <LogOut className="mr-2 h-4 w-4" />
-                          <span>Cerrar Sesión</span>
-                         </Link>
-                       </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </SidebarFooter>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="top" align="start" className="w-56 mb-2 ml-2">
+                         <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                         <DropdownMenuSeparator />
+                         <DropdownMenuItem asChild>
+                           <Link href="/profile">
+                            <User className="mr-2 h-4 w-4" />
+                            <span>Perfil</span>
+                           </Link>
+                         </DropdownMenuItem>
+                         {isAdmin && (
+                            <DropdownMenuItem asChild>
+                                <Link href="/admin">
+                                    <Shield className="mr-2 h-4 w-4" />
+                                    <span>Panel Admin</span>
+                                </Link>
+                            </DropdownMenuItem>
+                         )}
+                         <DropdownMenuSeparator />
+                         <DropdownMenuItem asChild>
+                           <Link href="/login">
+                            <LogOut className="mr-2 h-4 w-4" />
+                            <span>Cerrar Sesión</span>
+                           </Link>
+                         </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </SidebarFooter>
+                )}
               </Sidebar>
               <SidebarInset>
                 <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
                   <div className="ml-auto flex items-center gap-4">
                     <Notifications />
                     <Cart />
-                    <Link href="/login">
-                      <Button>Iniciar Sesión</Button>
-                    </Link>
+                    {!isLoggedIn && (
+                      <Link href="/login">
+                        <Button>Iniciar Sesión</Button>
+                      </Link>
+                    )}
                   </div>
                 </header>
                 <main className="flex-1 p-4 md:p-6">
