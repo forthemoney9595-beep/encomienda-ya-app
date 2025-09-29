@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, getDocs, query, doc, getDoc, where } from 'firebase/firestore';
+import { collection, getDocs, query, doc, getDoc, where, updateDoc } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 
 /**
@@ -113,5 +113,35 @@ export async function getDeliveryPersonnel(): Promise<DeliveryPersonnel[]> {
   } catch (error) {
     console.error("Error fetching delivery personnel from Firestore: ", error);
     return [];
+  }
+}
+
+/**
+ * Updates the status of a store in Firestore.
+ * @param storeId The ID of the store to update.
+ * @param status The new status ('Aprobado' or 'Rechazado').
+ */
+export async function updateStoreStatus(storeId: string, status: 'Aprobado' | 'Rechazado'): Promise<void> {
+  try {
+    const storeRef = doc(db, 'stores', storeId);
+    await updateDoc(storeRef, { status });
+  } catch (error) {
+    console.error(`Error updating store status for ${storeId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Updates the status of a delivery person in Firestore.
+ * @param personnelId The ID of the delivery person to update.
+ * @param status The new status ('approved' or 'rejected').
+ */
+export async function updateDeliveryPersonnelStatus(personnelId: string, status: 'approved' | 'rejected'): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', personnelId);
+    await updateDoc(userRef, { status });
+  } catch (error) {
+    console.error(`Error updating delivery personnel status for ${personnelId}:`, error);
+    throw error;
   }
 }

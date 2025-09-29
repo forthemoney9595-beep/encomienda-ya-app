@@ -12,14 +12,23 @@ import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getStores } from '@/lib/data-service';
+import { getStores, updateStoreStatus } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminStoresPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const fetchStores = async () => {
+    setLoading(true);
+    const storesFromDb = await getStores();
+    setStores(storesFromDb);
+    setLoading(false);
+  };
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -29,15 +38,28 @@ export default function AdminStoresPage() {
 
   useEffect(() => {
     if (isAdmin) {
-      const fetchStores = async () => {
-        setLoading(true);
-        const storesFromDb = await getStores();
-        setStores(storesFromDb);
-        setLoading(false);
-      };
       fetchStores();
     }
   }, [isAdmin]);
+  
+  const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
+    try {
+      await updateStoreStatus(storeId, status);
+      toast({
+        title: '¡Éxito!',
+        description: `La tienda ha sido marcada como ${status.toLowerCase()}.`,
+      });
+      // Refresh the list
+      await fetchStores();
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo actualizar el estado de la tienda.',
+      });
+    }
+  };
+
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -129,11 +151,11 @@ export default function AdminStoresPage() {
                         <DropdownMenuContent align="end">
                             {store.status === 'Pendiente' && (
                               <>
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusUpdate(store.id, 'Aprobado')}>
                                     <CheckCircle className="mr-2 h-4 w-4" />
                                     Aprobar
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive">
+                                <DropdownMenuItem className="text-destructive" onClick={() => handleStatusUpdate(store.id, 'Rechazado')}>
                                     <XCircle className="mr-2 h-4 w-4" />
                                     Rechazar
                                 </DropdownMenuItem>
