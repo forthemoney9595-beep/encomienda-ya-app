@@ -25,7 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = getCurrentUser();
-  const isLoggedIn = user?.role !== 'buyer' || user.name !== 'Invitado'; // Simulación de login
+  // Esta simulación cambiará cuando integremos el estado de auth real
+  const isLoggedIn = user?.role !== 'buyer' || user.name !== 'Invitado'; 
   const isAdmin = user?.role === 'admin';
 
   return (

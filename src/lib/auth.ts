@@ -8,8 +8,8 @@ export const getCurrentUser = () => {
   // para que la interfaz por defecto no muestre el panel de admin.
   // La lógica real vendrá de Firebase.
   return {
-    name: 'Invitado',
-    email: 'invitado@email.com',
-    role: 'buyer', // Por defecto, cualquier usuario es un comprador.
+    name: 'Admin User',
+    email: 'admin@email.com',
+    role: 'admin', // Asignamos el rol de admin para las pruebas.
   };
 };
