@@ -40,7 +40,16 @@ export function ProductList({ products, productCategories }: ProductListProps) {
                     {products.filter(p => p.category === category).map((product) => (
                         <Card key={product.id}>
                             <CardContent className="flex items-center gap-4 p-4">
-                                <Image src={`https://picsum.photos/seed/${product.id}/80/80`} alt={product.name} width={80} height={80} className="rounded-md" data-ai-hint="food item" />
+                                <div className="relative h-20 w-20 flex-shrink-0">
+                                    <Image 
+                                        src={product.imageUrl || `https://picsum.photos/seed/${product.id}/80/80`} 
+                                        alt={product.name} 
+                                        fill
+                                        style={{ objectFit: 'cover' }}
+                                        className="rounded-md" 
+                                        data-ai-hint="food item" 
+                                    />
+                                </div>
                                 <div className="flex-1">
                                     <h3 className="font-semibold">{product.name}</h3>
                                     <p className="text-sm text-muted-foreground">{product.description}</p>
@@ -57,11 +66,9 @@ export function ProductList({ products, productCategories }: ProductListProps) {
                 </TabsContent>
             ))}
             {products.length === 0 && (
-                <TabsContent value="all">
-                    <div className="text-center text-muted-foreground py-10">
-                        <p>Esta tienda aún no tiene productos.</p>
-                    </div>
-                </TabsContent>
+                 <div className="text-center text-muted-foreground py-10">
+                    <p>Esta tienda aún no tiene productos.</p>
+                </div>
             )}
         </Tabs>
     )

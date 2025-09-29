@@ -85,6 +85,7 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
         description: data.description || '',
         price: data.price || 0,
         category: data.category || '',
+        imageUrl: data.imageUrl,
       };
     });
 

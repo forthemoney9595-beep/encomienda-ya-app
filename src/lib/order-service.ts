@@ -60,6 +60,7 @@ export async function createOrder(
             price: item.price,
             category: item.category,
             quantity: item.quantity,
+            imageUrl: item.imageUrl || null,
         })), 
         total,
         status: 'Pedido Realizado',

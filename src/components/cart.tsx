@@ -36,7 +36,15 @@ export function Cart() {
               <div className="mt-4 space-y-4">
                 {cart.map(item => (
                   <div key={item.id} className="flex items-start gap-4">
-                    <Image src={`https://picsum.photos/seed/${item.id}/64/64`} alt={item.name} width={64} height={64} className="rounded-md" />
+                    <div className="relative h-16 w-16 flex-shrink-0">
+                        <Image 
+                            src={item.imageUrl || `https://picsum.photos/seed/${item.id}/64/64`} 
+                            alt={item.name}
+                            fill
+                            style={{ objectFit: 'cover' }}
+                            className="rounded-md" 
+                        />
+                    </div>
                     <div className="flex-1">
                       <p className="font-semibold">{item.name}</p>
                       <p className="text-sm text-muted-foreground">${item.price.toFixed(2)}</p>

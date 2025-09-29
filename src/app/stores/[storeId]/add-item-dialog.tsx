@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle } from "lucide-react";
+import { Loader2, PlusCircle, Wand2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { addProductToStore } from "@/lib/data-service";
 import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/combobox";
+import { generateProductImage } from "@/ai/flows/generate-product-image";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -31,7 +32,9 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
-  const [categorySearch, setCategorySearch] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingState, setProcessingState] = useState('');
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -42,25 +45,29 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
       category: "",
     },
   });
-  
-  const categoryOptions = useMemo(() => {
-    const existingOptions = productCategories.map(cat => ({ value: cat.toLowerCase(), label: cat }));
-    const searchValueLower = categorySearch.toLowerCase();
-    
-    // If the search term doesn't exactly match an existing category, add it as a "Create new" option
-    if (categorySearch && !existingOptions.some(opt => opt.value === searchValueLower)) {
-      return [
-        { value: searchValueLower, label: `Crear nueva categoría: "${categorySearch}"` },
-        ...existingOptions
-      ];
-    }
-    return existingOptions;
-  }, [productCategories, categorySearch]);
-
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsProcessing(true);
+    let imageUrl = '';
     try {
-      await addProductToStore(storeId, values);
+        setProcessingState('Generando imagen del producto...');
+        const imageResult = await generateProductImage({
+            productName: values.name,
+            productDescription: values.description,
+        });
+        imageUrl = imageResult.imageUrl;
+    } catch (error) {
+        console.error("Error al generar la imagen:", error);
+        toast({
+            variant: "destructive",
+            title: "Error de IA",
+            description: "No se pudo generar la imagen del producto. Se usará una imagen de marcador de posición.",
+        });
+    }
+
+    try {
+      setProcessingState('Guardando producto...');
+      await addProductToStore(storeId, {...values, imageUrl: imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/400/400` });
       toast({
         title: "¡Artículo Guardado!",
         description: `El artículo "${values.name}" ha sido añadido correctamente.`,
@@ -75,24 +82,27 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
         title: "Error",
         description: "No se pudo añadir el artículo. Por favor, inténtalo de nuevo.",
       });
+    } finally {
+        setIsProcessing(false);
+        setProcessingState('');
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { if (!isProcessing) setOpen(o)}}>
       <DialogTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
           Añadir Nuevo Artículo
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isProcessing) e.preventDefault() }}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
               <DialogTitle>Añadir Nuevo Artículo</DialogTitle>
               <DialogDescription>
-                Rellena los detalles del nuevo producto. Haz clic en guardar cuando hayas terminado.
+                Rellena los detalles del nuevo producto. Se generará una imagen con IA.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -103,7 +113,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                   <FormItem>
                     <FormLabel>Nombre del Producto</FormLabel>
                     <FormControl>
-                      <Input placeholder="Pizza Margarita" {...field} />
+                      <Input placeholder="Pizza Margarita" {...field} disabled={isProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -116,7 +126,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                   <FormItem>
                     <FormLabel>Descripción</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Queso clásico y tomate" {...field} />
+                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -136,6 +146,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                         }}
                         placeholder="Selecciona o crea una categoría"
                         emptyMessage="No se encontraron categorías."
+                        disabled={isProcessing}
                     />
                     <FormMessage />
                   </FormItem>
@@ -148,7 +159,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                   <FormItem>
                     <FormLabel>Precio</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="12.99" {...field} />
+                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -156,9 +167,18 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
               />
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar cambios
+              <Button type="submit" disabled={isProcessing}>
+                {isProcessing ? (
+                   <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {processingState}
+                   </>
+                ) : (
+                  <>
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    Guardar y Generar Imagen
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </form>
