@@ -1,25 +1,25 @@
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { User, Store, Bike } from "lucide-react";
+import { User, Store, Bike, ShieldCheck } from "lucide-react";
 import PageHeader from "@/components/page-header";
 
 export default function SignupPage() {
   const roles = [
     {
       name: "Comprador",
-      description: "Crea una cuenta para pedir de tus tiendas favoritas.",
+      description: "Crea una cuenta para navegar por las tiendas y realizar pedidos de tus productos favoritos.",
       icon: <User className="h-12 w-12" />,
       href: "/signup/buyer"
     },
     {
       name: "Tienda",
-      description: "Registra tu negocio para empezar a vender tus productos.",
+      description: "Registra tu negocio para vender tus productos. Tu cuenta requerirá la aprobación de un administrador.",
       icon: <Store className="h-12 w-12" />,
       href: "/signup/store"
     },
     {
       name: "Repartidor",
-      description: "Únete a nuestro equipo para empezar a entregar pedidos.",
+      description: "Únete a nuestro equipo para ganar dinero entregando pedidos. Tu cuenta será verificada por un administrador.",
       icon: <Bike className="h-12 w-12" />,
       href: "/signup/delivery"
     }
