@@ -24,6 +24,7 @@ export interface Order {
     };
     // Let's add customer info for the store view
     customerName?: string;
+    storeAddress?: string; // Add store address for delivery personnel
 }
 
 export async function createOrder(
@@ -36,8 +37,6 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // This is a simplification. In a real app, you wouldn't query all stores.
-    // You'd likely have the storeId available in the cart or product object.
     const storeDetails = await getStoreDetailsFromProductId(items[0].id);
     const userDoc = await getDoc(doc(db, 'users', userId));
     const customerName = userDoc.exists() ? userDoc.data().name : shippingInfo.name;
@@ -58,28 +57,29 @@ export async function createOrder(
         createdAt: serverTimestamp(),
         storeId: storeDetails.id,
         storeName: storeDetails.name,
+        storeAddress: storeDetails.address,
         shippingAddress: shippingInfo,
         customerName: customerName, 
     });
     return orderRef.id;
 }
 
-async function getStoreDetailsFromProductId(productId: string): Promise<{id: string, name: string}> {
+async function getStoreDetailsFromProductId(productId: string): Promise<{id: string, name: string, address: string}> {
     const storesRef = collection(db, "stores");
     const q = query(storesRef);
     const storesSnapshot = await getDocs(q);
 
     for (const storeDoc of storesSnapshot.docs) {
-        // This is inefficient. In a real app, products might have a direct 'storeId' field.
         const productsRef = collection(db, "stores", storeDoc.id, "products");
         const productDocSnapshot = await getDoc(doc(productsRef, productId));
         if (productDocSnapshot.exists()) {
-            return { id: storeDoc.id, name: storeDoc.data().name || "Tienda sin nombre" };
+            const storeData = storeDoc.data();
+            return { id: storeDoc.id, name: storeData.name || "Tienda sin nombre", address: storeData.address || "Dirección desconocida" };
         }
     }
     
     console.warn(`Could not find store for product ${productId}. Falling back to a default.`);
-    return { id: 'unknown_store', name: 'Tienda Desconocida' };
+    return { id: 'unknown_store', name: 'Tienda Desconocida', address: 'Dirección Desconocida' };
 }
 
 
@@ -114,6 +114,22 @@ export async function getOrdersByStore(storeId: string): Promise<Order[]> {
         } as Order;
     });
 
+    return orders;
+}
+
+export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
+    const ordersRef = collection(db, 'orders');
+    const q = query(ordersRef, where('status', '==', 'En preparación'), orderBy('createdAt', 'asc'));
+
+    const querySnapshot = await getDocs(q);
+    const orders: Order[] = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+        } as Order;
+    });
     return orders;
 }
 

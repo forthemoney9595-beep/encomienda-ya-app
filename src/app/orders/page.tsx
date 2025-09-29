@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import PageHeader from '@/components/page-header';
-import { getOrdersByUser, getOrdersByStore } from '@/lib/order-service';
+import { getOrdersByUser, getOrdersByStore, getAvailableOrdersForDelivery } from '@/lib/order-service';
 import { db } from "@/lib/firebase";
 import { cookies } from "next/headers";
 import { redirect } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import BuyerOrdersView from './buyer-orders-view';
 import StoreOrdersView from './store-orders-view';
+import DeliveryOrdersView from './delivery-orders-view';
 
 
 async function getAuthenticatedUser() {
@@ -37,18 +38,45 @@ export default async function OrdersPage() {
     redirect('/login');
   }
 
-  const isStoreOwner = user.role === 'store';
-  const orders = isStoreOwner && user.storeId
-    ? await getOrdersByStore(user.storeId)
-    : await getOrdersByUser(user.uid);
+  const userRole = user.role;
+  let orders = [];
+  let pageTitle = "";
+  let pageDescription = "";
 
-  const pageTitle = isStoreOwner ? "Gestión de Pedidos" : "Mis Pedidos";
-  const pageDescription = isStoreOwner ? "Gestiona los pedidos de tu tienda." : "Ve tus pedidos recientes y en curso.";
+  switch (userRole) {
+    case 'store':
+      orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
+      pageTitle = "Gestión de Pedidos";
+      pageDescription = "Gestiona los pedidos de tu tienda.";
+      break;
+    case 'delivery':
+      orders = await getAvailableOrdersForDelivery();
+      pageTitle = "Pedidos Disponibles";
+      pageDescription = "Acepta pedidos para empezar a entregar.";
+      break;
+    default: // 'buyer' and any other case
+      orders = await getOrdersByUser(user.uid);
+      pageTitle = "Mis Pedidos";
+      pageDescription = "Ve tus pedidos recientes y en curso.";
+      break;
+  }
+  
+  const renderView = () => {
+    switch (userRole) {
+      case 'store':
+        return <StoreOrdersView orders={orders} />;
+      case 'delivery':
+        return <DeliveryOrdersView orders={orders} />;
+      default:
+        return <BuyerOrdersView orders={orders} />;
+    }
+  }
+
 
   return (
     <div className="container mx-auto">
       <PageHeader title={pageTitle} description={pageDescription} />
-      {isStoreOwner ? <StoreOrdersView orders={orders} /> : <BuyerOrdersView orders={orders} />}
+      {renderView()}
     </div>
   );
 }
