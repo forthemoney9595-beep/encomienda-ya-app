@@ -1,10 +1,8 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import { getProductsByStoreId } from '@/lib/placeholder-data';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AddItemDialog } from './add-item-dialog';
-import { getStoreById } from '@/lib/data-service';
+import { getStoreById, getProductsByStoreId } from '@/lib/data-service';
 import { StoreOwnerTools } from './store-owner-tools';
 import { ProductList } from './product-list';
 
@@ -15,7 +13,7 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
     notFound();
   }
 
-  const products = getProductsByStoreId(params.storeId);
+  const products = await getProductsByStoreId(params.storeId);
   const productCategories = Array.from(new Set(products.map(p => p.category)));
 
   return (
