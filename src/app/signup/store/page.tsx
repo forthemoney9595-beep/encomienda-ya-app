@@ -10,6 +10,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
+import { auth } from '@/lib/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
@@ -22,6 +25,7 @@ const formSchema = z.object({
 
 export default function SignupStorePage() {
   const { toast } = useToast();
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -33,12 +37,26 @@ export default function SignupStorePage() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-      title: "¡Tienda Registrada!",
-      description: "Tu tienda ha sido registrada exitosamente.",
-    });
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      // Aquí deberíamos guardar los datos de la tienda (nombre, categoría, dirección, etc) y el rol/estado en Firestore
+      console.log('Usuario de tienda creado:', userCredential.user);
+      toast({
+        title: "¡Solicitud de Registro Enviada!",
+        description: "Tu tienda ha sido registrada y está pendiente de aprobación.",
+      });
+      router.push('/');
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title: "Error al Registrar la Tienda",
+        description: error.code === 'auth/email-already-in-use' 
+          ? "Este correo electrónico ya está en uso."
+          : "Ocurrió un error. Por favor, inténtalo de nuevo.",
+      });
+    }
   }
 
   return (
@@ -146,7 +164,9 @@ export default function SignupStorePage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full">Registrar Tienda</Button>
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Registrando tienda..." : "Registrar Tienda"}
+              </Button>
               <div className="mt-4 text-center text-sm">
                 ¿Ya tienes una cuenta?{" "}
                 <Link href="/login" className="underline">

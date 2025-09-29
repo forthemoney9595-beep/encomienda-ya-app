@@ -10,6 +10,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
+import { auth } from '@/lib/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -22,6 +25,7 @@ const formSchema = z.object({
 
 export default function SignupDeliveryPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -31,12 +35,26 @@ export default function SignupDeliveryPage() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-      title: "¡Cuenta de Repartidor Creada!",
-      description: "Tu cuenta ha sido creada exitosamente. Pronto nos pondremos en contacto.",
-    });
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      // Aquí deberíamos guardar los datos adicionales (nombre, vehículo, rol, estado 'pendiente') en Firestore
+      console.log('Usuario repartidor creado:', userCredential.user);
+      toast({
+        title: "¡Solicitud Enviada!",
+        description: "Tu cuenta de repartidor ha sido creada y está pendiente de aprobación.",
+      });
+      router.push('/');
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title: "Error al Crear la Cuenta",
+        description: error.code === 'auth/email-already-in-use' 
+          ? "Este correo electrónico ya está en uso."
+          : "Ocurrió un error. Por favor, inténtalo de nuevo.",
+      });
+    }
   }
 
   return (
@@ -134,7 +152,9 @@ export default function SignupDeliveryPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full">Crear Cuenta de Repartidor</Button>
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Enviando solicitud..." : "Crear Cuenta de Repartidor"}
+              </Button>
               <div className="mt-4 text-center text-sm">
                 ¿Ya tienes una cuenta?{" "}
                 <Link href="/login" className="underline">

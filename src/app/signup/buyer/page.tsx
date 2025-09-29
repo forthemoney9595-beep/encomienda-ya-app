@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
+import { auth } from '@/lib/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -18,6 +21,7 @@ const formSchema = z.object({
 
 export default function SignupBuyerPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -27,12 +31,26 @@ export default function SignupBuyerPage() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-      title: "¡Cuenta Creada!",
-      description: "Tu cuenta de comprador ha sido creada exitosamente.",
-    });
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      // Aquí podrías guardar 'name' y 'role' en Firestore
+      console.log('Usuario comprador creado:', userCredential.user);
+      toast({
+        title: "¡Cuenta Creada!",
+        description: "Tu cuenta de comprador ha sido creada exitosamente.",
+      });
+      router.push('/');
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title: "Error al Crear la Cuenta",
+        description: error.code === 'auth/email-already-in-use' 
+          ? "Este correo electrónico ya está en uso."
+          : "Ocurrió un error. Por favor, inténtalo de nuevo.",
+      });
+    }
   }
 
   return (
@@ -88,7 +106,9 @@ export default function SignupBuyerPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full">Crear Cuenta</Button>
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Creando cuenta..." : "Crear Cuenta"}
+              </Button>
               <div className="mt-4 text-center text-sm">
                 ¿Ya tienes una cuenta?{" "}
                 <Link href="/login" className="underline">
