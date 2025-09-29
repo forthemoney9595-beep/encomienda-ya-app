@@ -1,17 +1,9 @@
 'use client';
 
+import type { Product } from '@/lib/placeholder-data';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export interface Product {
-    id: string;
-    name: string;
-    description: string;
-    price: number;
-    category: string;
-    // imageUrl: string;
-}
-
-interface CartItem extends Product {
+export interface CartItem extends Product {
     quantity: number;
 }
 

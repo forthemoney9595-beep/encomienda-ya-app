@@ -19,9 +19,9 @@ import { useAuth } from '@/context/auth-context';
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
   address: z.string().min(5, "La dirección es obligatoria."),
-  cardNumber: z.string().length(16, "El número de tarjeta debe tener 16 dígitos.").filter(val => /^\d+$/.test(val), "Solo se admiten números."),
+  cardNumber: z.string().length(16, "El número de tarjeta debe tener 16 dígitos.").regex(/^\d+$/, "Solo se admiten números."),
   expiryDate: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "El formato debe ser MM/AA."),
-  cvc: z.string().length(3, "El CVC debe tener 3 dígitos.").filter(val => /^\d+$/.test(val), "Solo se admiten números."),
+  cvc: z.string().length(3, "El CVC debe tener 3 dígitos.").regex(/^\d+$/, "Solo se admiten números."),
 });
 
 

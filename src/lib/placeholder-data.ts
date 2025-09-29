@@ -41,10 +41,6 @@ export const productsByStore: { [key: string]: Product[] } = {
   // This data is now fetched from Firestore. See /lib/data-service.ts
 };
 
-export const orders = [
-  // This data is now fetched from Firestore. See /lib/order-service.ts
-];
-
 export const deliveryPersonnel: DeliveryPersonnel[] = [
     // This data is now fetched from Firestore. See /lib/data-service.ts
 ];
@@ -55,7 +51,3 @@ export const notifications = [
   { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
-
-export const getStoreById = (id: string) => stores.find(s => s.id === id);
-export const getProductsByStoreId = (id: string) => productsByStore[id as keyof typeof productsByStore] || [];
-export const getOrderById = (id: string) => orders.find(o => o.id === id);
