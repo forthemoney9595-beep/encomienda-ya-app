@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getStoreById, getProductsByStoreId } from '@/lib/data-service';
 import { StoreOwnerTools } from './store-owner-tools';
 import { ProductList } from './product-list';
+import { ContactStore } from './contact-store';
 
 export default async function StoreDetailPage({ params }: { params: { storeId: string } }) {
   const store = await getStoreById(params.storeId);
@@ -57,6 +58,7 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
                         <h3 className="font-semibold">Horario</h3>
                         <p className="text-muted-foreground">Lun-Dom: 11:00 AM - 10:00 PM</p>
                     </div>
+                     <ContactStore storeId={store.id} />
                 </CardContent>
             </Card>
         </div>

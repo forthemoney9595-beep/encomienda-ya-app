@@ -21,7 +21,8 @@ import {
   Utensils,
   Shirt,
   ShoppingBag,
-  User
+  User,
+  MessageCircle,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
@@ -63,6 +64,18 @@ export function MainNav() {
                 <span>Pedidos</span>
               </Link>
             </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+             <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith('/chat')}
+                tooltip="Chat"
+              >
+                <Link href="/chat">
+                  <MessageCircle />
+                  <span>Chat</span>
+                </Link>
+              </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
