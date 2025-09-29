@@ -24,13 +24,13 @@ import {
   User
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { getCurrentUser } from '@/lib/auth';
+import { useAuth } from '@/context/auth-context';
+
 
 export function MainNav() {
   const pathname = usePathname();
-  const user = getCurrentUser();
-  const isAdmin = user?.role === 'admin';
-
+  const { user, isAdmin } = useAuth();
+  
   const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
   const [isStoresOpen, setIsStoresOpen] = React.useState(
     pathname.startsWith('/stores') || pathname === '/'
@@ -50,30 +50,34 @@ export function MainNav() {
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          asChild
-          isActive={pathname.startsWith('/orders')}
-          tooltip="Pedidos"
-        >
-          <Link href="/orders">
-            <ClipboardList />
-            <span>Pedidos</span>
-          </Link>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          asChild
-          isActive={pathname === '/profile'}
-          tooltip="Perfil"
-        >
-          <Link href="/profile">
-            <User />
-            <span>Perfil</span>
-          </Link>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
+      { user && (
+        <>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname.startsWith('/orders')}
+              tooltip="Pedidos"
+            >
+              <Link href="/orders">
+                <ClipboardList />
+                <span>Pedidos</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === '/profile'}
+              tooltip="Perfil"
+            >
+              <Link href="/profile">
+                <User />
+                <span>Perfil</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </>
+      )}
 
       <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
         <SidebarMenuItem>
