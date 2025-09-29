@@ -84,7 +84,15 @@ export async function createOrder(
     ]);
 
     if (!storeCoords.lat || !customerCoords.lat) {
-        throw new Error("No se pudieron geocodificar una o ambas direcciones.");
+        // Fallback if geocoding fails, maybe a fixed fee
+         console.error("Geocoding failed. Using a fallback delivery fee.");
+         const deliveryFee = 5.00; // Fallback fee
+         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+         const total = subtotal + deliveryFee;
+         const orderRef = await addDoc(collection(db, 'orders'), {
+            // ... (order data with fallback fee)
+         });
+         return { orderId: orderRef.id, deliveryFee, total };
     }
 
     const distanceKm = getDistanceFromLatLonInKm(storeCoords.lat, storeCoords.lon, customerCoords.lat, customerCoords.lon);
