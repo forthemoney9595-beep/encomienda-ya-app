@@ -2,6 +2,7 @@ import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import type { Product } from './placeholder-data';
 import { getStoreById } from './data-service';
+import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem extends Product {
@@ -15,6 +16,7 @@ export interface Order {
     userId: string;
     items: CartItem[];
     total: number;
+    deliveryFee: number;
     status: OrderStatus;
     createdAt: Date;
     storeId: string; 
@@ -30,22 +32,67 @@ export interface Order {
     deliveryPersonName?: string;
 }
 
+interface CreateOrderInput {
+    userId: string;
+    items: CartItem[];
+    shippingInfo: { name: string, address: string };
+    storeId: string;
+}
+
+interface CreateOrderOutput {
+    orderId: string;
+    deliveryFee: number;
+    total: number;
+}
+
+// Haversine formula to calculate distance between two lat/lon points
+function getDistanceFromLatLonInKm(lat1:number, lon1:number, lat2:number, lon2:number) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2-lat1);
+    const dLon = deg2rad(lon2-lon1); 
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2)
+        ; 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const d = R * c; // Distance in km
+    return d;
+}
+
+function deg2rad(deg: number) {
+    return deg * (Math.PI/180)
+}
+
 export async function createOrder(
-    userId: string, 
-    items: CartItem[], 
-    total: number, 
-    shippingInfo: { name: string, address: string }
-): Promise<string> {
+   input: CreateOrderInput
+): Promise<CreateOrderOutput> {
+    const { userId, items, shippingInfo, storeId } = input;
     if (items.length === 0) {
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // Assume all items are from the same store for this transaction
-    const firstProductId = items[0].id;
-    const storeInfo = await getStoreDetailsFromProductId(firstProductId);
-    if (!storeInfo) {
-        throw new Error(`Could not find a store for product id ${firstProductId}`);
+    const store = await getStoreById(storeId);
+    if (!store) {
+        throw new Error(`No se pudo encontrar la tienda con ID ${storeId}`);
     }
+
+    // Geocode addresses
+    const [storeCoords, customerCoords] = await Promise.all([
+        geocodeAddress({ address: store.address }),
+        geocodeAddress({ address: shippingInfo.address })
+    ]);
+
+    if (!storeCoords.lat || !customerCoords.lat) {
+        throw new Error("No se pudieron geocodificar una o ambas direcciones.");
+    }
+
+    const distanceKm = getDistanceFromLatLonInKm(storeCoords.lat, storeCoords.lon, customerCoords.lat, customerCoords.lon);
+
+    // Calculate delivery fee: $2 base + $1.5 per km
+    const deliveryFee = 2 + (distanceKm * 1.5);
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const total = subtotal + deliveryFee;
 
     const userDoc = await getDoc(doc(db, 'users', userId));
     const customerName = userDoc.exists() ? userDoc.data().name : shippingInfo.name;
@@ -62,15 +109,22 @@ export async function createOrder(
             quantity: item.quantity,
             imageUrl: item.imageUrl || null,
         })), 
+        subtotal,
+        deliveryFee,
         total,
         status: 'Pedido Realizado',
         createdAt: serverTimestamp(),
-        storeId: storeInfo.id,
-        storeName: storeInfo.name,
-        storeAddress: storeInfo.address,
+        storeId: store.id,
+        storeName: store.name,
+        storeAddress: store.address,
         shippingAddress: shippingInfo,
     });
-    return orderRef.id;
+    
+    return {
+        orderId: orderRef.id,
+        deliveryFee,
+        total
+    };
 }
 
 async function getStoreDetailsFromProductId(productId: string): Promise<{id: string, name: string, address: string} | null> {

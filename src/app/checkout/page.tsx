@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import { CreditCard, Home, User, Loader2 } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
+import { useEffect, useState } from 'react';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
@@ -26,7 +27,7 @@ const formSchema = z.object({
 
 
 export default function CheckoutPage() {
-  const { cart, totalPrice, totalItems, clearCart } = useCart();
+  const { cart, totalPrice, totalItems, clearCart, storeId } = useCart();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
@@ -51,7 +52,7 @@ export default function CheckoutPage() {
     return null;
   }
 
-  if (totalItems === 0) {
+  if (totalItems === 0 || !storeId) {
     return (
       <div className="container mx-auto text-center py-20">
         <h2 className="text-2xl font-bold">Tu carrito está vacío</h2>
@@ -62,12 +63,18 @@ export default function CheckoutPage() {
   }
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!user) return;
+    if (!user || !storeId) return;
 
     try {
-      const orderId = await createOrder(user.uid, cart, totalPrice, {
-        name: values.name,
-        address: values.address
+      // Pass the storeId to createOrder
+      const orderData = await createOrder({
+        userId: user.uid,
+        items,
+        shippingInfo: {
+          name: values.name,
+          address: values.address
+        },
+        storeId: storeId,
       });
 
       toast({
@@ -75,7 +82,7 @@ export default function CheckoutPage() {
         description: "Gracias por tu compra. Tu pedido está siendo procesado.",
       });
       clearCart();
-      router.push(`/orders/${orderId}`);
+      router.push(`/orders/${orderData.orderId}`);
     } catch (error) {
       console.error("Error creating order:", error);
       toast({
@@ -196,11 +203,23 @@ export default function CheckoutPage() {
                 </div>
               ))}
               <Separator />
-              <div className="flex justify-between font-bold text-lg">
-                <p>Total</p>
+               <div className="flex justify-between text-muted-foreground">
+                <p>Subtotal</p>
                 <p>${totalPrice.toFixed(2)}</p>
               </div>
+              <div className="flex justify-between text-muted-foreground">
+                <p>Tarifa de envío (aprox.)</p>
+                <p>$5.00</p>
+              </div>
+              <Separator />
+              <div className="flex justify-between font-bold text-lg">
+                <p>Total (aprox.)</p>
+                <p>${(totalPrice + 5.00).toFixed(2)}</p>
+              </div>
             </CardContent>
+             <CardFooter>
+                <p className="text-xs text-muted-foreground">El costo de envío final se calculará al confirmar la dirección.</p>
+            </CardFooter>
           </Card>
         </div>
       </div>
