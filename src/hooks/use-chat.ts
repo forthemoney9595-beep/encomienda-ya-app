@@ -18,33 +18,41 @@ export function useChat(chatId: string) {
 
         const fetchDetailsAndSubscribe = async () => {
             setLoading(true);
-            const details = await getChatDetails(chatId, user.uid);
-            setChatDetails(details);
+            try {
+                const details = await getChatDetails(chatId, user.uid);
+                setChatDetails(details);
 
-            const messagesRef = collection(db, 'chats', chatId, 'messages');
-            const q = query(messagesRef, orderBy('createdAt', 'asc'));
+                const messagesRef = collection(db, 'chats', chatId, 'messages');
+                const q = query(messagesRef, orderBy('createdAt', 'asc'));
 
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
-                const fetchedMessages = querySnapshot.docs.map(doc => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        text: data.text,
-                        senderId: data.senderId,
-                        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                    };
+                const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                    const fetchedMessages = querySnapshot.docs.map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            text: data.text,
+                            senderId: data.senderId,
+                            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                        };
+                    });
+                    setMessages(fetchedMessages);
+                }, (error) => {
+                    console.error("Error al suscribirse a los mensajes:", error);
                 });
-                setMessages(fetchedMessages);
+                
                 setLoading(false);
-            }, (error) => {
-                console.error("Error al suscribirse a los mensajes:", error);
+                return () => unsubscribe();
+            } catch (error) {
+                console.error("Error fetching chat details:", error);
                 setLoading(false);
-            });
-
-            return () => unsubscribe();
+            }
         };
 
-        fetchDetailsAndSubscribe();
+        const unsubscribePromise = fetchDetailsAndSubscribe();
+
+        return () => {
+            unsubscribePromise.then(unsubscribe => unsubscribe && unsubscribe());
+        };
 
     }, [chatId, user]);
 
