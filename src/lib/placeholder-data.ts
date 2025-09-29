@@ -42,9 +42,7 @@ export const productsByStore: { [key: string]: Product[] } = {
 };
 
 export const orders = [
-  { id: 'ord1', storeName: 'Paraíso de la Pizza', total: 21.98, status: 'Entregado', date: '2024-07-20' },
-  { id: 'ord2', storeName: 'Bonanza de Hamburguesas', total: 15.98, status: 'En reparto', date: '2024-07-21' },
-  { id: 'ord3', storeName: 'Estación de Sushi', total: 12.98, status: 'En preparación', date: '2024-07-21' },
+  // This data is now fetched from Firestore. See /lib/order-service.ts
 ];
 
 export const deliveryPersonnel: DeliveryPersonnel[] = [

@@ -12,19 +12,22 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { CreditCard, Home, User } from 'lucide-react';
+import { CreditCard, Home, User, Loader2 } from 'lucide-react';
+import { createOrder } from '@/lib/order-service';
+import { useAuth } from '@/context/auth-context';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
   address: z.string().min(5, "La dirección es obligatoria."),
-  cardNumber: z.string().length(16, "El número de tarjeta debe tener 16 dígitos."),
+  cardNumber: z.string().length(16, "El número de tarjeta debe tener 16 dígitos.").filter(val => /^\d+$/.test(val), "Solo se admiten números."),
   expiryDate: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "El formato debe ser MM/AA."),
-  cvc: z.string().length(3, "El CVC debe tener 3 dígitos."),
+  cvc: z.string().length(3, "El CVC debe tener 3 dígitos.").filter(val => /^\d+$/.test(val), "Solo se admiten números."),
 });
 
 
 export default function CheckoutPage() {
   const { cart, totalPrice, totalItems, clearCart } = useCart();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -39,6 +42,15 @@ export default function CheckoutPage() {
     },
   });
 
+  if (authLoading) {
+     return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
+  }
+
+  if (!user) {
+    router.push('/login');
+    return null;
+  }
+
   if (totalItems === 0) {
     return (
       <div className="container mx-auto text-center py-20">
@@ -49,16 +61,29 @@ export default function CheckoutPage() {
     )
   }
   
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    console.log("Datos del pedido:", { values, cart, totalPrice });
-    toast({
-      title: "¡Pedido Realizado!",
-      description: "Gracias por tu compra. Tu pedido está siendo procesado.",
-    });
-    clearCart();
-    // En una aplicación real, el id del pedido vendría de la respuesta del backend
-    const mockOrderId = `ord${Math.floor(Math.random() * 1000)}`; 
-    router.push(`/orders/${mockOrderId}`);
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!user) return;
+
+    try {
+      const orderId = await createOrder(user.uid, cart, totalPrice, {
+        name: values.name,
+        address: values.address
+      });
+
+      toast({
+        title: "¡Pedido Realizado!",
+        description: "Gracias por tu compra. Tu pedido está siendo procesado.",
+      });
+      clearCart();
+      router.push(`/orders/${orderId}`);
+    } catch (error) {
+      console.error("Error creating order:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al realizar el pedido",
+        description: "Hubo un problema al guardar tu pedido. Por favor, inténtalo de nuevo.",
+      });
+    }
   }
 
   return (
@@ -103,7 +128,7 @@ export default function CheckoutPage() {
                     </Card>
                      <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><CreditCard /> Detalles del Pago</CardTitle>
+                            <CardTitle className="flex items-center gap-2"><CreditCard /> Detalles del Pago (Simulado)</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                              <FormField
@@ -150,7 +175,7 @@ export default function CheckoutPage() {
                         </CardContent>
                     </Card>
                      <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
-                        {form.formState.isSubmitting ? "Procesando Pedido..." : `Pagar $${totalPrice.toFixed(2)}`}
+                        {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando Pedido...</> : `Pagar $${totalPrice.toFixed(2)}`}
                     </Button>
                 </form>
             </Form>
