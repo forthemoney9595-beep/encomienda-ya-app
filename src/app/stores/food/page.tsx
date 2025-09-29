@@ -22,7 +22,10 @@ export default function FoodStoresPage() {
     const fetchStores = async () => {
       setLoading(true);
       const allStores = await getStores();
-      const foodStores = allStores.filter(store => foodCategories.includes(store.category));
+      // Filter for approved stores that are in food categories
+      const foodStores = allStores.filter(store => 
+        store.status === 'Aprobado' && foodCategories.includes(store.category)
+      );
       setStores(foodStores);
       setLoading(false);
     };
