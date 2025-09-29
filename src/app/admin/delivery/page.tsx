@@ -1,3 +1,5 @@
+'use client';
+
 import PageHeader from '@/components/page-header';
 import { deliveryPersonnel } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
@@ -7,8 +9,22 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { PlusCircle, MoreVertical, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useAuth } from '@/context/auth-context';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+
 
 export default function AdminDeliveryPage() {
+  const { user, isAdmin, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !isAdmin) {
+      router.push('/login');
+    }
+  }, [user, isAdmin, loading, router]);
+
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -22,6 +38,27 @@ export default function AdminDeliveryPage() {
         return 'destructive';
     }
   };
+
+  if (loading || !isAdmin) {
+    return (
+      <div className="container mx-auto">
+         <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto." />
+         <Card>
+           <CardHeader>
+             <CardTitle>Personal de Reparto</CardTitle>
+           </CardHeader>
+           <CardContent>
+            <div className="space-y-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+           </CardContent>
+         </Card>
+       </div>
+    );
+  }
+
 
   return (
     <div className="container mx-auto">

@@ -5,21 +5,24 @@ import Image from 'next/image';
 import { getStoreById, getProductsByStoreId } from '@/lib/placeholder-data';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { MoreVertical, Edit, Trash2, ShoppingCart } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ShoppingCart } from 'lucide-react';
 import { AddItemDialog } from './add-item-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCart } from '@/context/cart-context';
-import type { Product } from '@/context/cart-context';
+import type { Product } from '@/lib/placeholder-data';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/auth-context';
 
 export default function StoreDetailPage({ params }: { params: { storeId: string } }) {
   const store = getStoreById(params.storeId);
   const products = getProductsByStoreId(params.storeId);
   const { addToCart } = useCart();
   const { toast } = useToast();
+  const { user } = useAuth();
+  
+  const isStoreOwner = user?.role === 'store' && user?.storeId === store?.id;
+
 
   if (!store) {
     notFound();
@@ -38,7 +41,7 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
   return (
     <div className="container mx-auto">
       <PageHeader title={store.name} description={store.category}>
-        <AddItemDialog />
+        {isStoreOwner && <AddItemDialog />}
       </PageHeader>
       
       <div className="grid gap-6 md:grid-cols-3">
@@ -76,6 +79,11 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
                         </div>
                       </TabsContent>
                     ))}
+                     {products.length === 0 && (
+                        <div className="text-center text-muted-foreground py-10">
+                            <p>Esta tienda aún no tiene productos.</p>
+                        </div>
+                    )}
                   </Tabs>
                 </CardContent>
             </Card>
