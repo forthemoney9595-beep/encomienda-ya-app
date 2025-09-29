@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Bell } from 'lucide-react';
 import Link from 'next/link';
+import { Notifications } from '@/components/notifications';
 
 export const metadata: Metadata = {
   title: 'EncomiendaYA',
@@ -55,10 +56,7 @@ export default function RootLayout({
             <SidebarInset>
               <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
                 <div className="ml-auto flex items-center gap-4">
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <Bell className="h-5 w-5" />
-                    <span className="sr-only">Ver notificaciones</span>
-                  </Button>
+                  <Notifications />
                   <Link href="/login">
                     <Button>Iniciar Sesión</Button>
                   </Link>

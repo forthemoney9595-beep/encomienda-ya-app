@@ -57,6 +57,13 @@ export const deliveryPersonnel = [
     { id: 'd4', name: 'Sofía Fernández', vehicle: 'Motocicleta', zone: 'Oeste', status: 'Activo' },
 ];
 
+export const notifications = [
+  { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Bonanza de Hamburguesas está en camino.', date: 'hace 5 min' },
+  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Estación de Sushi ha sido confirmado.', date: 'hace 1 hora' },
+  { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
+  { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
+];
+
 export const getStoreById = (id: string) => stores.find(s => s.id === id);
 export const getProductsByStoreId = (id: string) => productsByStore[id as keyof typeof productsByStore] || [];
 export const getOrderById = (id: string) => orders.find(o => o.id === id);
