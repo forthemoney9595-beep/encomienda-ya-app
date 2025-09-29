@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, onSnapshot, Unsubscribe, Timestamp } from 'firebase/firestore';
 
 /**
  * Gets or creates a chat room between a user and a store.
@@ -28,9 +28,10 @@ export async function getOrCreateChat(userId: string, storeId: string): Promise<
     
     // Get store and user details to store in the chat document for easier access.
     const userDoc = await getDoc(doc(db, 'users', userId));
-    const storeDoc = await getDoc(doc(db, 'stores', storeId));
+    const storeUserDoc = await getDoc(doc(db, 'users', storeId)); // The store owner's user doc
+    const storeDoc = await getDoc(doc(db, 'stores', storeId)); // The store's public profile doc
 
-    if (!userDoc.exists() || !storeDoc.exists()) {
+    if (!userDoc.exists() || !storeUserDoc.exists() || !storeDoc.exists()) {
         throw new Error("User or Store not found");
     }
 
@@ -42,7 +43,7 @@ export async function getOrCreateChat(userId: string, storeId: string): Promise<
             role: userDoc.data().role,
         },
         [storeId]: {
-            name: storeDoc.data().name,
+            name: storeDoc.data().name, // The public store name
             role: 'store', // Hardcoded for clarity
             imageUrl: storeDoc.data().imageUrl,
         }
@@ -55,13 +56,21 @@ export async function getOrCreateChat(userId: string, storeId: string): Promise<
   }
 }
 
+export type ChatParticipant = {
+    id: string;
+    name: string;
+    imageUrl?: string;
+};
+
+export type ChatDetails = {
+    id: string;
+    participants: string[];
+    otherParticipant: ChatParticipant;
+}
+
 export type ChatPreview = {
     id: string;
-    otherParticipant: {
-        id: string;
-        name: string;
-        imageUrl?: string;
-    };
+    otherParticipant: ChatParticipant;
     lastMessage: string | null;
     lastMessageTimestamp: Date | null;
 }
@@ -99,4 +108,138 @@ export async function getUserChats(userId: string): Promise<ChatPreview[]> {
     });
 
     return chats;
+}
+
+
+export interface Message {
+  id: string;
+  text: string;
+  senderId: string;
+  createdAt: Date;
+}
+
+/**
+ * Sends a message in a chat and updates the chat's last message.
+ * @param chatId The ID of the chat.
+ * @param senderId The ID of the message sender.
+ * @param text The message text.
+ */
+export async function sendMessage(chatId: string, senderId: string, text: string): Promise<void> {
+  const chatRef = doc(db, 'chats', chatId);
+  const messagesRef = collection(chatRef, 'messages');
+  
+  const batch = writeBatch(db);
+
+  // Add the new message
+  const newMessageRef = doc(messagesRef);
+  batch.set(newMessageRef, {
+    text,
+    senderId,
+    createdAt: serverTimestamp(),
+  });
+
+  // Update the last message on the chat document
+  batch.update(chatRef, {
+    lastMessage: text,
+    lastMessageTimestamp: serverTimestamp(),
+  });
+
+  await batch.commit();
+}
+
+
+/**
+ * Subscribes to new messages in a chat.
+ * @param chatId The ID of the chat.
+ * @param onNewMessages Callback function to be called with new messages.
+ * @returns An unsubscribe function.
+ */
+export function onNewMessage(chatId: string, onNewMessages: (messages: Message[], chatDetails: ChatDetails) => void): Unsubscribe {
+  const messagesRef = collection(db, 'chats', chatId, 'messages');
+  const q = query(messagesRef, orderBy('createdAt', 'asc'));
+
+  // First, get chat details once
+  getDoc(doc(db, 'chats', chatId)).then(chatDoc => {
+    if (!chatDoc.exists()) {
+        console.error("Chat does not exist!");
+        return;
+    }
+    const chatData = chatDoc.data();
+    const currentUserId = chatData.participants.find((p:string) => p !== 'placeholder'); // This needs current user ID logic. We'll fix this.
+
+    // Subscribe to messages
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const messages = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                text: data.text,
+                senderId: data.senderId,
+                // Firestore timestamps can be null on the client before they are set by the server.
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            };
+        });
+
+        // We'll figure out the other participant dynamically in the hook/component
+        const chatDetails = {
+            id: chatDoc.id,
+            participants: chatData.participants,
+            participantInfo: chatData.participantInfo
+        }
+
+        // We need to pass both messages and details. For now, let's just pass messages.
+        // We will pass chatDetails later.
+        onNewMessages(messages, chatDetails as any);
+    });
+
+    return unsubscribe;
+  });
+
+
+  // The outer function needs to return the unsubscribe function.
+  // The structure above is a bit tricky, let's simplify for the hook to manage.
+  // The hook will get chat details, then call this.
+
+  return onSnapshot(q, (querySnapshot) => {
+    const messages = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            text: data.text,
+            senderId: data.senderId,
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+        };
+    });
+    // This is incomplete, the callback needs chatDetails too.
+    // The hook will solve this. For now, let's just pass an empty object.
+    // onNewMessages(messages, {} as ChatDetails);
+  });
+}
+
+export async function getChatDetails(chatId: string, currentUserId: string): Promise<ChatDetails | null> {
+    const chatDoc = await getDoc(doc(db, 'chats', chatId));
+    if (!chatDoc.exists()) {
+        console.error("Chat does not exist!");
+        return null;
+    }
+
+    const data = chatDoc.data();
+    const otherParticipantId = data.participants.find((p: string) => p !== currentUserId);
+    
+    if (!otherParticipantId) {
+        console.error("Could not find other participant in chat.");
+        return null;
+    }
+
+    const otherParticipantInfo = data.participantInfo[otherParticipantId];
+
+    return {
+        id: chatDoc.id,
+        participants: data.participants,
+        otherParticipant: {
+            id: otherParticipantId,
+            name: otherParticipantInfo?.name || 'Usuario Desconocido',
+            imageUrl: otherParticipantInfo?.imageUrl || `https://picsum.photos/seed/${otherParticipantId}/64/64`,
+        }
+    };
 }

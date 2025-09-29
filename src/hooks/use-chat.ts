@@ -1,0 +1,68 @@
+"use client";
+
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/context/auth-context';
+import { db } from '@/lib/firebase';
+import { onSnapshot, collection, query, orderBy, Timestamp } from 'firebase/firestore';
+import { sendMessage as sendMessageService, getChatDetails, type Message, type ChatDetails } from '@/lib/chat-service';
+
+
+export function useChat(chatId: string) {
+    const { user, loading: authLoading } = useAuth();
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [chatDetails, setChatDetails] = useState<ChatDetails | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!user || !chatId) return;
+
+        const fetchDetailsAndSubscribe = async () => {
+            setLoading(true);
+            const details = await getChatDetails(chatId, user.uid);
+            setChatDetails(details);
+
+            const messagesRef = collection(db, 'chats', chatId, 'messages');
+            const q = query(messagesRef, orderBy('createdAt', 'asc'));
+
+            const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                const fetchedMessages = querySnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        text: data.text,
+                        senderId: data.senderId,
+                        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                    };
+                });
+                setMessages(fetchedMessages);
+                setLoading(false);
+            }, (error) => {
+                console.error("Error al suscribirse a los mensajes:", error);
+                setLoading(false);
+            });
+
+            return () => unsubscribe();
+        };
+
+        fetchDetailsAndSubscribe();
+
+    }, [chatId, user]);
+
+    const sendMessage = useCallback(async (text: string) => {
+        if (!user || !chatId) return;
+
+        try {
+            await sendMessageService(chatId, user.uid, text);
+        } catch (error) {
+            console.error("Error al enviar el mensaje:", error);
+            // Optionally: show a toast notification
+        }
+    }, [chatId, user]);
+
+    return {
+        messages,
+        chatDetails,
+        sendMessage,
+        loading: authLoading || loading,
+    };
+}
