@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
 
@@ -24,6 +24,7 @@ export async function getStores(): Promise<Store[]> {
         imageHint: data.imageHint || 'store',
         status: data.status || 'Pendiente',
         ownerId: data.ownerId || '',
+        productCategories: data.productCategories || [data.category] || [],
       };
     });
     
@@ -54,6 +55,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
         imageHint: data.imageHint || 'store',
         status: data.status || 'Pendiente',
         ownerId: data.ownerId || '',
+        productCategories: data.productCategories || [data.category] || [],
       } as Store;
     } else {
       console.log(`No store found with id: ${id}`);
@@ -95,13 +97,29 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
 
 /**
  * Adds a new product to a store's 'products' subcollection.
+ * If the product's category is new, it adds it to the store's `productCategories` array.
  * @param storeId The ID of the store.
  * @param productData The data for the new product.
  */
 export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
     try {
-        const productsCollectionRef = collection(db, 'stores', storeId, 'products');
+        const storeRef = doc(db, 'stores', storeId);
+        const productsCollectionRef = collection(storeRef, 'products');
+        
+        // Add the product to the subcollection
         await addDoc(productsCollectionRef, productData);
+
+        // Check if the category is new and update the store document
+        const storeSnap = await getDoc(storeRef);
+        if (storeSnap.exists()) {
+            const storeData = storeSnap.data();
+            const existingCategories = storeData.productCategories || [];
+            if (!existingCategories.map((c: string) => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+                await updateDoc(storeRef, {
+                    productCategories: arrayUnion(productData.category)
+                });
+            }
+        }
     } catch (error) {
         console.error(`Error adding product to store ${storeId}:`, error);
         throw error;

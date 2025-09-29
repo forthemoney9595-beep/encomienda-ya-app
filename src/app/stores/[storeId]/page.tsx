@@ -15,7 +15,9 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
   }
 
   const products = await getProductsByStoreId(params.storeId);
-  const productCategories = Array.from(new Set(products.map(p => p.category).concat(store.category)));
+  // Use the dynamically managed productCategories from the store document
+  const productCategories = store.productCategories && store.productCategories.length > 0 ? store.productCategories : [store.category];
+
 
   return (
     <div className="container mx-auto">

@@ -8,18 +8,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, PlusCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { addProductToStore } from "@/lib/data-service";
 import { useRouter } from "next/navigation";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
-  category: z.string({ required_error: "Por favor selecciona una categoría." }),
+  category: z.string().min(1, "Por favor, selecciona o crea una categoría."),
 });
 
 interface AddItemDialogProps {
@@ -31,6 +31,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const [categorySearch, setCategorySearch] = useState('');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -38,8 +39,24 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
       name: "",
       description: "",
       price: 0,
+      category: "",
     },
   });
+  
+  const categoryOptions = useMemo(() => {
+    const existingOptions = productCategories.map(cat => ({ value: cat.toLowerCase(), label: cat }));
+    const searchValueLower = categorySearch.toLowerCase();
+    
+    // If the search term doesn't exactly match an existing category, add it as a "Create new" option
+    if (categorySearch && !existingOptions.some(opt => opt.value === searchValueLower)) {
+      return [
+        { value: searchValueLower, label: `Crear nueva categoría: "${categorySearch}"` },
+        ...existingOptions
+      ];
+    }
+    return existingOptions;
+  }, [productCategories, categorySearch]);
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
@@ -109,23 +126,17 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                 control={form.control}
                 name="category"
                 render={({ field }) => (
-                  <FormItem>
+                   <FormItem className="flex flex-col">
                     <FormLabel>Categoría</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                            <SelectTrigger>
-                            <SelectValue placeholder="Selecciona una categoría para el producto" />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            {productCategories.map((cat) => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                            ))}
-                            <SelectItem value="nueva-categoria">
-                                <span className="text-primary">Crear nueva categoría... (próximamente)</span>
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <Combobox
+                        options={productCategories.map(cat => ({ value: cat, label: cat }))}
+                        value={field.value}
+                        onChange={(value) => {
+                            form.setValue('category', value, { shouldValidate: true });
+                        }}
+                        placeholder="Selecciona o crea una categoría"
+                        emptyMessage="No se encontraron categorías."
+                    />
                     <FormMessage />
                   </FormItem>
                 )}

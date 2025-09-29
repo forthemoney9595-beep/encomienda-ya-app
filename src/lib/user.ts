@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, setDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -22,7 +22,7 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
     await setDoc(userDocRef, {
       uid, 
       ...data,
-      createdAt: new Date(),
+      createdAt: serverTimestamp(),
     });
 
     if (data.role === 'store') {
@@ -30,9 +30,11 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
         await addDoc(storeCollectionRef, {
             name: data.storeName,
             category: data.storeCategory,
+            productCategories: [data.storeCategory], // Initialize with the main category
             address: data.storeAddress,
             ownerId: uid,
             status: 'Pendiente',
+            createdAt: serverTimestamp(),
             imageUrl: `https://picsum.photos/seed/${data.storeName}/600/400`,
             imageHint: 'store food',
         });
