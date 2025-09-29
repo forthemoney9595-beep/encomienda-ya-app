@@ -3,34 +3,44 @@
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Store, Truck, ClipboardList } from 'lucide-react';
-import { deliveryPersonnel, orders } from '@/lib/placeholder-data';
+import { orders } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getStores } from '@/lib/data-service';
-import type { Store as StoreType } from '@/lib/placeholder-data';
+import { getStores, getDeliveryPersonnel } from '@/lib/data-service';
 
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading } = useAuth();
   const router = useRouter();
   const [totalStores, setTotalStores] = useState(0);
+  const [totalDrivers, setTotalDrivers] = useState(0);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !isAdmin) {
       router.push('/login');
     }
     if (isAdmin) {
-      getStores().then(stores => setTotalStores(stores.length));
+      const fetchData = async () => {
+        setDashboardLoading(true);
+        const [stores, drivers] = await Promise.all([
+          getStores(),
+          getDeliveryPersonnel()
+        ]);
+        setTotalStores(stores.length);
+        setTotalDrivers(drivers.length);
+        setDashboardLoading(false);
+      }
+      fetchData();
     }
   }, [user, isAdmin, loading, router]);
 
 
-  const totalDrivers = deliveryPersonnel.length;
   const pendingOrders = orders.filter(o => o.status !== 'Entregado').length;
   
-  if (loading || !isAdmin) {
+  if (loading || dashboardLoading || !isAdmin) {
     return (
        <div className="container mx-auto">
         <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
