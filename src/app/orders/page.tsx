@@ -39,7 +39,7 @@ export default async function OrdersPage() {
   }
 
   const userRole = user.role;
-  let orders = [];
+  let orders: any[] = [];
   let pageTitle = "";
   let pageDescription = "";
 
