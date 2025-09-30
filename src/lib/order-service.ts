@@ -92,10 +92,19 @@ export async function createOrder(
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
 
-    const userDoc = await getDoc(doc(db, 'users', userId));
     let customerName = shippingInfo.name;
-    if (userDoc.exists()) {
-         customerName = userDoc.data().name;
+    // Check if it's a prototype user to get the name, otherwise fetch from DB
+    const isProtoUser = userId.startsWith('proto-');
+    if (isProtoUser) {
+        const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
+        if (protoUser) {
+            customerName = protoUser.name;
+        }
+    } else {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+            customerName = userDoc.data().name;
+        }
     }
 
 
