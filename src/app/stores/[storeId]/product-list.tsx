@@ -38,15 +38,21 @@ export function ProductList({ products: initialProducts, productCategories: init
 
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
-
-    // This ensures client-side prototype data is loaded correctly without hydration errors
+    
+    const [isClient, setIsClient] = useState(false);
     useEffect(() => {
-        if (currentStoreId === 'proto-store-id') {
-            setProducts(getPrototypeProducts());
+        setIsClient(true);
+    }, []);
+
+    useEffect(() => {
+        if (isClient && currentStoreId.startsWith('proto-')) {
+            const protoProducts = getPrototypeProducts(currentStoreId);
+            setProducts(protoProducts);
         } else {
             setProducts(initialProducts);
         }
-    }, [currentStoreId, initialProducts]);
+    }, [currentStoreId, initialProducts, isClient]);
+
 
     const productCategories = useMemo(() => {
         const categories = new Set(products.map(p => p.category));
@@ -57,24 +63,22 @@ export function ProductList({ products: initialProducts, productCategories: init
         const isEditing = products.some(p => p.id === productData.id);
         let successMessage = "";
 
-        // For prototype store, update state directly in memory
-        if (currentStoreId === 'proto-store-id') {
+        if (currentStoreId.startsWith('proto-')) {
             if (isEditing) {
                 setProducts(products.map(p => p.id === productData.id ? productData : p));
                 successMessage = "¡Artículo Actualizado!";
             } else {
-                setProducts([...products, productData]);
+                setProducts(prev => [...prev, productData]);
                 successMessage = "¡Artículo Añadido!";
             }
         } else {
-            // For real stores, call the database service
             if (isEditing) {
                 await updateProductInStore(currentStoreId, productData.id, productData);
                 setProducts(products.map(p => p.id === productData.id ? productData : p));
                 successMessage = "¡Artículo Actualizado!";
             } else {
-                const newProduct = await addProductToStore(currentStoreId, productData);
-                setProducts([...products, newProduct]);
+                await addProductToStore(currentStoreId, productData);
+                setProducts(prev => [...prev, productData]);
                 successMessage = "¡Artículo Añadido!";
             }
         }
@@ -85,11 +89,9 @@ export function ProductList({ products: initialProducts, productCategories: init
     };
 
     const handleDeleteProduct = async (productId: string) => {
-        // For prototype store, update state directly
-        if (currentStoreId === 'proto-store-id') {
+        if (currentStoreId.startsWith('proto-')) {
              setProducts(products.filter(p => p.id !== productId));
         } else {
-            // For real stores, call the database service
             await deleteProductFromStore(currentStoreId, productId);
             setProducts(products.filter(p => p.id !== productId));
         }
@@ -144,9 +146,10 @@ export function ProductList({ products: initialProducts, productCategories: init
         setPendingProduct(null);
     }
     
-    if (!products) {
-        return <div>Cargando productos...</div>
+    if (!isClient && currentStoreId.startsWith('proto-')) {
+        return null; // Or a skeleton loader
     }
+
 
     return (
         <>
@@ -155,6 +158,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
                 onSave={handleSaveProduct}
+                productCategories={productCategories}
             />
             {isOwner && (
               <div className="mb-4">

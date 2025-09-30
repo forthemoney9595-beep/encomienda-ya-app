@@ -30,10 +30,11 @@ interface ManageItemDialogProps {
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
-    onSave: (data: Product) => void;
+    onSave: (data: Product, categories: string[]) => void;
+    productCategories: string[];
 }
 
-export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
+export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const isEditing = product !== null;
@@ -94,7 +95,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
           imageUrl: imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
         };
 
-        onSave(productData);
+        onSave(productData, productCategories);
 
     } catch (error) {
         console.error("Error al guardar el producto:", error);
