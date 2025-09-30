@@ -95,3 +95,16 @@ export function getPrototypeOrdersByStore(storeId: string): PrototypeOrder[] {
     const allOrders = getPrototypeOrders();
     return allOrders.filter(order => order.storeId === storeId);
 }
+
+
+export function getAvailablePrototypeOrdersForDelivery(): PrototypeOrder[] {
+    if (typeof window === 'undefined') return [];
+    const allOrders = getPrototypeOrders();
+    return allOrders.filter(order => order.status === 'En preparación' && !order.deliveryPersonId);
+}
+
+export function getPrototypeOrdersByDeliveryPerson(driverId: string): PrototypeOrder[] {
+    if (typeof window === 'undefined') return [];
+    const allOrders = getPrototypeOrders();
+    return allOrders.filter(order => order.deliveryPersonId === driverId && order.status === 'En reparto');
+}

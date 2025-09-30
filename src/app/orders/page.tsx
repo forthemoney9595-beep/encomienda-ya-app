@@ -1,4 +1,3 @@
-
 'use client';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
@@ -38,8 +37,6 @@ export default function OrdersPage() {
       case 'store':
         return <StoreOrdersView />;
       case 'delivery':
-        // For delivery, we might need a more complex data fetching strategy
-        // Let's assume for now it's handled inside the component.
         return <DeliveryOrdersView />;
       default: // 'buyer'
         return <BuyerOrdersView />;

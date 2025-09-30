@@ -1,7 +1,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders, getPrototypeOrdersByStore, getAvailablePrototypeOrdersForDelivery, getPrototypeOrdersByDeliveryPerson } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
@@ -91,12 +91,14 @@ export async function createOrder(
             items: items,
             total: total,
             deliveryFee: deliveryFee,
-            status: 'Pedido Realizado',
+            status: 'En preparación', // Start as 'En preparación' so it's available for delivery
             createdAt: new Date().toISOString(),
             storeId: prototypeStore.id,
             storeName: prototypeStore.name,
             storeAddress: prototypeStore.address,
             shippingAddress: shippingInfo,
+            deliveryPersonId: null,
+            deliveryPersonName: null,
         };
 
         savePrototypeOrder(newOrder);
@@ -143,13 +145,14 @@ export async function createOrder(
         subtotal,
         deliveryFee,
         total,
-        status: 'Pedido Realizado',
+        status: 'En preparación',
         createdAt: serverTimestamp(),
         storeId: storeDoc.id,
         storeName: store.name,
         storeAddress: store.address,
         shippingAddress: shippingInfo,
         deliveryPersonId: null, // Initially unassigned
+        deliveryPersonName: null,
     });
     
     return {
@@ -187,6 +190,13 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 }
 
 export async function getOrdersByStore(storeId: string): Promise<Order[]> {
+    if (storeId === 'proto-store-id') {
+        const protoOrders = getPrototypeOrdersByStore(storeId);
+         return protoOrders
+            .map(o => ({...o, createdAt: new Date(o.createdAt)}))
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }
+    
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
 
@@ -203,7 +213,13 @@ export async function getOrdersByStore(storeId: string): Promise<Order[]> {
     return orders;
 }
 
-export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
+export async function getAvailableOrdersForDelivery(isPrototype: boolean): Promise<Order[]> {
+    if (isPrototype) {
+        return getAvailablePrototypeOrdersForDelivery()
+            .map(o => ({...o, createdAt: new Date(o.createdAt)}))
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }
+
     const ordersRef = collection(db, 'orders');
     // Orders ready for pickup and not yet assigned
     const q = query(
@@ -226,6 +242,12 @@ export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
 }
 
 export async function getOrdersByDeliveryPerson(driverId: string): Promise<Order[]> {
+    if (driverId.startsWith('proto-')) {
+        return getPrototypeOrdersByDeliveryPerson(driverId)
+            .map(o => ({...o, createdAt: new Date(o.createdAt)}))
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }
+
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, 
         where('deliveryPersonId', '==', driverId),
@@ -281,7 +303,12 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
  */
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
   if (orderId.startsWith('proto-order-')) {
-    console.log(`PROTOTYPE: Simulating update order ${orderId} to ${status}`);
+    const orders = getPrototypeOrders();
+    const orderIndex = orders.findIndex(o => o.id === orderId);
+    if (orderIndex > -1) {
+        orders[orderIndex].status = status;
+        sessionStorage.setItem('prototypeOrders', JSON.stringify(orders));
+    }
     return;
   }
   try {
@@ -300,6 +327,21 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
  * @param driverName The name of the delivery person.
  */
 export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
+    if (orderId.startsWith('proto-order-')) {
+        const orders = getPrototypeOrders();
+        const orderIndex = orders.findIndex(o => o.id === orderId);
+        if (orderIndex > -1) {
+            if (orders[orderIndex].deliveryPersonId) {
+                throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
+            }
+            orders[orderIndex].status = 'En reparto';
+            orders[orderIndex].deliveryPersonId = driverId;
+            orders[orderIndex].deliveryPersonName = driverName;
+            sessionStorage.setItem('prototypeOrders', JSON.stringify(orders));
+        }
+        return;
+    }
+    
   try {
     const orderRef = doc(db, 'orders', orderId);
     const orderSnap = await getDoc(orderRef);

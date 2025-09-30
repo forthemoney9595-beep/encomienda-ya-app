@@ -7,22 +7,39 @@ import { MapPin, Store, PackageSearch, Loader2, CheckCircle } from 'lucide-react
 import type { Order } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { assignOrderToDeliveryPerson, updateOrderStatus } from '@/lib/order-service';
-import { useState } from 'react';
+import { assignOrderToDeliveryPerson, updateOrderStatus, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson } from '@/lib/order-service';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
-interface DeliveryOrdersViewProps {
-  availableOrders: Order[];
-  assignedOrders: Order[];
-}
-
-export default function DeliveryOrdersView({ availableOrders, assignedOrders }: DeliveryOrdersViewProps) {
-  const { user } = useAuth();
+export default function DeliveryOrdersView() {
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
+  const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || user.role !== 'delivery') return;
+
+    const fetchOrders = async () => {
+        setLoading(true);
+        const [available, assigned] = await Promise.all([
+            getAvailableOrdersForDelivery(user.uid.startsWith('proto-')),
+            getOrdersByDeliveryPerson(user.uid),
+        ]);
+        setAvailableOrders(available);
+        setAssignedOrders(assigned);
+        setLoading(false);
+    };
+
+    fetchOrders();
+  }, [user, authLoading]);
 
   const handleAcceptOrder = async (orderId: string) => {
     if (!user) {
@@ -84,6 +101,37 @@ export default function DeliveryOrdersView({ availableOrders, assignedOrders }: 
       </CardContent>
     </Card>
   );
+
+  const OrderCardSkeleton = () => (
+    <Card>
+        <CardHeader>
+            <Skeleton className="h-6 w-1/2" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+            </div>
+            <div className="space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+            </div>
+            <div className="flex justify-end gap-2">
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-10 w-32" />
+            </div>
+        </CardContent>
+    </Card>
+  );
+
+  if (loading) {
+    return (
+        <div className="space-y-4">
+            <OrderCardSkeleton />
+            <OrderCardSkeleton />
+        </div>
+    );
+  }
 
   return (
     <Tabs defaultValue="available" className="w-full">
