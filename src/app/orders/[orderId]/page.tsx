@@ -17,10 +17,19 @@ export default async function OrderTrackingPage({ params }: { params: { orderId:
     notFound();
   }
   
+  // For prototype orders, geocoding might fail if addresses are too generic.
+  // We can provide default coords or handle it gracefully.
   const [storeCoords, customerCoords] = await Promise.all([
     geocodeAddress({ address: order.storeAddress! }),
     geocodeAddress({ address: order.shippingAddress.address })
-  ]);
+  ]).catch(err => {
+    console.error("Geocoding failed, using fallbacks for prototype", err);
+    // Fallback coordinates for prototype mode
+    return [
+      { lat: 40.7128, lon: -74.0060 },
+      { lat: 40.7580, lon: -73.9855 }
+    ];
+  });
   
   return (
     <div className="container mx-auto">

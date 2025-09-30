@@ -1,7 +1,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore, prototypeProducts } from './placeholder-data';
 import { getStoreById } from './data-service';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
@@ -75,21 +75,25 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    let store;
-    let customerName = shippingInfo.name;
-
+    // Simulate order creation for prototype
     if (isPrototype) {
-        store = prototypeStore;
-        const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
-        if (protoUser) {
-            customerName = protoUser.name;
+        console.log("PROTOTYPE: Simulating order creation.");
+        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const deliveryFee = 5.00; // Mock fee
+        const total = subtotal + deliveryFee;
+        const mockOrderId = `proto-order-${Date.now()}`;
+        return {
+            orderId: mockOrderId,
+            deliveryFee,
+            total,
         }
-    } else {
-        store = await getStoreById(storeId);
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-            customerName = userDoc.data().name;
-        }
+    }
+
+    let store = await getStoreById(storeId);
+    let customerName = shippingInfo.name;
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists()) {
+        customerName = userDoc.data().name;
     }
     
     if (!store) {
@@ -109,17 +113,6 @@ export async function createOrder(
 
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
-
-    // Simulate order creation for prototype
-    if (isPrototype) {
-        console.log("PROTOTYPE: Simulating order creation.");
-        const mockOrderId = `proto-order-${Date.now()}`;
-        return {
-            orderId: mockOrderId,
-            deliveryFee,
-            total,
-        }
-    }
 
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,
@@ -236,8 +229,8 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
             id: orderId,
             userId: 'proto-buyer',
             customerName: 'Comprador Proto',
-            items: [{ id: 'proto-prod-1', name: 'Hamburguesa Clásica IA', description: 'La clásica con queso, lechuga y tomate.', price: 9.99, category: 'Comida Rápida', quantity: 1, imageUrl: "https://picsum.photos/seed/classicburger/200/200" }],
-            total: 14.99,
+            items: [{ ...prototypeProducts[0], quantity: 1 }],
+            total: prototypeProducts[0].price + 5.00,
             deliveryFee: 5.00,
             status: 'Pedido Realizado',
             createdAt: new Date(),
@@ -245,8 +238,8 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
             storeName: 'Hamburguesas IA',
             storeAddress: 'Av. Hamburguesa 456',
             shippingAddress: {
-                name: 'Test Name',
-                address: 'Test Address 123'
+                name: 'Comprador Proto',
+                address: 'Calle Falsa 123'
             },
         }
     }
