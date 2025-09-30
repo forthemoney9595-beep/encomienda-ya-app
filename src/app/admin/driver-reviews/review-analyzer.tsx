@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { DeliveryPersonnel } from '@/lib/placeholder-data';
-import { getDeliveryPersonnel, addDriverReview } from '@/lib/data-service';
+import { addDriverReview } from '@/lib/data-service';
 import { Loader2, Wand2, ThumbsUp, ThumbsDown, Meh } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -25,19 +25,14 @@ const formSchema = z.object({
   reviewText: z.string().min(10, 'La reseña debe tener al menos 10 caracteres.'),
 });
 
-export function ReviewAnalyzer() {
+interface ReviewAnalyzerProps {
+  personnel: DeliveryPersonnel[];
+}
+
+export function ReviewAnalyzer({ personnel }: ReviewAnalyzerProps) {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchPersonnel = async () => {
-        const personnelFromDb = await getDeliveryPersonnel();
-        setPersonnel(personnelFromDb.filter(p => p.status === 'Activo' || p.status === 'Pendiente'));
-    };
-    fetchPersonnel();
-  }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
