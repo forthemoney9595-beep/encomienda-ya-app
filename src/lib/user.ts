@@ -30,7 +30,8 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
         await addDoc(storeCollectionRef, {
             name: data.storeName,
             category: data.storeCategory,
-            productCategories: data.storeCategory ? [data.storeCategory] : [], // Initialize with the main category if it exists
+            // Only add the category to the array if it exists, otherwise initialize as empty array
+            productCategories: data.storeCategory ? [data.storeCategory] : [], 
             address: data.storeAddress,
             ownerId: uid,
             status: 'Pendiente',
