@@ -52,15 +52,19 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     
     setIsUpdating(true);
     try {
-        await updateOrderStatus(order.id, selectedStatus, updatePrototypeOrder);
+      if (order.id.startsWith('proto-')) {
+        updatePrototypeOrder(order.id, { status: selectedStatus });
+      } else {
+        await updateOrderStatus(order.id, selectedStatus);
+      }
 
-        toast({
-            title: '¡Estado Actualizado!',
-            description: `El pedido ahora está "${selectedStatus}".`,
-        });
-        // We don't need to push, the context update will re-render the parent
-        // and this component if needed. Let's see if the toast is enough.
-        router.refresh(); // This can help re-fetch server data if needed, but for proto, context is key.
+      toast({
+          title: '¡Estado Actualizado!',
+          description: `El pedido ahora está "${selectedStatus}".`,
+      });
+      // The context update will re-render the parent page with the new data automatically.
+      // We can push the user back to the list view.
+      router.push('/orders');
     } catch (error) {
         console.error('Error updating order status:', error);
         toast({

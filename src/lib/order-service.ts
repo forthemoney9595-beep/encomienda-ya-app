@@ -2,9 +2,8 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore } from './placeholder-data';
+import { type Product } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
-import { usePrototypeData } from '@/context/prototype-data-context';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem extends Product {
@@ -128,14 +127,16 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 
 /**
  * Updates the status of an order.
- * This function now internally handles prototype vs. real data via the context.
+ * This function only handles real database orders now.
+ * Prototype orders are handled entirely on the client via PrototypeDataContext.
  * @param orderId The ID of the order to update.
  * @param status The new status for the order.
- * @param updatePrototypeOrder The function from the context to update prototype data.
  */
-export async function updateOrderStatus(orderId: string, status: OrderStatus, updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void): Promise<void> {
+export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
   if (orderId.startsWith('proto-')) {
-    updatePrototypeOrder(orderId, { status });
+    // This case should be handled by client-side context now,
+    // but we can log a warning if it's ever called.
+    console.warn('updateOrderStatus server action called for a prototype order. This should be handled on the client.');
     return;
   }
   try {
@@ -149,20 +150,14 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, up
 
 /**
  * Assigns an order to a delivery person and updates its status.
+ * Prototype logic is now handled on the client-side.
  * @param orderId The ID of the order to assign.
  * @param driverId The ID of the delivery person.
  * @param driverName The name of the delivery person.
- * @param isPrototype If true, will update prototype data.
  */
-export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string, isPrototype: boolean = false): Promise<void> {
-    const { updatePrototypeOrder } = usePrototypeData();
-    if (isPrototype) {
-        updatePrototypeOrder(orderId, {
-            id: orderId,
-            status: 'En reparto',
-            deliveryPersonId: driverId,
-            deliveryPersonName: driverName,
-        });
+export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
+    if (orderId.startsWith('proto-')) {
+        console.warn('assignOrderToDeliveryPerson server action called for a prototype order. This should be handled on the client.');
         return;
     }
     
@@ -186,13 +181,13 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
 }
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
+    // Prototype orders are now handled by the PrototypeDataContext on the client.
+    // This function is only for REAL database orders.
     if (orderId.startsWith('proto-order-')) {
-        // This is now handled by PrototypeDataContext. This function is for real DB only.
+        console.warn('getOrderById server action called for a prototype order. This should be handled on the client.');
         return null;
     }
 
-    // This function is now only for REAL database orders.
-    // Prototype orders are handled by the PrototypeDataContext.
     try {
         const orderDoc = await getDoc(doc(db, 'orders', orderId));
         if (orderDoc.exists()) {
