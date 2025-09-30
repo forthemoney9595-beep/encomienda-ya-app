@@ -1,10 +1,8 @@
-"use client"
-
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Your web app's Firebase configuration, now from environment variables
+// Your web app's Firebase configuration
 const firebaseConfig = {
   projectId: "studio-8973437171-6b185",
   appId: "1:1091869412431:web:e25c7cebb7b151423f2e3a",
@@ -13,7 +11,7 @@ const firebaseConfig = {
   messagingSenderId: "1091869412431",
 };
 
-// Initialize Firebase for SSR
+// Initialize Firebase safely for both server and client
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 const auth = getAuth(app);
