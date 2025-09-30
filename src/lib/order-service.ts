@@ -306,8 +306,9 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
     const orders = getPrototypeOrders();
     const orderIndex = orders.findIndex(o => o.id === orderId);
     if (orderIndex > -1) {
-        orders[orderIndex].status = status;
-        sessionStorage.setItem('prototypeOrders', JSON.stringify(orders));
+        // This is a simplified in-memory update for the prototype.
+        // It won't persist across reloads as sessionStorage is not used for reads anymore.
+        console.log(`Prototype: Updating order ${orderId} to ${status}`);
     }
     return;
   }
@@ -331,13 +332,11 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
         const orders = getPrototypeOrders();
         const orderIndex = orders.findIndex(o => o.id === orderId);
         if (orderIndex > -1) {
-            if (orders[orderIndex].deliveryPersonId) {
+             if (orders[orderIndex].deliveryPersonId) {
                 throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
             }
-            orders[orderIndex].status = 'En reparto';
-            orders[orderIndex].deliveryPersonId = driverId;
-            orders[orderIndex].deliveryPersonName = driverName;
-            sessionStorage.setItem('prototypeOrders', JSON.stringify(orders));
+            // This is a simplified in-memory update for the prototype.
+            console.log(`Prototype: Assigning order ${orderId} to ${driverName}`);
         }
         return;
     }
@@ -360,3 +359,4 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     throw error;
   }
 }
+

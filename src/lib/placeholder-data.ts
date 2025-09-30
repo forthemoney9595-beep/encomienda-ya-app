@@ -32,7 +32,7 @@ export type DeliveryPersonnel = {
   email: string;
 };
 
-export type UserProfile = {
+export interface UserProfile {
     uid: string;
     name: string;
     email: string;
@@ -124,37 +124,37 @@ const initialPrototypeOrders: PrototypeOrder[] = [
 
 export function savePrototypeOrder(order: PrototypeOrder) {
     if (typeof window === 'undefined') return;
-    const existingOrders = getPrototypeOrders();
+    const existingOrders = getPrototypeOrdersFromSession();
     const updatedOrders = [...existingOrders, order];
     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
 }
 
-export function getPrototypeOrders(): PrototypeOrder[] {
+// Function to get orders from session, used for writes
+function getPrototypeOrdersFromSession(): PrototypeOrder[] {
     if (typeof window === 'undefined') return [];
     const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-    if (ordersJson) {
-        return JSON.parse(ordersJson);
-    }
-    // If no orders in session storage, initialize with seed data
-    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+    return ordersJson ? JSON.parse(ordersJson) : initialPrototypeOrders;
+}
+
+
+// This function is now safe to call on the server
+export function getPrototypeOrders(): PrototypeOrder[] {
+    // For server-side rendering and initial client render, always return the static seed data
     return initialPrototypeOrders;
 }
 
 export function getPrototypeOrdersByStore(storeId: string): PrototypeOrder[] {
-    if (typeof window === 'undefined') return [];
     const allOrders = getPrototypeOrders();
     return allOrders.filter(order => order.storeId === storeId);
 }
 
 
 export function getAvailablePrototypeOrdersForDelivery(): PrototypeOrder[] {
-    if (typeof window === 'undefined') return [];
     const allOrders = getPrototypeOrders();
     return allOrders.filter(order => order.status === 'En preparación' && !order.deliveryPersonId);
 }
 
 export function getPrototypeOrdersByDeliveryPerson(driverId: string): PrototypeOrder[] {
-    if (typeof window === 'undefined') return [];
     const allOrders = getPrototypeOrders();
     return allOrders.filter(order => order.deliveryPersonId === driverId && order.status === 'En reparto');
 }
@@ -166,3 +166,4 @@ export const notifications = [
   { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
+
