@@ -128,7 +128,7 @@ export async function addProductToStore(storeId: string, productData: Omit<Produ
         console.log("Prototype mode: Simulating adding product.");
         prototypeProducts.push({ id: `proto-prod-${Date.now()}`, ...productData });
         const newCategory = productData.category;
-        if (!prototypeStore.productCategories.includes(newCategory)) {
+        if (!prototypeStore.productCategories.map(c => c.toLowerCase()).includes(newCategory.toLowerCase())) {
             prototypeStore.productCategories.push(newCategory);
         }
         return;
@@ -162,7 +162,7 @@ export async function addProductToStore(storeId: string, productData: Omit<Produ
 /**
  * Fetches all delivery personnel from the 'users' collection in Firestore.
  */
-export async function getDeliveryPersonnel(): Promise<DeliveryPersonnel[]> {
+export async function getDeliveryPersonnel(isPrototype: boolean = false): Promise<DeliveryPersonnel[]> {
   try {
     const usersCollectionRef = collection(db, 'users');
     const q = query(usersCollectionRef, where('role', '==', 'delivery'));
@@ -183,10 +183,35 @@ export async function getDeliveryPersonnel(): Promise<DeliveryPersonnel[]> {
         status: statusMap[data.status as keyof typeof statusMap] || 'Inactivo',
       };
     });
+
+    if (isPrototype) {
+        const protoDeliveryUser = Object.values(prototypeUsers).find(u => u.role === 'delivery');
+        if (protoDeliveryUser && !personnel.find(p => p.id === protoDeliveryUser.uid)) {
+            personnel.unshift({
+                id: protoDeliveryUser.uid,
+                name: protoDeliveryUser.name,
+                status: 'Activo',
+                vehicle: 'Motocicleta',
+                zone: 'Centro'
+            });
+        }
+    }
     
     return personnel;
   } catch (error) {
     console.error("Error fetching delivery personnel from Firestore: ", error);
+    if (isPrototype) {
+        const protoDeliveryUser = Object.values(prototypeUsers).find(u => u.role === 'delivery');
+        if (protoDeliveryUser) {
+            return [{
+                id: protoDeliveryUser.uid,
+                name: protoDeliveryUser.name,
+                status: 'Activo',
+                vehicle: 'Motocicleta',
+                zone: 'Centro'
+            }];
+        }
+    }
     return [];
   }
 }
