@@ -31,6 +31,10 @@ export default function StoreOrdersView({ orders }: { orders: Order[] }) {
         router.push(`/orders/${orderId}`);
     };
 
+    if (!orders) {
+      return null; // Don't render if orders are not yet available
+    }
+
     return (
       <Card>
         <CardHeader>

@@ -94,7 +94,11 @@ export default function OrdersPage() {
   }, [user, authLoading, router]);
 
   const renderView = () => {
-    if (!user) return null;
+    // Ensure pageProps are populated before rendering the view
+    if (!user || (user.role === 'store' && !pageProps.orders) || (user.role === 'buyer' && !pageProps.orders)) {
+      return null;
+    }
+    
     switch (user.role) {
       case 'store':
         return <StoreOrdersView {...pageProps} />;

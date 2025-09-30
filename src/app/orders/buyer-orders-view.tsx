@@ -23,6 +23,10 @@ const getBadgeVariant = (status: string) => {
 };
 
 export default function BuyerOrdersView({ orders }: { orders: Order[] }) {
+  if (!orders) {
+    return null; // Don't render if orders are not yet available
+  }
+  
   return (
     <div className="space-y-4">
       {orders.length === 0 ? (
