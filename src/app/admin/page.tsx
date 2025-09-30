@@ -29,7 +29,7 @@ export default function AdminDashboard() {
         const isPrototype = user?.uid.startsWith('proto-') ?? false;
         const [stores, drivers, availableOrders] = await Promise.all([
           getStores(true, isPrototype),
-          getDeliveryPersonnel(),
+          getDeliveryPersonnel(isPrototype),
           getAvailableOrdersForDelivery(isPrototype),
         ]);
         setTotalStores(stores.length);
