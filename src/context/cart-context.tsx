@@ -21,25 +21,39 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-    const [cart, setCart] = useState<CartItem[]>(() => {
-        if (typeof window === 'undefined') return [];
-        const savedCart = localStorage.getItem('cart');
-        return savedCart ? JSON.parse(savedCart) : [];
-    });
-    
-    const [storeId, setStoreId] = useState<string | null>(() => {
-        if (typeof window === 'undefined') return null;
-        return localStorage.getItem('cartStoreId');
-    });
+    const [cart, setCart] = useState<CartItem[]>([]);
+    const [storeId, setStoreId] = useState<string | null>(null);
+
+    // State to ensure we only run localStorage logic on the client
+    const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
-        localStorage.setItem('cart', JSON.stringify(cart));
-        if (storeId) {
-            localStorage.setItem('cartStoreId', storeId);
-        } else {
-            localStorage.removeItem('cartStoreId');
+        setIsClient(true);
+    }, []);
+
+    useEffect(() => {
+        if (isClient) {
+            const savedCart = localStorage.getItem('cart');
+            const savedStoreId = localStorage.getItem('cartStoreId');
+            if (savedCart) {
+                setCart(JSON.parse(savedCart));
+            }
+            if (savedStoreId) {
+                setStoreId(savedStoreId);
+            }
         }
-    }, [cart, storeId]);
+    }, [isClient]);
+
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('cart', JSON.stringify(cart));
+            if (storeId) {
+                localStorage.setItem('cartStoreId', storeId);
+            } else {
+                localStorage.removeItem('cartStoreId');
+            }
+        }
+    }, [cart, storeId, isClient]);
 
     const addToCart = (product: Product, newStoreId: string) => {
         // If the new item is from a different store, clear the cart first
