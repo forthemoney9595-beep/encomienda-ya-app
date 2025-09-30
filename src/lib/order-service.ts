@@ -191,7 +191,7 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 }
 
 export async function getOrdersByStore(storeId: string): Promise<Order[]> {
-    if (storeId === 'proto-store-id') {
+    if (storeId.startsWith('proto-')) {
         const protoOrders = getPrototypeOrdersByStore(storeId);
          return protoOrders
             .map(o => ({...o, createdAt: new Date(o.createdAt)}))
@@ -303,7 +303,7 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
  * @param status The new status for the order.
  */
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
-  if (orderId.startsWith('proto-order-')) {
+  if (orderId.startsWith('proto-')) {
     updatePrototypeOrder(orderId, { status });
     return;
   }
@@ -323,7 +323,7 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
  * @param driverName The name of the delivery person.
  */
 export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
-    if (orderId.startsWith('proto-order-')) {
+    if (orderId.startsWith('proto-')) {
         const orders = getAvailablePrototypeOrdersForDelivery();
         const orderExists = orders.some(o => o.id === orderId);
         if (!orderExists) {

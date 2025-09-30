@@ -12,7 +12,7 @@ import type { Order } from '@/lib/order-service';
 import { getOrdersByStore } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getPrototypeOrders, getPrototypeOrdersByStore } from '@/lib/placeholder-data';
+import { getPrototypeOrdersByStore } from '@/lib/placeholder-data';
 
 const getBadgeVariant = (status: string) => {
     switch (status) {
@@ -51,19 +51,23 @@ export default function StoreOrdersView() {
         const fetchOrders = async () => {
             setLoading(true);
             let storeOrders: Order[] = [];
+            
+            // This now correctly fetches from the session-aware functions
             if (user.uid.startsWith('proto-')) {
-                // Correctly fetch from session-aware function and then filter
-                storeOrders = getPrototypeOrdersByStore(user.storeId)
+                 storeOrders = getPrototypeOrdersByStore(user.storeId)
                     .map(o => ({...o, createdAt: new Date(o.createdAt)}));
             } else {
                 storeOrders = await getOrdersByStore(user.storeId!);
             }
+            
             storeOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
             setOrders(storeOrders);
             setLoading(false);
         };
 
         fetchOrders();
+        // Re-running this effect when the user or client status changes is enough.
+        // Next.js router state is not a reliable dependency for data fetching in this case.
     }, [user, authLoading, isClient]);
 
     const handleRowClick = (orderId: string) => {
@@ -117,7 +121,7 @@ export default function StoreOrdersView() {
                   <TableRow key={order.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => handleRowClick(order.id)}>
                     <TableCell className="font-medium">#{order.id.substring(0, 7)}</TableCell>
                     <TableCell>{order.customerName}</TableCell>
-                    <TableCell>{format(order.createdAt, "Pp", { locale: es })}</TableCell>
+                    <TableCell>{format(new Date(order.createdAt), "Pp", { locale: es })}</TableCell>
                     <TableCell>
                       <Badge variant={getBadgeVariant(order.status)}>{order.status}</Badge>
                     </TableCell>

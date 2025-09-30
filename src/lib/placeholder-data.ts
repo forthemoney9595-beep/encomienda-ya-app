@@ -125,41 +125,31 @@ const initialPrototypeOrders: PrototypeOrder[] = [
 // Gets the current list of orders from session storage.
 // If empty, it seeds it with the initial data.
 function getPrototypeOrdersFromSession(): PrototypeOrder[] {
-    if (typeof window === 'undefined') return initialPrototypeOrders;
-    
-    let ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-    
-    // If session storage is empty or doesn't contain our seed data, initialize it.
-    if (!ordersJson) {
-        const ordersToSeed = initialPrototypeOrders;
-        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(ordersToSeed));
-        return ordersToSeed;
-    }
-    
-    try {
-        const parsedOrders = JSON.parse(ordersJson);
-        // Basic check to see if it's a valid array
-        if (Array.isArray(parsedOrders)) {
-            return parsedOrders;
-        }
-        // If not, reset to initial data
-        throw new Error("Invalid data in session storage");
-    } catch (e) {
-        // If parsing fails, reset to initial data
-        console.error("Failed to parse prototype orders from session storage, resetting.", e);
-        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+    if (typeof window === 'undefined') {
         return initialPrototypeOrders;
     }
+    
+    const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
+    
+    if (ordersJson) {
+        try {
+            const parsedOrders = JSON.parse(ordersJson);
+            if (Array.isArray(parsedOrders)) {
+                return parsedOrders;
+            }
+        } catch (e) {
+            console.error("Corrupted prototype orders in session storage, resetting.", e);
+        }
+    }
+    
+    // If we are here, it means sessionStorage is empty or corrupted, so we initialize it.
+    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+    return initialPrototypeOrders;
 }
 
 // Public function to get all prototype orders.
 // Safe to call from both server and client.
 export function getPrototypeOrders(): PrototypeOrder[] {
-    if (typeof window === 'undefined') {
-        // On the server, always return the static initial list.
-        return initialPrototypeOrders;
-    }
-    // On the client, get the stateful list from session storage.
     return getPrototypeOrdersFromSession();
 }
 
