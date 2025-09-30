@@ -49,18 +49,19 @@ export default function CheckoutPage() {
     }
   }, [authLoading, user, router]);
 
+  useEffect(() => {
+    // If the cart is or becomes empty, or there's no storeId, redirect.
+    if (!authLoading && totalItems === 0) {
+      toast({
+        title: 'Tu carrito está vacío',
+        description: 'Redirigiendo a la página principal...',
+      })
+      router.push('/');
+    }
+  }, [totalItems, authLoading, router, toast]);
+
   if (authLoading || !user) {
      return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
-  }
-
-  if (totalItems === 0 || !storeId) {
-    router.push('/');
-    return (
-      <div className="container mx-auto text-center py-20">
-        <h2 className="text-2xl font-bold">Tu carrito está vacío</h2>
-        <p className="text-muted-foreground mt-2">Redirigiendo a la página principal...</p>
-      </div>
-    )
   }
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -90,6 +91,8 @@ export default function CheckoutPage() {
         title: "Error al realizar el pedido",
         description: "Hubo un problema al guardar tu pedido. Por favor, inténtalo de nuevo.",
       });
+      // The form state (isSubmitting) is automatically handled by react-hook-form
+      // upon promise resolution (success or failure), so no need to manually set it here.
     }
   }
 
