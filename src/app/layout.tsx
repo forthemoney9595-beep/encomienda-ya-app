@@ -1,17 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarFooter } from '@/components/ui/sidebar';
-import { MainNav } from '@/components/main-nav';
-import Logo from '@/components/logo';
 import { Toaster } from '@/components/ui/toaster';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { Notifications } from '@/components/notifications';
 import { CartProvider } from '@/context/cart-context';
-import { Cart } from '@/components/cart';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { User, LogOut, Shield } from 'lucide-react';
 import { AuthProvider } from '@/context/auth-context';
 import { AppContent } from './app-content';
 
