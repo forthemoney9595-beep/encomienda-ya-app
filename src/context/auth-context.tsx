@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { prototypeUsers } from '@/lib/placeholder-data';
 
 interface UserProfile {
     uid: string;
@@ -43,6 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     const fetchUserProfile = async (firebaseUser: FirebaseUser | null, prototypeEmail?: string | null) => {
+        setLoading(true);
         let profileToSet: UserProfile | null = null;
         if (firebaseUser) {
             sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
