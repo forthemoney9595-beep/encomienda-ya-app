@@ -127,15 +127,12 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 
 /**
  * Updates the status of an order.
- * This function only handles real database orders now.
  * Prototype orders are handled entirely on the client via PrototypeDataContext.
  * @param orderId The ID of the order to update.
  * @param status The new status for the order.
  */
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
   if (orderId.startsWith('proto-')) {
-    // This case is handled by client-side context (usePrototypeData hook).
-    // This server action is only for real database interactions.
     console.warn('updateOrderStatus server action called for a prototype order. This should be handled on the client.');
     return;
   }
@@ -157,8 +154,6 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
  */
 export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
     if (orderId.startsWith('proto-')) {
-        // This case is handled by client-side context (usePrototypeData hook).
-        // This server action is only for real database interactions.
         console.warn('assignOrderToDeliveryPerson server action called for a prototype order. This should be handled on the client.');
         return;
     }
@@ -183,8 +178,6 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
 }
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
-    // Prototype orders are now handled by the PrototypeDataContext on the client.
-    // This function is only for REAL database orders.
     if (orderId.startsWith('proto-order-')) {
         console.warn('getOrderById server action called for a prototype order. This should be handled on the client.');
         return null;

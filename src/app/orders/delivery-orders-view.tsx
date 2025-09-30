@@ -17,9 +17,8 @@ import { useRouter } from 'next/navigation';
 
 export default function DeliveryOrdersView() {
   const { user, loading: authLoading } = useAuth();
-  const { prototypeOrders, loading: prototypeLoading, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson } = usePrototypeData();
+  const { prototypeOrders, loading: prototypeLoading, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson, updatePrototypeOrder } = usePrototypeData();
   const { toast } = useToast();
-  const router = useRouter();
   
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
@@ -27,10 +26,8 @@ export default function DeliveryOrdersView() {
 
   useEffect(() => {
     if (!user || prototypeLoading) return;
-
     setAvailableOrders(getAvailableOrdersForDelivery());
     setAssignedOrders(getOrdersByDeliveryPerson(user.uid));
-
   }, [user, prototypeOrders, prototypeLoading, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson]);
 
 
@@ -46,7 +43,15 @@ export default function DeliveryOrdersView() {
 
     setLoadingOrderId(orderId);
     try {
-      await assignOrderToDeliveryPerson(orderId, user.uid, user.name);
+      if (orderId.startsWith('proto-')) {
+          updatePrototypeOrder(orderId, { 
+              status: 'En reparto', 
+              deliveryPersonId: user.uid,
+              deliveryPersonName: user.name,
+            });
+      } else {
+         await assignOrderToDeliveryPerson(orderId, user.uid, user.name);
+      }
       toast({
         title: '¡Pedido Aceptado!',
         description: 'El pedido ha sido asignado a ti. ¡Hora de ponerse en marcha!',
@@ -66,7 +71,11 @@ export default function DeliveryOrdersView() {
   const handleCompleteOrder = async (orderId: string) => {
     setLoadingOrderId(orderId);
     try {
-      await updateOrderStatus(orderId, 'Entregado');
+        if(orderId.startsWith('proto-')) {
+            updatePrototypeOrder(orderId, { status: 'Entregado' });
+        } else {
+            await updateOrderStatus(orderId, 'Entregado');
+        }
       toast({
         title: '¡Entrega Completada!',
         description: '¡Buen trabajo! El pedido ha sido marcado como entregado.',
