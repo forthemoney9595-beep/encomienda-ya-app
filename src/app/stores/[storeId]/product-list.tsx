@@ -31,6 +31,7 @@ export function ProductList({ products: initialProducts, productCategories: init
     const { user } = useAuth();
     
     const [products, setProducts] = useState<Product[]>(initialProducts);
+    const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -39,61 +40,55 @@ export function ProductList({ products: initialProducts, productCategories: init
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
     
-    const [isClient, setIsClient] = useState(false);
     useEffect(() => {
-        setIsClient(true);
-    }, []);
-
-    useEffect(() => {
-        if (isClient && currentStoreId.startsWith('proto-')) {
+        // Since prototype data is now static, we just set it on initial load.
+        // The state will handle in-memory updates.
+        if (currentStoreId.startsWith('proto-')) {
             const protoProducts = getPrototypeProducts(currentStoreId);
             setProducts(protoProducts);
+            const categories = new Set(protoProducts.map(p => p.category));
+            setProductCategories(Array.from(categories));
         } else {
             setProducts(initialProducts);
+            setProductCategories(initialCategories);
         }
-    }, [currentStoreId, initialProducts, isClient]);
+    }, [currentStoreId, initialProducts, initialCategories]);
 
-
-    const productCategories = useMemo(() => {
-        const categories = new Set(products.map(p => p.category));
-        return Array.from(categories);
-    }, [products]);
 
     const handleSaveProduct = async (productData: Product) => {
         const isEditing = products.some(p => p.id === productData.id);
-        let successMessage = "";
-
-        if (currentStoreId.startsWith('proto-')) {
-            if (isEditing) {
-                setProducts(products.map(p => p.id === productData.id ? productData : p));
-                successMessage = "¡Artículo Actualizado!";
-            } else {
-                setProducts(prev => [...prev, productData]);
-                successMessage = "¡Artículo Añadido!";
-            }
+        
+        let updatedProducts;
+        if (isEditing) {
+            updatedProducts = products.map(p => (p.id === productData.id ? productData : p));
         } else {
+            updatedProducts = [...products, productData];
+        }
+        setProducts(updatedProducts);
+
+        // Unify category logic: always check if the new/updated category exists and add if not.
+        if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+            setProductCategories(prev => [...prev, productData.category]);
+        }
+
+        // Real backend update (for non-prototype)
+        if (!currentStoreId.startsWith('proto-')) {
             if (isEditing) {
                 await updateProductInStore(currentStoreId, productData.id, productData);
-                setProducts(products.map(p => p.id === productData.id ? productData : p));
-                successMessage = "¡Artículo Actualizado!";
             } else {
-                await addProductToStore(currentStoreId, productData);
-                setProducts(prev => [...prev, productData]);
-                successMessage = "¡Artículo Añadido!";
+                await addProductToStore(currentStoreId, productData, productCategories);
             }
         }
         
-        toast({ title: successMessage });
+        toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
         setManageItemDialogOpen(false);
         setEditingProduct(null);
     };
 
     const handleDeleteProduct = async (productId: string) => {
-        if (currentStoreId.startsWith('proto-')) {
-             setProducts(products.filter(p => p.id !== productId));
-        } else {
+        setProducts(products.filter(p => p.id !== productId));
+        if (!currentStoreId.startsWith('proto-')) {
             await deleteProductFromStore(currentStoreId, productId);
-            setProducts(products.filter(p => p.id !== productId));
         }
        
         toast({
@@ -146,11 +141,6 @@ export function ProductList({ products: initialProducts, productCategories: init
         setPendingProduct(null);
     }
     
-    if (!isClient && currentStoreId.startsWith('proto-')) {
-        return null; // Or a skeleton loader
-    }
-
-
     return (
         <>
             <ManageItemDialog
@@ -158,7 +148,6 @@ export function ProductList({ products: initialProducts, productCategories: init
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
                 onSave={handleSaveProduct}
-                productCategories={productCategories}
             />
             {isOwner && (
               <div className="mb-4">
@@ -167,7 +156,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                 </Button>
               </div>
             )}
-            <Tabs defaultValue={productCategories[0] || 'all'}>
+            <Tabs defaultValue={productCategories[0] || 'all'} className="w-full">
                 <TabsList className="mb-4">
                     {productCategories.map(category => (
                     <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
@@ -210,7 +199,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                                                         <AlertDialogDescription>
-                                                            Esta acción no se puede deshacer. Esto eliminará permanentemente el producto.
+                                                            Esta acción no se puede deshacer. Esto eliminará permanentemente el producto (hasta que recargues la página en modo prototipo).
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter>
@@ -239,15 +228,9 @@ export function ProductList({ products: initialProducts, productCategories: init
                     </div>
                     </TabsContent>
                 ))}
-                {products.length === 0 && !isOwner && (
+                {products.length === 0 && productCategories.length === 0 && (
                     <div className="text-center text-muted-foreground py-10">
-                        <p>Esta tienda aún no tiene productos.</p>
-                    </div>
-                )}
-                 {products.length === 0 && isOwner && (
-                    <div className="text-center text-muted-foreground py-10">
-                        <p>Esta tienda aún no tiene productos.</p>
-                        <p>¡Añade tu primer artículo usando el botón de arriba!</p>
+                        <p>{isOwner ? 'Esta tienda aún no tiene productos. ¡Añade tu primer artículo usando el botón de arriba!' : 'Esta tienda aún no tiene productos.'}</p>
                     </div>
                 )}
             </Tabs>

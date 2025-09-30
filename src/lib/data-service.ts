@@ -77,7 +77,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
         imageHint: data.imageHint || 'store',
         status: data.status || 'Pendiente',
         ownerId: data.ownerId || '',
-        productCategories: data.productCategories || [data.category] || [],
+        productCategories: data.productCategories || [data.category]- Creado || [],
       } as Store;
     } else {
       console.log(`No store found with id: ${id}`);
@@ -95,7 +95,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
   if (storeId.startsWith('proto-')) {
-    return getPrototypeProducts();
+    return getPrototypeProducts(storeId);
   }
 
   try {
@@ -127,31 +127,20 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
  * If the product's category is new, it adds it to the store's `productCategories` array.
  * @param storeId The ID of the store.
  * @param productData The data for the new product.
+ * @param currentCategories The current list of categories for the store.
  */
-export async function addProductToStore(storeId: string, productData: Product): Promise<void> {
-    if (storeId.startsWith('proto-')) {
-        // This is now handled in-memory in the component state for prototype mode.
-        console.log("Prototype mode: Product added to component state.", productData);
-        return;
-    }
-    
+export async function addProductToStore(storeId: string, productData: Product, currentCategories: string[]): Promise<void> {
     try {
         const storeRef = doc(db, 'stores', storeId);
-        // Use the product's own ID for the document ID in the subcollection.
         const productRef = doc(collection(storeRef, 'products'), productData.id);
         
         await setDoc(productRef, productData);
 
         // Check if the category is new and update the store document
-        const storeSnap = await getDoc(storeRef);
-        if (storeSnap.exists()) {
-            const storeData = storeSnap.data();
-            const existingCategories = storeData.productCategories || [];
-            if (!existingCategories.map((c: string) => c.toLowerCase()).includes(productData.category.toLowerCase())) {
-                await updateDoc(storeRef, {
-                    productCategories: arrayUnion(productData.category)
-                });
-            }
+        if (!currentCategories.map((c: string) => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+            await updateDoc(storeRef, {
+                productCategories: arrayUnion(productData.category)
+            });
         }
     } catch (error) {
         console.error(`Error adding product to store ${storeId}:`, error);
