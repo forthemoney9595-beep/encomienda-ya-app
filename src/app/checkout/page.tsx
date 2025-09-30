@@ -15,14 +15,14 @@ import { useRouter } from 'next/navigation';
 import { CreditCard, Home, Loader2 } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
   address: z.string().min(5, "La dirección es obligatoria."),
-  cardNumber: z.string().length(16, "El número de tarjeta debe tener 16 dígitos.").regex(/^\d+$/, "Solo se admiten números."),
-  expiryDate: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "El formato debe ser MM/AA."),
-  cvc: z.string().length(3, "El CVC debe tener 3 dígitos.").regex(/^\d+$/, "Solo se admiten números."),
+  cardNumber: z.string().min(1, "El número de tarjeta es obligatorio."),
+  expiryDate: z.string().min(1, "La fecha de expiración es obligatoria."),
+  cvc: z.string().min(1, "El CVC es obligatorio."),
 });
 
 
@@ -31,6 +31,7 @@ export default function CheckoutPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -50,24 +51,25 @@ export default function CheckoutPage() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    if (isClientReady() && (totalItems === 0 || !storeId)) {
+    // This check needs to run only on the client after hydration
+    if (typeof window !== 'undefined' && !authLoading && (totalItems === 0 || !storeId)) {
       toast({
         title: 'Tu carrito está vacío o la tienda no está definida',
         description: 'Redirigiendo a la página principal...',
       })
       router.push('/');
     }
-  }, [totalItems, storeId, authLoading, router, toast]);
-
-  const isClientReady = () => !authLoading && totalItems > 0 && storeId;
+  }, [totalItems, storeId, authLoading, router, toast, user]);
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    setIsSubmitting(true);
     if (!user || !storeId || cart.length === 0) {
       toast({
         variant: "destructive",
         title: "Error",
         description: "Falta información del usuario, la tienda o el carrito está vacío.",
       });
+      setIsSubmitting(false);
       return;
     };
 
@@ -95,6 +97,8 @@ export default function CheckoutPage() {
         title: "Error al realizar el pedido",
         description: "Hubo un problema al guardar tu pedido. Por favor, inténtalo de nuevo.",
       });
+    } finally {
+        setIsSubmitting(false);
     }
   }
 
@@ -154,7 +158,7 @@ export default function CheckoutPage() {
                                 <FormItem>
                                     <FormLabel>Número de Tarjeta</FormLabel>
                                     <FormControl>
-                                    <Input placeholder="---- ---- ---- ----" {...field} />
+                                    <Input placeholder="Cualquier número es válido" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -168,7 +172,7 @@ export default function CheckoutPage() {
                                     <FormItem className="w-1/2">
                                         <FormLabel>Fecha de Expiración</FormLabel>
                                         <FormControl>
-                                        <Input placeholder="MM/AA" {...field} />
+                                        <Input placeholder="Cualquier fecha" {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -181,7 +185,7 @@ export default function CheckoutPage() {
                                     <FormItem className="w-1/2">
                                         <FormLabel>CVC</FormLabel>
                                         <FormControl>
-                                        <Input placeholder="---" {...field} />
+                                        <Input placeholder="Cualquier código" {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -190,8 +194,8 @@ export default function CheckoutPage() {
                             </div>
                         </CardContent>
                     </Card>
-                     <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
-                        {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando Pedido...</> : `Pagar $${(totalPrice + 5.00).toFixed(2)}`}
+                     <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+                        {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando Pedido...</> : `Pagar $${(totalPrice + 5.00).toFixed(2)}`}
                     </Button>
                 </form>
             </Form>
