@@ -12,11 +12,20 @@ import { auth } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
   password: z.string().min(1, "La contraseña no puede estar vacía."),
 });
+
+const testUsers = [
+    { role: 'Admin', email: 'admin@test.com', password: 'password' },
+    { role: 'Tienda', email: 'tienda@test.com', password: 'password' },
+    { role: 'Repartidor', email: 'repartidor@test.com', password: 'password' },
+    { role: 'Comprador', email: 'comprador@test.com', password: 'password' },
+]
 
 export default function LoginPage() {
   const { toast } = useToast();
@@ -49,58 +58,88 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
-      <Card className="w-full max-w-sm">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center p-4">
+      <div className="flex flex-col items-center justify-center gap-6">
+        <Card className="w-full max-w-sm">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <CardHeader>
+                <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
+                <CardDescription>
+                  Ingresa tu correo electrónico a continuación para iniciar sesión en tu cuenta.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Correo Electrónico</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="nombre@ejemplo.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contraseña</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="••••••••" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+              <CardFooter className="flex flex-col">
+                <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Iniciando Sesión..." : "Iniciar Sesión"}
+                </Button>
+                <div className="mt-4 text-center text-sm">
+                  ¿No tienes una cuenta?{" "}
+                  <Link href="/signup" className="underline">
+                    Regístrate
+                  </Link>
+                </div>
+              </CardFooter>
+            </form>
+          </Form>
+        </Card>
+        
+        <Card className="w-full max-w-sm">
             <CardHeader>
-              <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
-              <CardDescription>
-                Ingresa tu correo electrónico a continuación para iniciar sesión en tu cuenta.
-              </CardDescription>
+                <CardTitle>Cuentas de Prueba</CardTitle>
+                <CardDescription>Usa estas cuentas para explorar los diferentes roles. La contraseña para todas es <Badge variant="secondary" className="font-mono">password</Badge>.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Correo Electrónico</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="nombre@ejemplo.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contraseña</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Rol</TableHead>
+                            <TableHead>Email</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {testUsers.map(user => (
+                            <TableRow key={user.role}>
+                                <TableCell className="font-medium">{user.role}</TableCell>
+                                <TableCell>{user.email}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+                <p className="text-xs text-muted-foreground mt-4">
+                    Nota: Debes registrar estas cuentas primero a través de la página de <Link href="/signup" className="underline">registro</Link> si aún no lo has hecho.
+                </p>
             </CardContent>
-            <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Iniciando Sesión..." : "Iniciar Sesión"}
-              </Button>
-              <div className="mt-4 text-center text-sm">
-                ¿No tienes una cuenta?{" "}
-                <Link href="/signup" className="underline">
-                  Regístrate
-                </Link>
-              </div>
-            </CardFooter>
-          </form>
-        </Form>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
