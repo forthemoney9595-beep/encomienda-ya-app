@@ -113,7 +113,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
         // Initial check on mount
-        fetchUserProfile(auth.currentUser, prototypeEmail);
+        if (prototypeEmail) {
+            fetchUserProfile(null, prototypeEmail);
+        } else {
+             fetchUserProfile(auth.currentUser, null);
+        }
 
         return () => unsubscribe();
     }, []);
