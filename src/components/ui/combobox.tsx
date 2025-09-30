@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import {
   Command,
   CommandEmpty,
-  CommandGroup,
   CommandInput,
+  CommandGroup,
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
@@ -39,8 +39,25 @@ export function Combobox({
   disabled,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+  const [search, setSearch] = React.useState("")
 
   const currentOption = options.find((option) => option.value.toLowerCase() === value?.toLowerCase())
+
+  const handleSelect = (selectedValue: string) => {
+    const option = options.find(opt => opt.label.toLowerCase() === selectedValue.toLowerCase());
+    onChange(option ? option.value : selectedValue);
+    setOpen(false);
+    setSearch(option ? option.label : selectedValue);
+  }
+  
+  React.useEffect(() => {
+    if (value) {
+      const option = options.find(opt => opt.value.toLowerCase() === value.toLowerCase());
+      setSearch(option ? option.label : value);
+    } else {
+      setSearch("");
+    }
+  }, [value, options]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -52,28 +69,35 @@ export function Combobox({
           className={cn("w-full justify-between", className)}
           disabled={disabled}
         >
-          {currentOption ? currentOption.label : placeholder}
+          <span className="truncate">
+            {currentOption ? currentOption.label : value || placeholder}
+          </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-        <Command>
+        <Command shouldFilter={false}>
           <CommandInput 
             placeholder={placeholder}
+            value={search}
+            onValueChange={setSearch}
+            onBlur={() => {
+                // If the user tabs away, commit the current search text as the new value
+                if (search && (!currentOption || search !== currentOption.label)) {
+                    onChange(search);
+                }
+            }}
           />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
-              {options.map((option) => (
+              {options
+                .filter(opt => opt.label.toLowerCase().includes(search.toLowerCase()))
+                .map((option) => (
                 <CommandItem
                   key={option.value}
                   value={option.label}
-                  onSelect={(currentValue) => {
-                    // Find the option object that matches the selected label (case-insensitive)
-                    const selectedOption = options.find(opt => opt.label.toLowerCase() === currentValue.toLowerCase());
-                    onChange(selectedOption ? selectedOption.value : "")
-                    setOpen(false)
-                  }}
+                  onSelect={handleSelect}
                 >
                   <Check
                     className={cn(

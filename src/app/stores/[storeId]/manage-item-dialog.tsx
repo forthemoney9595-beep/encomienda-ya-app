@@ -155,12 +155,15 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 control={form.control}
                 name="category"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Categoría</FormLabel>
                      <Combobox
                         options={categoryOptions}
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(value) => {
+                          // When a value is selected or typed, update the form field.
+                          field.onChange(value);
+                        }}
                         placeholder="Selecciona o escribe una categoría"
                         emptyMessage="No se encontraron categorías."
                         disabled={isProcessing}
