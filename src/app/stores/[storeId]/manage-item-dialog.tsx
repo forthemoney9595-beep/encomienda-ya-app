@@ -13,6 +13,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
 import { useToast } from "@/hooks/use-toast";
+import { generateProductImage } from "@/ai/flows/generate-product-image";
+import { Combobox } from "@/components/ui/combobox";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -29,10 +31,12 @@ interface ManageItemDialogProps {
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
     onSave: (data: Product) => void;
+    productCategories: string[];
 }
 
-export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
+export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories = [] }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const isEditing = product !== null;
   const { toast } = useToast();
 
@@ -73,15 +77,25 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
     setIsProcessing(true);
 
     try {
-      // If we are editing, use the existing product ID.
-      // If we are creating, generate a new unique ID.
-      const productData: Product = {
-        id: product?.id || `new-${Date.now()}-${Math.random()}`,
-        ...values,
-        imageUrl: values.imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
-      };
+        let imageUrl = values.imageUrl;
+        if (!imageUrl) {
+            setStatusMessage('Generando imagen del producto...');
+            const imageResult = await generateProductImage({
+                productName: values.name,
+                productDescription: values.description,
+            });
+            imageUrl = imageResult.imageUrl;
+        }
 
-      onSave(productData);
+        setStatusMessage('Guardando producto...');
+      
+        const productData: Product = {
+          id: isEditing ? product.id : `new-${Date.now()}-${Math.random()}`,
+          ...values,
+          imageUrl: imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
+        };
+
+        onSave(productData);
 
     } catch (error) {
         console.error("Error al guardar el producto:", error);
@@ -92,9 +106,12 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
         });
     } finally {
         setIsProcessing(false);
+        setStatusMessage('');
         setIsOpen(false);
     }
   }
+
+  const categoryOptions = productCategories.map(cat => ({ value: cat, label: cat }));
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!isProcessing) setIsOpen(open)}}>
@@ -104,7 +121,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellene los detalles del producto. Si no proporciona una URL de imagen, se asignará una imagen de marcador de posición.
+                Rellene los detalles del producto. Si no proporciona una URL de imagen, se generará una con IA.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -140,9 +157,14 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <FormControl>
-                       <Input placeholder="Ej. Comida Rápida" {...field} disabled={isProcessing} />
-                    </FormControl>
+                     <Combobox
+                        options={categoryOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Selecciona o escribe una categoría"
+                        emptyMessage="No se encontraron categorías."
+                        disabled={isProcessing}
+                      />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -175,11 +197,12 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
               />
             </div>
             <DialogFooter>
+               {isProcessing && <p className="text-sm text-muted-foreground mr-auto">{statusMessage}</p>}
               <Button type="submit" disabled={isProcessing}>
                 {isProcessing ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Guardando...
+                    Procesando...
                    </>
                 ) : (
                   <>

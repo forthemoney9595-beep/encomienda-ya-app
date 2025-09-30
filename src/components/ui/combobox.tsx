@@ -27,18 +27,16 @@ type ComboboxProps = {
   emptyMessage?: string
   className?: string
   disabled?: boolean
-  creatable?: boolean
 }
 
 export function Combobox({
   options,
   value,
   onChange,
-  placeholder = "Select an option...",
-  emptyMessage = "No options found.",
+  placeholder = "Selecciona una opción...",
+  emptyMessage = "No se encontraron opciones.",
   className,
   disabled,
-  creatable = false
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -69,16 +67,18 @@ export function Combobox({
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.value}
+                  value={option.label}
                   onSelect={(currentValue) => {
-                    onChange(currentValue === value ? "" : currentValue)
+                    // Find the option object that matches the selected label (case-insensitive)
+                    const selectedOption = options.find(opt => opt.label.toLowerCase() === currentValue.toLowerCase());
+                    onChange(selectedOption ? selectedOption.value : "")
                     setOpen(false)
                   }}
                 >
                   <Check
                     className={cn(
                       "mr-2 h-4 w-4",
-                      value === option.value ? "opacity-100" : "opacity-0"
+                      value?.toLowerCase() === option.value.toLowerCase() ? "opacity-100" : "opacity-0"
                     )}
                   />
                   {option.label}

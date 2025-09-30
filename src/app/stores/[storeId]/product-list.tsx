@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { ManageItemDialog } from './manage-item-dialog';
+import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 
 interface ProductListProps {
     products: Product[];
@@ -21,7 +22,7 @@ interface ProductListProps {
     ownerId: string;
 }
 
-export function ProductList({ products: initialProducts, productCategories, ownerId }: ProductListProps) {
+export function ProductList({ products: initialProducts, productCategories: initialCategories, ownerId }: ProductListProps) {
     const { addToCart, storeId: cartStoreId, clearCart } = useCart();
     const { toast } = useToast();
     const params = useParams();
@@ -29,6 +30,7 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const { user } = useAuth();
     
     const [products, setProducts] = useState<Product[]>(initialProducts);
+    const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -37,22 +39,41 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
-    // When initialProducts changes (e.g. on navigation), reset the state.
+    // When initialProducts changes, reset the state.
     useEffect(() => {
         setProducts(initialProducts);
-    }, [initialProducts]);
+        setProductCategories(initialCategories);
+    }, [initialProducts, initialCategories]);
 
     const handleSaveProduct = async (productData: Product) => {
+        const isEditing = products.some(p => p.id === productData.id);
         let successMessage = "";
-        if (editingProduct) {
-            // Editing existing product
-            setProducts(products.map(p => p.id === productData.id ? productData : p));
-            successMessage = "¡Artículo Actualizado!";
+
+        // For prototype store, update state directly
+        if (currentStoreId === 'proto-store-id') {
+            if (isEditing) {
+                setProducts(products.map(p => p.id === productData.id ? productData : p));
+                successMessage = "¡Artículo Actualizado!";
+            } else {
+                setProducts([...products, productData]);
+                successMessage = "¡Artículo Añadido!";
+            }
         } else {
-            // Adding new product
-            const newProductWithId = { ...productData, id: `new-${Date.now()}` };
-            setProducts([...products, newProductWithId]);
-            successMessage = "¡Artículo Añadido!";
+            // For real stores, call the database service
+            if (isEditing) {
+                await updateProductInStore(currentStoreId, productData.id, productData);
+                setProducts(products.map(p => p.id === productData.id ? productData : p));
+                successMessage = "¡Artículo Actualizado!";
+            } else {
+                await addProductToStore(currentStoreId, productData);
+                setProducts([...products, productData]);
+                successMessage = "¡Artículo Añadido!";
+            }
+        }
+        
+        // Update categories if a new one was added
+        if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+            setProductCategories([...productCategories, productData.category]);
         }
         
         toast({ title: successMessage });
@@ -61,10 +82,18 @@ export function ProductList({ products: initialProducts, productCategories, owne
     };
 
     const handleDeleteProduct = async (productId: string) => {
-        setProducts(products.filter(p => p.id !== productId));
+        // For prototype store, update state directly
+        if (currentStoreId === 'proto-store-id') {
+             setProducts(products.filter(p => p.id !== productId));
+        } else {
+            // For real stores, call the database service
+            await deleteProductFromStore(currentStoreId, productId);
+            setProducts(products.filter(p => p.id !== productId));
+        }
+       
         toast({
             title: "Producto Eliminado",
-            description: "El producto ha sido eliminado de la vista actual.",
+            description: "El producto ha sido eliminado.",
         });
     };
 
@@ -119,6 +148,7 @@ export function ProductList({ products: initialProducts, productCategories, owne
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
                 onSave={handleSaveProduct}
+                productCategories={productCategories}
             />
             {isOwner && (
               <div className="mb-4">
