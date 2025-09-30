@@ -12,8 +12,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { addProductToStore } from "@/lib/data-service";
-import { useRouter } from "next/navigation";
-import { getPlaceholderImage } from "@/lib/placeholder-images";
+import { generateProductImage } from "@/ai/flows/generate-product-image";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -40,7 +39,6 @@ const toDataURL = (file: File): Promise<string> => new Promise((resolve, reject)
 export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -61,16 +59,23 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
       if (values.image) {
         imageUrl = await toDataURL(values.image);
       } else {
-        imageUrl = getPlaceholderImage(values.name.replace(/\s/g, ''), 400, 400);
+        // Generate image with AI if no file is provided
+        toast({ title: "Generando imagen de producto...", description: "La IA está creando una imagen para su artículo. Esto puede tardar unos segundos." });
+        const imageResult = await generateProductImage({
+          productName: values.name,
+          productDescription: values.description,
+        });
+        imageUrl = imageResult.imageUrl;
       }
     } catch (error) {
-      console.error("Error converting image:", error);
+      console.error("Error processing or generating image:", error);
       toast({
         variant: "destructive",
         title: "Error de Imagen",
-        description: "No se pudo procesar la imagen. Se usará una de marcador de posición.",
+        description: "No se pudo procesar ni generar la imagen. Por favor, inténtelo de nuevo o suba un archivo.",
       });
-      imageUrl = getPlaceholderImage(values.name.replace(/\s/g, ''), 400, 400);
+      setIsProcessing(false);
+      return;
     }
 
     try {
@@ -115,7 +120,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
             <DialogHeader>
               <DialogTitle>Añadir Nuevo Artículo</DialogTitle>
               <DialogDescription>
-                Rellena los detalles y sube una imagen para el nuevo producto.
+                Rellene los detalles del producto. Si no sube una imagen, nuestra IA generará una por usted.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -176,7 +181,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                 name="image"
                 render={({ field: { onChange, value, ...rest }}) => (
                   <FormItem>
-                    <FormLabel>Imagen del Producto</FormLabel>
+                    <FormLabel>Imagen del Producto (Opcional)</FormLabel>
                     <FormControl>
                       <Input 
                         type="file" 

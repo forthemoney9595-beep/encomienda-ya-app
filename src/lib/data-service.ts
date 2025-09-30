@@ -2,7 +2,7 @@
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
-import { prototypeStore, prototypeProducts, prototypeUsers, getPrototypeProducts, savePrototypeProduct, updatePrototypeStore } from './placeholder-data';
+import { prototypeStore, getPrototypeProducts, savePrototypeProduct, updatePrototypeStore } from './placeholder-data';
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
 
 
@@ -56,6 +56,11 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
  */
 export async function getStoreById(id: string): Promise<Store | null> {
   if (id === prototypeStore.id) {
+    // Ensure we get the latest from session storage if available
+    if (typeof window !== 'undefined') {
+        const stored = sessionStorage.getItem('prototypeStore');
+        return stored ? JSON.parse(stored) : prototypeStore;
+    }
     return prototypeStore;
   }
 
@@ -126,14 +131,22 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
  */
 export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
     if (storeId === prototypeStore.id) {
-        console.log("Prototype mode: Simulating adding product.");
+        console.log("Prototype mode: Saving product and updating store categories.");
         const newProduct = { id: `proto-prod-${Date.now()}`, ...productData };
         savePrototypeProduct(newProduct);
         
-        const newCategory = productData.category;
-        if (!prototypeStore.productCategories.map(c => c.toLowerCase()).includes(newCategory.toLowerCase())) {
-            prototypeStore.productCategories.push(newCategory);
-            updatePrototypeStore(prototypeStore);
+        const currentStore = await getStoreById(prototypeStore.id);
+        if (currentStore) {
+            const newCategory = productData.category;
+            const lowerCaseCategories = currentStore.productCategories.map(c => c.toLowerCase());
+
+            if (!lowerCaseCategories.includes(newCategory.toLowerCase())) {
+                const updatedStore = {
+                    ...currentStore,
+                    productCategories: [...currentStore.productCategories, newCategory]
+                };
+                updatePrototypeStore(updatedStore);
+            }
         }
         return;
     }

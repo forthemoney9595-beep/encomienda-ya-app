@@ -10,10 +10,10 @@ import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { useAuth } from '@/context/auth-context';
+import { getProductsByStoreId } from '@/lib/data-service';
 
 interface ProductListProps {
     products: Product[];
@@ -29,19 +29,19 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const { user } = useAuth();
 
     const [products, setProducts] = useState(initialProducts);
-    
     const isOwner = user?.uid === ownerId;
 
     const [openAlert, setOpenAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
+    const fetchProducts = useCallback(async () => {
+        const updatedProducts = await getProductsByStoreId(currentStoreId);
+        setProducts(updatedProducts);
+    }, [currentStoreId]);
+
     useEffect(() => {
         const handleProductAdded = () => {
-            // This is specific for prototype mode to force a re-read from sessionStorage
-            if (currentStoreId === 'proto-store-id') {
-                const updatedProducts = getPrototypeProducts();
-                setProducts(updatedProducts);
-            }
+            fetchProducts();
         };
 
         window.addEventListener('product-added', handleProductAdded);
@@ -49,7 +49,7 @@ export function ProductList({ products: initialProducts, productCategories, owne
         return () => {
             window.removeEventListener('product-added', handleProductAdded);
         };
-    }, [currentStoreId]);
+    }, [fetchProducts]);
 
 
     const handleAddToCart = (product: Product) => {
@@ -96,12 +96,11 @@ export function ProductList({ products: initialProducts, productCategories, owne
                                 <CardContent className="flex items-center gap-4 p-4">
                                     <div className="relative h-20 w-20 flex-shrink-0">
                                         <Image 
-                                            src={product.imageUrl || getPlaceholderImage(product.id, 80, 80)} 
+                                            src={product.imageUrl || ''}
                                             alt={product.name} 
                                             fill
                                             style={{ objectFit: 'cover' }}
-                                            className="rounded-md" 
-                                            data-ai-hint="food item" 
+                                            className="rounded-md bg-muted" 
                                         />
                                     </div>
                                     <div className="flex-1">
