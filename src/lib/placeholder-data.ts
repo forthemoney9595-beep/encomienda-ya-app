@@ -121,12 +121,11 @@ const initialPrototypeOrders: PrototypeOrder[] = [
     }
 ];
 
-
 // This is the single source of truth for prototype orders.
 // It reads from session storage, and if it's empty, initializes it.
 function getPrototypeOrdersFromSession(): PrototypeOrder[] {
     if (typeof window === 'undefined') {
-        // On the server, always return the initial static data.
+        // On the server, always return the initial static data to avoid errors.
         return initialPrototypeOrders;
     }
     
@@ -149,12 +148,18 @@ function getPrototypeOrdersFromSession(): PrototypeOrder[] {
 }
 
 
-// Public function to get all prototype orders.
-// Safe to call from both server and client.
+/**
+ * Public function to get all prototype orders.
+ * Reads from session storage and initializes it if empty.
+ * Safe to call from both server and client.
+ */
 export function getPrototypeOrders(): PrototypeOrder[] {
     return getPrototypeOrdersFromSession();
 }
 
+/**
+ * Saves a new prototype order to the session.
+ */
 export function savePrototypeOrder(order: PrototypeOrder) {
     if (typeof window === 'undefined') return;
     const existingOrders = getPrototypeOrdersFromSession();
@@ -162,7 +167,9 @@ export function savePrototypeOrder(order: PrototypeOrder) {
     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
 }
 
-
+/**
+ * Updates an existing prototype order in the session.
+ */
 export function updatePrototypeOrder(orderId: string, updates: Partial<PrototypeOrder>) {
     if (typeof window === 'undefined') return;
 
@@ -173,23 +180,6 @@ export function updatePrototypeOrder(orderId: string, updates: Partial<Prototype
         orders[orderIndex] = { ...orders[orderIndex], ...updates };
         sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(orders));
     }
-}
-
-
-export function getPrototypeOrdersByStore(storeId: string): PrototypeOrder[] {
-    const allOrders = getPrototypeOrders();
-    return allOrders.filter(order => order.storeId === storeId);
-}
-
-
-export function getAvailablePrototypeOrdersForDelivery(): PrototypeOrder[] {
-    const allOrders = getPrototypeOrders();
-    return allOrders.filter(order => order.status === 'En preparación' && !order.deliveryPersonId);
-}
-
-export function getPrototypeOrdersByDeliveryPerson(driverId: string): PrototypeOrder[] {
-    const allOrders = getPrototypeOrders();
-    return allOrders.filter(order => order.deliveryPersonId === driverId && order.status === 'En reparto');
 }
 
 

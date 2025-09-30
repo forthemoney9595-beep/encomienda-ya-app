@@ -53,7 +53,8 @@ export default function StoreOrdersView() {
             let storeOrders: Order[] = [];
             
             if (user.uid.startsWith('proto-')) {
-                 // For prototype, get all orders from session and filter them
+                 // For prototype, get ALL orders from session and filter them right here.
+                 // This ensures we always get the latest data from the session.
                  const allPrototypeOrders = getPrototypeOrders();
                  storeOrders = allPrototypeOrders
                     .filter(o => o.storeId === user.storeId)

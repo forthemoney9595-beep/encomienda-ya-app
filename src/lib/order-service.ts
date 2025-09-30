@@ -2,7 +2,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders, getPrototypeOrdersByStore, getAvailablePrototypeOrdersForDelivery, getPrototypeOrdersByDeliveryPerson, updatePrototypeOrder } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders, updatePrototypeOrder } from './placeholder-data';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem extends Product {
@@ -44,25 +44,6 @@ interface CreateOrderOutput {
     orderId: string;
     deliveryFee: number;
     total: number;
-}
-
-// Haversine formula to calculate distance between two lat/lon points
-function getDistanceFromLatLonInKm(lat1:number, lon1:number, lat2:number, lon2:number) {
-    const R = 6371; // Radius of the earth in km
-    const dLat = deg2rad(lat2-lat1);
-    const dLon = deg2rad(lon2-lon1); 
-    const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-        Math.sin(dLon/2) * Math.sin(dLon/2)
-        ; 
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-    const d = R * c; // Distance in km
-    return d;
-}
-
-function deg2rad(deg: number) {
-    return deg * (Math.PI/180)
 }
 
 export async function createOrder(
@@ -182,12 +163,6 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 }
 
 export async function getOrdersByStore(storeId: string): Promise<Order[]> {
-    if (storeId.startsWith('proto-')) {
-        return getPrototypeOrdersByStore(storeId)
-            .map(o => ({...o, createdAt: new Date(o.createdAt)}))
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    }
-    
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
 
@@ -206,7 +181,9 @@ export async function getOrdersByStore(storeId: string): Promise<Order[]> {
 
 export async function getAvailableOrdersForDelivery(isPrototype: boolean = false): Promise<Order[]> {
     if (isPrototype) {
-        return getAvailablePrototypeOrdersForDelivery()
+        const allOrders = getPrototypeOrders();
+        return allOrders
+            .filter(order => order.status === 'En preparación' && !order.deliveryPersonId)
             .map(o => ({...o, createdAt: new Date(o.createdAt)}))
             .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     }
@@ -234,7 +211,9 @@ export async function getAvailableOrdersForDelivery(isPrototype: boolean = false
 
 export async function getOrdersByDeliveryPerson(driverId: string): Promise<Order[]> {
     if (driverId.startsWith('proto-')) {
-        return getPrototypeOrdersByDeliveryPerson(driverId)
+        const allOrders = getPrototypeOrders();
+        return allOrders
+            .filter(order => order.deliveryPersonId === driverId && order.status === 'En reparto')
             .map(o => ({...o, createdAt: new Date(o.createdAt)}))
             .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     }
@@ -314,8 +293,8 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
  */
 export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
     if (orderId.startsWith('proto-')) {
-        const orders = getAvailablePrototypeOrdersForDelivery();
-        const orderExists = orders.some(o => o.id === orderId);
+        const allOrders = getPrototypeOrders();
+        const orderExists = allOrders.some(o => o.id === orderId && o.status === 'En preparación' && !o.deliveryPersonId);
         if (!orderExists) {
             throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
         }
