@@ -28,6 +28,30 @@ const getBadgeVariant = (status: string) => {
   }
 };
 
+function OrderRowSkeleton() {
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
+                  <div>
+                    <Skeleton className="h-6 w-40 mb-1" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <Skeleton className="h-6 w-28" />
+                </div>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between">
+                <div>
+                  <Skeleton className="h-4 w-32 mb-1" />
+                  <Skeleton className="h-8 w-20" />
+                </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground" />
+            </CardContent>
+        </Card>
+    )
+}
+
+
 export default function BuyerOrdersView() {
   const { user, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -51,8 +75,8 @@ export default function BuyerOrdersView() {
   if (loading) {
      return (
         <div className="space-y-4">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
+          <OrderRowSkeleton />
+          <OrderRowSkeleton />
         </div>
     );
   }

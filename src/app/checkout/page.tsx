@@ -32,6 +32,11 @@ export default function CheckoutPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [clientLoaded, setClientLoaded] = useState(false);
+
+  useEffect(() => {
+    setClientLoaded(true);
+  }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -52,14 +57,14 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     // This check needs to run only on the client after hydration
-    if (typeof window !== 'undefined' && !authLoading && (totalItems === 0 || !storeId)) {
+    if (clientLoaded && !authLoading && (totalItems === 0 || !storeId)) {
       toast({
         title: 'Tu carrito está vacío o la tienda no está definida',
         description: 'Redirigiendo a la página principal...',
       })
       router.push('/');
     }
-  }, [totalItems, storeId, authLoading, router, toast, user]);
+  }, [totalItems, storeId, authLoading, router, toast, user, clientLoaded]);
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
@@ -103,7 +108,7 @@ export default function CheckoutPage() {
     }
   }
 
-   if (authLoading || !user) {
+   if (authLoading || !user || !clientLoaded || totalItems === 0) {
      return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
   }
 

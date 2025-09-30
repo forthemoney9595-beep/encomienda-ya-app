@@ -6,30 +6,28 @@ import BuyerOrdersView from './buyer-orders-view';
 import StoreOrdersView from './store-orders-view';
 import DeliveryOrdersView from './delivery-orders-view';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useEffect } from 'react';
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   
-  if (authLoading) {
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [authLoading, user, router]);
+
+  if (authLoading || !user) {
     return (
       <div className="container mx-auto">
         <PageHeader title="Cargando Pedidos..." description="Por favor, espera un momento." />
         <div className="space-y-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
         </div>
       </div>
     );
-  }
-
-  if (!user) {
-    // This check needs to run on the client side after loading is complete
-    if (typeof window !== 'undefined') {
-      router.push('/login');
-    }
-    return null; // Render nothing while redirecting
   }
 
   const renderView = () => {
