@@ -32,15 +32,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const loginForPrototype = async (email: string) => {
-        sessionStorage.setItem(PROTOTYPE_SESSION_KEY, email);
-    };
-
-    const logoutForPrototype = () => {
-        sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
-        setUser(null);
-    }
-    
     const fetchUserProfile = async (firebaseUser: FirebaseUser | null, prototypeEmail?: string | null) => {
         setLoading(true);
         let profileToSet: UserProfile | null = null;
@@ -92,34 +83,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
     }
 
+    const loginForPrototype = async (email: string) => {
+        sessionStorage.setItem(PROTOTYPE_SESSION_KEY, email);
+        // Force fetch the profile immediately after setting the session storage
+        await fetchUserProfile(null, email);
+    };
+
+    const logoutForPrototype = () => {
+        sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
+        setUser(null);
+    }
+
     useEffect(() => {
         const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-            await fetchUserProfile(firebaseUser, prototypeEmail);
+            // Only fetch based on firebaseUser if no prototype session is active
+            if (!sessionStorage.getItem(PROTOTYPE_SESSION_KEY)) {
+                await fetchUserProfile(firebaseUser, null);
+            }
         });
 
-        // Initial check in case onAuthStateChanged doesn't fire immediately
-        if (!auth.currentUser && prototypeEmail) {
-            fetchUserProfile(null, prototypeEmail);
-        } else if (!auth.currentUser && !prototypeEmail) {
-            setLoading(false);
-        }
+        // Initial check on mount
+        fetchUserProfile(auth.currentUser, prototypeEmail);
 
-
-        const handleStorageChange = (event: StorageEvent) => {
-            if (event.key === PROTOTYPE_SESSION_KEY) {
-                const newPrototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
-                fetchUserProfile(auth.currentUser, newPrototypeEmail);
-            }
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-
-
-        return () => {
-            unsubscribe();
-            window.removeEventListener('storage', handleStorageChange);
-        };
+        return () => unsubscribe();
     }, []);
 
     const isAdmin = user?.role === 'admin';
