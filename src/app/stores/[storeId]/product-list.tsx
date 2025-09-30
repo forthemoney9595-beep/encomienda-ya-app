@@ -1,19 +1,20 @@
+
 'use client';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Product } from '@/lib/placeholder-data';
-import { getPrototypeProducts } from '@/lib/placeholder-data';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { getProductsByStoreId } from '@/lib/data-service';
+import { getProductsByStoreId, deleteProductFromStore } from '@/lib/data-service';
+import { ManageItemDialog } from './manage-item-dialog';
 
 interface ProductListProps {
     products: Product[];
@@ -27,11 +28,14 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const params = useParams();
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
-
+    
     const [products, setProducts] = useState(initialProducts);
+    const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
+    const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
     const isOwner = user?.uid === ownerId;
 
-    const [openAlert, setOpenAlert] = useState(false);
+    const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
     const fetchProducts = useCallback(async () => {
@@ -40,20 +44,47 @@ export function ProductList({ products: initialProducts, productCategories, owne
     }, [currentStoreId]);
 
     useEffect(() => {
-        const handleProductAdded = () => {
+        const handleProductsUpdated = () => {
             fetchProducts();
         };
 
-        window.addEventListener('product-added', handleProductAdded);
+        window.addEventListener('products-updated', handleProductsUpdated);
 
         return () => {
-            window.removeEventListener('product-added', handleProductAdded);
+            window.removeEventListener('products-updated', handleProductsUpdated);
         };
     }, [fetchProducts]);
 
+    const handleEditProduct = (product: Product) => {
+        setEditingProduct(product);
+        setManageItemDialogOpen(true);
+    };
+
+    const handleAddNewProduct = () => {
+        setEditingProduct(null);
+        setManageItemDialogOpen(true);
+    };
+
+    const handleDeleteProduct = async (productId: string) => {
+        try {
+            await deleteProductFromStore(currentStoreId, productId);
+            toast({
+                title: "Producto Eliminado",
+                description: "El producto ha sido eliminado correctamente.",
+            });
+            fetchProducts(); // Refresh list
+        } catch (error) {
+            console.error("Error deleting product:", error);
+            toast({
+                variant: 'destructive',
+                title: "Error",
+                description: "No se pudo eliminar el producto.",
+            });
+        }
+    };
+
 
     const handleAddToCart = (product: Product) => {
-        // If cart is empty or from the same store, add directly
         if (!cartStoreId || cartStoreId === currentStoreId) {
             addToCart(product, currentStoreId);
             toast({
@@ -61,9 +92,8 @@ export function ProductList({ products: initialProducts, productCategories, owne
               description: `${product.name} ha sido añadido a tu carrito.`,
             });
         } else {
-            // If from a different store, ask for confirmation
             setPendingProduct(product);
-            setOpenAlert(true);
+            setOpenCartAlert(true);
         }
     };
 
@@ -76,12 +106,19 @@ export function ProductList({ products: initialProducts, productCategories, owne
               description: `Se ha vaciado tu carrito y se ha añadido ${pendingProduct.name}.`,
             });
         }
-        setOpenAlert(false);
+        setOpenCartAlert(false);
         setPendingProduct(null);
     }
 
     return (
         <>
+            {isOwner && (
+              <div className="mb-4">
+                <Button onClick={handleAddNewProduct}>
+                  Añadir Nuevo Artículo
+                </Button>
+              </div>
+            )}
             <Tabs defaultValue={productCategories[0] || 'all'}>
                 <TabsList className="mb-4">
                     {productCategories.map(category => (
@@ -110,14 +147,32 @@ export function ProductList({ products: initialProducts, productCategories, owne
                                     </div>
                                     {isOwner ? (
                                         <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => alert('Próximamente: Editar')}>
+                                            <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 Editar
                                             </Button>
-                                            <Button variant="destructive" size="sm" onClick={() => alert('Próximamente: Eliminar')}>
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Eliminar
-                                            </Button>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive" size="sm">
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Eliminar
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta acción no se puede deshacer. Esto eliminará permanentemente el producto.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDeleteProduct(product.id)}>
+                                                            Sí, eliminar
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
                                         </div>
                                     ) : (
                                         <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)}>
@@ -138,7 +193,7 @@ export function ProductList({ products: initialProducts, productCategories, owne
                     </div>
                 )}
             </Tabs>
-             <AlertDialog open={openAlert} onOpenChange={setOpenAlert}>
+             <AlertDialog open={openCartAlert} onOpenChange={setOpenCartAlert}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                     <AlertDialogTitle>¿Vaciar carrito actual?</AlertDialogTitle>
@@ -152,6 +207,12 @@ export function ProductList({ products: initialProducts, productCategories, owne
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            <ManageItemDialog
+                isOpen={isManageItemDialogOpen}
+                setIsOpen={setManageItemDialogOpen}
+                storeId={currentStoreId}
+                product={editingProduct}
+            />
         </>
     )
 }

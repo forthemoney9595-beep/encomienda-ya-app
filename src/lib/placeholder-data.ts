@@ -76,24 +76,53 @@ export function updatePrototypeStore(store: Store) {
 
 
 const PROTOTYPE_PRODUCTS_KEY = 'prototypeProducts';
-let initialPrototypeProducts: Product[] = [
+const initialPrototypeProducts: Product[] = [
     { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
     { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
     { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebidas", imageUrl: "https://picsum.photos/seed/soda/200/200" },
 ];
 
 export function getPrototypeProducts(): Product[] {
-    if (typeof window === 'undefined') return initialPrototypeProducts;
+    if (typeof window === 'undefined') {
+      return initialPrototypeProducts;
+    }
     const productsJson = sessionStorage.getItem(PROTOTYPE_PRODUCTS_KEY);
-    return productsJson ? JSON.parse(productsJson) : initialPrototypeProducts;
+    if (productsJson) {
+      return JSON.parse(productsJson);
+    }
+    // If no products in session storage, initialize it
+    sessionStorage.setItem(PROTOTYPE_PRODUCTS_KEY, JSON.stringify(initialPrototypeProducts));
+    return initialPrototypeProducts;
 }
 
-export function savePrototypeProduct(productData: Omit<Product, 'id'>) {
+export function savePrototypeProducts(products: Product[]) {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem(PROTOTYPE_PRODUCTS_KEY, JSON.stringify(products));
+}
+
+export function addPrototypeProduct(productData: Omit<Product, 'id'>) {
     if (typeof window === 'undefined') return;
     const newProduct = { id: `proto-prod-${Date.now()}`, ...productData };
     const existingProducts = getPrototypeProducts();
     const updatedProducts = [...existingProducts, newProduct];
-    sessionStorage.setItem(PROTOTYPE_PRODUCTS_KEY, JSON.stringify(updatedProducts));
+    savePrototypeProducts(updatedProducts);
+}
+
+export function updatePrototypeProduct(productId: string, updatedData: Partial<Omit<Product, 'id'>>) {
+    if (typeof window === 'undefined') return;
+    const existingProducts = getPrototypeProducts();
+    const productIndex = existingProducts.findIndex(p => p.id === productId);
+    if (productIndex !== -1) {
+        existingProducts[productIndex] = { ...existingProducts[productIndex], ...updatedData };
+        savePrototypeProducts(existingProducts);
+    }
+}
+
+export function deletePrototypeProduct(productId: string) {
+    if (typeof window === 'undefined') return;
+    const existingProducts = getPrototypeProducts();
+    const updatedProducts = existingProducts.filter(p => p.id !== productId);
+    savePrototypeProducts(updatedProducts);
 }
 
 

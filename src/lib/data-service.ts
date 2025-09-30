@@ -1,9 +1,18 @@
+
 'use server';
 import { db } from './firebase';
-import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion } from 'firebase/firestore';
+import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
-import { prototypeStore, getPrototypeProducts, savePrototypeProduct, updatePrototypeStore } from './placeholder-data';
+import { 
+    prototypeStore, 
+    getPrototypeProducts, 
+    updatePrototypeStore, 
+    addPrototypeProduct,
+    updatePrototypeProduct,
+    deletePrototypeProduct
+} from './placeholder-data';
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
+import { generateProductImage } from '@/ai/flows/generate-product-image';
 
 
 /**
@@ -123,6 +132,10 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
   }
 }
 
+interface ProductData extends Omit<Product, 'id'> {
+  imageFile?: File;
+}
+
 /**
  * Adds a new product to a store's 'products' subcollection.
  * If the product's category is new, it adds it to the store's `productCategories` array.
@@ -131,21 +144,7 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
  */
 export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
     if (storeId === prototypeStore.id) {
-        savePrototypeProduct(productData);
-        
-        const currentStore = await getStoreById(prototypeStore.id); // This will read from sessionStorage
-        if (currentStore) {
-            const newCategory = productData.category;
-            const lowerCaseCategories = currentStore.productCategories.map(c => c.toLowerCase());
-
-            if (!lowerCaseCategories.includes(newCategory.toLowerCase())) {
-                const updatedStore = {
-                    ...currentStore,
-                    productCategories: [...currentStore.productCategories, newCategory]
-                };
-                updatePrototypeStore(updatedStore);
-            }
-        }
+        addPrototypeProduct(productData);
         return;
     }
     
@@ -169,6 +168,36 @@ export async function addProductToStore(storeId: string, productData: Omit<Produ
         }
     } catch (error) {
         console.error(`Error adding product to store ${storeId}:`, error);
+        throw error;
+    }
+}
+
+export async function updateProductInStore(storeId: string, productId: string, productData: Partial<Omit<Product, 'id'>>) {
+    if (storeId === prototypeStore.id) {
+        updatePrototypeProduct(productId, productData);
+        return;
+    }
+
+    try {
+        const productRef = doc(db, 'stores', storeId, 'products', productId);
+        await updateDoc(productRef, productData);
+    } catch (error) {
+        console.error(`Error updating product ${productId} in store ${storeId}:`, error);
+        throw error;
+    }
+}
+
+export async function deleteProductFromStore(storeId: string, productId: string) {
+    if (storeId === prototypeStore.id) {
+        deletePrototypeProduct(productId);
+        return;
+    }
+
+    try {
+        const productRef = doc(db, 'stores', storeId, 'products', productId);
+        await deleteDoc(productRef);
+    } catch (error) {
+        console.error(`Error deleting product ${productId} from store ${storeId}:`, error);
         throw error;
     }
 }

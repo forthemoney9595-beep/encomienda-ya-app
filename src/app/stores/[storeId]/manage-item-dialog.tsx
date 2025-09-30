@@ -1,17 +1,19 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle } from "lucide-react";
-import { useState } from "react";
+import { Loader2, PlusCircle, Edit } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { addProductToStore } from "@/lib/data-service";
+import { addProductToStore, updateProductInStore } from "@/lib/data-service";
+import type { Product } from "@/lib/placeholder-data";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -20,15 +22,17 @@ const formSchema = z.object({
   category: z.string().min(1, "Por favor, especifica una categoría."),
 });
 
-interface AddItemDialogProps {
+interface ManageItemDialogProps {
+    isOpen: boolean;
+    setIsOpen: (isOpen: boolean) => void;
     storeId: string;
-    productCategories: string[];
+    product: Product | null; // null for creating, product object for editing
 }
 
-export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ManageItemDialog({ isOpen, setIsOpen, storeId, product }: ManageItemDialogProps) {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const isEditing = product !== null;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -40,32 +44,56 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
     },
   });
 
+  useEffect(() => {
+    if (product) {
+      form.reset({
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        category: product.category,
+      });
+    } else {
+      form.reset({
+        name: "",
+        description: "",
+        price: 0,
+        category: "",
+      });
+    }
+  }, [product, form]);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsProcessing(true);
     
     try {
-      // Usaremos una imagen de marcador de posición por ahora para simplificar.
-      const imageUrl = `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`;
+      const productData = {
+        ...values,
+        imageUrl: product?.imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`,
+      };
 
-      await addProductToStore(storeId, {...values, imageUrl });
-      
-      toast({
-        title: "¡Artículo Guardado!",
-        description: `El artículo "${values.name}" ha sido añadido correctamente.`,
-      });
+      if (isEditing) {
+        await updateProductInStore(storeId, product.id, productData);
+        toast({
+          title: "¡Artículo Actualizado!",
+          description: `El artículo "${values.name}" ha sido actualizado correctamente.`,
+        });
+      } else {
+        await addProductToStore(storeId, productData);
+        toast({
+          title: "¡Artículo Guardado!",
+          description: `El artículo "${values.name}" ha sido añadido correctamente.`,
+        });
+      }
 
-      // Dispara un evento personalizado para notificar a la lista de productos que se actualice
-      window.dispatchEvent(new CustomEvent('product-added'));
-
-      setOpen(false);
-      form.reset();
+      window.dispatchEvent(new CustomEvent('products-updated'));
+      setIsOpen(false);
       
     } catch (error) {
-      console.error("Error adding item:", error);
+      console.error("Error managing item:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "No se pudo añadir el artículo. Por favor, inténtalo de nuevo.",
+        description: "No se pudo guardar el artículo. Por favor, inténtalo de nuevo.",
       });
     } finally {
         setIsProcessing(false);
@@ -73,18 +101,12 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!isProcessing) setOpen(o)}}>
-      <DialogTrigger asChild>
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Añadir Nuevo Artículo
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!isProcessing) setIsOpen(open)}}>
       <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isProcessing) e.preventDefault() }}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
-              <DialogTitle>Añadir Nuevo Artículo</DialogTitle>
+              <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
                 Rellene los detalles del producto.
               </DialogDescription>
@@ -123,7 +145,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ej. Comida Rápida, Bebidas, etc." {...field} disabled={isProcessing} />
+                      <Input placeholder="Ej. Comida Rápida, Bebidas" {...field} disabled={isProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -152,8 +174,8 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                    </>
                 ) : (
                   <>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Guardar Artículo
+                    {isEditing ? <Edit className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                    {isEditing ? 'Guardar Cambios' : 'Guardar Artículo'}
                   </>
                 )}
               </Button>
