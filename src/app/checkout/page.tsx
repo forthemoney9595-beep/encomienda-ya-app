@@ -12,10 +12,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { CreditCard, Home, User, Loader2 } from 'lucide-react';
+import { CreditCard, Home, Loader2 } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
@@ -50,22 +50,26 @@ export default function CheckoutPage() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    // If the cart is or becomes empty, or there's no storeId, redirect.
-    if (!authLoading && totalItems === 0) {
+    if (isClientReady() && (totalItems === 0 || !storeId)) {
       toast({
-        title: 'Tu carrito está vacío',
+        title: 'Tu carrito está vacío o la tienda no está definida',
         description: 'Redirigiendo a la página principal...',
       })
       router.push('/');
     }
-  }, [totalItems, authLoading, router, toast]);
+  }, [totalItems, storeId, authLoading, router, toast]);
 
-  if (authLoading || !user) {
-     return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
-  }
+  const isClientReady = () => !authLoading && totalItems > 0 && storeId;
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!user || !storeId) return;
+    if (!user || !storeId || cart.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Falta información del usuario, la tienda o el carrito está vacío.",
+      });
+      return;
+    };
 
     try {
       const orderData = await createOrder({
@@ -91,9 +95,11 @@ export default function CheckoutPage() {
         title: "Error al realizar el pedido",
         description: "Hubo un problema al guardar tu pedido. Por favor, inténtalo de nuevo.",
       });
-      // The form state (isSubmitting) is automatically handled by react-hook-form
-      // upon promise resolution (success or failure), so no need to manually set it here.
     }
+  }
+
+   if (authLoading || !user) {
+     return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
   }
 
   return (
