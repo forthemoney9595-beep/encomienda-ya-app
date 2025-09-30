@@ -15,6 +15,7 @@ import { addProductToStore } from "@/lib/data-service";
 import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/combobox";
 import { generateProductImage } from "@/ai/flows/generate-product-image";
+import { getPlaceholderImage } from "@/lib/placeholder-images";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -67,7 +68,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
 
     try {
       setProcessingState('Guardando producto...');
-      await addProductToStore(storeId, {...values, imageUrl: imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/400/400` });
+      await addProductToStore(storeId, {...values, imageUrl: imageUrl || getPlaceholderImage(values.name.replace(/\s/g, ''), 400, 400) });
       toast({
         title: "¡Artículo Guardado!",
         description: `El artículo "${values.name}" ha sido añadido correctamente.`,

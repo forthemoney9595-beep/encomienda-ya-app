@@ -15,6 +15,7 @@ import { User, LogOut, Shield, Loader2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 export function AppContent({ children }: { children: React.ReactNode }) {
     const { user, loading, isAdmin, logoutForPrototype } = useAuth();
@@ -69,7 +70,7 @@ export function AppContent({ children }: { children: React.ReactNode }) {
                                 <DropdownMenuTrigger asChild>
                                     <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent/50 cursor-pointer rounded-md">
                                         <Avatar className="h-9 w-9">
-                                            <AvatarImage src={`https://picsum.photos/seed/${user.name}/40/40`} alt={user.name} />
+                                            <AvatarImage src={getPlaceholderImage(user.name, 40, 40)} alt={user.name} />
                                             <AvatarFallback>{user.name?.[0].toUpperCase()}</AvatarFallback>
                                         </Avatar>
                                         <div className="flex flex-col group-data-[collapsible=icon]:hidden">

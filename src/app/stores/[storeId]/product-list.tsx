@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 interface ProductListProps {
     products: Product[];
@@ -70,7 +71,7 @@ export function ProductList({ products, productCategories }: ProductListProps) {
                                 <CardContent className="flex items-center gap-4 p-4">
                                     <div className="relative h-20 w-20 flex-shrink-0">
                                         <Image 
-                                            src={product.imageUrl || `https://picsum.photos/seed/${product.id}/80/80`} 
+                                            src={product.imageUrl || getPlaceholderImage(product.id, 80, 80)} 
                                             alt={product.name} 
                                             fill
                                             style={{ objectFit: 'cover' }}

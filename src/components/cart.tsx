@@ -9,6 +9,7 @@ import Image from "next/image";
 import { Separator } from "./ui/separator";
 import { ScrollArea } from "./ui/scroll-area";
 import Link from "next/link";
+import { getPlaceholderImage } from "@/lib/placeholder-images";
 
 export function Cart() {
   const { cart, totalItems, totalPrice, removeFromCart, updateQuantity } = useCart();
@@ -38,7 +39,7 @@ export function Cart() {
                   <div key={item.id} className="flex items-start gap-4">
                     <div className="relative h-16 w-16 flex-shrink-0">
                         <Image 
-                            src={item.imageUrl || `https://picsum.photos/seed/${item.id}/64/64`} 
+                            src={item.imageUrl || getPlaceholderImage(item.id, 64, 64)} 
                             alt={item.name}
                             fill
                             style={{ objectFit: 'cover' }}

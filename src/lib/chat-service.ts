@@ -1,5 +1,6 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, onSnapshot, Unsubscribe, Timestamp } from 'firebase/firestore';
+import { getPlaceholderImage } from './placeholder-images';
 
 /**
  * Gets or creates a chat room between a user and a store.
@@ -100,7 +101,7 @@ export async function getUserChats(userId: string): Promise<ChatPreview[]> {
             otherParticipant: {
                 id: otherParticipantId,
                 name: otherParticipantInfo?.name || 'Usuario Desconocido',
-                imageUrl: otherParticipantInfo?.imageUrl || `https://picsum.photos/seed/${otherParticipantId}/64/64`,
+                imageUrl: otherParticipantInfo?.imageUrl || getPlaceholderImage(otherParticipantId, 64, 64),
             },
             lastMessage: data.lastMessage || 'No hay mensajes todavía.',
             lastMessageTimestamp: data.lastMessageTimestamp?.toDate() || null,
@@ -239,7 +240,7 @@ export async function getChatDetails(chatId: string, currentUserId: string): Pro
         otherParticipant: {
             id: otherParticipantId,
             name: otherParticipantInfo?.name || 'Usuario Desconocido',
-            imageUrl: otherParticipantInfo?.imageUrl || `https://picsum.photos/seed/${otherParticipantId}/64/64`,
+            imageUrl: otherParticipantInfo?.imageUrl || getPlaceholderImage(otherParticipantId, 64, 64),
         }
     };
 }

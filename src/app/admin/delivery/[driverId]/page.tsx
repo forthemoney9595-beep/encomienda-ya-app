@@ -7,6 +7,7 @@ import { getDeliveryPersonById, getDriverReviews, type DriverReview } from '@/li
 import { Car, Mail, Phone, ThumbsUp, ThumbsDown, Meh } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 function getStatusVariant(status: string) {
     switch (status) {
@@ -47,7 +48,7 @@ export default async function DriverProfilePage({ params }: { params: { driverId
                     <Card>
                         <CardHeader className="items-center text-center">
                             <Avatar className="h-24 w-24 mb-4 border-2 border-primary">
-                                <AvatarImage src={`https://picsum.photos/seed/${driver.id}/128/128`} alt={driver.name} />
+                                <AvatarImage src={getPlaceholderImage(driver.id, 128, 128)} alt={driver.name} />
                                 <AvatarFallback className="text-3xl">{driver.name.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <CardTitle className="text-2xl">{driver.name}</CardTitle>

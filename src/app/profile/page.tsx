@@ -14,6 +14,7 @@ import { useAuth } from '@/context/auth-context';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 
 const formSchema = z.object({
@@ -95,7 +96,7 @@ export default function ProfilePage() {
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardHeader className="flex-row items-center gap-4">
                 <Avatar className="h-20 w-20">
-                    <AvatarImage src={`https://picsum.photos/seed/${user.name}/100/100`} alt={user.name} />
+                    <AvatarImage src={getPlaceholderImage(user.name, 100, 100)} alt={user.name} />
                     <AvatarFallback className="text-2xl">{user.name?.[0].toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div>

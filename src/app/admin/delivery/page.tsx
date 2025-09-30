@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getDeliveryPersonnel, updateDeliveryPersonnelStatus } from '@/lib/data-service';
 import { useToast } from '@/hooks/use-toast';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 export default function AdminDeliveryPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
@@ -130,7 +131,7 @@ export default function AdminDeliveryPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar>
-                        <AvatarImage src={`https://picsum.photos/seed/${driver.id}/40/40`} alt={driver.name} />
+                        <AvatarImage src={getPlaceholderImage(driver.id, 40, 40)} alt={driver.name} />
                         <AvatarFallback>{driver.name.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <span className="font-medium">{driver.name}</span>

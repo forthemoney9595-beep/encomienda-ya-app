@@ -9,6 +9,7 @@ import { useAuth } from "@/context/auth-context";
 import { useChat } from "@/hooks/use-chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef } from "react";
+import { getPlaceholderImage } from "@/lib/placeholder-images";
 
 function ChatSkeleton() {
   return (
@@ -110,7 +111,7 @@ export default function ChatRoomPage({ params }: { params: { chatId: string } })
                                 </div>
                                 {message.senderId === user.uid && (
                                      <Avatar className="h-8 w-8 border">
-                                        <AvatarImage src={`https://picsum.photos/seed/${user.name}/40/40`} />
+                                        <AvatarImage src={getPlaceholderImage(user.name, 40, 40)} />
                                         <AvatarFallback>{user.name?.charAt(0).toUpperCase()}</AvatarFallback>
                                     </Avatar>
                                 )}
