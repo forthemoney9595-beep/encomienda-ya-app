@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
 import { useToast } from "@/hooks/use-toast";
 import { generateProductImage } from "@/ai/flows/generate-product-image";
-import { Combobox } from "@/components/ui/combobox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -31,10 +31,9 @@ interface ManageItemDialogProps {
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
     onSave: (data: Product) => void;
-    productCategories: string[];
 }
 
-export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories = [] }: ManageItemDialogProps) {
+export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const isEditing = product !== null;
@@ -90,7 +89,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         setStatusMessage('Guardando producto...');
       
         const productData: Product = {
-          id: isEditing ? product.id : `new-${Date.now()}-${Math.random()}`,
+          id: product?.id || `new-${Date.now()}-${Math.random()}`,
           ...values,
           imageUrl: imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
         };
@@ -110,8 +109,6 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         setIsOpen(false);
     }
   }
-
-  const categoryOptions = productCategories.map(cat => ({ value: cat, label: cat }));
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!isProcessing) setIsOpen(open)}}>
@@ -155,19 +152,19 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 control={form.control}
                 name="category"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                     <Combobox
-                        options={categoryOptions}
-                        value={field.value}
-                        onChange={(value) => {
-                          // When a value is selected or typed, update the form field.
-                          field.onChange(value);
-                        }}
-                        placeholder="Selecciona o escribe una categoría"
-                        emptyMessage="No se encontraron categorías."
-                        disabled={isProcessing}
-                      />
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isProcessing}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona una categoría" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Comida">Comida</SelectItem>
+                        <SelectItem value="Bebida">Bebida</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

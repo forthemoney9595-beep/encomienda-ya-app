@@ -10,11 +10,12 @@ import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
+import { getPrototypeProducts } from '@/lib/placeholder-data';
 
 interface ProductListProps {
     products: Product[];
@@ -30,7 +31,6 @@ export function ProductList({ products: initialProducts, productCategories: init
     const { user } = useAuth();
     
     const [products, setProducts] = useState<Product[]>(initialProducts);
-    const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -39,17 +39,25 @@ export function ProductList({ products: initialProducts, productCategories: init
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
-    // When initialProducts changes, reset the state.
+    // This ensures client-side prototype data is loaded correctly without hydration errors
     useEffect(() => {
-        setProducts(initialProducts);
-        setProductCategories(initialCategories);
-    }, [initialProducts, initialCategories]);
+        if (currentStoreId === 'proto-store-id') {
+            setProducts(getPrototypeProducts());
+        } else {
+            setProducts(initialProducts);
+        }
+    }, [currentStoreId, initialProducts]);
+
+    const productCategories = useMemo(() => {
+        const categories = new Set(products.map(p => p.category));
+        return Array.from(categories);
+    }, [products]);
 
     const handleSaveProduct = async (productData: Product) => {
         const isEditing = products.some(p => p.id === productData.id);
         let successMessage = "";
 
-        // For prototype store, update state directly
+        // For prototype store, update state directly in memory
         if (currentStoreId === 'proto-store-id') {
             if (isEditing) {
                 setProducts(products.map(p => p.id === productData.id ? productData : p));
@@ -65,15 +73,10 @@ export function ProductList({ products: initialProducts, productCategories: init
                 setProducts(products.map(p => p.id === productData.id ? productData : p));
                 successMessage = "¡Artículo Actualizado!";
             } else {
-                await addProductToStore(currentStoreId, productData);
-                setProducts([...products, productData]);
+                const newProduct = await addProductToStore(currentStoreId, productData);
+                setProducts([...products, newProduct]);
                 successMessage = "¡Artículo Añadido!";
             }
-        }
-        
-        // Update categories if a new one was added
-        if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
-            setProductCategories([...productCategories, productData.category]);
         }
         
         toast({ title: successMessage });
@@ -140,6 +143,10 @@ export function ProductList({ products: initialProducts, productCategories: init
         setOpenCartAlert(false);
         setPendingProduct(null);
     }
+    
+    if (!products) {
+        return <div>Cargando productos...</div>
+    }
 
     return (
         <>
@@ -148,7 +155,6 @@ export function ProductList({ products: initialProducts, productCategories: init
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
                 onSave={handleSaveProduct}
-                productCategories={productCategories}
             />
             {isOwner && (
               <div className="mb-4">
@@ -229,10 +235,15 @@ export function ProductList({ products: initialProducts, productCategories: init
                     </div>
                     </TabsContent>
                 ))}
-                {products.length === 0 && (
+                {products.length === 0 && !isOwner && (
                     <div className="text-center text-muted-foreground py-10">
                         <p>Esta tienda aún no tiene productos.</p>
-                         {isOwner && <p>¡Añade tu primer artículo usando el botón de arriba!</p>}
+                    </div>
+                )}
+                 {products.length === 0 && isOwner && (
+                    <div className="text-center text-muted-foreground py-10">
+                        <p>Esta tienda aún no tiene productos.</p>
+                        <p>¡Añade tu primer artículo usando el botón de arriba!</p>
                     </div>
                 )}
             </Tabs>
