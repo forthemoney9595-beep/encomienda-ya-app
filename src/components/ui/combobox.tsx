@@ -41,18 +41,26 @@ export function Combobox({
   creatable = false
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
-  const [inputValue, setInputValue] = React.useState("")
+  const [query, setQuery] = React.useState("")
 
   const handleSelect = (currentValue: string) => {
-    onChange(currentValue.toLowerCase() === value?.toLowerCase() ? "" : currentValue)
+    onChange(currentValue)
     setOpen(false)
   }
 
   const currentOption = options.find((option) => option.value.toLowerCase() === value?.toLowerCase())
 
-  const filteredOptions = creatable && inputValue && !options.some(opt => opt.label.toLowerCase() === inputValue.toLowerCase())
-    ? [...options, { value: inputValue, label: `Crear "${inputValue}"` }]
-    : options;
+  const filteredOptions = query
+    ? options.filter((option) =>
+        option.label.toLowerCase().includes(query.toLowerCase())
+      )
+    : options
+
+  const displayedOptions =
+    creatable && query && !filteredOptions.some(opt => opt.label.toLowerCase() === query.toLowerCase())
+      ? [...filteredOptions, { value: query, label: `Crear "${query}"` }]
+      : filteredOptions;
+
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -72,14 +80,13 @@ export function Combobox({
         <Command shouldFilter={false}>
           <CommandInput 
             placeholder={placeholder}
-            onValueChange={setInputValue}
+            value={query}
+            onValueChange={setQuery}
           />
           <CommandList>
-            <CommandEmpty>{creatable && inputValue ? `Presiona Enter para crear "${inputValue}"` : emptyMessage}</CommandEmpty>
+            <CommandEmpty>{creatable && query ? `Presiona Enter para crear "${query}"` : emptyMessage}</CommandEmpty>
             <CommandGroup>
-              {filteredOptions
-                .filter(option => option.label.toLowerCase().includes(inputValue.toLowerCase()))
-                .map((option) => (
+              {displayedOptions.map((option) => (
                 <CommandItem
                   key={option.value}
                   value={option.value}
