@@ -213,7 +213,7 @@ export async function getOrdersByStore(storeId: string): Promise<Order[]> {
     return orders;
 }
 
-export async function getAvailableOrdersForDelivery(isPrototype: boolean): Promise<Order[]> {
+export async function getAvailableOrdersForDelivery(isPrototype: boolean = false): Promise<Order[]> {
     if (isPrototype) {
         return getAvailablePrototypeOrdersForDelivery()
             .map(o => ({...o, createdAt: new Date(o.createdAt)}))
@@ -360,3 +360,4 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     throw error;
   }
 }
+
