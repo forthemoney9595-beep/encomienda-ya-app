@@ -9,6 +9,7 @@ import BuyerOrdersView from './buyer-orders-view';
 import StoreOrdersView from './store-orders-view';
 import DeliveryOrdersView from './delivery-orders-view';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getPrototypeOrdersByStore } from '@/lib/placeholder-data';
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -32,28 +33,53 @@ export default function OrdersPage() {
       let description = "";
 
       try {
-        switch (userRole) {
-          case 'store':
-            const orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
-            title = "Gestión de Pedidos";
-            description = "Gestiona los pedidos de tu tienda.";
-            props = { orders };
-            break;
-          case 'delivery':
-            const [availableOrders, assignedOrders] = await Promise.all([
-              getAvailableOrdersForDelivery(),
-              getOrdersByDeliveryPerson(user.uid),
-            ]);
-            title = "Panel de Repartidor";
-            description = "Gestiona los pedidos disponibles y tus entregas activas.";
-            props = { availableOrders, assignedOrders };
-            break;
-          default: // 'buyer' and any other case
-            const buyerOrders = await getOrdersByUser(user.uid);
-            title = "Mis Pedidos";
-            description = "Ve tus pedidos recientes y en curso.";
-            props = { orders: buyerOrders };
-            break;
+        if (user.uid.startsWith('proto-')) {
+            // Handle prototype users client-side
+             switch (userRole) {
+              case 'store':
+                const protoOrders = getPrototypeOrdersByStore(user.storeId!);
+                title = "Gestión de Pedidos (Prototipo)";
+                description = "Gestiona los pedidos de tu tienda.";
+                props = { orders: protoOrders };
+                break;
+              case 'buyer':
+                 const buyerOrders = await getOrdersByUser(user.uid);
+                 title = "Mis Pedidos";
+                 description = "Ve tus pedidos recientes y en curso.";
+                 props = { orders: buyerOrders };
+                 break;
+              default:
+                 // Fallback for other prototype roles if needed
+                 title = "Panel de Pedidos";
+                 description = "Gestiona tus pedidos.";
+                 props = { orders: [] };
+                 break;
+            }
+        } else {
+            // Handle real users
+            switch (userRole) {
+              case 'store':
+                const orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
+                title = "Gestión de Pedidos";
+                description = "Gestiona los pedidos de tu tienda.";
+                props = { orders };
+                break;
+              case 'delivery':
+                const [availableOrders, assignedOrders] = await Promise.all([
+                  getAvailableOrdersForDelivery(),
+                  getOrdersByDeliveryPerson(user.uid),
+                ]);
+                title = "Panel de Repartidor";
+                description = "Gestiona los pedidos disponibles y tus entregas activas.";
+                props = { availableOrders, assignedOrders };
+                break;
+              default: // 'buyer' and any other case
+                const buyerOrders = await getOrdersByUser(user.uid);
+                title = "Mis Pedidos";
+                description = "Ve tus pedidos recientes y en curso.";
+                props = { orders: buyerOrders };
+                break;
+            }
         }
         setPageProps(props);
         setPageInfo({ title, description });

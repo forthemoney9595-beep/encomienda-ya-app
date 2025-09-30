@@ -1,7 +1,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore, prototypeProducts, type PrototypeOrder, savePrototypeOrder, getPrototypeOrdersByStore } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore, prototypeProducts, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders } from './placeholder-data';
 import { getStoreById } from './data-service';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
@@ -167,6 +167,15 @@ export async function createOrder(
 
 
 export async function getOrdersByUser(userId: string): Promise<Order[]> {
+    if (userId.startsWith('proto-')) {
+        const protoOrders = getPrototypeOrders();
+        // For buyer, filter orders by their userId
+        return protoOrders
+            .filter(o => o.userId === userId)
+            .map(o => ({...o, createdAt: new Date(o.createdAt)}))
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }
+
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
 
@@ -184,11 +193,6 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 }
 
 export async function getOrdersByStore(storeId: string): Promise<Order[]> {
-    if (storeId === prototypeStore.id) {
-        const protoOrders = getPrototypeOrdersByStore(storeId);
-        return protoOrders.map(o => ({ ...o, createdAt: new Date(o.createdAt) }));
-    }
-
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
 
@@ -250,23 +254,12 @@ export async function getOrdersByDeliveryPerson(driverId: string): Promise<Order
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
     if (orderId.startsWith('proto-order-')) {
-        return {
-            id: orderId,
-            userId: 'proto-buyer',
-            customerName: 'Comprador Proto',
-            items: [{ ...prototypeProducts[0], quantity: 1 }],
-            total: prototypeProducts[0].price + 5.00,
-            deliveryFee: 5.00,
-            status: 'Pedido Realizado',
-            createdAt: new Date(),
-            storeId: 'proto-store-id',
-            storeName: 'Hamburguesas IA',
-            storeAddress: 'Av. Hamburguesa 456',
-            shippingAddress: {
-                name: 'Comprador Proto',
-                address: 'Calle Falsa 123'
-            },
+        const protoOrders = getPrototypeOrders();
+        const order = protoOrders.find(o => o.id === orderId);
+        if (order) {
+            return { ...order, createdAt: new Date(order.createdAt) };
         }
+        return null;
     }
 
 
