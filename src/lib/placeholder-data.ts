@@ -91,6 +91,7 @@ export function getPrototypeOrders(): PrototypeOrder[] {
 }
 
 export function getPrototypeOrdersByStore(storeId: string): PrototypeOrder[] {
+    if (typeof window === 'undefined') return [];
     const allOrders = getPrototypeOrders();
     return allOrders.filter(order => order.storeId === storeId);
 }

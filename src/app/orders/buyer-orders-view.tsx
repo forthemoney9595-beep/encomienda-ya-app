@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -5,6 +8,9 @@ import { ArrowRight, PackageSearch } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Order } from '@/lib/order-service';
+import { getOrdersByUser } from '@/lib/order-service';
+import { useAuth } from '@/context/auth-context';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const getBadgeVariant = (status: string) => {
   switch (status) {
@@ -22,9 +28,33 @@ const getBadgeVariant = (status: string) => {
   }
 };
 
-export default function BuyerOrdersView({ orders }: { orders: Order[] }) {
-  if (!orders) {
-    return null; // Don't render if orders are not yet available
+export default function BuyerOrdersView() {
+  const { user, loading: authLoading } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+
+    const fetchOrders = async () => {
+      setLoading(true);
+      const userOrders = await getOrdersByUser(user.uid);
+      setOrders(userOrders);
+      setLoading(false);
+    };
+
+    fetchOrders();
+  }, [user, authLoading]);
+
+
+  if (loading) {
+     return (
+        <div className="space-y-4">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+    );
   }
   
   return (

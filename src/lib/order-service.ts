@@ -1,8 +1,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore, prototypeProducts, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders } from './placeholder-data';
-import { getStoreById } from './data-service';
+import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
@@ -75,20 +74,20 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // Simulate order creation for prototype
+    // Handle prototype orders separately.
     if (isPrototype) {
-        console.log("PROTOTYPE: Simulating order creation.");
+        const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
+        const customerName = protoUser ? protoUser.name : shippingInfo.name;
         
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const deliveryFee = 5.00; // Mock fee
         const total = subtotal + deliveryFee;
         const mockOrderId = `proto-order-${Date.now()}`;
-        const buyer = prototypeUsers['comprador@test.com'];
-
+        
         const newOrder: PrototypeOrder = {
             id: mockOrderId,
-            userId: buyer.uid,
-            customerName: buyer.name,
+            userId: userId,
+            customerName: customerName,
             items: items,
             total: total,
             deliveryFee: deliveryFee,
@@ -106,18 +105,20 @@ export async function createOrder(
             orderId: mockOrderId,
             deliveryFee,
             total,
-        }
+        };
     }
 
-    let store = await getStoreById(storeId);
+    // Real order logic
+    const storeDoc = await getDoc(doc(db, 'stores', storeId));
+    if (!storeDoc.exists()) {
+        throw new Error(`No se pudo encontrar la tienda con ID ${storeId}`);
+    }
+    const store = storeDoc.data();
+
     let customerName = shippingInfo.name;
     const userDoc = await getDoc(doc(db, 'users', userId));
     if (userDoc.exists()) {
         customerName = userDoc.data().name;
-    }
-    
-    if (!store) {
-        throw new Error(`No se pudo encontrar la tienda con ID ${storeId}`);
     }
 
     // Geocode addresses
@@ -127,9 +128,10 @@ export async function createOrder(
     ]);
 
     // Calculate delivery fee: $2 base + $1.5 per km
-    // If geocoding fails, use a fallback flat fee.
-    const distanceKm = storeCoords.lat && customerCoords.lat ? getDistanceFromLatLonInKm(storeCoords.lat, storeCoords.lon, customerCoords.lat, customerCoords.lon) : -1;
-    const deliveryFee = distanceKm >= 0 ? 2 + (distanceKm * 1.5) : 5.00;
+    const distanceKm = (storeCoords?.lat && customerCoords?.lat) 
+        ? getDistanceFromLatLonInKm(storeCoords.lat, storeCoords.lon, customerCoords.lat, customerCoords.lon) 
+        : -1;
+    const deliveryFee = distanceKm >= 0 ? 2 + (distanceKm * 1.5) : 5.00; // fallback flat fee
 
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
@@ -137,21 +139,13 @@ export async function createOrder(
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,
         customerName: customerName, 
-        items: items.map(item => ({
-            id: item.id,
-            name: item.name,
-            description: item.description,
-            price: item.price,
-            category: item.category,
-            quantity: item.quantity,
-            imageUrl: item.imageUrl || null,
-        })), 
+        items: items.map(item => ({...item})), // Store a clean copy of item data
         subtotal,
         deliveryFee,
         total,
         status: 'Pedido Realizado',
         createdAt: serverTimestamp(),
-        storeId: store.id,
+        storeId: storeDoc.id,
         storeName: store.name,
         storeAddress: store.address,
         shippingAddress: shippingInfo,

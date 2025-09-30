@@ -1,115 +1,18 @@
 
 'use client';
-import { useEffect, useState } from 'react';
-import PageHeader from '@/components/page-header';
-import { getOrdersByUser, getOrdersByStore, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson, type Order } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
+import PageHeader from '@/components/page-header';
 import BuyerOrdersView from './buyer-orders-view';
 import StoreOrdersView from './store-orders-view';
 import DeliveryOrdersView from './delivery-orders-view';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getPrototypeOrdersByStore } from '@/lib/placeholder-data';
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [pageProps, setPageProps] = useState<any>({});
-  const [pageInfo, setPageInfo] = useState({ title: '', description: '' });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-
-    const fetchData = async () => {
-      setLoading(true);
-      const userRole = user.role;
-      let props: any = {};
-      let title = "";
-      let description = "";
-
-      try {
-        if (user.uid.startsWith('proto-')) {
-            // Handle prototype users client-side
-             switch (userRole) {
-              case 'store':
-                const protoOrders = getPrototypeOrdersByStore(user.storeId!);
-                title = "Gestión de Pedidos (Prototipo)";
-                description = "Gestiona los pedidos de tu tienda.";
-                props = { orders: protoOrders };
-                break;
-              case 'buyer':
-                 const buyerOrders = await getOrdersByUser(user.uid);
-                 title = "Mis Pedidos";
-                 description = "Ve tus pedidos recientes y en curso.";
-                 props = { orders: buyerOrders };
-                 break;
-              default:
-                 // Fallback for other prototype roles if needed
-                 title = "Panel de Pedidos";
-                 description = "Gestiona tus pedidos.";
-                 props = { orders: [] };
-                 break;
-            }
-        } else {
-            // Handle real users
-            switch (userRole) {
-              case 'store':
-                const orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
-                title = "Gestión de Pedidos";
-                description = "Gestiona los pedidos de tu tienda.";
-                props = { orders };
-                break;
-              case 'delivery':
-                const [availableOrders, assignedOrders] = await Promise.all([
-                  getAvailableOrdersForDelivery(),
-                  getOrdersByDeliveryPerson(user.uid),
-                ]);
-                title = "Panel de Repartidor";
-                description = "Gestiona los pedidos disponibles y tus entregas activas.";
-                props = { availableOrders, assignedOrders };
-                break;
-              default: // 'buyer' and any other case
-                const buyerOrders = await getOrdersByUser(user.uid);
-                title = "Mis Pedidos";
-                description = "Ve tus pedidos recientes y en curso.";
-                props = { orders: buyerOrders };
-                break;
-            }
-        }
-        setPageProps(props);
-        setPageInfo({ title, description });
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [user, authLoading, router]);
-
-  const renderView = () => {
-    // Ensure pageProps are populated before rendering the view
-    if (!user || (user.role === 'store' && !pageProps.orders) || (user.role === 'buyer' && !pageProps.orders)) {
-      return null;
-    }
-    
-    switch (user.role) {
-      case 'store':
-        return <StoreOrdersView {...pageProps} />;
-      case 'delivery':
-        return <DeliveryOrdersView {...pageProps} />;
-      default:
-        return <BuyerOrdersView {...pageProps} />;
-    }
-  };
-
-  if (authLoading || loading) {
+  
+  if (authLoading) {
     return (
       <div className="container mx-auto">
         <PageHeader title="Cargando Pedidos..." description="Por favor, espera un momento." />
@@ -122,9 +25,43 @@ export default function OrdersPage() {
     );
   }
 
+  if (!user) {
+    // This check needs to run on the client side after loading is complete
+    if (typeof window !== 'undefined') {
+      router.push('/login');
+    }
+    return null; // Render nothing while redirecting
+  }
+
+  const renderView = () => {
+    switch (user.role) {
+      case 'store':
+        return <StoreOrdersView />;
+      case 'delivery':
+        // For delivery, we might need a more complex data fetching strategy
+        // Let's assume for now it's handled inside the component.
+        return <DeliveryOrdersView />;
+      default: // 'buyer'
+        return <BuyerOrdersView />;
+    }
+  };
+
+  const getPageInfo = () => {
+    switch (user.role) {
+      case 'store':
+        return { title: "Gestión de Pedidos", description: "Gestiona los pedidos de tu tienda." };
+      case 'delivery':
+        return { title: "Panel de Repartidor", description: "Gestiona los pedidos disponibles y tus entregas activas." };
+      default:
+        return { title: "Mis Pedidos", description: "Ve tus pedidos recientes y en curso." };
+    }
+  }
+
+  const { title, description } = getPageInfo();
+
   return (
     <div className="container mx-auto">
-      <PageHeader title={pageInfo.title} description={pageInfo.description} />
+      <PageHeader title={title} description={description} />
       {renderView()}
     </div>
   );
