@@ -41,19 +41,8 @@ export function Combobox({
   creatable = false
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
-  const [query, setQuery] = React.useState('');
-
-  const handleSelect = (currentValue: string) => {
-    onChange(currentValue);
-    setOpen(false);
-  }
 
   const currentOption = options.find((option) => option.value.toLowerCase() === value?.toLowerCase())
-
-  const displayedOptions =
-    creatable && query && !options.some(opt => opt.label.toLowerCase() === query.toLowerCase())
-      ? [...options, { value: query.toLowerCase(), label: `Crear "${query}"` }]
-      : options;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -73,17 +62,16 @@ export function Combobox({
         <Command>
           <CommandInput 
             placeholder={placeholder}
-            onValueChange={setQuery}
           />
           <CommandList>
-            <CommandEmpty>{creatable && query ? `No se encontró nada. Presiona Enter para crear "${query}"` : emptyMessage}</CommandEmpty>
+            <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
-              {displayedOptions.map((option) => (
+              {options.map((option) => (
                 <CommandItem
                   key={option.value}
                   value={option.value}
                   onSelect={(currentValue) => {
-                    onChange(currentValue === value ? '' : currentValue)
+                    onChange(currentValue === value ? "" : currentValue)
                     setOpen(false)
                   }}
                 >
