@@ -6,9 +6,6 @@ import type { Store, Product, DeliveryPersonnel, prototypeUsers } from './placeh
 import { 
     prototypeStore, 
     getPrototypeProducts, 
-    addPrototypeProduct,
-    updatePrototypeProduct,
-    deletePrototypeProduct
 } from './placeholder-data';
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
 

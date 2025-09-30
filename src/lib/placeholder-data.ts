@@ -66,29 +66,9 @@ const initialPrototypeProducts: Product[] = [
 ];
 
 export function getPrototypeProducts(): Product[] {
+    // Returns a static, predictable list for consistent server/client rendering.
     return initialPrototypeProducts;
 }
-
-// Functions for in-memory manipulation, they don't really do anything permanently.
-export function addPrototypeProduct(product: Product) {
-    console.log("Adding product (in-memory):", product);
-}
-
-export function updatePrototypeProduct(productId: string, productData: Partial<Product>) {
-    console.log("Updating product (in-memory):", productId, productData);
-}
-
-export function deletePrototypeProduct(productId: string) {
-    console.log("Deleting product (in-memory):", productId);
-}
-
-
-export const notifications = [
-  { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Bonanza de Hamburguesas está en camino.', date: 'hace 5 min' },
-  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Estación de Sushi ha sido confirmado.', date: 'hace 1 hora' },
-  { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
-  { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
-];
 
 // In-memory/session storage for prototype orders
 const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
@@ -127,3 +107,11 @@ export function getPrototypeOrdersByDeliveryPerson(driverId: string): PrototypeO
     const allOrders = getPrototypeOrders();
     return allOrders.filter(order => order.deliveryPersonId === driverId && order.status === 'En reparto');
 }
+
+
+export const notifications = [
+  { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Bonanza de Hamburguesas está en camino.', date: 'hace 5 min' },
+  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Estación de Sushi ha sido confirmado.', date: 'hace 1 hora' },
+  { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
+  { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
+];
