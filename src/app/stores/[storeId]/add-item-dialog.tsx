@@ -82,9 +82,13 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
         title: "¡Artículo Guardado!",
         description: `El artículo "${values.name}" ha sido añadido correctamente.`,
       });
+
+      // Dispatch a custom event to notify the product list to update
+      window.dispatchEvent(new CustomEvent('product-added'));
+
       setOpen(false);
       form.reset();
-      router.refresh(); // Re-fetches server data for this route
+      
     } catch (error) {
       console.error("Error adding item:", error);
       toast({

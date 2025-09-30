@@ -2,6 +2,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Product } from '@/lib/placeholder-data';
+import { getPrototypeProducts } from '@/lib/placeholder-data';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { useAuth } from '@/context/auth-context';
@@ -20,17 +21,36 @@ interface ProductListProps {
     ownerId: string;
 }
 
-export function ProductList({ products, productCategories, ownerId }: ProductListProps) {
+export function ProductList({ products: initialProducts, productCategories, ownerId }: ProductListProps) {
     const { addToCart, storeId: cartStoreId, clearCart } = useCart();
     const { toast } = useToast();
     const params = useParams();
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
+
+    const [products, setProducts] = useState(initialProducts);
     
     const isOwner = user?.uid === ownerId;
 
     const [openAlert, setOpenAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
+
+    useEffect(() => {
+        const handleProductAdded = () => {
+            // This is specific for prototype mode to force a re-read from sessionStorage
+            if (currentStoreId === 'proto-store-id') {
+                const updatedProducts = getPrototypeProducts();
+                setProducts(updatedProducts);
+            }
+        };
+
+        window.addEventListener('product-added', handleProductAdded);
+
+        return () => {
+            window.removeEventListener('product-added', handleProductAdded);
+        };
+    }, [currentStoreId]);
+
 
     const handleAddToCart = (product: Product) => {
         // If cart is empty or from the same store, add directly
