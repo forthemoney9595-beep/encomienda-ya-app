@@ -13,7 +13,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { addProductToStore } from "@/lib/data-service";
 import { useRouter } from "next/navigation";
-import { Combobox } from "@/components/ui/combobox";
 import { generateProductImage } from "@/ai/flows/generate-product-image";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
 
@@ -21,7 +20,7 @@ const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
-  category: z.string().min(1, "Por favor, selecciona o crea una categoría."),
+  category: z.string().min(1, "Por favor, especifica una categoría."),
 });
 
 interface AddItemDialogProps {
@@ -89,8 +88,6 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
     }
   }
 
-  const categoryOptions = productCategories.map(cat => ({ value: cat, label: cat }));
-
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!isProcessing) setOpen(o)}}>
       <DialogTrigger asChild>
@@ -139,17 +136,11 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                 control={form.control}
                 name="category"
                 render={({ field }) => (
-                   <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <Combobox
-                        options={categoryOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Selecciona o crea una categoría"
-                        emptyMessage="No se encontraron categorías."
-                        disabled={isProcessing}
-                        creatable
-                    />
+                    <FormControl>
+                      <Input placeholder="Ej. Comida Rápida, Bebidas, etc." {...field} disabled={isProcessing} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
