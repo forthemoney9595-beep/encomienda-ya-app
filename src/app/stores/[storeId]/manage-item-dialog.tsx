@@ -20,7 +20,7 @@ const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
-  category: z.string().min(1, "Por favor, especifica una categoría."),
+  category: z.string().min(1, "Por favor, selecciona una categoría."),
   imageUrl: z.string().url("Debe ser una URL válida.").optional().or(z.literal('')),
 });
 
@@ -30,10 +30,11 @@ interface ManageItemDialogProps {
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
-    onSave: (data: Product) => void;
+    onSave: (data: Product, categories: string[]) => void;
+    productCategories: string[];
 }
 
-export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
+export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const isEditing = product !== null;
@@ -94,7 +95,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
           imageUrl: imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
         };
 
-        onSave(productData);
+        onSave(productData, productCategories);
 
     } catch (error) {
         console.error("Error al guardar el producto:", error);

@@ -55,7 +55,7 @@ export function ProductList({ products: initialProducts, productCategories: init
     }, [currentStoreId, initialProducts, initialCategories]);
 
 
-    const handleSaveProduct = async (productData: Product) => {
+    const handleSaveProduct = async (productData: Product, currentCategories: string[]) => {
         const isEditing = products.some(p => p.id === productData.id);
         
         let updatedProducts;
@@ -67,16 +67,21 @@ export function ProductList({ products: initialProducts, productCategories: init
         setProducts(updatedProducts);
 
         // Unify category logic: always check if the new/updated category exists and add if not.
-        if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
-            setProductCategories(prev => [...prev, productData.category]);
+        if (!currentCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+            const newCategories = [...currentCategories, productData.category];
+            setProductCategories(newCategories);
         }
 
         // Real backend update (for non-prototype)
         if (!currentStoreId.startsWith('proto-')) {
+            const categoriesToUpdate = !currentCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase()) 
+                ? [...currentCategories, productData.category] 
+                : currentCategories;
+
             if (isEditing) {
                 await updateProductInStore(currentStoreId, productData.id, productData);
             } else {
-                await addProductToStore(currentStoreId, productData, productCategories);
+                await addProductToStore(currentStoreId, productData, categoriesToUpdate);
             }
         }
         
@@ -148,6 +153,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
                 onSave={handleSaveProduct}
+                productCategories={productCategories}
             />
             {isOwner && (
               <div className="mb-4">
