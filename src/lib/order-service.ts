@@ -1,7 +1,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import type { Product } from './placeholder-data';
+import { type Product, prototypeUsers } from './placeholder-data';
 import { getStoreById } from './data-service';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
@@ -92,8 +92,20 @@ export async function createOrder(
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
 
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    const customerName = userDoc.exists() ? userDoc.data().name : shippingInfo.name;
+    let customerName = shippingInfo.name;
+    if (userId.startsWith('proto-')) {
+        // Find the prototype user by UID to get their name
+        const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
+        if (protoUser) {
+            customerName = protoUser.name;
+        }
+    } else {
+        // For real users, fetch from Firestore
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+             customerName = userDoc.data().name;
+        }
+    }
 
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,
