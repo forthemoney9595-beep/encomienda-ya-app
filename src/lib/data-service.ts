@@ -5,18 +5,12 @@ import { prototypeStore, prototypeProducts, prototypeUsers } from './placeholder
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
 
 
-function isPrototypeMode() {
-    if (typeof window === 'undefined') return false;
-    return !!sessionStorage.getItem('prototypeUserEmail');
-}
-
 /**
  * Fetches stores from Firestore.
  * @param all - If true, fetches all stores regardless of status. Otherwise, fetches only 'Aprobado' stores.
+ * @param isPrototype - If true, ensures prototype data is included.
  */
-export async function getStores(all: boolean = false): Promise<Store[]> {
-  const isProto = isPrototypeMode();
-
+export async function getStores(all: boolean = false, isPrototype: boolean = false): Promise<Store[]> {
   try {
     const storesCollectionRef = collection(db, 'stores');
     const q = all ? query(storesCollectionRef) : query(storesCollectionRef, where("status", "==", "Aprobado"));
@@ -38,7 +32,7 @@ export async function getStores(all: boolean = false): Promise<Store[]> {
       };
     });
 
-    if (isProto) {
+    if (isPrototype) {
         if (!stores.find(s => s.id === prototypeStore.id)) {
             stores.unshift(prototypeStore);
         }
@@ -47,7 +41,7 @@ export async function getStores(all: boolean = false): Promise<Store[]> {
     return stores;
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
-     if (isProto) {
+     if (isPrototype) {
         return [prototypeStore];
     }
     return [];

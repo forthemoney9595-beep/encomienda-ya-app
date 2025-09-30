@@ -26,14 +26,14 @@ export default function AdminDashboard() {
     if (isAdmin) {
       const fetchData = async () => {
         setDashboardLoading(true);
+        const isPrototype = user?.uid.startsWith('proto-') ?? false;
         const [stores, drivers, availableOrders] = await Promise.all([
-          getStores(),
+          getStores(true, isPrototype),
           getDeliveryPersonnel(),
-          getAvailableOrdersForDelivery(user?.uid.startsWith('proto-') ?? false),
+          getAvailableOrdersForDelivery(isPrototype),
         ]);
         setTotalStores(stores.length);
         setTotalDrivers(drivers.length);
-        // This counts orders that are 'En preparación' and unassigned, which is a good proxy for pending.
         setPendingOrders(availableOrders.length);
         setDashboardLoading(false);
       }

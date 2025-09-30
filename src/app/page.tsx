@@ -6,10 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import PageHeader from '@/components/page-header';
 import { getStores } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
+import { auth } from '@/lib/firebase';
 
 export default async function Home() {
   // Data is now fetched on the server before the page is rendered.
-  const stores: Store[] = await getStores();
+  // We determine if we are in prototype mode by checking the user's UID format.
+  // Note: This is a simplified check for this prototype.
+  const isPrototype = auth.currentUser?.uid.startsWith('proto-') ?? false;
+  const stores: Store[] = await getStores(false, isPrototype);
   const approvedStores = stores.filter(s => s.status === 'Aprobado');
 
   return (
