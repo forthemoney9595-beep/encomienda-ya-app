@@ -1,7 +1,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore } from './placeholder-data';
 import { getStoreById } from './data-service';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
@@ -73,7 +73,10 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    const store = await getStoreById(storeId);
+    // Handle prototype case separately to avoid DB calls
+    const isProtoOrder = storeId === 'proto-store-id';
+    
+    const store = isProtoOrder ? prototypeStore : await getStoreById(storeId);
     if (!store) {
         throw new Error(`No se pudo encontrar la tienda con ID ${storeId}`);
     }
@@ -93,7 +96,6 @@ export async function createOrder(
     const total = subtotal + deliveryFee;
 
     let customerName = shippingInfo.name;
-    // Check if it's a prototype user to get the name, otherwise fetch from DB
     const isProtoUser = userId.startsWith('proto-');
     if (isProtoUser) {
         const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
