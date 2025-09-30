@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 import { getStores } from '@/lib/data-service';
 import { StoresList } from './stores-list';
+import { auth } from '@/lib/firebase';
 
 // Nota: En una aplicación real, protegerías esta ruta con middleware.
 // Para este prototipo, asumimos que el usuario es un administrador si puede navegar aquí.
 
 export default async function AdminStoresPage() {
-  const stores = await getStores(true); // Pasar true para obtener todas las tiendas (incluidas las pendientes)
+  const isPrototype = auth.currentUser?.uid.startsWith('proto-') ?? false;
+  const stores = await getStores(true, isPrototype); // Pasar true para obtener todas las tiendas (incluidas las pendientes)
 
   return (
     <div className="container mx-auto">
