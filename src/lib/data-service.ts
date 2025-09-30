@@ -2,7 +2,7 @@
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
-import { prototypeStore, prototypeProducts, prototypeUsers } from './placeholder-data';
+import { prototypeStore, prototypeProducts, prototypeUsers, getPrototypeProducts, savePrototypeProduct, updatePrototypeStore } from './placeholder-data';
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
 
 
@@ -91,7 +91,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
   if (storeId === prototypeStore.id) {
-    return prototypeProducts;
+    return getPrototypeProducts();
   }
 
   try {
@@ -127,10 +127,13 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
 export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
     if (storeId === prototypeStore.id) {
         console.log("Prototype mode: Simulating adding product.");
-        prototypeProducts.push({ id: `proto-prod-${Date.now()}`, ...productData });
+        const newProduct = { id: `proto-prod-${Date.now()}`, ...productData };
+        savePrototypeProduct(newProduct);
+        
         const newCategory = productData.category;
         if (!prototypeStore.productCategories.map(c => c.toLowerCase()).includes(newCategory.toLowerCase())) {
             prototypeStore.productCategories.push(newCategory);
+            updatePrototypeStore(prototypeStore);
         }
         return;
     }
