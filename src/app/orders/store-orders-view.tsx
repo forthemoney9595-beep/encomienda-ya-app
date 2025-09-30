@@ -12,7 +12,9 @@ import type { Order } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPrototypeOrders } from '@/lib/placeholder-data';
-import { getOrdersByStore } from '@/lib/order-service';
+import { getDocs, collection, query, where, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
 
 const getBadgeVariant = (status: string) => {
     switch (status) {
@@ -50,7 +52,6 @@ export default function StoreOrdersView() {
 
         const fetchOrders = async () => {
             setLoading(true);
-            // For prototype mode, we fetch fresh data on every focus to ensure updates are reflected
             if (user.uid.startsWith('proto-')) {
                 const allPrototypeOrders = getPrototypeOrders();
                 const storeOrders = allPrototypeOrders
@@ -59,21 +60,25 @@ export default function StoreOrdersView() {
                 storeOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
                 setOrders(storeOrders);
             } else {
-                const firestoreOrders = await getOrdersByStore(user.storeId!);
+                const ordersRef = collection(db, 'orders');
+                const q = query(ordersRef, where('storeId', '==', user.storeId), orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+                const firestoreOrders = querySnapshot.docs.map(doc => ({...doc.data(), id: doc.id, createdAt: doc.data().createdAt.toDate()})) as Order[];
                 setOrders(firestoreOrders);
             }
             setLoading(false);
         };
         
-        // Fetch orders initially
         fetchOrders();
 
-        // Also fetch orders whenever the window gains focus (e.g., user tabs back)
-        // This is a robust way to ensure data is fresh in prototype mode
-        window.addEventListener('focus', fetchOrders);
-        return () => {
-            window.removeEventListener('focus', fetchOrders);
+        // Refetch on window focus to catch updates made in other tabs/windows for prototype
+        const handleFocus = () => {
+          if (user.uid.startsWith('proto-')) {
+            fetchOrders();
+          }
         };
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
 
     }, [user, authLoading, isClient]);
 

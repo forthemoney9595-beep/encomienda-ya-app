@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -22,24 +23,42 @@ export default function DeliveryOrdersView() {
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user || user.role !== 'delivery') return;
+    setIsClient(true);
+  }, []);
 
-    const fetchOrders = async () => {
-        setLoading(true);
-        const [available, assigned] = await Promise.all([
-            getAvailableOrdersForDelivery(user.uid.startsWith('proto-')),
-            getOrdersByDeliveryPerson(user.uid),
-        ]);
-        setAvailableOrders(available);
-        setAssignedOrders(assigned);
-        setLoading(false);
-    };
+  const fetchOrders = async () => {
+      if (!user) return;
+      setLoading(true);
+      const [available, assigned] = await Promise.all([
+          getAvailableOrdersForDelivery(user.uid.startsWith('proto-')),
+          getOrdersByDeliveryPerson(user.uid),
+      ]);
+      setAvailableOrders(available);
+      setAssignedOrders(assigned);
+      setLoading(false);
+  };
 
+  useEffect(() => {
+    if (authLoading || !isClient) return;
+    if (!user || user.role !== 'delivery') {
+      setLoading(false);
+      return;
+    }
+    
     fetchOrders();
-  }, [user, authLoading]);
+
+    const handleFocus = () => {
+      if (user.uid.startsWith('proto-')) {
+        fetchOrders();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+
+  }, [user, authLoading, isClient]);
 
   const handleAcceptOrder = async (orderId: string) => {
     if (!user) {
@@ -58,7 +77,8 @@ export default function DeliveryOrdersView() {
         title: '¡Pedido Aceptado!',
         description: 'El pedido ha sido asignado a ti. ¡Hora de ponerse en marcha!',
       });
-      router.refresh();
+      // Refetch orders to update both tabs
+      await fetchOrders(); 
     } catch (error) {
       console.error('Error accepting order:', error);
       toast({
@@ -79,7 +99,7 @@ export default function DeliveryOrdersView() {
         title: '¡Entrega Completada!',
         description: '¡Buen trabajo! El pedido ha sido marcado como entregado.',
       });
-      router.refresh();
+      await fetchOrders();
     } catch (error) {
       console.error('Error completing order:', error);
       toast({
@@ -124,7 +144,7 @@ export default function DeliveryOrdersView() {
     </Card>
   );
 
-  if (loading) {
+  if (loading || !isClient) {
     return (
         <div className="space-y-4">
             <OrderCardSkeleton />

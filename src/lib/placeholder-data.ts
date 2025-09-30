@@ -121,16 +121,17 @@ const initialPrototypeOrders: PrototypeOrder[] = [
     }
 ];
 
-// This is the single source of truth for prototype orders.
-// It reads from session storage, and if it's empty, initializes it.
-function getPrototypeOrdersFromSession(): PrototypeOrder[] {
+/**
+ * The single source of truth for getting prototype orders.
+ * Reads from session storage and initializes it if empty.
+ * Safe to call from both server and client components.
+ */
+export function getAndInitializePrototypeOrders(): PrototypeOrder[] {
     if (typeof window === 'undefined') {
-        // On the server, always return the initial static data to avoid errors.
         return initialPrototypeOrders;
     }
-    
+
     const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-    
     if (ordersJson) {
         try {
             const parsedOrders = JSON.parse(ordersJson);
@@ -141,28 +142,26 @@ function getPrototypeOrdersFromSession(): PrototypeOrder[] {
             console.error("Corrupted prototype orders in session storage, resetting.", e);
         }
     }
-    
-    // If we are here, it means sessionStorage is empty or corrupted, so we initialize it.
+
     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
     return initialPrototypeOrders;
 }
 
-
 /**
  * Public function to get all prototype orders.
  * Reads from session storage and initializes it if empty.
- * Safe to call from both server and client.
  */
 export function getPrototypeOrders(): PrototypeOrder[] {
-    return getPrototypeOrdersFromSession();
+    return getAndInitializePrototypeOrders();
 }
+
 
 /**
  * Saves a new prototype order to the session.
  */
 export function savePrototypeOrder(order: PrototypeOrder) {
     if (typeof window === 'undefined') return;
-    const existingOrders = getPrototypeOrdersFromSession();
+    const existingOrders = getAndInitializePrototypeOrders();
     const updatedOrders = [...existingOrders, order];
     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
 }
@@ -173,7 +172,7 @@ export function savePrototypeOrder(order: PrototypeOrder) {
 export function updatePrototypeOrder(orderId: string, updates: Partial<PrototypeOrder>) {
     if (typeof window === 'undefined') return;
 
-    const orders = getPrototypeOrdersFromSession();
+    const orders = getAndInitializePrototypeOrders();
     const orderIndex = orders.findIndex(o => o.id === orderId);
 
     if (orderIndex !== -1) {
