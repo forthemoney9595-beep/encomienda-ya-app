@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { initializeFirebase, auth, db } from '@/lib/firebase'; // Import the initializer and services
+import { auth, db } from '@/lib/firebase'; // Import the initialized services
 
 interface UserProfile {
     uid: string;
@@ -34,9 +34,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Initialize Firebase on the client side. This is the crucial fix.
-        initializeFirebase();
-
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
             if (firebaseUser) {
                 const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -61,17 +58,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                     setUser(profile);
                 } else {
-                    // If user exists in Auth but not Firestore, something is wrong.
-                    // For now, treat as logged out.
                     setUser(null);
                 }
             } else {
-                // START OF SIMULATION
-                // If no user is logged in, simulate the admin user for demo purposes.
-                // This avoids needing to register users manually to test the app.
                 console.log("No Firebase user found, simulating Admin user.");
                 setUser(mockAdminUser);
-                // END OF SIMULATION
             }
             setLoading(false);
         });
