@@ -1,3 +1,4 @@
+'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import type { Product } from './placeholder-data';
@@ -83,22 +84,11 @@ export async function createOrder(
         geocodeAddress({ address: shippingInfo.address })
     ]);
 
-    if (!storeCoords.lat || !customerCoords.lat) {
-        // Fallback if geocoding fails, maybe a fixed fee
-         console.error("Geocoding failed. Using a fallback delivery fee.");
-         const deliveryFee = 5.00; // Fallback fee
-         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-         const total = subtotal + deliveryFee;
-         const orderRef = await addDoc(collection(db, 'orders'), {
-            // ... (order data with fallback fee)
-         });
-         return { orderId: orderRef.id, deliveryFee, total };
-    }
-
-    const distanceKm = getDistanceFromLatLonInKm(storeCoords.lat, storeCoords.lon, customerCoords.lat, customerCoords.lon);
-
     // Calculate delivery fee: $2 base + $1.5 per km
-    const deliveryFee = 2 + (distanceKm * 1.5);
+    // If geocoding fails, use a fallback flat fee.
+    const distanceKm = storeCoords.lat && customerCoords.lat ? getDistanceFromLatLonInKm(storeCoords.lat, storeCoords.lon, customerCoords.lat, customerCoords.lon) : -1;
+    const deliveryFee = distanceKm >= 0 ? 2 + (distanceKm * 1.5) : 5.00;
+
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
 
@@ -126,6 +116,7 @@ export async function createOrder(
         storeName: store.name,
         storeAddress: store.address,
         shippingAddress: shippingInfo,
+        deliveryPersonId: null, // Initially unassigned
     });
     
     return {
@@ -133,28 +124,6 @@ export async function createOrder(
         deliveryFee,
         total
     };
-}
-
-async function getStoreDetailsFromProductId(productId: string): Promise<{id: string, name: string, address: string} | null> {
-    const storesRef = collection(db, "stores");
-    const q = query(storesRef, where('status', '==', 'Aprobado')); // Only search in approved stores
-    const storesSnapshot = await getDocs(q);
-
-    for (const storeDoc of storesSnapshot.docs) {
-        const productDocRef = doc(db, "stores", storeDoc.id, "products", productId);
-        const productDocSnapshot = await getDoc(productDocRef);
-        if (productDocSnapshot.exists()) {
-            const storeData = storeDoc.data();
-            return { 
-                id: storeDoc.id, 
-                name: storeData.name || "Tienda sin nombre", 
-                address: storeData.address || "Dirección desconocida" 
-            };
-        }
-    }
-    
-    console.warn(`Could not find store for product ${productId}.`);
-    return null;
 }
 
 

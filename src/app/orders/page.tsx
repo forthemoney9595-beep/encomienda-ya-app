@@ -20,9 +20,17 @@ async function getAuthenticatedUser() {
     // This is a placeholder for a real verification logic
     // For this prototype, we assume the cookie is a UID.
     // WARNING: Do not do this in production.
-    const userDoc = await getDoc(doc(db, "users", sessionCookie));
+    const userDocRef = doc(db, "users", sessionCookie);
+    const userDoc = await getDoc(userDocRef);
     if (userDoc.exists()) {
-        return { uid: userDoc.id, ...userDoc.data() };
+        const userData = userDoc.data();
+        return { 
+            uid: userDoc.id,
+            role: userData.role,
+            storeId: userData.storeId, // May not exist for all roles
+            name: userData.name,
+            ...userData
+        };
     }
     return null;
   } catch (error) {
