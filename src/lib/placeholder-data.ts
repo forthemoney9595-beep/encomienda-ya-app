@@ -129,15 +129,21 @@ function getPrototypeOrdersFromSession(): PrototypeOrder[] {
     
     let ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
     
-    // If session storage is empty, initialize it with the seed data.
-    if (!ordersJson || ordersJson === '[]') {
+    // If session storage is empty or doesn't contain our seed data, initialize it.
+    if (!ordersJson) {
         const ordersToSeed = initialPrototypeOrders;
         sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(ordersToSeed));
         return ordersToSeed;
     }
     
     try {
-        return JSON.parse(ordersJson);
+        const parsedOrders = JSON.parse(ordersJson);
+        // Basic check to see if it's a valid array
+        if (Array.isArray(parsedOrders)) {
+            return parsedOrders;
+        }
+        // If not, reset to initial data
+        throw new Error("Invalid data in session storage");
     } catch (e) {
         // If parsing fails, reset to initial data
         console.error("Failed to parse prototype orders from session storage, resetting.", e);
