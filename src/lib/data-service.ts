@@ -29,10 +29,8 @@ export async function getStores(): Promise<Store[]> {
       };
     });
     
-    // Add prototype store for prototype users
     const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
     if (prototypeUserEmail) {
-        // Ensure prototype store isn't duplicated if it somehow gets into the DB
         if (!stores.find(s => s.id === prototypeStore.id)) {
             stores.unshift(prototypeStore);
         }
@@ -41,7 +39,6 @@ export async function getStores(): Promise<Store[]> {
     return stores;
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
-     // Return prototype store if there's a DB error but we are in prototype mode
     const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
     if (prototypeUserEmail) {
         return [prototypeStore];
@@ -56,9 +53,8 @@ export async function getStores(): Promise<Store[]> {
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(id: string): Promise<Store | null> {
-  // If in prototype mode and asking for the prototype store, return it directly.
-  const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
-  if (prototypeUserEmail && id === prototypeStore.id) {
+  // If asking for the prototype store, return it directly. This works on server and client.
+  if (id === prototypeStore.id) {
     return prototypeStore;
   }
 
@@ -93,9 +89,8 @@ export async function getStoreById(id: string): Promise<Store | null> {
  * @param storeId The ID of the store whose products to fetch.
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
-  // If in prototype mode and asking for the prototype store, return its products directly.
-  const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
-  if (prototypeUserEmail && storeId === prototypeStore.id) {
+  // If asking for the prototype store's products, return them directly.
+  if (storeId === prototypeStore.id) {
     return prototypeProducts;
   }
 
