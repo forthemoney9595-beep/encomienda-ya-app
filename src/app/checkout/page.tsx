@@ -16,6 +16,8 @@ import { CreditCard, Home, Loader2 } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
+import { usePrototypeData } from '@/context/prototype-data-context';
+import { prototypeStore } from '@/lib/placeholder-data';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
@@ -29,6 +31,7 @@ const formSchema = z.object({
 export default function CheckoutPage() {
   const { cart, totalPrice, totalItems, clearCart, storeId } = useCart();
   const { user, loading: authLoading } = useAuth();
+  const { createPrototypeOrder } = usePrototypeData();
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,23 +82,49 @@ export default function CheckoutPage() {
     };
 
     try {
-      const orderData = await createOrder({
-        userId: user.uid,
-        items: cart,
-        shippingInfo: {
-          name: values.name,
-          address: values.address
-        },
-        storeId: storeId,
-        isPrototype: user.uid.startsWith('proto-'),
-      });
+      let orderId;
+      if (user.uid.startsWith('proto-')) {
+          const deliveryFee = 5.00;
+          const total = totalPrice + deliveryFee;
+          const newOrderData = {
+              userId: user.uid,
+              customerName: user.name,
+              items: cart,
+              total: total,
+              deliveryFee: deliveryFee,
+              status: 'En preparación' as const,
+              storeId: storeId,
+              storeName: prototypeStore.name, // Assuming prototypeStore is the only possibility
+              storeAddress: prototypeStore.address,
+              shippingAddress: {
+                  name: values.name,
+                  address: values.address
+              },
+          };
+          createPrototypeOrder(newOrderData);
+          // A bit of a hack to get the "new" ID, but for a prototype it's ok.
+          orderId = `proto-order-${Date.now()}`;
+      } else {
+          const orderData = await createOrder({
+            userId: user.uid,
+            items: cart,
+            shippingInfo: {
+              name: values.name,
+              address: values.address
+            },
+            storeId: storeId,
+          });
+          orderId = orderData.orderId;
+      }
 
       toast({
         title: "¡Pedido Realizado!",
         description: "Gracias por tu compra. Tu pedido está siendo procesado.",
       });
       clearCart();
-      router.push(`/orders/${orderData.orderId}`);
+      // Wait a moment for context to update before redirecting
+      setTimeout(() => router.push(`/orders/${orderId}`), 100);
+
     } catch (error) {
       console.error("Error creating order:", error);
       toast({

@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { CartProvider } from '@/context/cart-context';
 import { AuthProvider } from '@/context/auth-context';
 import { AppContent } from './app-content';
+import { PrototypeDataProvider } from '@/context/prototype-data-context';
 
 export const metadata: Metadata = {
   title: 'EncomiendaYA',
@@ -26,9 +27,11 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <AuthProvider>
           <CartProvider>
-            <AppContent>
-              {children}
-            </AppContent>
+            <PrototypeDataProvider>
+              <AppContent>
+                {children}
+              </AppContent>
+            </PrototypeDataProvider>
           </CartProvider>
         </AuthProvider>
         <Toaster />

@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import Link from 'next/link';
@@ -9,58 +7,38 @@ import { MapPin, Store, PackageSearch, Loader2, CheckCircle } from 'lucide-react
 import type { Order } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { assignOrderToDeliveryPerson, updateOrderStatus, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson } from '@/lib/order-service';
+import { assignOrderToDeliveryPerson, updateOrderStatus } from '@/lib/order-service';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 export default function DeliveryOrdersView() {
   const { user, loading: authLoading } = useAuth();
+  const { 
+    prototypeOrders, 
+    loading: prototypeLoading, 
+    getAvailableOrdersForDelivery, 
+    getOrdersByDeliveryPerson 
+  } = usePrototypeData();
+  
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
-  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
+    if (authLoading || prototypeLoading || !user || user.role !== 'delivery') return;
 
-  const fetchOrders = async () => {
-      if (!user) return;
-      setLoading(true);
-      const isPrototype = user.uid.startsWith('proto-');
-      const [available, assigned] = await Promise.all([
-          getAvailableOrdersForDelivery(isPrototype),
-          getOrdersByDeliveryPerson(user.uid),
-      ]);
-      setAvailableOrders(available);
-      setAssignedOrders(assigned);
-      setLoading(false);
-  };
-
-  useEffect(() => {
-    if (authLoading || !isClient) return;
-    if (!user || user.role !== 'delivery') {
-      setLoading(false);
-      return;
+    if (user.uid.startsWith('proto-')) {
+      setAvailableOrders(getAvailableOrdersForDelivery());
+      setAssignedOrders(getOrdersByDeliveryPerson(user.uid));
+    } else {
+      // Logic for real DB would go here
     }
-    
-    fetchOrders();
+  }, [user, authLoading, prototypeLoading, prototypeOrders, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson]);
 
-    // Refetch on window focus to catch updates made in other tabs/windows for prototype
-    const handleFocus = () => {
-      if (user.uid.startsWith('proto-')) {
-        fetchOrders();
-      }
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-
-  }, [user, authLoading, isClient]);
 
   const handleAcceptOrder = async (orderId: string) => {
     if (!user) {
@@ -74,19 +52,17 @@ export default function DeliveryOrdersView() {
 
     setLoadingOrderId(orderId);
     try {
-      await assignOrderToDeliveryPerson(orderId, user.uid, user.name);
+      await assignOrderToDeliveryPerson(orderId, user.uid, user.name, user.uid.startsWith('proto-'));
       toast({
         title: '¡Pedido Aceptado!',
         description: 'El pedido ha sido asignado a ti. ¡Hora de ponerse en marcha!',
       });
-      // Refetch orders to update both tabs
-      await fetchOrders(); 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accepting order:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'No se pudo aceptar el pedido. Puede que ya haya sido tomado por otro repartidor.',
+        description: error.message || 'No se pudo aceptar el pedido. Puede que ya haya sido tomado por otro repartidor.',
       });
     } finally {
       setLoadingOrderId(null);
@@ -95,13 +71,13 @@ export default function DeliveryOrdersView() {
 
   const handleCompleteOrder = async (orderId: string) => {
     setLoadingOrderId(orderId);
+
     try {
-      await updateOrderStatus(orderId, 'Entregado');
+      await updateOrderStatus(orderId, 'Entregado', user?.uid.startsWith('proto-'));
       toast({
         title: '¡Entrega Completada!',
         description: '¡Buen trabajo! El pedido ha sido marcado como entregado.',
       });
-      await fetchOrders();
     } catch (error) {
       console.error('Error completing order:', error);
       toast({
@@ -146,7 +122,7 @@ export default function DeliveryOrdersView() {
     </Card>
   );
 
-  if (loading || !isClient) {
+  if (prototypeLoading || authLoading) {
     return (
         <div className="space-y-4">
             <OrderCardSkeleton />

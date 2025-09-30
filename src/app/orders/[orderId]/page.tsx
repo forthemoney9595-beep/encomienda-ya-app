@@ -1,18 +1,17 @@
-
-
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { getOrderById, Order } from '@/lib/order-service';
+import { type Order } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 function OrderPageSkeleton() {
     return (
@@ -64,17 +63,26 @@ export default function OrderTrackingPage() {
   const orderId = params.orderId as string;
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { getOrderById, loading: prototypeLoading } = usePrototypeData();
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (authLoading) return; // Wait for auth to be ready
-    if (!orderId) return;
+    if (!orderId || !user) return;
 
     const fetchOrderData = async () => {
-      setLoading(true);
-      const orderData = await getOrderById(orderId);
+        setLoading(true);
+        let orderData: Order | null | undefined = null;
+
+        if (user.uid.startsWith('proto-')) {
+            orderData = getOrderById(orderId);
+        } else {
+            // Placeholder for real DB fetch if needed in future
+            // For now, prototype context handles it all.
+            console.warn("Real DB fetch for getOrderById not implemented for non-prototype users in this component yet.");
+        }
       
       if (!orderData) {
         console.warn(`Pedido no encontrado (ID: ${orderId}), redirigiendo a /orders.`);
@@ -98,8 +106,13 @@ export default function OrderTrackingPage() {
       setLoading(false);
     };
 
-    fetchOrderData();
-  }, [orderId, user, authLoading, router]);
+    if (user.uid.startsWith('proto-') && !prototypeLoading) {
+      fetchOrderData();
+    } else if (!user.uid.startsWith('proto-')) {
+       // Handle real user data fetching logic here if needed
+    }
+
+  }, [orderId, user, authLoading, router, getOrderById, prototypeLoading]);
 
 
   if (loading || authLoading || !order) {

@@ -1,5 +1,3 @@
-
-
 import type { CartItem, Order, OrderStatus } from "./order-service";
 
 export type Store = {
@@ -60,28 +58,22 @@ export const prototypeStore: Store = {
     imageHint: "burger joint",
 };
 
-// This is now the single source of truth for prototype products.
-// Any in-app changes are in-memory and will be lost on reload.
-const initialPrototypeProducts: Product[] = [
+export const initialPrototypeProducts: Product[] = [
     { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
     { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
     { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebida", imageUrl: "https://picsum.photos/seed/soda/200/200" },
 ];
 
 export function getPrototypeProducts(): Product[] {
-    // Returns a static, predictable list for consistent server/client rendering.
     return initialPrototypeProducts;
 }
 
 
 // In-memory/session storage for prototype orders
-const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
+export const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
 
-export type PrototypeOrder = Omit<Order, 'createdAt'> & { createdAt: string };
-
-
-// Seed data for prototype orders to ensure the app is usable from the start.
-const initialPrototypeOrders: PrototypeOrder[] = [
+// Seed data for prototype orders. This is the initial state.
+export const initialPrototypeOrders: Order[] = [
     {
         id: 'proto-order-1',
         userId: 'proto-buyer',
@@ -93,13 +85,13 @@ const initialPrototypeOrders: PrototypeOrder[] = [
         deliveryFee: 4.50,
         total: (9.99 * 2) + (2.50 * 2) + 4.50,
         status: 'Pedido Realizado',
-        createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 minutes ago
+        createdAt: new Date(Date.now() - 1000 * 60 * 5),
         storeId: 'proto-store-id',
         storeName: prototypeStore.name,
         storeAddress: prototypeStore.address,
         shippingAddress: { name: 'Comprador Proto', address: 'Calle Falsa 123' },
-        deliveryPersonId: null,
-        deliveryPersonName: null,
+        deliveryPersonId: undefined,
+        deliveryPersonName: undefined,
     },
     {
         id: 'proto-order-2',
@@ -111,77 +103,15 @@ const initialPrototypeOrders: PrototypeOrder[] = [
         deliveryFee: 6.00,
         total: 12.99 + 6.00,
         status: 'En preparación',
-        createdAt: new Date(Date.now() - 1000 * 60 * 20).toISOString(), // 20 minutes ago
+        createdAt: new Date(Date.now() - 1000 * 60 * 20),
         storeId: 'proto-store-id',
         storeName: prototypeStore.name,
         storeAddress: prototypeStore.address,
         shippingAddress: { name: 'Juan Pérez', address: 'Avenida Siempre Viva 742' },
-        deliveryPersonId: null,
-        deliveryPersonName: null,
+        deliveryPersonId: undefined,
+        deliveryPersonName: undefined,
     }
 ];
-
-/**
- * The single source of truth for getting prototype orders.
- * Reads from session storage and initializes it if empty.
- * Safe to call from client components.
- */
-function getAndInitializePrototypeOrders(): PrototypeOrder[] {
-    if (typeof window === 'undefined') {
-        return []; // Return empty array on server to avoid hydration mismatch
-    }
-
-    const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-    if (ordersJson) {
-        try {
-            const parsedOrders = JSON.parse(ordersJson);
-            if (Array.isArray(parsedOrders)) {
-                return parsedOrders;
-            }
-        } catch (e) {
-            console.error("Corrupted prototype orders in session storage, resetting.", e);
-        }
-    }
-
-    // If session is empty or corrupted, initialize it.
-    const initialOrders = JSON.stringify(initialPrototypeOrders);
-    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, initialOrders);
-    return initialPrototypeOrders;
-}
-
-/**
- * Public function to get all prototype orders.
- * Reads from session storage and initializes it if empty.
- */
-export function getPrototypeOrders(): PrototypeOrder[] {
-    return getAndInitializePrototypeOrders();
-}
-
-
-/**
- * Saves a new prototype order to the session.
- */
-export function savePrototypeOrder(order: PrototypeOrder) {
-    if (typeof window === 'undefined') return;
-    const existingOrders = getAndInitializePrototypeOrders();
-    const updatedOrders = [...existingOrders, order];
-    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
-}
-
-/**
- * Updates an existing prototype order in the session.
- */
-export function updatePrototypeOrder(orderId: string, updates: Partial<PrototypeOrder>) {
-    if (typeof window === 'undefined') return;
-
-    const orders = getAndInitializePrototypeOrders();
-    const orderIndex = orders.findIndex(o => o.id === orderId);
-
-    if (orderIndex !== -1) {
-        orders[orderIndex] = { ...orders[orderIndex], ...updates };
-        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(orders));
-    }
-}
 
 
 export const notifications = [
@@ -190,4 +120,3 @@ export const notifications = [
   { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
-

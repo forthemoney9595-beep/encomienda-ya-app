@@ -1,8 +1,7 @@
-
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders, updatePrototypeOrder } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
@@ -26,9 +25,8 @@ export interface Order {
         name: string;
         address: string;
     };
-    // Let's add customer info for the store view
     customerName?: string;
-    storeAddress?: string; // Add store address for delivery personnel
+    storeAddress?: string; 
     deliveryPersonId?: string;
     deliveryPersonName?: string;
     storeCoords?: { lat: number; lon: number };
@@ -49,51 +47,17 @@ interface CreateOrderOutput {
     total: number;
 }
 
+// This function now only handles REAL database orders.
+// The prototype data context will have its own `createPrototypeOrder` function.
 export async function createOrder(
    input: CreateOrderInput
 ): Promise<CreateOrderOutput> {
-    const { userId, items, shippingInfo, storeId, isPrototype } = input;
+    const { userId, items, shippingInfo, storeId } = input;
 
     if (items.length === 0) {
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // Handle prototype orders separately.
-    if (isPrototype) {
-        const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
-        const customerName = protoUser ? protoUser.name : shippingInfo.name;
-        
-        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const deliveryFee = 5.00; // Mock fee
-        const total = subtotal + deliveryFee;
-        const mockOrderId = `proto-order-${Date.now()}`;
-        
-        const newOrder: PrototypeOrder = {
-            id: mockOrderId,
-            userId: userId,
-            customerName: customerName,
-            items: items,
-            total: total,
-            deliveryFee: deliveryFee,
-            status: 'En preparación', // Start as 'En preparación' so it's available for delivery
-            createdAt: new Date().toISOString(),
-            storeId: prototypeStore.id,
-            storeName: prototypeStore.name,
-            storeAddress: prototypeStore.address,
-            shippingAddress: shippingInfo,
-            deliveryPersonId: null,
-            deliveryPersonName: null,
-        };
-
-        savePrototypeOrder(newOrder);
-
-        return {
-            orderId: mockOrderId,
-            deliveryFee,
-            total,
-        };
-    }
-
     // Real order logic
     const storeDoc = await getDoc(doc(db, 'stores', storeId));
     if (!storeDoc.exists()) {
@@ -144,17 +108,10 @@ export async function createOrder(
     };
 }
 
+// These functions for getting orders are kept for real DB users,
+// but prototype users will get their data from the context.
 
 export async function getOrdersByUser(userId: string): Promise<Order[]> {
-    if (userId.startsWith('proto-')) {
-        const protoOrders = getPrototypeOrders();
-        // For buyer, filter orders by their userId
-        return protoOrders
-            .filter(o => o.userId === userId)
-            .map(o => ({...o, createdAt: new Date(o.createdAt)}))
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    }
-
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
 
@@ -171,100 +128,17 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
     return orders;
 }
 
-export async function getAvailableOrdersForDelivery(isPrototype: boolean = false): Promise<Order[]> {
-    if (isPrototype) {
-        const allOrders = getPrototypeOrders();
-        return allOrders
-            .filter(order => order.status === 'En preparación' && !order.deliveryPersonId)
-            .map(o => ({...o, createdAt: new Date(o.createdAt)}))
-            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    }
-
-    const ordersRef = collection(db, 'orders');
-    // Orders ready for pickup and not yet assigned
-    const q = query(
-        ordersRef, 
-        where('status', '==', 'En preparación'), 
-        where('deliveryPersonId', '==', null),
-        orderBy('createdAt', 'asc')
-    );
-
-    const querySnapshot = await getDocs(q);
-    const orders: Order[] = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-        } as Order;
-    });
-    return orders;
-}
-
-export async function getOrdersByDeliveryPerson(driverId: string): Promise<Order[]> {
-    if (driverId.startsWith('proto-')) {
-        const allOrders = getPrototypeOrders();
-        return allOrders
-            .filter(order => order.deliveryPersonId === driverId)
-            .map(o => ({...o, createdAt: new Date(o.createdAt)}))
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-
-    const ordersRef = collection(db, 'orders');
-    const q = query(ordersRef, 
-        where('deliveryPersonId', '==', driverId),
-        orderBy('createdAt', 'desc')
-    );
-
-    const querySnapshot = await getDocs(q);
-    const orders: Order[] = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-        } as Order;
-    });
-
-    return orders;
-}
-
-export async function getOrderById(orderId: string): Promise<Order | null> {
-    if (orderId.startsWith('proto-order-')) {
-        const protoOrders = getPrototypeOrders();
-        const order = protoOrders.find(o => o.id === orderId);
-        if (order) {
-            return { ...order, createdAt: new Date(order.createdAt) };
-        }
-        return null;
-    }
-
-
-    const orderRef = doc(db, 'orders', orderId);
-    const docSnap = await getDoc(orderRef);
-
-    if (docSnap.exists()) {
-        const data = docSnap.data();
-        return {
-            id: docSnap.id,
-            ...data,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-        } as Order;
-    } else {
-        console.log(`No order found with id: ${orderId}`);
-        return null;
-    }
-}
-
-
 /**
- * Updates the status of an order.
+ * Updates the status of an order. Now accepts a callback for prototype data.
  * @param orderId The ID of the order to update.
  * @param status The new status for the order.
+ * @param isPrototype If true, will expect a callback to update prototype state.
  */
-export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
-  if (orderId.startsWith('proto-')) {
-    updatePrototypeOrder(orderId, { status });
+export async function updateOrderStatus(orderId: string, status: OrderStatus, isPrototype: boolean = false, updatePrototype?: (orderId: string, updates: Partial<Order>) => void): Promise<void> {
+  if (isPrototype) {
+    if (updatePrototype) {
+        updatePrototype(orderId, { status });
+    }
     return;
   }
   try {
@@ -282,18 +156,15 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
  * @param driverId The ID of the delivery person.
  * @param driverName The name of the delivery person.
  */
-export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
-    if (orderId.startsWith('proto-')) {
-        const allOrders = getPrototypeOrders();
-        const orderExists = allOrders.some(o => o.id === orderId && o.status === 'En preparación' && !o.deliveryPersonId);
-        if (!orderExists) {
-            throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
+export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string, isPrototype: boolean = false, updatePrototype?: (orderId: string, updates: Partial<Order>) => void): Promise<void> {
+    if (isPrototype) {
+        if (updatePrototype) {
+            updatePrototype(orderId, {
+                status: 'En reparto',
+                deliveryPersonId: driverId,
+                deliveryPersonName: driverName,
+            });
         }
-        updatePrototypeOrder(orderId, {
-            status: 'En reparto',
-            deliveryPersonId: driverId,
-            deliveryPersonName: driverName,
-        });
         return;
     }
     
@@ -315,5 +186,3 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     throw error;
   }
 }
-
-    

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 interface OrderStatusUpdaterProps {
   order: Order;
@@ -25,6 +26,7 @@ const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
 
 export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { user, loading: authLoading } = useAuth();
+  const { updatePrototypeOrder } = usePrototypeData();
   const router = useRouter();
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
@@ -49,12 +51,15 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     
     setIsUpdating(true);
     try {
-        await updateOrderStatus(order.id, selectedStatus);
+        const isPrototype = user?.uid.startsWith('proto-');
+        await updateOrderStatus(order.id, selectedStatus, isPrototype, updatePrototypeOrder);
+
         toast({
             title: '¡Estado Actualizado!',
             description: `El pedido ahora está "${selectedStatus}".`,
         });
-        router.push('/orders'); // Redirect back to the orders list
+        // Wait a moment for the context to propagate before navigating
+        setTimeout(() => router.push('/orders'), 100);
     } catch (error) {
         console.error('Error updating order status:', error);
         toast({
