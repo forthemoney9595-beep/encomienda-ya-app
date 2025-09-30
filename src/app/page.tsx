@@ -1,31 +1,66 @@
-'use server';
+'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
 import { getStores } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
-import { auth } from '@/lib/firebase';
+import { useAuth } from '@/context/auth-context';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export default async function Home() {
-  // Data is now fetched on the server before the page is rendered.
-  // We determine if we are in prototype mode by checking the user's UID format.
-  // Note: This is a simplified check for this prototype.
-  const isPrototype = auth.currentUser?.uid.startsWith('proto-') ?? false;
-  const stores: Store[] = await getStores(false, isPrototype);
-  const approvedStores = stores.filter(s => s.status === 'Aprobado');
+function StoreCardSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <Skeleton className="h-48 w-full" />
+      <CardHeader>
+        <Skeleton className="h-6 w-3/4" />
+        <Skeleton className="h-4 w-1/2 mt-2" />
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="h-4 w-full" />
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function Home() {
+  const { user, loading: authLoading } = useAuth();
+  const [stores, setStores] = useState<Store[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStores = async () => {
+      setLoading(true);
+      // We determine if we are in prototype mode by checking the user's UID format.
+      // This check is safe now as it runs on the client.
+      const isPrototype = user?.uid.startsWith('proto-') ?? false;
+      const fetchedStores = await getStores(false, isPrototype);
+      setStores(fetchedStores.filter(s => s.status === 'Aprobado'));
+      setLoading(false);
+    };
+
+    // We wait for auth to finish loading before fetching stores.
+    if (!authLoading) {
+        fetchStores();
+    }
+  }, [user, authLoading]);
 
   return (
     <div className="container mx-auto">
       <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
       
-      {/* The interactive search bar is temporarily removed for this structural refactoring. 
-          It can be re-added later as a client component. */}
-
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {approvedStores.length > 0 ? (
-          approvedStores.map((store) => (
+        {loading ? (
+          <>
+            <StoreCardSkeleton />
+            <StoreCardSkeleton />
+            <StoreCardSkeleton />
+            <StoreCardSkeleton />
+          </>
+        ) : stores.length > 0 ? (
+          stores.map((store) => (
             <Link href={`/stores/${store.id}`} key={store.id} className="group">
               <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
                 <div className="relative h-48 w-full">
