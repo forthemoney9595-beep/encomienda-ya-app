@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/context/auth-context';
 
 const formSchema = z.object({
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
@@ -30,6 +31,7 @@ const testUsers = [
 export default function LoginPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const { loginForPrototype } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,12 +50,23 @@ export default function LoginPage() {
       });
       router.push('/');
     } catch (error: any) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title: "Error al Iniciar Sesión",
-        description: "El correo electrónico o la contraseña son incorrectos. Por favor, inténtalo de nuevo.",
-      });
+      console.log("Firebase login failed, attempting prototype login.", error.code);
+      // If Firebase auth fails (e.g., user not found), try prototype login
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+         await loginForPrototype(values.email);
+         toast({
+            title: "¡Inicio de Sesión Simulado!",
+            description: `Modo de prototipo activado para ${values.email}.`,
+         });
+         router.push('/');
+      } else {
+        console.error(error);
+        toast({
+          variant: "destructive",
+          title: "Error al Iniciar Sesión",
+          description: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
+        });
+      }
     }
   }
 
