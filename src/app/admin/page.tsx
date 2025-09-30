@@ -3,12 +3,12 @@
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Store, Truck, ClipboardList } from 'lucide-react';
-import { orders } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getStores, getDeliveryPersonnel } from '@/lib/data-service';
+import { getAvailableOrdersForDelivery } from '@/lib/order-service';
 
 
 export default function AdminDashboard() {
@@ -16,6 +16,7 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [totalStores, setTotalStores] = useState(0);
   const [totalDrivers, setTotalDrivers] = useState(0);
+  const [pendingOrders, setPendingOrders] = useState(0);
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
   useEffect(() => {
@@ -25,20 +26,20 @@ export default function AdminDashboard() {
     if (isAdmin) {
       const fetchData = async () => {
         setDashboardLoading(true);
-        const [stores, drivers] = await Promise.all([
+        const [stores, drivers, availableOrders] = await Promise.all([
           getStores(),
-          getDeliveryPersonnel()
+          getDeliveryPersonnel(),
+          getAvailableOrdersForDelivery(),
         ]);
         setTotalStores(stores.length);
         setTotalDrivers(drivers.length);
+        // This counts orders that are 'En preparación' and unassigned, which is a good proxy for pending.
+        setPendingOrders(availableOrders.length);
         setDashboardLoading(false);
       }
       fetchData();
     }
   }, [user, isAdmin, loading, router]);
-
-
-  const pendingOrders = orders.filter(o => o.status !== 'Entregado').length;
   
   if (loading || dashboardLoading || !isAdmin) {
     return (
