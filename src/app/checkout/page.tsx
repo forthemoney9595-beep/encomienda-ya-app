@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useCart } from '@/context/cart-context';
@@ -94,16 +95,17 @@ export default function CheckoutPage() {
               deliveryFee: deliveryFee,
               status: 'En preparación' as const,
               storeId: storeId,
-              storeName: prototypeStore.name, // Assuming prototypeStore is the only possibility
+              storeName: prototypeStore.name,
               storeAddress: prototypeStore.address,
               shippingAddress: {
                   name: values.name,
                   address: values.address
               },
           };
-          createPrototypeOrder(newOrderData);
-          // A bit of a hack to get the "new" ID, but for a prototype it's ok.
-          orderId = `proto-order-${Date.now()}`;
+          // Use the centralized context function to create the order
+          const createdOrder = createPrototypeOrder(newOrderData);
+          orderId = createdOrder.id;
+
       } else {
           const orderData = await createOrder({
             userId: user.uid,

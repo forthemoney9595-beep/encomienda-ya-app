@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -8,7 +9,7 @@ interface PrototypeDataContextType {
     prototypeOrders: Order[];
     loading: boolean;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
-    createPrototypeOrder: (orderData: Omit<Order, 'id' | 'createdAt'>) => void;
+    createPrototypeOrder: (orderData: Omit<Order, 'id' | 'createdAt'>) => Order;
     getOrdersByStore: (storeId: string) => Order[];
     getAvailableOrdersForDelivery: () => Order[];
     getOrdersByDeliveryPerson: (driverId: string) => Order[];
@@ -64,7 +65,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         });
     };
 
-    const createPrototypeOrder = (orderData: Omit<Order, 'id' | 'createdAt'>) => {
+    const createPrototypeOrder = (orderData: Omit<Order, 'id' | 'createdAt'>): Order => {
         const newOrder: Order = {
             ...orderData,
             id: `proto-order-${Date.now()}`,
@@ -75,6 +76,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             updateSessionStorage(updatedOrders);
             return updatedOrders;
         });
+        return newOrder;
     };
     
     const getOrdersByStore = useCallback((storeId: string) => {
