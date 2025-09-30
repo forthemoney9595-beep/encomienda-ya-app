@@ -75,26 +75,32 @@ export default function StoreDetailPage() {
   useEffect(() => {
     async function fetchData() {
         if (!storeId) return;
-        setLoading(true);
-        const [storeData, productsData] = await Promise.all([
-            getStoreById(storeId),
-            getProductsByStoreId(storeId)
-        ]);
+        
+        try {
+            const [storeData, productsData] = await Promise.all([
+                getStoreById(storeId),
+                getProductsByStoreId(storeId)
+            ]);
 
-        if (!storeData) {
-            notFound();
-            return;
+            if (!storeData) {
+                notFound();
+                return;
+            }
+
+            setStore(storeData);
+            setProducts(productsData);
+        } catch (error) {
+            console.error("Failed to fetch store data:", error);
+            // Handle error appropriately, maybe show a toast
+        } finally {
+            setLoading(false);
         }
-
-        setStore(storeData);
-        setProducts(productsData);
-        setLoading(false);
     }
     fetchData();
   }, [storeId]);
 
 
-  if (loading || !store) {
+  if (loading) {
     return (
          <div className="container mx-auto">
             <PageHeader title={<Skeleton className='h-9 w-1/2' />} description={<Skeleton className='h-5 w-1/3' />} />
@@ -102,6 +108,13 @@ export default function StoreDetailPage() {
         </div>
     )
   }
+  
+  if (!store) {
+    // This can happen if the fetch fails but loading is finished.
+    // Or handle this with a dedicated error component.
+    return notFound();
+  }
+
 
   // Use the dynamically managed productCategories from the store document
   const productCategories = store.productCategories && store.productCategories.length > 0 ? store.productCategories : [store.category];
@@ -109,9 +122,9 @@ export default function StoreDetailPage() {
 
   return (
     <div className="container mx-auto">
-      <PageHeader title={store.name} description={store.category}>
-        <StoreOwnerTools storeId={store.id} ownerId={store.ownerId} productCategories={productCategories} />
-      </PageHeader>
+        <PageHeader title={store.name} description={store.category}>
+            <StoreOwnerTools storeId={store.id} ownerId={store.ownerId} productCategories={productCategories} />
+        </PageHeader>
       
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2">
