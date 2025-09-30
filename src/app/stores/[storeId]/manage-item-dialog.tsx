@@ -7,12 +7,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Edit, Wand2 } from "lucide-react";
+import { Loader2, PlusCircle, Edit } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
-import { generateProductImage } from "@/ai/flows/generate-product-image";
 import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
@@ -29,12 +28,11 @@ interface ManageItemDialogProps {
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
-    onSave: (data: Product) => Promise<void>;
+    onSave: (data: Product) => void;
 }
 
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingMessage, setProcessingMessage] = useState("Guardando...");
   const isEditing = product !== null;
   const { toast } = useToast();
 
@@ -74,38 +72,23 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
   async function onSubmit(values: FormData) {
     setIsProcessing(true);
 
-    let finalImageUrl = values.imageUrl;
-
     try {
-      if (!values.imageUrl) {
-        setProcessingMessage("Generando imagen con IA...");
-        const imageResult = await generateProductImage({
-          productName: values.name,
-          productDescription: values.description,
-        });
-        finalImageUrl = imageResult.imageUrl;
-        toast({
-          title: "¡Imagen Generada!",
-          description: "La IA ha creado una imagen para tu producto.",
-        });
-      }
-      
-      setProcessingMessage("Guardando artículo...");
-
+      // If we are editing, use the existing product ID.
+      // If we are creating, generate a new unique ID.
       const productData: Product = {
-        id: product?.id || `new-${Date.now()}`,
+        id: product?.id || `new-${Date.now()}-${Math.random()}`,
         ...values,
-        imageUrl: finalImageUrl,
+        imageUrl: values.imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
       };
 
-      await onSave(productData);
+      onSave(productData);
 
     } catch (error) {
         console.error("Error al guardar el producto:", error);
         toast({
             variant: "destructive",
             title: "Error al Guardar",
-            description: "No se pudo generar la imagen o guardar el producto. Por favor, inténtalo de nuevo.",
+            description: "No se pudo guardar el producto. Por favor, inténtalo de nuevo.",
         });
     } finally {
         setIsProcessing(false);
@@ -121,7 +104,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellene los detalles del producto. Si no proporciona una URL de imagen, la IA generará una por usted.
+                Rellene los detalles del producto. Si no proporciona una URL de imagen, se asignará una imagen de marcador de posición.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -196,7 +179,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
                 {isProcessing ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {processingMessage}
+                    Guardando...
                    </>
                 ) : (
                   <>
