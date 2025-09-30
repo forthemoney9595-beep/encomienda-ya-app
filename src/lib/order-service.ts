@@ -3,6 +3,7 @@
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders, updatePrototypeOrder } from './placeholder-data';
+import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem extends Product {
@@ -30,6 +31,8 @@ export interface Order {
     storeAddress?: string; // Add store address for delivery personnel
     deliveryPersonId?: string;
     deliveryPersonName?: string;
+    storeCoords?: { lat: number; lon: number };
+    customerCoords?: { lat: number; lon: number };
 }
 
 interface CreateOrderInput {
@@ -104,9 +107,13 @@ export async function createOrder(
         customerName = userDoc.data().name;
     }
 
-    // SIMULATED Geocode addresses for fee calculation
-    const distanceKm = 1 + Math.random() * 10; // Simulate distance between 1-11 km
-    const deliveryFee = 2 + (distanceKm * 1.5); // $2 base + $1.5 per km
+    const [storeCoords, customerCoords] = await Promise.all([
+        geocodeAddress({ address: store.address }),
+        geocodeAddress({ address: shippingInfo.address })
+    ]);
+
+    const distanceKm = 1 + Math.random() * 10;
+    const deliveryFee = 2 + (distanceKm * 1.5);
 
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
@@ -126,6 +133,8 @@ export async function createOrder(
         shippingAddress: shippingInfo,
         deliveryPersonId: null, // Initially unassigned
         deliveryPersonName: null,
+        storeCoords,
+        customerCoords,
     });
     
     return {
@@ -196,7 +205,7 @@ export async function getOrdersByDeliveryPerson(driverId: string): Promise<Order
     if (driverId.startsWith('proto-')) {
         const allOrders = getPrototypeOrders();
         return allOrders
-            .filter(order => order.deliveryPersonId === driverId && (order.status === 'En reparto' || order.status === 'Entregado'))
+            .filter(order => order.deliveryPersonId === driverId)
             .map(o => ({...o, createdAt: new Date(o.createdAt)}))
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
@@ -306,3 +315,5 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     throw error;
   }
 }
+
+    
