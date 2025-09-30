@@ -22,13 +22,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const mockAdminUser: UserProfile = {
-    uid: 'mock-admin-uid',
-    name: 'Admin',
-    email: 'admin@test.com',
-    role: 'admin',
-};
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
@@ -58,11 +51,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                     setUser(profile);
                 } else {
+                    // If no profile document, treat as logged out
                     setUser(null);
                 }
             } else {
-                console.log("No Firebase user found, simulating Admin user.");
-                setUser(mockAdminUser);
+                // No user is signed in
+                setUser(null);
             }
             setLoading(false);
         });
