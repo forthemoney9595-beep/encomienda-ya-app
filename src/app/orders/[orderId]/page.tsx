@@ -2,7 +2,7 @@
 
 'use client';
 
-import { notFound, useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -77,7 +77,8 @@ export default function OrderTrackingPage() {
       const orderData = await getOrderById(orderId);
       
       if (!orderData) {
-        notFound();
+        console.warn(`Pedido no encontrado (ID: ${orderId}), redirigiendo a /orders.`);
+        router.push('/orders');
         return;
       }
       
