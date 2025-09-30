@@ -6,7 +6,7 @@ import type { Product } from '@/lib/placeholder-data';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
+import { ShoppingCart, Edit, Trash2, Loader2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -14,8 +14,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { ManageItemDialog } from './manage-item-dialog';
-import { getPrototypeProducts, savePrototypeProducts } from '@/lib/placeholder-data';
 import { addProductToStore, deleteProductFromStore, updateProductInStore } from '@/lib/data-service';
+import { getPrototypeProducts, savePrototypeProducts } from '@/lib/placeholder-data';
 
 interface ProductListProps {
     products: Product[];
@@ -30,9 +30,8 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
     
-    // Manage products in local state. Start with initialProducts to avoid hydration errors.
     const [products, setProducts] = useState<Product[]>(initialProducts);
-    const [loading, setLoading] = useState(true);
+    const [isClient, setIsClient] = useState(false);
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -41,47 +40,48 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
-    // This effect runs only on the client, after initial render.
-    // This solves the hydration error.
     useEffect(() => {
+        setIsClient(true);
         if (currentStoreId.startsWith('proto-')) {
             const storedProducts = getPrototypeProducts();
             setProducts(storedProducts);
         }
-        setLoading(false);
     }, [currentStoreId]);
 
     const handleSaveProduct = async (productData: Product) => {
+        setManageItemDialogOpen(false);
+        setEditingProduct(null);
+
         let updatedProducts;
+        let successMessage = "";
     
-        if (editingProduct) { // Editing existing product
-            await updateProductInStore(currentStoreId, editingProduct.id, productData);
+        if (editingProduct) {
             updatedProducts = products.map(p => p.id === editingProduct.id ? { ...productData, id: editingProduct.id } : p);
-            toast({ title: "¡Artículo Actualizado!" });
-        } else { // Creating new product
+            await updateProductInStore(currentStoreId, editingProduct.id, productData);
+            successMessage = "¡Artículo Actualizado!";
+        } else {
             const newProductWithId = { ...productData, id: `proto-prod-${Date.now()}` };
-            await addProductToStore(currentStoreId, newProductWithId);
             updatedProducts = [...products, newProductWithId];
-            toast({ title: "¡Artículo Guardado!" });
+            await addProductToStore(currentStoreId, newProductWithId);
+            successMessage = "¡Artículo Guardado!";
         }
         
         if (currentStoreId.startsWith('proto-')) {
             savePrototypeProducts(updatedProducts);
         }
         setProducts(updatedProducts);
-        setManageItemDialogOpen(false);
-        setEditingProduct(null);
+        toast({ title: successMessage });
     };
 
     const handleDeleteProduct = async (productId: string) => {
-        await deleteProductFromStore(currentStoreId, productId);
         const updatedProducts = products.filter(p => p.id !== productId);
+        setProducts(updatedProducts);
         
         if (currentStoreId.startsWith('proto-')) {
             savePrototypeProducts(updatedProducts);
         }
+        await deleteProductFromStore(currentStoreId, productId);
         
-        setProducts(updatedProducts);
         toast({
             title: "Producto Eliminado",
             description: "El producto ha sido eliminado correctamente.",
@@ -99,6 +99,14 @@ export function ProductList({ products: initialProducts, productCategories, owne
     };
     
     const handleAddToCart = (product: Product) => {
+        if (!user) {
+            toast({
+                variant: 'destructive',
+                title: 'Inicia Sesión para Comprar',
+                description: 'Debes iniciar sesión para añadir artículos a tu carrito.',
+            });
+            return;
+        }
         if (!cartStoreId || cartStoreId === currentStoreId) {
             addToCart(product, currentStoreId);
             toast({
@@ -124,10 +132,13 @@ export function ProductList({ products: initialProducts, productCategories, owne
         setPendingProduct(null);
     }
     
-    if (loading) {
-        return null; // Return null during client-side hydration to avoid mismatch
+    if (!isClient) {
+        return (
+            <div className="flex justify-center items-center h-48">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        );
     }
-
 
     return (
         <>
@@ -211,7 +222,12 @@ export function ProductList({ products: initialProducts, productCategories, owne
                     </div>
                     </TabsContent>
                 ))}
-                {products.length === 0 && (
+                {products.length === 0 && !isClient && (
+                     <div className="flex justify-center items-center h-48">
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                )}
+                {products.length === 0 && isClient && (
                     <div className="text-center text-muted-foreground py-10">
                         <p>Esta tienda aún no tiene productos.</p>
                          {isOwner && <p>¡Añade tu primer artículo usando el botón de arriba!</p>}

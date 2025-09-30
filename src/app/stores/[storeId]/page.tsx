@@ -1,3 +1,4 @@
+
 'use client';
 
 import { notFound, useParams } from 'next/navigation';
@@ -77,15 +78,18 @@ export default function StoreDetailPage() {
         if (!storeId) return;
         
         try {
-            const [storeData, productsData] = await Promise.all([
-                getStoreById(storeId),
-                getProductsByStoreId(storeId)
-            ]);
-
+            const storeData = await getStoreById(storeId);
+            
             if (!storeData) {
                 notFound();
                 return;
             }
+            
+            // For prototype stores, we don't fetch products from the server
+            // as they are managed client-side in session storage to prevent hydration errors.
+            const productsData = storeId.startsWith('proto-')
+                ? [] 
+                : await getProductsByStoreId(storeId);
 
             setStore(storeData);
             setProducts(productsData);
@@ -110,8 +114,6 @@ export default function StoreDetailPage() {
   }
   
   if (!store) {
-    // This can happen if the fetch fails but loading is finished.
-    // Or handle this with a dedicated error component.
     return notFound();
   }
 
@@ -123,7 +125,6 @@ export default function StoreDetailPage() {
   return (
     <div className="container mx-auto">
         <PageHeader title={store.name} description={store.category}>
-            <StoreOwnerTools storeId={store.id} ownerId={store.ownerId} productCategories={productCategories} />
         </PageHeader>
       
       <div className="grid gap-6 md:grid-cols-3">
