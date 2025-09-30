@@ -64,7 +64,7 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(id: string): Promise<Store | null> {
-  if (id === prototypeStore.id) {
+  if (id.startsWith('proto-')) {
     // Ensure we get the latest from session storage if available
     if (typeof window !== 'undefined') {
         const stored = sessionStorage.getItem('prototypeStore');
@@ -104,7 +104,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
  * @param storeId The ID of the store whose products to fetch.
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
-  if (storeId === prototypeStore.id) {
+  if (storeId.startsWith('proto-')) {
     return getPrototypeProducts();
   }
 
@@ -143,8 +143,8 @@ interface ProductData extends Omit<Product, 'id'> {
  * @param productData The data for the new product.
  */
 export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
-    if (storeId === prototypeStore.id) {
-        addPrototypeProduct(productData);
+    if (storeId.startsWith('proto-')) {
+        addPrototypeProduct(productData as Product);
         return;
     }
     
@@ -173,7 +173,7 @@ export async function addProductToStore(storeId: string, productData: Omit<Produ
 }
 
 export async function updateProductInStore(storeId: string, productId: string, productData: Partial<Omit<Product, 'id'>>) {
-    if (storeId === prototypeStore.id) {
+    if (storeId.startsWith('proto-')) {
         updatePrototypeProduct(productId, productData);
         return;
     }
@@ -188,7 +188,7 @@ export async function updateProductInStore(storeId: string, productId: string, p
 }
 
 export async function deleteProductFromStore(storeId: string, productId: string) {
-    if (storeId === prototypeStore.id) {
+    if (storeId.startsWith('proto-')) {
         deletePrototypeProduct(productId);
         return;
     }
@@ -262,7 +262,6 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
 
 /**
  * Fetches a single delivery person by their user ID.
- * @param id The user ID of the delivery person.
  */
 export async function getDeliveryPersonById(id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
   try {
@@ -378,3 +377,4 @@ export async function getDriverReviews(driverId: string): Promise<DriverReview[]
     return [];
   }
 }
+

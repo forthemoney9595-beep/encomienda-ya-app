@@ -15,6 +15,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { getPrototypeProducts, savePrototypeProducts } from '@/lib/placeholder-data';
+import { addProductToStore, deleteProductFromStore, updateProductInStore } from '@/lib/data-service';
 
 interface ProductListProps {
     products: Product[];
@@ -42,7 +43,7 @@ export function ProductList({ products: initialProducts, productCategories, owne
 
     // This effect runs only on the client, after hydration
     useEffect(() => {
-        if (currentStoreId === 'proto-store-id') {
+        if (currentStoreId.startsWith('proto-')) {
             const storedProducts = getPrototypeProducts();
             setProducts(storedProducts);
         }
@@ -58,28 +59,26 @@ export function ProductList({ products: initialProducts, productCategories, owne
         setManageItemDialogOpen(true);
     };
     
-    const handleSaveProduct = (productData: Product, id?: string) => {
+    const handleSaveProduct = async (productData: Product, id?: string) => {
         let updatedProducts;
+
         if (id) { // Editing existing product
-            updatedProducts = products.map(p => p.id === id ? { ...p, ...productData, id: p.id } : p);
+            await updateProductInStore(currentStoreId, id, productData);
+            updatedProducts = products.map(p => p.id === id ? { ...p, ...productData, id } : p);
             toast({ title: "¡Artículo Actualizado!" });
         } else { // Creating new product
             const newProductWithId = { ...productData, id: `proto-prod-${Date.now()}` };
+            await addProductToStore(currentStoreId, newProductWithId);
             updatedProducts = [...products, newProductWithId];
             toast({ title: "¡Artículo Guardado!" });
         }
         setProducts(updatedProducts);
-        if (currentStoreId === 'proto-store-id') {
-            savePrototypeProducts(updatedProducts);
-        }
     };
     
-    const handleDeleteProduct = (productId: string) => {
+    const handleDeleteProduct = async (productId: string) => {
+        await deleteProductFromStore(currentStoreId, productId);
         const updatedProducts = products.filter(p => p.id !== productId);
         setProducts(updatedProducts);
-         if (currentStoreId === 'proto-store-id') {
-            savePrototypeProducts(updatedProducts);
-        }
         toast({
             title: "Producto Eliminado",
             description: "El producto ha sido eliminado correctamente.",
@@ -113,18 +112,13 @@ export function ProductList({ products: initialProducts, productCategories, owne
         setPendingProduct(null);
     }
 
-    // Function to handle saving from the dialog
-    const onSaveFromDialog = (data: Product, id?: string) => {
-        handleSaveProduct(data, id);
-    };
-
     return (
         <>
             <ManageItemDialog
                 isOpen={isManageItemDialogOpen}
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
-                onSave={onSaveFromDialog}
+                onSave={handleSaveProduct}
             />
             {isOwner && (
               <div className="mb-4">

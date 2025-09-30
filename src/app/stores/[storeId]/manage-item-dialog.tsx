@@ -28,7 +28,7 @@ interface ManageItemDialogProps {
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
-    onSave: (data: Product, id?: string) => void;
+    onSave: (data: Product, id?: string) => Promise<void>;
 }
 
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
@@ -76,7 +76,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
     let finalImageUrl = values.imageUrl;
 
     try {
-      if (!values.imageUrl && !isEditing) {
+      if (!values.imageUrl) {
         setProcessingMessage("Generando imagen con IA...");
         const imageResult = await generateProductImage({
           productName: values.name,
@@ -97,12 +97,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
         imageUrl: finalImageUrl,
       };
 
-      onSave(productData, product?.id);
-
-      toast({
-        title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Guardado!",
-        description: `"${values.name}" se ha guardado correctamente.`,
-      });
+      await onSave(productData, product?.id);
 
     } catch (error) {
         console.error("Error al guardar el producto:", error);
