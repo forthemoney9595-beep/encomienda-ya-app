@@ -307,21 +307,3 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     throw error;
   }
 }
-
-// This function is no longer needed as the component will fetch all and filter.
-// export async function getOrdersByStore(storeId: string): Promise<Order[]> {
-//     const ordersRef = collection(db, 'orders');
-//     const q = query(ordersRef, where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
-
-//     const querySnapshot = await getDocs(q);
-//     const orders: Order[] = querySnapshot.docs.map(doc => {
-//         const data = doc.data();
-//         return {
-//             id: doc.id,
-//             ...data,
-//             createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-//         } as Order;
-//     });
-
-//     return orders;
-// }

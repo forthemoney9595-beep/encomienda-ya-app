@@ -124,10 +124,12 @@ const initialPrototypeOrders: PrototypeOrder[] = [
 /**
  * The single source of truth for getting prototype orders.
  * Reads from session storage and initializes it if empty.
- * Safe to call from both server and client components.
+ * Safe to call from client components.
  */
-export function getAndInitializePrototypeOrders(): PrototypeOrder[] {
+function getAndInitializePrototypeOrders(): PrototypeOrder[] {
     if (typeof window === 'undefined') {
+        // Return a static copy on the server to prevent errors,
+        // client-side logic will take over with the real session data.
         return initialPrototypeOrders;
     }
 
@@ -143,6 +145,7 @@ export function getAndInitializePrototypeOrders(): PrototypeOrder[] {
         }
     }
 
+    // If session is empty or corrupted, initialize it.
     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
     return initialPrototypeOrders;
 }

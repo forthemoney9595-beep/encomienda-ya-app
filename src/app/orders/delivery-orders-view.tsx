@@ -32,8 +32,9 @@ export default function DeliveryOrdersView() {
   const fetchOrders = async () => {
       if (!user) return;
       setLoading(true);
+      const isPrototype = user.uid.startsWith('proto-');
       const [available, assigned] = await Promise.all([
-          getAvailableOrdersForDelivery(user.uid.startsWith('proto-')),
+          getAvailableOrdersForDelivery(isPrototype),
           getOrdersByDeliveryPerson(user.uid),
       ]);
       setAvailableOrders(available);
@@ -50,6 +51,7 @@ export default function DeliveryOrdersView() {
     
     fetchOrders();
 
+    // Refetch on window focus to catch updates made in other tabs/windows for prototype
     const handleFocus = () => {
       if (user.uid.startsWith('proto-')) {
         fetchOrders();
