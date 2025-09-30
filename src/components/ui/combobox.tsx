@@ -41,19 +41,18 @@ export function Combobox({
   creatable = false
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
-  const [inputValue, setInputValue] = React.useState(value || "")
+  const [inputValue, setInputValue] = React.useState("")
 
   const handleSelect = (currentValue: string) => {
-    const newValue = currentValue.toLowerCase() === value?.toLowerCase() ? "" : currentValue;
-    onChange(newValue);
-    setInputValue(newValue);
-    setOpen(false);
+    onChange(currentValue.toLowerCase() === value?.toLowerCase() ? "" : currentValue)
+    setOpen(false)
   }
-  
+
+  const currentOption = options.find((option) => option.value.toLowerCase() === value?.toLowerCase())
+
   const filteredOptions = creatable && inputValue && !options.some(opt => opt.label.toLowerCase() === inputValue.toLowerCase())
     ? [...options, { value: inputValue, label: `Crear "${inputValue}"` }]
     : options;
-
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -65,23 +64,22 @@ export function Combobox({
           className={cn("w-full justify-between", className)}
           disabled={disabled}
         >
-          {value
-            ? options.find((option) => option.value.toLowerCase() === value.toLowerCase())?.label || value
-            : placeholder}
+          {currentOption ? currentOption.label : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-        <Command shouldFilter={!creatable}>
+        <Command shouldFilter={false}>
           <CommandInput 
             placeholder={placeholder}
-            onValueChange={creatable ? setInputValue : undefined}
-            value={inputValue}
-           />
+            onValueChange={setInputValue}
+          />
           <CommandList>
-            <CommandEmpty>{creatable ? `Presiona Enter para crear "${inputValue}"` : emptyMessage}</CommandEmpty>
+            <CommandEmpty>{creatable && inputValue ? `Presiona Enter para crear "${inputValue}"` : emptyMessage}</CommandEmpty>
             <CommandGroup>
-              {filteredOptions.map((option) => (
+              {filteredOptions
+                .filter(option => option.label.toLowerCase().includes(inputValue.toLowerCase()))
+                .map((option) => (
                 <CommandItem
                   key={option.value}
                   value={option.value}
