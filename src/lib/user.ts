@@ -19,25 +19,31 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
   try {
     const userDocRef = doc(db, 'users', uid);
     
-    await setDoc(userDocRef, {
+    const profileData: any = {
       uid, 
       ...data,
       createdAt: serverTimestamp(),
-    });
+    };
+    // Ensure status is set for roles that need it
+    if ((data.role === 'store' || data.role === 'delivery') && !data.status) {
+      profileData.status = 'pending';
+    }
+
+
+    await setDoc(userDocRef, profileData);
 
     if (data.role === 'store') {
         const storeCollectionRef = collection(db, 'stores');
         await addDoc(storeCollectionRef, {
             name: data.storeName,
             category: data.storeCategory,
-            // Only add the category to the array if it exists, otherwise initialize as empty array
             productCategories: data.storeCategory ? [data.storeCategory] : [], 
             address: data.storeAddress,
             ownerId: uid,
             status: 'Pendiente',
             createdAt: serverTimestamp(),
             imageUrl: `https://picsum.photos/seed/${data.storeName.replace(/\s/g, '')}/600/400`,
-            imageHint: data.storeCategory.toLowerCase().split('-')[0] || 'store',
+            imageHint: data.storeCategory?.toLowerCase().split('-')[0] || 'store',
         });
     }
     

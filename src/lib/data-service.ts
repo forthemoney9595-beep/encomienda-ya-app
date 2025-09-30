@@ -10,7 +10,7 @@ import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-revie
 export async function getStores(): Promise<Store[]> {
   try {
     const storesCollectionRef = collection(db, 'stores');
-    const q = query(storesCollectionRef); // You can add where clauses here, e.g., where('status', '==', 'Aprobado')
+    const q = query(storesCollectionRef);
     const querySnapshot = await getDocs(q);
     
     const stores: Store[] = querySnapshot.docs.map(doc => {
@@ -139,12 +139,17 @@ export async function getDeliveryPersonnel(): Promise<DeliveryPersonnel[]> {
     
     const personnel: DeliveryPersonnel[] = querySnapshot.docs.map(doc => {
       const data = doc.data();
+      const statusMap = {
+        'pending': 'Pendiente',
+        'approved': 'Activo',
+        'rejected': 'Rechazado',
+      }
       return {
         id: doc.id,
         name: data.name || '',
         vehicle: data.vehicle || 'No especificado',
         zone: data.zone || 'No asignada',
-        status: data.status === 'pending' ? 'Pendiente' : data.status === 'approved' ? 'Activo' : data.status === 'rejected' ? 'Rechazado' : 'Inactivo',
+        status: statusMap[data.status as keyof typeof statusMap] || 'Inactivo',
       };
     });
     
@@ -165,13 +170,18 @@ export async function getDeliveryPersonById(id: string): Promise<(DeliveryPerson
     const docSnap = await getDoc(docRef);
     if (docSnap.exists() && docSnap.data().role === 'delivery') {
       const data = docSnap.data();
+      const statusMap = {
+        'pending': 'Pendiente',
+        'approved': 'Activo',
+        'rejected': 'Rechazado',
+      }
       return { 
         id: docSnap.id,
         name: data.name || '',
         email: data.email || '',
         vehicle: data.vehicle || 'No especificado',
         zone: data.zone || 'No asignada',
-        status: data.status === 'pending' ? 'Pendiente' : data.status === 'approved' ? 'Activo' : data.status === 'rejected' ? 'Rechazado' : 'Inactivo',
+        status: statusMap[data.status as keyof typeof statusMap] || 'Inactivo',
       };
     } else {
       console.log(`No delivery person found with id: ${id}`);

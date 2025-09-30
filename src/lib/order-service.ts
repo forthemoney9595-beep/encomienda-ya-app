@@ -92,20 +92,12 @@ export async function createOrder(
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
 
+    const userDoc = await getDoc(doc(db, 'users', userId));
     let customerName = shippingInfo.name;
-    if (userId.startsWith('proto-')) {
-        // Find the prototype user by UID to get their name
-        const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
-        if (protoUser) {
-            customerName = protoUser.name;
-        }
-    } else {
-        // For real users, fetch from Firestore
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-             customerName = userDoc.data().name;
-        }
+    if (userDoc.exists()) {
+         customerName = userDoc.data().name;
     }
+
 
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,

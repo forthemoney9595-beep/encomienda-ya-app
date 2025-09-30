@@ -43,6 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     const fetchUserProfile = async (firebaseUser: FirebaseUser | null, prototypeEmail?: string | null) => {
+        let profileToSet: UserProfile | null = null;
         if (firebaseUser) {
             sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
             const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -50,32 +51,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (userDoc.exists()) {
                 const userData = userDoc.data();
-                let profile: UserProfile = {
+                 profileToSet = {
                     uid: firebaseUser.uid,
                     email: firebaseUser.email!,
                     ...userData
                 } as UserProfile;
                 
-                if (profile.role === 'store') {
+                if (profileToSet.role === 'store') {
                     const storesRef = collection(db, 'stores');
                     const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
                     const querySnapshot = await getDocs(q);
                     if (!querySnapshot.empty) {
-                        profile.storeId = querySnapshot.docs[0].id;
+                        profileToSet.storeId = querySnapshot.docs[0].id;
                     }
                 }
-                setUser(profile);
-            } else {
-                setUser(null); // User exists in Auth but not in Firestore profiles
             }
-        } else if (prototypeEmail && prototypeUsers[prototypeEmail]) {
-            // For prototype users, we trust the placeholder data completely.
-            // No need to query the database.
-            const protoUser = prototypeUsers[prototypeEmail];
-            setUser(protoUser);
-        } else {
-            setUser(null);
+        } else if (prototypeEmail) {
+            const userQuery = query(collection(db, "users"), where("email", "==", prototypeEmail));
+            const querySnapshot = await getDocs(userQuery);
+            if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0];
+                const userData = userDoc.data();
+                profileToSet = {
+                    uid: userDoc.id,
+                    ...userData
+                } as UserProfile;
+
+                if (profileToSet.role === 'store') {
+                     const storesRef = collection(db, 'stores');
+                    const q = query(storesRef, where('ownerId', '==', userDoc.id));
+                    const storeQuerySnapshot = await getDocs(q);
+                    if (!storeQuerySnapshot.empty) {
+                        profileToSet.storeId = storeQuerySnapshot.docs[0].id;
+                    }
+                }
+            }
         }
+        
+        setUser(profileToSet);
         setLoading(false);
     }
 

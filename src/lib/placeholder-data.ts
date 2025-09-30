@@ -36,11 +36,11 @@ export type UserProfile = {
     [key: string]: any;
 }
 
-export const prototypeUsers: Record<string, UserProfile> = {
-    'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
-    'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-id', storeName: 'Tienda de Prueba IA' },
-    'repartidor@test.com': { uid: 'proto-delivery', name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery', status: 'approved' },
-    'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
+export const prototypeUsers: Record<string, Omit<UserProfile, 'uid' | 'storeId'>> = {
+    'admin@test.com': { name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
+    'tienda@test.com': { name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store' },
+    'repartidor@test.com': { name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
+    'comprador@test.com': { name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
 };
 
 
