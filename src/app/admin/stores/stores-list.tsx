@@ -11,6 +11,7 @@ import { updateStoreStatus } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 interface StoresListProps {
   initialStores: Store[];
@@ -18,7 +19,7 @@ interface StoresListProps {
 
 export function StoresList({ initialStores }: StoresListProps) {
   const { toast } = useToast();
-  const [stores, setStores] = useState<Store[]>(initialStores);
+  const router = useRouter();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
@@ -29,12 +30,8 @@ export function StoresList({ initialStores }: StoresListProps) {
         title: '¡Éxito!',
         description: `La tienda ha sido marcada como ${status.toLowerCase()}.`,
       });
-      // Update local state to immediately reflect the change
-      setStores(currentStores =>
-        currentStores.map(s =>
-          s.id === storeId ? { ...s, status } : s
-        )
-      );
+      // Instead of updating local state, we refresh the server data.
+      router.refresh();
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -81,7 +78,7 @@ export function StoresList({ initialStores }: StoresListProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {stores.map((store) => (
+            {initialStores.map((store) => (
               <TableRow key={store.id}>
                 <TableCell className="hidden sm:table-cell">
                   <Image
