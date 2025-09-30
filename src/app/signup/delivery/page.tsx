@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { createUserProfile } from '@/lib/user';
+import { cn } from '@/lib/utils';
+import { Bike, Car, Motorcycle } from 'lucide-react';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -123,36 +124,35 @@ export default function SignupDeliveryPage() {
                   <FormItem className="space-y-3">
                     <FormLabel>Tipo de Vehículo</FormLabel>
                     <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        className="flex flex-col space-y-1"
-                      >
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="motocicleta" />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            Motocicleta
-                          </FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="automovil" />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            Automóvil
-                          </FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="bicicleta" />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            Bicicleta
-                          </FormLabel>
-                        </FormItem>
-                      </RadioGroup>
+                        <div className="grid grid-cols-3 gap-2">
+                            <Button
+                                type="button"
+                                variant={field.value === 'motocicleta' ? 'secondary' : 'outline'}
+                                onClick={() => field.onChange('motocicleta')}
+                                className="flex-col h-16"
+                            >
+                                <Motorcycle className="mb-1" />
+                                Motocicleta
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={field.value === 'automovil' ? 'secondary' : 'outline'}
+                                onClick={() => field.onChange('automovil')}
+                                className="flex-col h-16"
+                            >
+                                <Car className="mb-1" />
+                                Automóvil
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={field.value === 'bicicleta' ? 'secondary' : 'outline'}
+                                onClick={() => field.onChange('bicicleta')}
+                                className="flex-col h-16"
+                            >
+                                <Bike className="mb-1" />
+                                Bicicleta
+                            </Button>
+                        </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
