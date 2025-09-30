@@ -12,7 +12,7 @@ import type { Order } from '@/lib/order-service';
 import { getOrdersByStore } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getPrototypeOrdersByStore } from '@/lib/placeholder-data';
+import { getPrototypeOrders } from '@/lib/placeholder-data';
 
 const getBadgeVariant = (status: string) => {
     switch (status) {
@@ -52,9 +52,11 @@ export default function StoreOrdersView() {
             setLoading(true);
             let storeOrders: Order[] = [];
             
-            // This now correctly fetches from the session-aware functions
             if (user.uid.startsWith('proto-')) {
-                 storeOrders = getPrototypeOrdersByStore(user.storeId)
+                 // For prototype, get all orders from session and filter them
+                 const allPrototypeOrders = getPrototypeOrders();
+                 storeOrders = allPrototypeOrders
+                    .filter(o => o.storeId === user.storeId)
                     .map(o => ({...o, createdAt: new Date(o.createdAt)}));
             } else {
                 storeOrders = await getOrdersByStore(user.storeId!);
@@ -66,8 +68,6 @@ export default function StoreOrdersView() {
         };
 
         fetchOrders();
-        // Re-running this effect when the user or client status changes is enough.
-        // Next.js router state is not a reliable dependency for data fetching in this case.
     }, [user, authLoading, isClient]);
 
     const handleRowClick = (orderId: string) => {

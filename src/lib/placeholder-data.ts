@@ -122,10 +122,11 @@ const initialPrototypeOrders: PrototypeOrder[] = [
 ];
 
 
-// Gets the current list of orders from session storage.
-// If empty, it seeds it with the initial data.
+// This is the single source of truth for prototype orders.
+// It reads from session storage, and if it's empty, initializes it.
 function getPrototypeOrdersFromSession(): PrototypeOrder[] {
     if (typeof window === 'undefined') {
+        // On the server, always return the initial static data.
         return initialPrototypeOrders;
     }
     
@@ -146,6 +147,7 @@ function getPrototypeOrdersFromSession(): PrototypeOrder[] {
     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
     return initialPrototypeOrders;
 }
+
 
 // Public function to get all prototype orders.
 // Safe to call from both server and client.

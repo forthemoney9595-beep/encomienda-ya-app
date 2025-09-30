@@ -9,8 +9,6 @@ import { getOrderById, Order } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
-import { geocodeAddress } from '@/ai/flows/geocode-address';
-import { OrderMap } from './order-map';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -68,8 +66,6 @@ export default function OrderTrackingPage() {
   const orderId = params.orderId as string;
   
   const [order, setOrder] = useState<Order | null>(null);
-  const [storeCoords, setStoreCoords] = useState<{lat: number, lon: number} | null>(null);
-  const [customerCoords, setCustomerCoords] = useState<{lat: number, lon: number} | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -81,22 +77,9 @@ export default function OrderTrackingPage() {
       
       if (!orderData) {
         notFound();
+        return;
       }
       setOrder(orderData);
-      
-      try {
-        const [sCoords, cCoords] = await Promise.all([
-          geocodeAddress({ address: orderData.storeAddress! }),
-          geocodeAddress({ address: orderData.shippingAddress.address })
-        ]);
-        setStoreCoords(sCoords);
-        setCustomerCoords(cCoords);
-      } catch (err) {
-        console.error("Geocoding failed, using fallbacks for prototype", err);
-        setStoreCoords({ lat: 40.7128, lon: -74.0060 });
-        setCustomerCoords({ lat: 40.7580, lon: -73.9855 });
-      }
-
       setLoading(false);
     };
 
@@ -104,7 +87,7 @@ export default function OrderTrackingPage() {
   }, [orderId]);
 
 
-  if (loading || !order || !storeCoords || !customerCoords) {
+  if (loading || !order) {
     return <OrderPageSkeleton />;
   }
   
@@ -114,28 +97,20 @@ export default function OrderTrackingPage() {
         title={`Pedido #${order.id.substring(0, 7)}`} 
         description={`Realizado el ${format(order.createdAt, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`} 
       />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
-            <Card className='h-[600px] flex flex-col'>
-                <CardHeader>
-                  <CardTitle>Seguimiento del Pedido</CardTitle>
-                  <CardDescription>Tu pedido de <span className="font-semibold text-primary">{order.storeName}</span> está actualmente: <span className="font-bold text-primary">{order.status}</span></CardDescription>
-                </CardHeader>
-                <CardContent className='flex-grow'>
-                 <OrderMap 
-                    orderStatus={order.status}
-                    storeCoords={storeCoords}
-                    customerCoords={customerCoords}
-                 />
-                </CardContent>
-            </Card>
-        </div>
-         <div className="md:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="md:col-span-1">
             <Card>
                 <CardHeader>
                     <CardTitle>Resumen del Pedido</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    <CardDescription>
+                        Pedido de <span className="font-semibold text-primary">{order.storeName}</span>
+                    </CardDescription>
+                     <CardDescription>
+                       Estado actual: <span className="font-bold text-primary">{order.status}</span>
+                    </CardDescription>
+                    <Separator/>
                     {order.items.map(item => (
                         <div key={item.id} className="flex justify-between items-center">
                             <div>
@@ -173,6 +148,14 @@ export default function OrderTrackingPage() {
                      )}
                 </CardContent>
                  <OrderStatusUpdater order={order} />
+            </Card>
+        </div>
+        <div className="md:col-span-1">
+            {/* Placeholder for map or other content */}
+             <Card className='min-h-[400px] flex items-center justify-center bg-muted/50'>
+                <CardContent className='text-center text-muted-foreground'>
+                    <p>(Área de mapa deshabilitada temporalmente)</p>
+                </CardContent>
             </Card>
         </div>
       </div>

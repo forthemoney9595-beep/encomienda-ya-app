@@ -3,7 +3,6 @@
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders, getPrototypeOrdersByStore, getAvailablePrototypeOrdersForDelivery, getPrototypeOrdersByDeliveryPerson, updatePrototypeOrder } from './placeholder-data';
-import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem extends Product {
@@ -124,17 +123,9 @@ export async function createOrder(
         customerName = userDoc.data().name;
     }
 
-    // Geocode addresses
-    const [storeCoords, customerCoords] = await Promise.all([
-        geocodeAddress({ address: store.address }),
-        geocodeAddress({ address: shippingInfo.address })
-    ]);
-
-    // Calculate delivery fee: $2 base + $1.5 per km
-    const distanceKm = (storeCoords?.lat && customerCoords?.lat) 
-        ? getDistanceFromLatLonInKm(storeCoords.lat, storeCoords.lon, customerCoords.lat, customerCoords.lon) 
-        : -1;
-    const deliveryFee = distanceKm >= 0 ? 2 + (distanceKm * 1.5) : 5.00; // fallback flat fee
+    // SIMULATED Geocode addresses for fee calculation
+    const distanceKm = 1 + Math.random() * 10; // Simulate distance between 1-11 km
+    const deliveryFee = 2 + (distanceKm * 1.5); // $2 base + $1.5 per km
 
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
@@ -192,8 +183,7 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 
 export async function getOrdersByStore(storeId: string): Promise<Order[]> {
     if (storeId.startsWith('proto-')) {
-        const protoOrders = getPrototypeOrdersByStore(storeId);
-         return protoOrders
+        return getPrototypeOrdersByStore(storeId)
             .map(o => ({...o, createdAt: new Date(o.createdAt)}))
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     }
