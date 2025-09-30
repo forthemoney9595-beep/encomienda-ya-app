@@ -26,6 +26,7 @@ type ComboboxProps = {
   placeholder?: string
   emptyMessage?: string
   className?: string
+  disabled?: boolean
 }
 
 export function Combobox({
@@ -35,6 +36,7 @@ export function Combobox({
   placeholder = "Select an option...",
   emptyMessage = "No options found.",
   className,
+  disabled
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -46,6 +48,7 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           className={cn("w-full justify-between", className)}
+          disabled={disabled}
         >
           {value
             ? options.find((option) => option.value.toLowerCase() === value.toLowerCase())?.label
@@ -64,7 +67,7 @@ export function Combobox({
                   key={option.value}
                   value={option.value}
                   onSelect={(currentValue) => {
-                    onChange(currentValue === value ? "" : currentValue)
+                    onChange(currentValue.toLowerCase() === value?.toLowerCase() ? "" : currentValue)
                     setOpen(false)
                   }}
                 >
