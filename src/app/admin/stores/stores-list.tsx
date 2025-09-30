@@ -14,10 +14,10 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 
 interface StoresListProps {
-  initialStores: Store[];
+  stores: Store[];
 }
 
-export function StoresList({ initialStores }: StoresListProps) {
+export function StoresList({ stores }: StoresListProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
@@ -30,7 +30,6 @@ export function StoresList({ initialStores }: StoresListProps) {
         title: '¡Éxito!',
         description: `La tienda ha sido marcada como ${status.toLowerCase()}.`,
       });
-      // Instead of updating local state, we refresh the server data.
       router.refresh();
     } catch (error) {
       toast({
@@ -78,7 +77,7 @@ export function StoresList({ initialStores }: StoresListProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {initialStores.map((store) => (
+            {stores.map((store) => (
               <TableRow key={store.id}>
                 <TableCell className="hidden sm:table-cell">
                   <Image

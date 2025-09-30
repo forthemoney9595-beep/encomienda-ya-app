@@ -1,18 +1,33 @@
-'use server';
+'use client';
 
+import { useState, useEffect } from 'react';
 import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 import { getStores } from '@/lib/data-service';
 import { StoresList } from './stores-list';
-import { auth } from '@/lib/firebase';
+import { useAuth } from '@/context/auth-context';
+import type { Store } from '@/lib/placeholder-data';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// Nota: En una aplicación real, protegerías esta ruta con middleware.
-// Para este prototipo, asumimos que el usuario es un administrador si puede navegar aquí.
+export default function AdminStoresPage() {
+  const { user, loading: authLoading } = useAuth();
+  const [stores, setStores] = useState<Store[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default async function AdminStoresPage() {
-  const isPrototype = auth.currentUser?.uid.startsWith('proto-') ?? false;
-  const stores = await getStores(true, isPrototype); // Pasar true para obtener todas las tiendas (incluidas las pendientes)
+  useEffect(() => {
+    if (authLoading) return;
+
+    const fetchStores = async () => {
+      setLoading(true);
+      const isPrototype = user?.uid.startsWith('proto-') ?? false;
+      const fetchedStores = await getStores(true, isPrototype);
+      setStores(fetchedStores);
+      setLoading(false);
+    };
+
+    fetchStores();
+  }, [user, authLoading]);
 
   return (
     <div className="container mx-auto">
@@ -22,7 +37,17 @@ export default async function AdminStoresPage() {
           Agregar Nueva Tienda
         </Button>
       </PageHeader>
-      <StoresList initialStores={stores} />
+      {loading ? (
+        <div className="border rounded-lg p-4">
+            <Skeleton className="h-8 w-1/4 mb-4" />
+            <div className="space-y-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+            </div>
+        </div>
+      ) : (
+        <StoresList stores={stores} />
+      )}
     </div>
   );
 }
