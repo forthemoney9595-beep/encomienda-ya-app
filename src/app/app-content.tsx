@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarFooter } from '@/components/ui/sidebar';
 import { MainNav } from '@/components/main-nav';
@@ -18,6 +19,21 @@ import { useRouter } from 'next/navigation';
 export function AppContent({ children }: { children: React.ReactNode }) {
     const { user, loading, isAdmin, logoutForPrototype } = useAuth();
     const router = useRouter();
+
+    useEffect(() => {
+        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            if (event.reason && typeof event.reason.message === 'string' && event.reason.message.includes('MetaMask')) {
+                console.warn('Se detectó y se ignoró un error no crítico de MetaMask.', event.reason);
+                event.preventDefault();
+            }
+        };
+
+        window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+        return () => {
+            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+        };
+    }, []);
 
     const handleSignOut = async () => {
         try {
