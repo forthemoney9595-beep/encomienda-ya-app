@@ -134,9 +134,6 @@ export default function LoginPage() {
                         ))}
                     </TableBody>
                 </Table>
-                <p className="text-xs text-muted-foreground mt-4">
-                    Nota: Debes registrar estas cuentas primero a través de la página de <Link href="/signup" className="underline">registro</Link> si aún no lo has hecho.
-                </p>
             </CardContent>
         </Card>
       </div>
