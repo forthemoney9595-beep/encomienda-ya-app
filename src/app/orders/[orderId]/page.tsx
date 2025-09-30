@@ -8,7 +8,6 @@ import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 import { OrderMap } from './order-map';
-import 'leaflet/dist/leaflet.css';
 
 export default async function OrderTrackingPage({ params }: { params: { orderId: string } }) {
   const order = await getOrderById(params.orderId);
