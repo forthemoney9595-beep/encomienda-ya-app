@@ -1,4 +1,5 @@
 
+
 import type { CartItem, Order, OrderStatus } from "./order-service";
 
 export type Store = {
@@ -79,6 +80,48 @@ const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
 export type PrototypeOrder = Omit<Order, 'createdAt'> & { createdAt: string };
 
 
+// Seed data for prototype orders to ensure the app is usable from the start.
+const initialPrototypeOrders: PrototypeOrder[] = [
+    {
+        id: 'proto-order-1',
+        userId: 'proto-buyer',
+        customerName: 'Comprador Proto',
+        items: [
+            { ...initialPrototypeProducts[0], quantity: 2 },
+            { ...initialPrototypeProducts[2], quantity: 2 }
+        ],
+        deliveryFee: 4.50,
+        total: (9.99 * 2) + (2.50 * 2) + 4.50,
+        status: 'Pedido Realizado',
+        createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 minutes ago
+        storeId: 'proto-store-id',
+        storeName: prototypeStore.name,
+        storeAddress: prototypeStore.address,
+        shippingAddress: { name: 'Comprador Proto', address: 'Calle Falsa 123' },
+        deliveryPersonId: null,
+        deliveryPersonName: null,
+    },
+    {
+        id: 'proto-order-2',
+        userId: 'some-other-user',
+        customerName: 'Juan Pérez',
+        items: [
+             { ...initialPrototypeProducts[1], quantity: 1 }
+        ],
+        deliveryFee: 6.00,
+        total: 12.99 + 6.00,
+        status: 'En preparación',
+        createdAt: new Date(Date.now() - 1000 * 60 * 20).toISOString(), // 20 minutes ago
+        storeId: 'proto-store-id',
+        storeName: prototypeStore.name,
+        storeAddress: prototypeStore.address,
+        shippingAddress: { name: 'Juan Pérez', address: 'Avenida Siempre Viva 742' },
+        deliveryPersonId: null,
+        deliveryPersonName: null,
+    }
+];
+
+
 export function savePrototypeOrder(order: PrototypeOrder) {
     if (typeof window === 'undefined') return;
     const existingOrders = getPrototypeOrders();
@@ -89,7 +132,12 @@ export function savePrototypeOrder(order: PrototypeOrder) {
 export function getPrototypeOrders(): PrototypeOrder[] {
     if (typeof window === 'undefined') return [];
     const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-    return ordersJson ? JSON.parse(ordersJson) : [];
+    if (ordersJson) {
+        return JSON.parse(ordersJson);
+    }
+    // If no orders in session storage, initialize with seed data
+    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+    return initialPrototypeOrders;
 }
 
 export function getPrototypeOrdersByStore(storeId: string): PrototypeOrder[] {
