@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -34,35 +35,40 @@ export default function StoreOrdersView() {
     const { user, loading: authLoading } = useAuth();
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
-        if (authLoading) return;
-        if (!user || user.role !== 'store' || !user.storeId) return;
+        setIsClient(true);
+    }, []);
+
+    useEffect(() => {
+        if (!isClient || authLoading) return;
+        if (!user || user.role !== 'store' || !user.storeId) {
+            setLoading(false);
+            return;
+        };
 
         const fetchOrders = async () => {
             setLoading(true);
             let storeOrders: Order[] = [];
             if (user.uid.startsWith('proto-')) {
-                // For prototype users, get orders from session storage
                 storeOrders = getPrototypeOrdersByStore(user.storeId!).map(o => ({...o, createdAt: new Date(o.createdAt)}));
             } else {
-                // For real users, fetch from Firestore
                 storeOrders = await getOrdersByStore(user.storeId!);
             }
-            // Sort client-side to ensure consistent order
             storeOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
             setOrders(storeOrders);
             setLoading(false);
         };
 
         fetchOrders();
-    }, [user, authLoading]);
+    }, [user, authLoading, isClient]);
 
     const handleRowClick = (orderId: string) => {
         router.push(`/orders/${orderId}`);
     };
 
-    if (loading) {
+    if (loading || !isClient) {
         return (
             <Card>
                 <CardHeader>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,9 +15,14 @@ export default function AdminStoresPage() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    if (authLoading) return;
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient || authLoading) return;
 
     const fetchStores = async () => {
       setLoading(true);
@@ -27,7 +33,7 @@ export default function AdminStoresPage() {
     };
 
     fetchStores();
-  }, [user, authLoading]);
+  }, [user, authLoading, isClient]);
 
   return (
     <div className="container mx-auto">
@@ -37,7 +43,7 @@ export default function AdminStoresPage() {
           Agregar Nueva Tienda
         </Button>
       </PageHeader>
-      {loading ? (
+      {loading || !isClient ? (
         <div className="border rounded-lg p-4">
             <Skeleton className="h-8 w-1/4 mb-4" />
             <div className="space-y-2">

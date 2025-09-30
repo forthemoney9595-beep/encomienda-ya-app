@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -28,40 +29,35 @@ function StoreCardSkeleton() {
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    // This effect ensures we don't try to fetch data until auth state is resolved.
-    if (authLoading) {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient || authLoading) {
       return;
     }
-    setInitialLoading(false); // Auth is resolved, we can now show the main content.
 
     const fetchStores = async () => {
-      setDataLoading(true);
+      setLoading(true);
       const isPrototype = user?.uid.startsWith('proto-') ?? false;
       const fetchedStores = await getStores(false, isPrototype);
       setStores(fetchedStores.filter(s => s.status === 'Aprobado'));
-      setDataLoading(false);
+      setLoading(false);
     };
 
     fetchStores();
-  }, [user, authLoading]);
+  }, [user, authLoading, isClient]);
 
   return (
     <div className="container mx-auto">
-      {initialLoading ? (
-         <div className="mb-6">
-            <Skeleton className="h-9 w-2/5" />
-            <Skeleton className="h-5 w-3/5 mt-2" />
-         </div>
-      ) : (
-        <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
-      )}
+      <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
       
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {(initialLoading || dataLoading) ? (
+        {loading || !isClient ? (
           <>
             <StoreCardSkeleton />
             <StoreCardSkeleton />

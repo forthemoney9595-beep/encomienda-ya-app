@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -12,9 +13,14 @@ export default function AdminDeliveryPage() {
   const { user, loading: authLoading } = useAuth();
   const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    if (authLoading) return;
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient || authLoading) return;
 
     const fetchPersonnel = async () => {
       setLoading(true);
@@ -25,12 +31,12 @@ export default function AdminDeliveryPage() {
     };
 
     fetchPersonnel();
-  }, [user, authLoading]);
+  }, [user, authLoading, isClient]);
 
   return (
     <div className="container mx-auto">
       <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto." />
-      {loading ? (
+      {loading || !isClient ? (
          <div className="border rounded-lg p-4">
             <Skeleton className="h-8 w-1/4 mb-4" />
             <div className="space-y-2">
