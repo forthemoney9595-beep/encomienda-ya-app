@@ -5,24 +5,29 @@ import type { Product } from '@/lib/placeholder-data';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
+import { useAuth } from '@/context/auth-context';
 
 interface ProductListProps {
     products: Product[];
     productCategories: string[];
+    ownerId: string;
 }
 
-export function ProductList({ products, productCategories }: ProductListProps) {
+export function ProductList({ products, productCategories, ownerId }: ProductListProps) {
     const { addToCart, storeId: cartStoreId, clearCart } = useCart();
     const { toast } = useToast();
     const params = useParams();
     const currentStoreId = params.storeId as string;
+    const { user } = useAuth();
+    
+    const isOwner = user?.uid === ownerId;
 
     const [openAlert, setOpenAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
@@ -84,10 +89,23 @@ export function ProductList({ products, productCategories }: ProductListProps) {
                                         <p className="text-sm text-muted-foreground">{product.description}</p>
                                         <p className="font-semibold">${product.price.toFixed(2)}</p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)}>
-                                    <ShoppingCart className="mr-2 h-4 w-4" />
-                                    Añadir
-                                    </Button>
+                                    {isOwner ? (
+                                        <div className="flex gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => alert('Próximamente: Editar')}>
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                Editar
+                                            </Button>
+                                            <Button variant="destructive" size="sm" onClick={() => alert('Próximamente: Eliminar')}>
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Eliminar
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)}>
+                                            <ShoppingCart className="mr-2 h-4 w-4" />
+                                            Añadir
+                                        </Button>
+                                    )}
                                 </CardContent>
                             </Card>
                         ))}
@@ -97,6 +115,7 @@ export function ProductList({ products, productCategories }: ProductListProps) {
                 {products.length === 0 && (
                     <div className="text-center text-muted-foreground py-10">
                         <p>Esta tienda aún no tiene productos.</p>
+                         {isOwner && <p>¡Añade tu primer artículo usando el botón de arriba!</p>}
                     </div>
                 )}
             </Tabs>

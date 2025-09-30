@@ -89,6 +89,8 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
     }
   }
 
+  const categoryOptions = productCategories.map(cat => ({ value: cat, label: cat }));
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!isProcessing) setOpen(o)}}>
       <DialogTrigger asChild>
@@ -140,7 +142,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                    <FormItem className="flex flex-col">
                     <FormLabel>Categoría</FormLabel>
                     <Combobox
-                        options={productCategories.map(cat => ({ value: cat, label: cat }))}
+                        options={categoryOptions}
                         value={field.value}
                         onChange={(value) => {
                             form.setValue('category', value, { shouldValidate: true });
@@ -148,6 +150,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                         placeholder="Selecciona o crea una categoría"
                         emptyMessage="No se encontraron categorías."
                         disabled={isProcessing}
+                        creatable
                     />
                     <FormMessage />
                   </FormItem>
