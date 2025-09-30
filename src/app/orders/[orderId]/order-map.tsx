@@ -1,3 +1,4 @@
+
 'use client';
 
 import 'leaflet/dist/leaflet.css';
@@ -25,7 +26,7 @@ const deliveryPersonIcon = new L.Icon({
 });
 
 const storeIcon = new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveDoiMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLXN0b3JlIj48cGF0aCBkPSJtMiA3IDQtMS4yQTYgNiAwIDAgMSAxMSA4djEwYy0uOSAwLTEuNjEuMy0yLjI0LjgzLS41My40My0xLjExIDEuMzQtMS4xMSAyLjE3IDAgLjg0LjU4IDEuNzQgMS4xMSAyLjE3LjYzLjUzIDEuMzUgLjgzIDIuMjQuODNzMS42MS0uMyAyLjI0LS44M2MxLjEyLS45MSAxLjMxLTIuNjYgLjQzLTMuOTgtLjE1ləş-.23-LjMwLS40Mi0uNDgtLjU5QTE1IDkuNSAwIDAgMCAxMyA5di43YTYgNiAwIDAgMCA1LjIgMS42N0w2MS45NCAyMnoiLz48cGF0aCBkPSJtMTYgMjItMSA0LTQgMVY4YTQgNCAwIDAgMSAuOS0yLjQ4Ii8+PC9zdmc+',
+    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLXN0b3JlIj48cGF0aCBkPSJtMiA3IDQtMS4yQTYgNiAwIDAgMSAxMSA4djEwYy0uOSAwLTEuNjEuMy0yLjI0LjgzLS41My40My0xLjExIDEuMzQtMS4xMSAyLjE3IDAgLjg0LjU4IDEuNzQgMS4xMSAyLjE3LjYzLjUzIDEuMzUgLjgzIDIuMjQuODNzMS42MS0uMyAyLjI0LS44M2MxLjEyLS45MSAxLjMxLTIuNjYgLjQzLTMuOTgtLjE1ləş-.23-LjMwLS40Mi0uNDgtLjU5QTE1IDkuNSAwIDAgMCAxMyA5di43YTYgNiAwIDAgMCA1LjIgMS42N0w2MS45NCAyMnoiLz48cGF0aCBkPSJtMTYgMjItMSA0LTQgMVY4YTQgNCAwIDAgMSAuOS0yLjQ4Ii8+PC9zdmc+',
     iconSize: [30, 30],
     iconAnchor: [15, 30],
     popupAnchor: [0, -32]
@@ -45,11 +46,12 @@ interface OrderMapProps {
   customerCoords: { lat: number, lon: number };
 }
 
-function MapUpdater({ center }: { center: L.LatLngExpression }) {
+function MapUpdater({ center, bounds }: { center: L.LatLngExpression, bounds: L.LatLngBounds }) {
     const map = useMap();
     useEffect(() => {
         map.setView(center, map.getZoom());
-    }, [center, map]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }, [center, bounds, map]);
     return null;
 }
 
@@ -68,7 +70,11 @@ export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapP
   const center = bounds.getCenter();
 
   useEffect(() => {
-    if (orderStatus !== 'En reparto') return;
+    // Reset driver position if status is not 'En reparto'
+    if (orderStatus !== 'En reparto') {
+        setDriverPosition({ lat: storeCoords.lat, lng: storeCoords.lon });
+        return;
+    }
 
     const totalSteps = 100; // Number of steps for the simulation
     const duration = 60000; // 1 minute in milliseconds
@@ -78,6 +84,8 @@ export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapP
     const lonStep = (customerCoords.lon - storeCoords.lon) / totalSteps;
     
     let currentStep = 0;
+    // Ensure the simulation starts from the store
+    setDriverPosition({ lat: storeCoords.lat, lng: storeCoords.lon });
 
     const interval = setInterval(() => {
         if (currentStep < totalSteps) {
@@ -101,21 +109,22 @@ export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapP
   }
   
   const driverPos: L.LatLngExpression = [driverPosition.lat, driverPosition.lng];
+  const mapKey = `${storeCoords.lat}-${storeCoords.lon}-${customerCoords.lat}-${customerCoords.lon}`;
 
   return (
-      <MapContainer center={center} zoom={13} bounds={bounds} scrollWheelZoom={true} style={{ height: '100%', width: '100%', borderRadius: 'var(--radius)' }}>
+      <MapContainer key={mapKey} center={center} zoom={13} scrollWheelZoom={true} style={{ height: '100%', width: '100%', borderRadius: 'var(--radius)' }}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapUpdater center={center} />
+        <MapUpdater center={center} bounds={bounds} />
         <Marker position={storePos} icon={storeIcon}>
           <Popup>Punto de Recogida</Popup>
         </Marker>
         <Marker position={customerPos} icon={homeIcon}>
           <Popup>Tu Dirección</Popup>
         </Marker>
-        {orderStatus === 'En reparto' && (
+        {['En reparto', 'Entregado'].includes(orderStatus) && (
              <Marker position={driverPos} icon={deliveryPersonIcon}>
                 <Popup>Repartidor</Popup>
             </Marker>
@@ -123,3 +132,4 @@ export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapP
       </MapContainer>
   );
 }
+
