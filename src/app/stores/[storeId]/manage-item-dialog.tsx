@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -7,17 +6,20 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Edit } from "lucide-react";
+import { Loader2, PlusCircle, Edit, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
+import { generateProductImage } from "@/ai/flows/generate-product-image";
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
   category: z.string().min(1, "Por favor, especifica una categoría."),
+  imageUrl: z.string().url("Debe ser una URL válida.").optional().or(z.literal('')),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -25,13 +27,15 @@ type FormData = z.infer<typeof formSchema>;
 interface ManageItemDialogProps {
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
-    product: Product | null; // null for creating, product object for editing
-    onSave: (data: FormData, id?: string) => void;
+    product: Product | null;
+    onSave: (data: Product, id?: string) => void;
 }
 
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState("Guardando...");
   const isEditing = product !== null;
+  const { toast } = useToast();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -40,6 +44,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
       description: "",
       price: 0,
       category: "",
+      imageUrl: "",
     },
   });
 
@@ -51,6 +56,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
           description: product.description,
           price: product.price,
           category: product.category,
+          imageUrl: product.imageUrl || "",
         });
       } else {
         form.reset({
@@ -58,6 +64,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
           description: "",
           price: 0,
           category: "",
+          imageUrl: "",
         });
       }
     }
@@ -65,10 +72,49 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
 
   async function onSubmit(values: FormData) {
     setIsProcessing(true);
-    // This component is now 'dumb'. It just passes the data up.
-    onSave(values, product?.id);
-    setIsProcessing(false);
-    setIsOpen(false);
+
+    let finalImageUrl = values.imageUrl;
+
+    try {
+      if (!values.imageUrl && !isEditing) {
+        setProcessingMessage("Generando imagen con IA...");
+        const imageResult = await generateProductImage({
+          productName: values.name,
+          productDescription: values.description,
+        });
+        finalImageUrl = imageResult.imageUrl;
+        toast({
+          title: "¡Imagen Generada!",
+          description: "La IA ha creado una imagen para tu producto.",
+        });
+      }
+      
+      setProcessingMessage("Guardando artículo...");
+
+      const productData: Product = {
+        id: product?.id || `new-${Date.now()}`,
+        ...values,
+        imageUrl: finalImageUrl,
+      };
+
+      onSave(productData, product?.id);
+
+      toast({
+        title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Guardado!",
+        description: `"${values.name}" se ha guardado correctamente.`,
+      });
+
+    } catch (error) {
+        console.error("Error al guardar el producto:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al Guardar",
+            description: "No se pudo generar la imagen o guardar el producto. Por favor, inténtalo de nuevo.",
+        });
+    } finally {
+        setIsProcessing(false);
+        setIsOpen(false);
+    }
   }
 
   return (
@@ -79,7 +125,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellene los detalles del producto.
+                Rellene los detalles del producto. Si no proporciona una URL de imagen, la IA generará una por usted.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -116,7 +162,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
                     <FormControl>
-                       <Input placeholder="Ej. Comida Rápida, Bebidas" {...field} disabled={isProcessing} />
+                       <Input placeholder="Ej. Comida Rápida" {...field} disabled={isProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -135,13 +181,26 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="imageUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL de la Imagen (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://ejemplo.com/imagen.jpg" {...field} disabled={isProcessing} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
             <DialogFooter>
               <Button type="submit" disabled={isProcessing}>
                 {isProcessing ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Guardando...
+                    {processingMessage}
                    </>
                 ) : (
                   <>
@@ -157,5 +216,3 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
     </Dialog>
   );
 }
-
-    
