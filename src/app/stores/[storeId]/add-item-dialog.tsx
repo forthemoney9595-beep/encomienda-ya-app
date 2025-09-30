@@ -144,9 +144,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                     <Combobox
                         options={categoryOptions}
                         value={field.value}
-                        onChange={(value) => {
-                            form.setValue('category', value, { shouldValidate: true });
-                        }}
+                        onChange={field.onChange}
                         placeholder="Selecciona o crea una categoría"
                         emptyMessage="No se encontraron categorías."
                         disabled={isProcessing}
