@@ -1,3 +1,4 @@
+'use server';
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
@@ -11,13 +12,14 @@ import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-revie
  * @param isPrototype - If true, ensures prototype data is included.
  */
 export async function getStores(all: boolean = false, isPrototype: boolean = false): Promise<Store[]> {
+  let stores: Store[] = [];
   try {
     const storesCollectionRef = collection(db, 'stores');
     const q = all ? query(storesCollectionRef) : query(storesCollectionRef, where("status", "==", "Aprobado"));
     
     const querySnapshot = await getDocs(q);
     
-    const stores: Store[] = querySnapshot.docs.map(doc => {
+    stores = querySnapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -32,20 +34,19 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
       };
     });
 
-    if (isPrototype) {
-        if (!stores.find(s => s.id === prototypeStore.id)) {
-            stores.unshift(prototypeStore);
-        }
-    }
-    
-    return stores;
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
-     if (isPrototype) {
-        return [prototypeStore];
-    }
-    return [];
+    // If fetching fails, we can still proceed with prototype data if requested.
   }
+
+  if (isPrototype) {
+    // Ensure prototype store is included and not duplicated
+    if (!stores.find(s => s.id === prototypeStore.id)) {
+        stores.unshift(prototypeStore);
+    }
+  }
+  
+  return stores;
 }
 
 
