@@ -45,7 +45,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
       name: "",
       description: "",
       price: 0,
-      category: "",
+      category: "Comida",
       imageUrl: "",
     },
   });
@@ -65,7 +65,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
           name: "",
           description: "",
           price: 0,
-          category: "",
+          category: "Comida",
           imageUrl: "",
         });
       }
@@ -76,22 +76,25 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
     setIsProcessing(true);
 
     try {
-        let imageUrl = values.imageUrl;
-        if (!imageUrl) {
+        let finalImageUrl = values.imageUrl;
+        if (!finalImageUrl) {
             setStatusMessage('Generando imagen del producto...');
             const imageResult = await generateProductImage({
                 productName: values.name,
                 productDescription: values.description,
             });
-            imageUrl = imageResult.imageUrl;
+            finalImageUrl = imageResult.imageUrl;
         }
 
         setStatusMessage('Guardando producto...');
       
         const productData: Product = {
           id: product?.id || `new-${Date.now()}-${Math.random()}`,
-          ...values,
-          imageUrl: imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
+          name: values.name,
+          description: values.description,
+          price: values.price,
+          category: values.category,
+          imageUrl: finalImageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
         };
 
         onSave(productData);
@@ -154,7 +157,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isProcessing}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecciona una categoría" />
