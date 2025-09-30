@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { OrderMap } from './order-map';
 
 function OrderPageSkeleton() {
     return (
@@ -69,20 +70,10 @@ export default function OrderTrackingPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (authLoading) return; // Wait for auth to be ready
+    if (authLoading || prototypeLoading) return; // Wait for auth and data to be ready
     if (!orderId || !user) return;
 
-    const fetchOrderData = async () => {
-        setLoading(true);
-        let orderData: Order | null | undefined = null;
-
-        if (user.uid.startsWith('proto-')) {
-            orderData = getOrderById(orderId);
-        } else {
-            // Placeholder for real DB fetch if needed in future
-            // For now, prototype context handles it all.
-            console.warn("Real DB fetch for getOrderById not implemented for non-prototype users in this component yet.");
-        }
+    const orderData = getOrderById(orderId);
       
       if (!orderData) {
         console.warn(`Pedido no encontrado (ID: ${orderId}), redirigiendo a /orders.`);
@@ -104,13 +95,6 @@ export default function OrderTrackingPage() {
 
       setOrder(orderData);
       setLoading(false);
-    };
-
-    if (user.uid.startsWith('proto-') && !prototypeLoading) {
-      fetchOrderData();
-    } else if (!user.uid.startsWith('proto-')) {
-       // Handle real user data fetching logic here if needed
-    }
 
   }, [orderId, user, authLoading, router, getOrderById, prototypeLoading]);
 
@@ -179,10 +163,18 @@ export default function OrderTrackingPage() {
             </Card>
         </div>
         <div className="md:col-span-1">
-             <Card className='min-h-[400px] flex items-center justify-center bg-muted/50'>
-                <CardContent className='text-center text-muted-foreground'>
-                    <p>(Área de mapa deshabilitada temporalmente)</p>
-                </CardContent>
+             <Card className='min-h-[400px]'>
+                {order.storeCoords && order.customerCoords ? (
+                    <OrderMap 
+                        orderStatus={order.status}
+                        storeCoords={order.storeCoords}
+                        customerCoords={order.customerCoords}
+                    />
+                ) : (
+                    <CardContent className='flex h-full items-center justify-center text-center text-muted-foreground'>
+                         <p>Las coordenadas para este pedido no están disponibles.</p>
+                    </CardContent>
+                )}
             </Card>
         </div>
       </div>

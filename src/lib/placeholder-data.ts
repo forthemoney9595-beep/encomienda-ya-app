@@ -89,9 +89,11 @@ export const initialPrototypeOrders: Order[] = [
         storeId: 'proto-store-id',
         storeName: prototypeStore.name,
         storeAddress: prototypeStore.address,
-        shippingAddress: { name: 'Comprador Proto', address: 'Calle Falsa 123' },
+        shippingAddress: { name: 'Comprador Proto', address: 'Calle Pizza 123' },
         deliveryPersonId: undefined,
         deliveryPersonName: undefined,
+        storeCoords: { lat: 34.0522, lon: -118.2437 }, // LA
+        customerCoords: { lat: 40.7128, lon: -74.0060 }, // NYC
     },
     {
         id: 'proto-order-2',
@@ -107,9 +109,11 @@ export const initialPrototypeOrders: Order[] = [
         storeId: 'proto-store-id',
         storeName: prototypeStore.name,
         storeAddress: prototypeStore.address,
-        shippingAddress: { name: 'Juan Pérez', address: 'Avenida Siempre Viva 742' },
+        shippingAddress: { name: 'Juan Pérez', address: 'Paseo Sushi 789' },
         deliveryPersonId: undefined,
         deliveryPersonName: undefined,
+        storeCoords: { lat: 34.0522, lon: -118.2437 }, // LA
+        customerCoords: { lat: 35.6895, lon: 139.6917 }, // Tokyo
     }
 ];
 
