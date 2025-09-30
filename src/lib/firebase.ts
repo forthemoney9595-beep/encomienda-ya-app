@@ -1,7 +1,6 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
-import { seedDatabase } from "./seeder";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -20,8 +19,6 @@ let db: Firestore;
 if (!getApps().length) {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
-    // Seed the database on initial startup, but only once.
-    seedDatabase(db).catch(console.error);
 } else {
     app = getApp();
     db = getFirestore(app);

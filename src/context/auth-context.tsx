@@ -33,37 +33,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const fetchUserProfile = async (firebaseUser: FirebaseUser | null) => {
-        setLoading(true);
-        if (firebaseUser) {
-             // Logic for real Firebase user
-            const userDocRef = doc(db, 'users', firebaseUser.uid);
-            const userDoc = await getDoc(userDocRef);
+    const fetchUserProfile = async (firebaseUser: FirebaseUser) => {
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
 
-            if (userDoc.exists()) {
-                const userData = userDoc.data();
-                const profileToSet: UserProfile = {
-                    uid: firebaseUser.uid,
-                    email: firebaseUser.email!,
-                    ...userData
-                } as UserProfile;
-                
-                if (profileToSet.role === 'store') {
-                    const storesRef = collection(db, 'stores');
-                    const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
-                    const querySnapshot = await getDocs(q);
-                    if (!querySnapshot.empty) {
-                        profileToSet.storeId = querySnapshot.docs[0].id;
-                    }
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const profileToSet: UserProfile = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email!,
+                ...userData
+            } as UserProfile;
+            
+            if (profileToSet.role === 'store') {
+                const storesRef = collection(db, 'stores');
+                const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    profileToSet.storeId = querySnapshot.docs[0].id;
                 }
-                setUser(profileToSet);
-            } else {
-                setUser(null);
             }
+            setUser(profileToSet);
         } else {
             setUser(null);
         }
-        setLoading(false);
     }
     
     const loginForPrototype = async (email: string) => {
@@ -90,12 +83,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
         if (prototypeEmail) {
             loginForPrototype(prototypeEmail).finally(() => setLoading(false));
-        } else {
-            const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-                await fetchUserProfile(firebaseUser);
-            });
-            return () => unsubscribe();
+            return;
         }
+
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+            if (firebaseUser) {
+                await fetchUserProfile(firebaseUser);
+            } else {
+                setUser(null);
+            }
+            setLoading(false);
+        });
+        return () => unsubscribe();
     }, []);
 
     const isAdmin = user?.role === 'admin';

@@ -1,17 +1,24 @@
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
-import { prototypeStore, prototypeProducts } from './placeholder-data';
+import { prototypeStore, prototypeProducts, prototypeUsers } from './placeholder-data';
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
 
+
+function isPrototypeMode() {
+    if (typeof window === 'undefined') return false;
+    return !!sessionStorage.getItem('prototypeUserEmail');
+}
 
 /**
  * Fetches all stores from the 'stores' collection in Firestore.
  */
 export async function getStores(): Promise<Store[]> {
+  const isProto = isPrototypeMode();
+
   try {
     const storesCollectionRef = collection(db, 'stores');
-    const q = query(storesCollectionRef);
+    const q = query(storesCollectionRef, where("status", "==", "Aprobado"));
     const querySnapshot = await getDocs(q);
     
     const stores: Store[] = querySnapshot.docs.map(doc => {
@@ -28,19 +35,17 @@ export async function getStores(): Promise<Store[]> {
         productCategories: data.productCategories || [data.category] || [],
       };
     });
-    
-    const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
-    if (prototypeUserEmail) {
+
+    if (isProto) {
         if (!stores.find(s => s.id === prototypeStore.id)) {
             stores.unshift(prototypeStore);
         }
     }
-
+    
     return stores;
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
-    const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
-    if (prototypeUserEmail) {
+     if (isProto) {
         return [prototypeStore];
     }
     return [];
@@ -53,7 +58,6 @@ export async function getStores(): Promise<Store[]> {
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(id: string): Promise<Store | null> {
-  // If asking for the prototype store, return it directly. This works on server and client.
   if (id === prototypeStore.id) {
     return prototypeStore;
   }
@@ -89,7 +93,6 @@ export async function getStoreById(id: string): Promise<Store | null> {
  * @param storeId The ID of the store whose products to fetch.
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
-  // If asking for the prototype store's products, return them directly.
   if (storeId === prototypeStore.id) {
     return prototypeProducts;
   }
@@ -125,6 +128,16 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
  * @param productData The data for the new product.
  */
 export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
+    if (storeId === prototypeStore.id) {
+        console.log("Prototype mode: Simulating adding product.");
+        prototypeProducts.push({ id: `proto-prod-${Date.now()}`, ...productData });
+        const newCategory = productData.category;
+        if (!prototypeStore.productCategories.includes(newCategory)) {
+            prototypeStore.productCategories.push(newCategory);
+        }
+        return;
+    }
+    
     try {
         const storeRef = doc(db, 'stores', storeId);
         const productsCollectionRef = collection(storeRef, 'products');

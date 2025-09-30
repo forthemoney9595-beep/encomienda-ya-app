@@ -82,6 +82,7 @@ export default function CheckoutPage() {
           address: values.address
         },
         storeId: storeId,
+        isPrototype: user.uid.startsWith('proto-'),
       });
 
       toast({

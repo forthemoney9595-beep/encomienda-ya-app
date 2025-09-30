@@ -38,6 +38,7 @@ interface CreateOrderInput {
     items: CartItem[];
     shippingInfo: { name: string, address: string };
     storeId: string;
+    isPrototype?: boolean;
 }
 
 interface CreateOrderOutput {
@@ -68,15 +69,29 @@ function deg2rad(deg: number) {
 export async function createOrder(
    input: CreateOrderInput
 ): Promise<CreateOrderOutput> {
-    const { userId, items, shippingInfo, storeId } = input;
+    const { userId, items, shippingInfo, storeId, isPrototype } = input;
+
     if (items.length === 0) {
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // Handle prototype case separately to avoid DB calls
-    const isProtoOrder = storeId === 'proto-store-id';
+    let store;
+    let customerName = shippingInfo.name;
+
+    if (isPrototype) {
+        store = prototypeStore;
+        const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
+        if (protoUser) {
+            customerName = protoUser.name;
+        }
+    } else {
+        store = await getStoreById(storeId);
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+            customerName = userDoc.data().name;
+        }
+    }
     
-    const store = isProtoOrder ? prototypeStore : await getStoreById(storeId);
     if (!store) {
         throw new Error(`No se pudo encontrar la tienda con ID ${storeId}`);
     }
@@ -95,20 +110,16 @@ export async function createOrder(
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + deliveryFee;
 
-    let customerName = shippingInfo.name;
-    const isProtoUser = userId.startsWith('proto-');
-    if (isProtoUser) {
-        const protoUser = Object.values(prototypeUsers).find(u => u.uid === userId);
-        if (protoUser) {
-            customerName = protoUser.name;
-        }
-    } else {
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-            customerName = userDoc.data().name;
+    // Simulate order creation for prototype
+    if (isPrototype) {
+        console.log("PROTOTYPE: Simulating order creation.");
+        const mockOrderId = `proto-order-${Date.now()}`;
+        return {
+            orderId: mockOrderId,
+            deliveryFee,
+            total,
         }
     }
-
 
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,
@@ -220,6 +231,27 @@ export async function getOrdersByDeliveryPerson(driverId: string): Promise<Order
 }
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
+    if (orderId.startsWith('proto-order-')) {
+        return {
+            id: orderId,
+            userId: 'proto-buyer',
+            customerName: 'Comprador Proto',
+            items: [{ id: 'proto-prod-1', name: 'Hamburguesa Clásica IA', description: 'La clásica con queso, lechuga y tomate.', price: 9.99, category: 'Comida Rápida', quantity: 1, imageUrl: "https://picsum.photos/seed/classicburger/200/200" }],
+            total: 14.99,
+            deliveryFee: 5.00,
+            status: 'Pedido Realizado',
+            createdAt: new Date(),
+            storeId: 'proto-store-id',
+            storeName: 'Hamburguesas IA',
+            storeAddress: 'Av. Hamburguesa 456',
+            shippingAddress: {
+                name: 'Test Name',
+                address: 'Test Address 123'
+            },
+        }
+    }
+
+
     const orderRef = doc(db, 'orders', orderId);
     const docSnap = await getDoc(orderRef);
 
@@ -243,6 +275,10 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
  * @param status The new status for the order.
  */
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
+  if (orderId.startsWith('proto-order-')) {
+    console.log(`PROTOTYPE: Simulating update order ${orderId} to ${status}`);
+    return;
+  }
   try {
     const orderRef = doc(db, 'orders', orderId);
     await updateDoc(orderRef, { status });
