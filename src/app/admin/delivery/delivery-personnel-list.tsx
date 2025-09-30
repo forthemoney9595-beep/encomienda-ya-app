@@ -1,4 +1,4 @@
-'use server';
+'use client';
 
 import type { DeliveryPersonnel } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
@@ -29,8 +29,12 @@ const getStatusVariant = (status: string) => {
     }
 };
 
-export async function DeliveryPersonnelList({ personnel }: DeliveryPersonnelListProps) {
+export function DeliveryPersonnelList({ personnel }: DeliveryPersonnelListProps) {
   
+  if (!personnel) {
+    return null;
+  }
+
   return (
     <>
        <div className="mb-6 flex justify-end">
@@ -57,27 +61,35 @@ export async function DeliveryPersonnelList({ personnel }: DeliveryPersonnelList
               </TableRow>
             </TableHeader>
             <TableBody>
-              {personnel.map((driver) => (
-                <TableRow key={driver.id}>
-                    <TableCell>
-                      <Link href={`/admin/delivery/${driver.id}`} className="flex items-center gap-3 hover:underline">
-                        <Avatar>
-                          <AvatarImage src={getPlaceholderImage(driver.id, 40, 40)} alt={driver.name} />
-                          <AvatarFallback>{driver.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">{driver.name}</span>
-                      </Link>
-                    </TableCell>
-                  <TableCell>{driver.vehicle}</TableCell>
-                  <TableCell className="hidden md:table-cell">{driver.zone}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <PersonnelActions driver={driver} />
+              {personnel.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    No se encontró personal de reparto.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                personnel.map((driver) => (
+                  <TableRow key={driver.id}>
+                      <TableCell>
+                        <Link href={`/admin/delivery/${driver.id}`} className="flex items-center gap-3 hover:underline">
+                          <Avatar>
+                            <AvatarImage src={getPlaceholderImage(driver.id, 40, 40)} alt={driver.name} />
+                            <AvatarFallback>{driver.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{driver.name}</span>
+                        </Link>
+                      </TableCell>
+                    <TableCell>{driver.vehicle}</TableCell>
+                    <TableCell className="hidden md:table-cell">{driver.zone}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <PersonnelActions driver={driver} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
