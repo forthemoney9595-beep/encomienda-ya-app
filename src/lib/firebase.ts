@@ -1,6 +1,6 @@
-import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -11,10 +11,26 @@ const firebaseConfig = {
   messagingSenderId: "1091869412431",
 };
 
-// Initialize Firebase safely for both server and client
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+// This file is now responsible ONLY for creating and exporting the Firebase services.
+// The initialization is handled in a client-side provider to ensure it runs correctly.
 
-const auth = getAuth(app);
-const db = getFirestore(app);
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
 
+// This function will be called from a client component to initialize Firebase.
+export function initializeFirebase() {
+    if (!getApps().length) {
+        app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+    } else {
+        app = getApp();
+        auth = getAuth(app);
+        db = getFirestore(app);
+    }
+}
+
+// Export the services to be used in other parts of the application.
+// Note: These will be uninitialized until initializeFirebase() is called.
 export { app, auth, db };
