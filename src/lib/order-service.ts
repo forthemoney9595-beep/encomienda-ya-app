@@ -1,7 +1,8 @@
+
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders, getPrototypeOrdersByStore, getAvailablePrototypeOrdersForDelivery, getPrototypeOrdersByDeliveryPerson } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore, type PrototypeOrder, savePrototypeOrder, getPrototypeOrders, getPrototypeOrdersByStore, getAvailablePrototypeOrdersForDelivery, getPrototypeOrdersByDeliveryPerson, updatePrototypeOrder } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
@@ -303,13 +304,7 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
  */
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
   if (orderId.startsWith('proto-order-')) {
-    const orders = getPrototypeOrders();
-    const orderIndex = orders.findIndex(o => o.id === orderId);
-    if (orderIndex > -1) {
-        // This is a simplified in-memory update for the prototype.
-        // It won't persist across reloads as sessionStorage is not used for reads anymore.
-        console.log(`Prototype: Updating order ${orderId} to ${status}`);
-    }
+    updatePrototypeOrder(orderId, { status });
     return;
   }
   try {
@@ -329,15 +324,16 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
  */
 export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
     if (orderId.startsWith('proto-order-')) {
-        const orders = getPrototypeOrders();
-        const orderIndex = orders.findIndex(o => o.id === orderId);
-        if (orderIndex > -1) {
-             if (orders[orderIndex].deliveryPersonId) {
-                throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
-            }
-            // This is a simplified in-memory update for the prototype.
-            console.log(`Prototype: Assigning order ${orderId} to ${driverName}`);
+        const orders = getAvailablePrototypeOrdersForDelivery();
+        const orderExists = orders.some(o => o.id === orderId);
+        if (!orderExists) {
+            throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
         }
+        updatePrototypeOrder(orderId, {
+            status: 'En reparto',
+            deliveryPersonId: driverId,
+            deliveryPersonName: driverName,
+        });
         return;
     }
     
@@ -359,4 +355,3 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     throw error;
   }
 }
-

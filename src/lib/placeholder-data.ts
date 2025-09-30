@@ -133,15 +133,35 @@ export function savePrototypeOrder(order: PrototypeOrder) {
 function getPrototypeOrdersFromSession(): PrototypeOrder[] {
     if (typeof window === 'undefined') return [];
     const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-    return ordersJson ? JSON.parse(ordersJson) : initialPrototypeOrders;
+    // If session storage is empty, initialize it with the seed data.
+    if (!ordersJson) {
+        return initialPrototypeOrders;
+    }
+    return JSON.parse(ordersJson);
 }
-
 
 // This function is now safe to call on the server
 export function getPrototypeOrders(): PrototypeOrder[] {
     // For server-side rendering and initial client render, always return the static seed data
-    return initialPrototypeOrders;
+    if (typeof window === 'undefined') {
+        return initialPrototypeOrders;
+    }
+    // On the client, return the session data
+    return getPrototypeOrdersFromSession();
 }
+
+export function updatePrototypeOrder(orderId: string, updates: Partial<PrototypeOrder>) {
+    if (typeof window === 'undefined') return;
+
+    const orders = getPrototypeOrdersFromSession();
+    const orderIndex = orders.findIndex(o => o.id === orderId);
+
+    if (orderIndex !== -1) {
+        orders[orderIndex] = { ...orders[orderIndex], ...updates };
+        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(orders));
+    }
+}
+
 
 export function getPrototypeOrdersByStore(storeId: string): PrototypeOrder[] {
     const allOrders = getPrototypeOrders();
@@ -166,4 +186,3 @@ export const notifications = [
   { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
-
