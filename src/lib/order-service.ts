@@ -2,8 +2,9 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore, savePrototypeOrder } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem extends Product {
@@ -127,13 +128,14 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 
 /**
  * Updates the status of an order.
+ * This function now internally handles prototype vs. real data via the context.
  * @param orderId The ID of the order to update.
  * @param status The new status for the order.
- * @param isPrototype If true, will update prototype data.
+ * @param updatePrototypeOrder The function from the context to update prototype data.
  */
-export async function updateOrderStatus(orderId: string, status: OrderStatus, isPrototype: boolean = false): Promise<void> {
-  if (isPrototype) {
-    savePrototypeOrder({ id: orderId, status });
+export async function updateOrderStatus(orderId: string, status: OrderStatus, updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void): Promise<void> {
+  if (orderId.startsWith('proto-')) {
+    updatePrototypeOrder(orderId, { status });
     return;
   }
   try {
@@ -153,8 +155,9 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, is
  * @param isPrototype If true, will update prototype data.
  */
 export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string, isPrototype: boolean = false): Promise<void> {
+    const { updatePrototypeOrder } = usePrototypeData();
     if (isPrototype) {
-        savePrototypeOrder({
+        updatePrototypeOrder(orderId, {
             id: orderId,
             status: 'En reparto',
             deliveryPersonId: driverId,
@@ -184,11 +187,7 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
     if (orderId.startsWith('proto-order-')) {
-        const protoOrders = getPrototypeOrders();
-        const order = protoOrders.find(o => o.id === orderId);
-        if (order) {
-            return { ...order, createdAt: new Date(order.createdAt) };
-        }
+        // This is now handled by PrototypeDataContext. This function is for real DB only.
         return null;
     }
 

@@ -30,6 +30,8 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const { updatePrototypeOrder } = usePrototypeData();
+
 
   const isStoreOwner = user?.storeId === order.storeId;
   const possibleNextStatuses = statusTransitions[order.status];
@@ -50,15 +52,15 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     
     setIsUpdating(true);
     try {
-        const isPrototype = user?.uid.startsWith('proto-');
-        await updateOrderStatus(order.id, selectedStatus, isPrototype);
+        await updateOrderStatus(order.id, selectedStatus, updatePrototypeOrder);
 
         toast({
             title: '¡Estado Actualizado!',
             description: `El pedido ahora está "${selectedStatus}".`,
         });
-        // Wait a moment for the context to propagate before navigating
-        setTimeout(() => router.push('/orders'), 100);
+        // We don't need to push, the context update will re-render the parent
+        // and this component if needed. Let's see if the toast is enough.
+        router.refresh(); // This can help re-fetch server data if needed, but for proto, context is key.
     } catch (error) {
         console.error('Error updating order status:', error);
         toast({
