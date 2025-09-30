@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ interface ManageItemDialogProps {
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
-    onSave: (data: Product, id?: string) => Promise<void>;
+    onSave: (data: Product) => Promise<void>;
 }
 
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
@@ -97,7 +98,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
         imageUrl: finalImageUrl,
       };
 
-      await onSave(productData, product?.id);
+      await onSave(productData);
 
     } catch (error) {
         console.error("Error al guardar el producto:", error);

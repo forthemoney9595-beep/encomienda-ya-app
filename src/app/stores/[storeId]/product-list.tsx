@@ -10,7 +10,7 @@ import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { ManageItemDialog } from './manage-item-dialog';
@@ -32,22 +32,61 @@ export function ProductList({ products: initialProducts, productCategories, owne
     
     // Manage products in local state. Start with initialProducts to avoid hydration errors.
     const [products, setProducts] = useState<Product[]>(initialProducts);
+    const [loading, setLoading] = useState(true);
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-
     const isOwner = user?.uid === ownerId;
 
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
-    // This effect runs only on the client, after hydration
+    // This effect runs only on the client, after initial render.
+    // This solves the hydration error.
     useEffect(() => {
         if (currentStoreId.startsWith('proto-')) {
             const storedProducts = getPrototypeProducts();
             setProducts(storedProducts);
         }
+        setLoading(false);
     }, [currentStoreId]);
+
+    const handleSaveProduct = async (productData: Product) => {
+        let updatedProducts;
+    
+        if (editingProduct) { // Editing existing product
+            await updateProductInStore(currentStoreId, editingProduct.id, productData);
+            updatedProducts = products.map(p => p.id === editingProduct.id ? { ...productData, id: editingProduct.id } : p);
+            toast({ title: "¡Artículo Actualizado!" });
+        } else { // Creating new product
+            const newProductWithId = { ...productData, id: `proto-prod-${Date.now()}` };
+            await addProductToStore(currentStoreId, newProductWithId);
+            updatedProducts = [...products, newProductWithId];
+            toast({ title: "¡Artículo Guardado!" });
+        }
+        
+        if (currentStoreId.startsWith('proto-')) {
+            savePrototypeProducts(updatedProducts);
+        }
+        setProducts(updatedProducts);
+        setManageItemDialogOpen(false);
+        setEditingProduct(null);
+    };
+
+    const handleDeleteProduct = async (productId: string) => {
+        await deleteProductFromStore(currentStoreId, productId);
+        const updatedProducts = products.filter(p => p.id !== productId);
+        
+        if (currentStoreId.startsWith('proto-')) {
+            savePrototypeProducts(updatedProducts);
+        }
+        
+        setProducts(updatedProducts);
+        toast({
+            title: "Producto Eliminado",
+            description: "El producto ha sido eliminado correctamente.",
+        });
+    };
 
     const handleOpenDialogForEdit = (product: Product) => {
         setEditingProduct(product);
@@ -59,33 +98,6 @@ export function ProductList({ products: initialProducts, productCategories, owne
         setManageItemDialogOpen(true);
     };
     
-    const handleSaveProduct = async (productData: Product, id?: string) => {
-        let updatedProducts;
-
-        if (id) { // Editing existing product
-            await updateProductInStore(currentStoreId, id, productData);
-            updatedProducts = products.map(p => p.id === id ? { ...p, ...productData, id } : p);
-            toast({ title: "¡Artículo Actualizado!" });
-        } else { // Creating new product
-            const newProductWithId = { ...productData, id: `proto-prod-${Date.now()}` };
-            await addProductToStore(currentStoreId, newProductWithId);
-            updatedProducts = [...products, newProductWithId];
-            toast({ title: "¡Artículo Guardado!" });
-        }
-        setProducts(updatedProducts);
-    };
-    
-    const handleDeleteProduct = async (productId: string) => {
-        await deleteProductFromStore(currentStoreId, productId);
-        const updatedProducts = products.filter(p => p.id !== productId);
-        setProducts(updatedProducts);
-        toast({
-            title: "Producto Eliminado",
-            description: "El producto ha sido eliminado correctamente.",
-        });
-    };
-
-
     const handleAddToCart = (product: Product) => {
         if (!cartStoreId || cartStoreId === currentStoreId) {
             addToCart(product, currentStoreId);
@@ -111,6 +123,11 @@ export function ProductList({ products: initialProducts, productCategories, owne
         setOpenCartAlert(false);
         setPendingProduct(null);
     }
+    
+    if (loading) {
+        return null; // Return null during client-side hydration to avoid mismatch
+    }
+
 
     return (
         <>
