@@ -33,13 +33,20 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         if (isClient) {
-            const savedCart = localStorage.getItem('cart');
-            const savedStoreId = localStorage.getItem('cartStoreId');
-            if (savedCart) {
-                setCart(JSON.parse(savedCart));
-            }
-            if (savedStoreId) {
-                setStoreId(savedStoreId);
+            try {
+                const savedCart = localStorage.getItem('cart');
+                const savedStoreId = localStorage.getItem('cartStoreId');
+                if (savedCart) {
+                    setCart(JSON.parse(savedCart));
+                }
+                if (savedStoreId) {
+                    setStoreId(JSON.parse(savedStoreId));
+                }
+            } catch (error) {
+                console.error("Failed to parse cart from localStorage", error);
+                // Clear corrupted data
+                localStorage.removeItem('cart');
+                localStorage.removeItem('cartStoreId');
             }
         }
     }, [isClient]);
@@ -47,11 +54,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         if (isClient) {
             localStorage.setItem('cart', JSON.stringify(cart));
-            if (storeId) {
-                localStorage.setItem('cartStoreId', storeId);
-            } else {
-                localStorage.removeItem('cartStoreId');
-            }
+            localStorage.setItem('cartStoreId', JSON.stringify(storeId));
         }
     }, [cart, storeId, isClient]);
 
@@ -108,8 +111,20 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
     const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
+    const value = {
+        cart,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        totalItems: isClient ? totalItems : 0, // Return 0 on server to prevent hydration mismatch
+        totalPrice,
+        storeId,
+    };
+
+
     return (
-        <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, storeId }}>
+        <CartContext.Provider value={value}>
             {children}
         </CartContext.Provider>
     );
