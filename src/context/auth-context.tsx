@@ -69,21 +69,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setUser(null); // User exists in Auth but not in Firestore profiles
             }
         } else if (prototypeEmail && prototypeUsers[prototypeEmail]) {
-            let protoUser = { ...prototypeUsers[prototypeEmail] };
-            
-            // If the proto user is a store, we need to find its storeId from the database
-            if (protoUser.role === 'store') {
-                const storesRef = collection(db, 'stores');
-                const q = query(storesRef, where('ownerId', '==', protoUser.uid));
-                const querySnapshot = await getDocs(q);
-                if (!querySnapshot.empty) {
-                    protoUser.storeId = querySnapshot.docs[0].id;
-                    protoUser.storeName = querySnapshot.docs[0].data().name;
-                } else {
-                    // This can happen if the store is not yet created. For prototype, we might need a fallback.
-                     console.warn(`Prototype store owner ${protoUser.email} has no store in DB.`);
-                }
-            }
+            // For prototype users, we trust the placeholder data completely.
+            // No need to query the database.
+            const protoUser = prototypeUsers[prototypeEmail];
             setUser(protoUser);
         } else {
             setUser(null);
