@@ -160,7 +160,7 @@ export function ReviewAnalyzer() {
                 )}
                 Analizar y Guardar Reseña
               </Button>
-            </Footer>
+            </CardFooter>
           </form>
         </Form>
       </Card>
