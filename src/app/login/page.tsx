@@ -38,26 +38,24 @@ export default function LoginPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      // First, try real Firebase login
-      await signInWithEmailAndPassword(auth, values.email, values.password);
-      toast({
-        title: "¡Inicio de Sesión Exitoso!",
-        description: "Bienvenido de nuevo.",
-      });
-      router.push('/');
-      router.refresh();
-    } catch (error: any) {
-       // If Firebase auth fails, check if it's a prototype user
-      if (prototypeUsers[values.email]) {
-         await loginForPrototype(values.email);
-         toast({
-            title: "¡Inicio de Sesión Simulado!",
-            description: `Modo de prototipo activado para ${values.email}.`,
-         });
-         router.push('/');
-         router.refresh();
-      } else {
+    // Check if it's a prototype user
+    if (Object.keys(prototypeUsers).includes(values.email)) {
+        await loginForPrototype(values.email);
+        toast({
+          title: "¡Inicio de Sesión Simulado!",
+          description: `Modo de prototipo activado para ${values.email}.`,
+        });
+        router.push('/');
+    } else {
+      // Try real Firebase login
+      try {
+        await signInWithEmailAndPassword(auth, values.email, values.password);
+        toast({
+          title: "¡Inicio de Sesión Exitoso!",
+          description: "Bienvenido de nuevo.",
+        });
+        router.push('/');
+      } catch (error: any) {
         console.error(error);
         toast({
           variant: "destructive",
@@ -137,7 +135,7 @@ export default function LoginPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {Object.entries(prototypeUsers).map(([email, user]) => (
+                        {Object.values(prototypeUsers).map((user) => (
                             <TableRow key={user.uid}>
                                 <TableCell className="font-medium capitalize">{user.role}</TableCell>
                                 <TableCell>{user.email}</TableCell>

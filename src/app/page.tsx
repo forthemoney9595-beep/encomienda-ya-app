@@ -10,8 +10,10 @@ import PageHeader from '@/components/page-header';
 import { getStores } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/context/auth-context';
 
 export default function Home() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +27,7 @@ export default function Home() {
       setLoading(false);
     };
     fetchStores();
-  }, []);
+  }, [user]); // Refetch stores when user logs in/out
 
   const filteredStores = useMemo(() => {
     if (!searchTerm) {

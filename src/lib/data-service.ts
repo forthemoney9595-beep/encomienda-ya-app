@@ -1,6 +1,7 @@
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
+import { prototypeStore, prototypeProducts } from './placeholder-data';
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
 
 
@@ -28,9 +29,23 @@ export async function getStores(): Promise<Store[]> {
       };
     });
     
+    // Add prototype store for prototype users
+    const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
+    if (prototypeUserEmail) {
+        // Ensure prototype store isn't duplicated if it somehow gets into the DB
+        if (!stores.find(s => s.id === prototypeStore.id)) {
+            stores.unshift(prototypeStore);
+        }
+    }
+
     return stores;
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
+     // Return prototype store if there's a DB error but we are in prototype mode
+    const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
+    if (prototypeUserEmail) {
+        return [prototypeStore];
+    }
     return [];
   }
 }
@@ -41,6 +56,12 @@ export async function getStores(): Promise<Store[]> {
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(id: string): Promise<Store | null> {
+  // If in prototype mode and asking for the prototype store, return it directly.
+  const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
+  if (prototypeUserEmail && id === prototypeStore.id) {
+    return prototypeStore;
+  }
+
   try {
     const docRef = doc(db, "stores", id);
     const docSnap = await getDoc(docRef);
@@ -72,6 +93,12 @@ export async function getStoreById(id: string): Promise<Store | null> {
  * @param storeId The ID of the store whose products to fetch.
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
+  // If in prototype mode and asking for the prototype store, return its products directly.
+  const prototypeUserEmail = typeof window !== 'undefined' ? sessionStorage.getItem('prototypeUserEmail') : null;
+  if (prototypeUserEmail && storeId === prototypeStore.id) {
+    return prototypeProducts;
+  }
+
   try {
     const productsCollectionRef = collection(db, 'stores', storeId, 'products');
     const q = query(productsCollectionRef);

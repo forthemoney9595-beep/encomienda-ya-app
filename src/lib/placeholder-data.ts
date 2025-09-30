@@ -36,12 +36,30 @@ export type UserProfile = {
     [key: string]: any;
 }
 
-export const prototypeUsers: Record<string, Omit<UserProfile, 'uid' | 'storeId'>> = {
-    'admin@test.com': { name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
-    'tienda@test.com': { name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store' },
-    'repartidor@test.com': { name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
-    'comprador@test.com': { name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
+export const prototypeUsers: Record<string, UserProfile> = {
+    'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
+    'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-id' },
+    'repartidor@test.com': { uid: 'proto-delivery', name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
+    'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
 };
+
+export const prototypeStore: Store = {
+    id: 'proto-store-id',
+    name: "Hamburguesas IA",
+    category: "Comida Rápida",
+    productCategories: ["Comida Rápida", "Bebidas"],
+    address: "Av. Hamburguesa 456",
+    ownerId: 'proto-store-owner',
+    status: 'Aprobado',
+    imageUrl: "https://picsum.photos/seed/burger/600/400",
+    imageHint: "burger joint",
+};
+
+export const prototypeProducts: Product[] = [
+    { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
+    { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
+    { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebidas", imageUrl: "https://picsum.photos/seed/soda/200/200" },
+];
 
 
 export const notifications = [
