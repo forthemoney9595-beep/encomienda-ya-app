@@ -22,6 +22,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const mockAdminUser: UserProfile = {
+    uid: 'mock-admin-uid',
+    name: 'Admin',
+    email: 'admin@test.com',
+    role: 'admin',
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
@@ -43,23 +50,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         ...userData
                     } as UserProfile;
                     
-                    // If user is a store owner, find their storeId
                     if (profile.role === 'store') {
                         const storesRef = collection(db, 'stores');
                         const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
                         const querySnapshot = await getDocs(q);
                         if (!querySnapshot.empty) {
-                            // Assuming a user owns only one store
                             profile.storeId = querySnapshot.docs[0].id;
                         }
                     }
 
                     setUser(profile);
                 } else {
+                    // If user exists in Auth but not Firestore, something is wrong.
+                    // For now, treat as logged out.
                     setUser(null);
                 }
             } else {
-                setUser(null);
+                // START OF SIMULATION
+                // If no user is logged in, simulate the admin user for demo purposes.
+                // This avoids needing to register users manually to test the app.
+                console.log("No Firebase user found, simulating Admin user.");
+                setUser(mockAdminUser);
+                // END OF SIMULATION
             }
             setLoading(false);
         });
