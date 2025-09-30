@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Order } from '@/lib/order-service';
-import { getOrdersByStore } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPrototypeOrders } from '@/lib/placeholder-data';
+import { getOrdersByStore } from '@/lib/order-service';
 
 const getBadgeVariant = (status: string) => {
     switch (status) {
@@ -50,25 +50,31 @@ export default function StoreOrdersView() {
 
         const fetchOrders = async () => {
             setLoading(true);
-            let storeOrders: Order[] = [];
-            
+            // For prototype mode, we fetch fresh data on every focus to ensure updates are reflected
             if (user.uid.startsWith('proto-')) {
-                 // For prototype, get ALL orders from session and filter them right here.
-                 // This ensures we always get the latest data from the session.
-                 const allPrototypeOrders = getPrototypeOrders();
-                 storeOrders = allPrototypeOrders
-                    .filter(o => o.storeId === user.storeId)
-                    .map(o => ({...o, createdAt: new Date(o.createdAt)}));
+                const allPrototypeOrders = getPrototypeOrders();
+                const storeOrders = allPrototypeOrders
+                   .filter(o => o.storeId === user.storeId)
+                   .map(o => ({...o, createdAt: new Date(o.createdAt)}));
+                storeOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+                setOrders(storeOrders);
             } else {
-                storeOrders = await getOrdersByStore(user.storeId!);
+                const firestoreOrders = await getOrdersByStore(user.storeId!);
+                setOrders(firestoreOrders);
             }
-            
-            storeOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-            setOrders(storeOrders);
             setLoading(false);
         };
-
+        
+        // Fetch orders initially
         fetchOrders();
+
+        // Also fetch orders whenever the window gains focus (e.g., user tabs back)
+        // This is a robust way to ensure data is fresh in prototype mode
+        window.addEventListener('focus', fetchOrders);
+        return () => {
+            window.removeEventListener('focus', fetchOrders);
+        };
+
     }, [user, authLoading, isClient]);
 
     const handleRowClick = (orderId: string) => {
