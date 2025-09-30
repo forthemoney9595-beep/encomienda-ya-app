@@ -29,7 +29,7 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
     
-    // Manage products in local state for immediate updates
+    // Manage products in local state. Start with initialProducts to avoid hydration errors.
     const [products, setProducts] = useState<Product[]>(initialProducts);
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
@@ -40,12 +40,13 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
-    // Save changes to sessionStorage whenever products state changes
+    // This effect runs only on the client, after hydration
     useEffect(() => {
         if (currentStoreId === 'proto-store-id') {
-            savePrototypeProducts(products);
+            const storedProducts = getPrototypeProducts();
+            setProducts(storedProducts);
         }
-    }, [products, currentStoreId]);
+    }, [currentStoreId]);
 
     const handleOpenDialogForEdit = (product: Product) => {
         setEditingProduct(product);
@@ -56,30 +57,33 @@ export function ProductList({ products: initialProducts, productCategories, owne
         setEditingProduct(null);
         setManageItemDialogOpen(true);
     };
-
+    
+    const handleSaveProduct = (productData: Product, id?: string) => {
+        let updatedProducts;
+        if (id) { // Editing existing product
+            updatedProducts = products.map(p => p.id === id ? { ...p, ...productData, id: p.id } : p);
+            toast({ title: "¡Artículo Actualizado!" });
+        } else { // Creating new product
+            const newProductWithId = { ...productData, id: `proto-prod-${Date.now()}` };
+            updatedProducts = [...products, newProductWithId];
+            toast({ title: "¡Artículo Guardado!" });
+        }
+        setProducts(updatedProducts);
+        if (currentStoreId === 'proto-store-id') {
+            savePrototypeProducts(updatedProducts);
+        }
+    };
+    
     const handleDeleteProduct = (productId: string) => {
-        setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+        const updatedProducts = products.filter(p => p.id !== productId);
+        setProducts(updatedProducts);
+         if (currentStoreId === 'proto-store-id') {
+            savePrototypeProducts(updatedProducts);
+        }
         toast({
             title: "Producto Eliminado",
             description: "El producto ha sido eliminado correctamente.",
         });
-    };
-    
-    const handleSaveProduct = (productData: Omit<Product, 'id'>, id?: string) => {
-        if (id) { // Editing existing product
-            setProducts(prevProducts => 
-                prevProducts.map(p => p.id === id ? { ...p, ...productData } : p)
-            );
-            toast({ title: "¡Artículo Actualizado!" });
-        } else { // Creating new product
-            const newProduct: Product = {
-                id: `proto-prod-${Date.now()}`,
-                imageUrl: `https://picsum.photos/seed/${productData.name.replace(/\s/g, '')}/200/200`,
-                ...productData,
-            };
-            setProducts(prevProducts => [...prevProducts, newProduct]);
-            toast({ title: "¡Artículo Guardado!" });
-        }
     };
 
 
@@ -109,8 +113,19 @@ export function ProductList({ products: initialProducts, productCategories, owne
         setPendingProduct(null);
     }
 
+    // Function to handle saving from the dialog
+    const onSaveFromDialog = (data: Product, id?: string) => {
+        handleSaveProduct(data, id);
+    };
+
     return (
         <>
+            <ManageItemDialog
+                isOpen={isManageItemDialogOpen}
+                setIsOpen={setManageItemDialogOpen}
+                product={editingProduct}
+                onSave={onSaveFromDialog}
+            />
             {isOwner && (
               <div className="mb-4">
                 <Button onClick={handleOpenDialogForCreate}>
@@ -206,14 +221,6 @@ export function ProductList({ products: initialProducts, productCategories, owne
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-            <ManageItemDialog
-                isOpen={isManageItemDialogOpen}
-                setIsOpen={setManageItemDialogOpen}
-                product={editingProduct}
-                onSave={handleSaveProduct}
-            />
         </>
     )
 }
-
-    
