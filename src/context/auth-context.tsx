@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         let effectiveEmail = prototypeEmail;
         if (!effectiveEmail && firebaseUser) {
-            // This case is for real Firebase users, not relevant for prototype but good to keep
+            // This case is for real Firebase users
         }
 
         if (effectiveEmail) {
@@ -54,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     ...userData
                 } as UserProfile;
 
+                // For a store user, find their storeId from the 'stores' collection
                 if (profileToSet.role === 'store') {
                     const storesRef = collection(db, 'stores');
                     const q = query(storesRef, where('ownerId', '==', userDoc.id));
