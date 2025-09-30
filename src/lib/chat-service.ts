@@ -28,21 +28,21 @@ export async function getOrCreateChat(userId: string, storeId: string): Promise<
     
     // Get store and user details to store in the chat document for easier access.
     const userDoc = await getDoc(doc(db, 'users', userId));
-    const storeUserDoc = await getDoc(doc(db, 'users', storeId)); // The store owner's user doc
     const storeDoc = await getDoc(doc(db, 'stores', storeId)); // The store's public profile doc
+    const storeOwnerId = storeDoc.exists() ? storeDoc.data().ownerId : null;
 
-    if (!userDoc.exists() || !storeUserDoc.exists() || !storeDoc.exists()) {
+    if (!userDoc.exists() || !storeDoc.exists() || !storeOwnerId) {
         throw new Error("User or Store not found");
     }
 
     const newChatRef = await addDoc(chatsRef, {
-      participants: [userId, storeId],
+      participants: [userId, storeOwnerId], // Chat is between buyer and store owner
       participantInfo: {
         [userId]: {
             name: userDoc.data().name,
             role: userDoc.data().role,
         },
-        [storeId]: {
+        [storeOwnerId]: {
             name: storeDoc.data().name, // The public store name
             role: 'store', // Hardcoded for clarity
             imageUrl: storeDoc.data().imageUrl,
