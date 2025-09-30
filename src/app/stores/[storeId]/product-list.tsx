@@ -10,7 +10,7 @@ import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { ManageItemDialog } from './manage-item-dialog';
@@ -30,6 +30,7 @@ export function ProductList({ products: initialProducts, productCategories: init
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
     
+    // State to manage products and categories in memory
     const [products, setProducts] = useState<Product[]>(initialProducts);
     const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
     
@@ -40,14 +41,13 @@ export function ProductList({ products: initialProducts, productCategories: init
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
     
+    // On mount, if we are in prototype mode, load the static prototype products.
     useEffect(() => {
-        // Since prototype data is now static, we just set it on initial load.
-        // The state will handle in-memory updates.
         if (currentStoreId.startsWith('proto-')) {
-            const protoProducts = getPrototypeProducts(currentStoreId);
+            const protoProducts = getPrototypeProducts();
             setProducts(protoProducts);
-            const categories = new Set(protoProducts.map(p => p.category));
-            setProductCategories(Array.from(categories));
+            const categories = Array.from(new Set(protoProducts.map(p => p.category)));
+            setProductCategories(categories);
         } else {
             setProducts(initialProducts);
             setProductCategories(initialCategories);
@@ -55,7 +55,7 @@ export function ProductList({ products: initialProducts, productCategories: init
     }, [currentStoreId, initialProducts, initialCategories]);
 
 
-    const handleSaveProduct = async (productData: Product, currentCategories: string[]) => {
+    const handleSaveProduct = async (productData: Product) => {
         const isEditing = products.some(p => p.id === productData.id);
         
         let updatedProducts;
@@ -66,17 +66,16 @@ export function ProductList({ products: initialProducts, productCategories: init
         }
         setProducts(updatedProducts);
 
-        // Unify category logic: always check if the new/updated category exists and add if not.
-        if (!currentCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
-            const newCategories = [...currentCategories, productData.category];
-            setProductCategories(newCategories);
+        // Update categories list in memory if a new one was added
+        if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+            setProductCategories([...productCategories, productData.category]);
         }
 
-        // Real backend update (for non-prototype)
+        // For non-prototype, update the backend
         if (!currentStoreId.startsWith('proto-')) {
-            const categoriesToUpdate = !currentCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase()) 
-                ? [...currentCategories, productData.category] 
-                : currentCategories;
+            const categoriesToUpdate = !productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase()) 
+                ? [...productCategories, productData.category] 
+                : productCategories;
 
             if (isEditing) {
                 await updateProductInStore(currentStoreId, productData.id, productData);
@@ -98,7 +97,7 @@ export function ProductList({ products: initialProducts, productCategories: init
        
         toast({
             title: "Producto Eliminado",
-            description: "El producto ha sido eliminado.",
+            description: "El producto ha sido eliminado de la vista. Se restaurará al recargar.",
         });
     };
 
@@ -153,7 +152,6 @@ export function ProductList({ products: initialProducts, productCategories: init
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
                 onSave={handleSaveProduct}
-                productCategories={productCategories}
             />
             {isOwner && (
               <div className="mb-4">
@@ -205,7 +203,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                                                         <AlertDialogDescription>
-                                                            Esta acción no se puede deshacer. Esto eliminará permanentemente el producto (hasta que recargues la página en modo prototipo).
+                                                            Esta acción no se puede deshacer. El producto se eliminará de la vista hasta que se recargue la página.
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter>

@@ -77,7 +77,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
         imageHint: data.imageHint || 'store',
         status: data.status || 'Pendiente',
         ownerId: data.ownerId || '',
-        productCategories: data.productCategories || [data.category]- Creado || [],
+        productCategories: data.productCategories || [data.category] || [],
       } as Store;
     } else {
       console.log(`No store found with id: ${id}`);
@@ -95,7 +95,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
   if (storeId.startsWith('proto-')) {
-    return getPrototypeProducts(storeId);
+    return getPrototypeProducts();
   }
 
   try {
@@ -130,6 +130,10 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
  * @param currentCategories The current list of categories for the store.
  */
 export async function addProductToStore(storeId: string, productData: Product, currentCategories: string[]): Promise<void> {
+    if (storeId.startsWith('proto-')) {
+      console.log("Prototype mode: Add handled in-memory.");
+      return;
+    }
     try {
         const storeRef = doc(db, 'stores', storeId);
         const productRef = doc(collection(storeRef, 'products'), productData.id);
@@ -150,8 +154,7 @@ export async function addProductToStore(storeId: string, productData: Product, c
 
 export async function updateProductInStore(storeId: string, productId: string, productData: Partial<Product>) {
     if (storeId.startsWith('proto-')) {
-        // This is now handled in-memory in the component state for prototype mode.
-        console.log("Prototype mode: Product updated in component state.", productId, productData);
+        console.log("Prototype mode: Update handled in-memory.");
         return;
     }
 
@@ -166,8 +169,7 @@ export async function updateProductInStore(storeId: string, productId: string, p
 
 export async function deleteProductFromStore(storeId: string, productId: string) {
     if (storeId.startsWith('proto-')) {
-        // This is now handled in-memory in the component state for prototype mode.
-        console.log("Prototype mode: Product deleted from component state.", productId);
+        console.log("Prototype mode: Delete handled in-memory.");
         return;
     }
 

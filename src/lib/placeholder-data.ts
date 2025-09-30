@@ -51,7 +51,7 @@ export const prototypeStore: Store = {
     id: 'proto-store-id',
     name: "Hamburguesas IA",
     category: "Comida Rápida",
-    productCategories: ["Comida Rápida", "Bebidas"],
+    productCategories: ["Comida", "Bebida"],
     address: "Av. Hamburguesa 456",
     ownerId: 'proto-store-owner',
     status: 'Aprobado',
@@ -59,16 +59,19 @@ export const prototypeStore: Store = {
     imageHint: "burger joint",
 };
 
+// This is now the single source of truth for prototype products.
+// Any in-app changes are in-memory and will be lost on reload.
 const initialPrototypeProducts: Product[] = [
-    { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
-    { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
-    { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebidas", imageUrl: "https://picsum.photos/seed/soda/200/200" },
+    { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
+    { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
+    { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebida", imageUrl: "https://picsum.photos/seed/soda/200/200" },
 ];
 
 export function getPrototypeProducts(): Product[] {
     // Returns a static, predictable list for consistent server/client rendering.
     return initialPrototypeProducts;
 }
+
 
 // In-memory/session storage for prototype orders
 const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
