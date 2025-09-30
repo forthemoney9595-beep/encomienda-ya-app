@@ -28,31 +28,40 @@ function StoreCardSkeleton() {
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   useEffect(() => {
+    // This effect ensures we don't try to fetch data until auth state is resolved.
+    if (authLoading) {
+      return;
+    }
+    setInitialLoading(false); // Auth is resolved, we can now show the main content.
+
     const fetchStores = async () => {
-      setLoading(true);
-      // We determine if we are in prototype mode by checking the user's UID format.
-      // This check is safe now as it runs on the client.
+      setDataLoading(true);
       const isPrototype = user?.uid.startsWith('proto-') ?? false;
       const fetchedStores = await getStores(false, isPrototype);
       setStores(fetchedStores.filter(s => s.status === 'Aprobado'));
-      setLoading(false);
+      setDataLoading(false);
     };
 
-    // We wait for auth to finish loading before fetching stores.
-    if (!authLoading) {
-        fetchStores();
-    }
+    fetchStores();
   }, [user, authLoading]);
 
   return (
     <div className="container mx-auto">
-      <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
+      {initialLoading ? (
+         <div className="mb-6">
+            <Skeleton className="h-9 w-2/5" />
+            <Skeleton className="h-5 w-3/5 mt-2" />
+         </div>
+      ) : (
+        <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
+      )}
       
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {loading ? (
+        {(initialLoading || dataLoading) ? (
           <>
             <StoreCardSkeleton />
             <StoreCardSkeleton />
