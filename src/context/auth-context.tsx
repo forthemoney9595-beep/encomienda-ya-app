@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { prototypeUsers } from '@/lib/placeholder-data';
 
 interface UserProfile {
     uid: string;
@@ -35,8 +36,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const fetchUserProfile = async (firebaseUser: FirebaseUser | null, prototypeEmail?: string | null) => {
         setLoading(true);
         let profileToSet: UserProfile | null = null;
-        if (firebaseUser) {
-            sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
+        
+        let effectiveEmail = prototypeEmail;
+        if (!effectiveEmail && firebaseUser) {
+            // This case is for real Firebase users, not relevant for prototype but good to keep
+        }
+
+        if (effectiveEmail) {
+            // Logic for Prototype user
+            const userQuery = query(collection(db, "users"), where("email", "==", effectiveEmail));
+            const querySnapshot = await getDocs(userQuery);
+            if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0];
+                const userData = userDoc.data();
+                profileToSet = {
+                    uid: userDoc.id,
+                    ...userData
+                } as UserProfile;
+
+                if (profileToSet.role === 'store') {
+                    const storesRef = collection(db, 'stores');
+                    const q = query(storesRef, where('ownerId', '==', userDoc.id));
+                    const storeQuerySnapshot = await getDocs(q);
+                    if (!storeQuerySnapshot.empty) {
+                        profileToSet.storeId = storeQuerySnapshot.docs[0].id;
+                    }
+                }
+            }
+        } else if (firebaseUser) {
+             // Logic for real Firebase user
             const userDocRef = doc(db, 'users', firebaseUser.uid);
             const userDoc = await getDoc(userDocRef);
 
@@ -54,26 +82,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const querySnapshot = await getDocs(q);
                     if (!querySnapshot.empty) {
                         profileToSet.storeId = querySnapshot.docs[0].id;
-                    }
-                }
-            }
-        } else if (prototypeEmail) {
-            const userQuery = query(collection(db, "users"), where("email", "==", prototypeEmail));
-            const querySnapshot = await getDocs(userQuery);
-            if (!querySnapshot.empty) {
-                const userDoc = querySnapshot.docs[0];
-                const userData = userDoc.data();
-                profileToSet = {
-                    uid: userDoc.id,
-                    ...userData
-                } as UserProfile;
-
-                if (profileToSet.role === 'store') {
-                     const storesRef = collection(db, 'stores');
-                    const q = query(storesRef, where('ownerId', '==', userDoc.id));
-                    const storeQuerySnapshot = await getDocs(q);
-                    if (!storeQuerySnapshot.empty) {
-                        profileToSet.storeId = storeQuerySnapshot.docs[0].id;
                     }
                 }
             }
