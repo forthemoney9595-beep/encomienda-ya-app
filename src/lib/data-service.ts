@@ -131,11 +131,9 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
  */
 export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
     if (storeId === prototypeStore.id) {
-        console.log("Prototype mode: Saving product and updating store categories.");
-        const newProduct = { id: `proto-prod-${Date.now()}`, ...productData };
-        savePrototypeProduct(newProduct);
+        savePrototypeProduct(productData);
         
-        const currentStore = await getStoreById(prototypeStore.id);
+        const currentStore = await getStoreById(prototypeStore.id); // This will read from sessionStorage
         if (currentStore) {
             const newCategory = productData.category;
             const lowerCaseCategories = currentStore.productCategories.map(c => c.toLowerCase());

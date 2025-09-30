@@ -76,32 +76,23 @@ export function updatePrototypeStore(store: Store) {
 
 
 const PROTOTYPE_PRODUCTS_KEY = 'prototypeProducts';
-let prototypeProductsInstance: Product[] = [
+let initialPrototypeProducts: Product[] = [
     { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
     { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
     { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebidas", imageUrl: "https://picsum.photos/seed/soda/200/200" },
 ];
 
-if (typeof window !== 'undefined') {
-    const storedProducts = sessionStorage.getItem(PROTOTYPE_PRODUCTS_KEY);
-    if (storedProducts) {
-        prototypeProductsInstance = JSON.parse(storedProducts);
-    } else {
-        sessionStorage.setItem(PROTOTYPE_PRODUCTS_KEY, JSON.stringify(prototypeProductsInstance));
-    }
-}
-export const prototypeProducts = prototypeProductsInstance;
-
 export function getPrototypeProducts(): Product[] {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === 'undefined') return initialPrototypeProducts;
     const productsJson = sessionStorage.getItem(PROTOTYPE_PRODUCTS_KEY);
-    return productsJson ? JSON.parse(productsJson) : prototypeProductsInstance;
+    return productsJson ? JSON.parse(productsJson) : initialPrototypeProducts;
 }
 
-export function savePrototypeProduct(product: Product) {
+export function savePrototypeProduct(productData: Omit<Product, 'id'>) {
     if (typeof window === 'undefined') return;
+    const newProduct = { id: `proto-prod-${Date.now()}`, ...productData };
     const existingProducts = getPrototypeProducts();
-    const updatedProducts = [...existingProducts, product];
+    const updatedProducts = [...existingProducts, newProduct];
     sessionStorage.setItem(PROTOTYPE_PRODUCTS_KEY, JSON.stringify(updatedProducts));
 }
 

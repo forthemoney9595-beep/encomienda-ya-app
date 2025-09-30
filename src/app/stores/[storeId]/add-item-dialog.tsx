@@ -7,34 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Upload } from "lucide-react";
+import { Loader2, PlusCircle } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { addProductToStore } from "@/lib/data-service";
-import { generateProductImage } from "@/ai/flows/generate-product-image";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
   category: z.string().min(1, "Por favor, especifica una categoría."),
-  image: z.instanceof(File).optional(),
 });
 
 interface AddItemDialogProps {
     storeId: string;
     productCategories: string[];
 }
-
-// Function to convert file to data URI
-const toDataURL = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-});
-
 
 export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps) {
   const [open, setOpen] = useState(false);
@@ -53,42 +42,19 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsProcessing(true);
-    let imageUrl = '';
-
+    
     try {
-      if (values.image) {
-        imageUrl = await toDataURL(values.image);
-      } else {
-        // Generate image with AI if no file is provided
-        toast({ title: "Generando imagen de producto...", description: "La IA está creando una imagen para su artículo. Esto puede tardar unos segundos." });
-        const imageResult = await generateProductImage({
-          productName: values.name,
-          productDescription: values.description,
-        });
-        imageUrl = imageResult.imageUrl;
-      }
-    } catch (error) {
-      console.error("Error processing or generating image:", error);
-      toast({
-        variant: "destructive",
-        title: "Error de Imagen",
-        description: "No se pudo procesar ni generar la imagen. Por favor, inténtelo de nuevo o suba un archivo.",
-      });
-      setIsProcessing(false);
-      return;
-    }
+      // Usaremos una imagen de marcador de posición por ahora para simplificar.
+      const imageUrl = `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`;
 
-    try {
-      // Exclude the 'image' file object from the data being sent to Firestore
-      const { image, ...productData } = values;
-
-      await addProductToStore(storeId, {...productData, imageUrl });
+      await addProductToStore(storeId, {...values, imageUrl });
+      
       toast({
         title: "¡Artículo Guardado!",
         description: `El artículo "${values.name}" ha sido añadido correctamente.`,
       });
 
-      // Dispatch a custom event to notify the product list to update
+      // Dispara un evento personalizado para notificar a la lista de productos que se actualice
       window.dispatchEvent(new CustomEvent('product-added'));
 
       setOpen(false);
@@ -120,7 +86,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
             <DialogHeader>
               <DialogTitle>Añadir Nuevo Artículo</DialogTitle>
               <DialogDescription>
-                Rellene los detalles del producto. Si no sube una imagen, nuestra IA generará una por usted.
+                Rellene los detalles del producto.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -171,30 +137,6 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                     <FormLabel>Precio</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isProcessing} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="image"
-                render={({ field: { onChange, value, ...rest }}) => (
-                  <FormItem>
-                    <FormLabel>Imagen del Producto (Opcional)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="file" 
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            onChange(file);
-                          }
-                        }}
-                        {...rest}
-                        disabled={isProcessing}
-                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
