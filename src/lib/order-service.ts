@@ -196,16 +196,15 @@ export async function getOrdersByDeliveryPerson(driverId: string): Promise<Order
     if (driverId.startsWith('proto-')) {
         const allOrders = getPrototypeOrders();
         return allOrders
-            .filter(order => order.deliveryPersonId === driverId && order.status === 'En reparto')
+            .filter(order => order.deliveryPersonId === driverId && (order.status === 'En reparto' || order.status === 'Entregado'))
             .map(o => ({...o, createdAt: new Date(o.createdAt)}))
-            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
 
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, 
         where('deliveryPersonId', '==', driverId),
-        where('status', '==', 'En reparto'),
-        orderBy('createdAt', 'asc')
+        orderBy('createdAt', 'desc')
     );
 
     const querySnapshot = await getDocs(q);

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -43,37 +44,38 @@ export default function StoreOrdersView() {
         setIsClient(true);
     }, []);
 
-    useEffect(() => {
-        if (!isClient || authLoading) return;
+    const fetchOrders = async () => {
         if (!user || user.role !== 'store' || !user.storeId) {
             setLoading(false);
             return;
-        };
+        }
 
-        const fetchOrders = async () => {
-            setLoading(true);
-            if (user.uid.startsWith('proto-')) {
-                const allPrototypeOrders = getPrototypeOrders();
-                const storeOrders = allPrototypeOrders
-                   .filter(o => o.storeId === user.storeId)
-                   .map(o => ({...o, createdAt: new Date(o.createdAt)}));
-                storeOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-                setOrders(storeOrders);
-            } else {
-                const ordersRef = collection(db, 'orders');
-                const q = query(ordersRef, where('storeId', '==', user.storeId), orderBy('createdAt', 'desc'));
-                const querySnapshot = await getDocs(q);
-                const firestoreOrders = querySnapshot.docs.map(doc => ({...doc.data(), id: doc.id, createdAt: doc.data().createdAt.toDate()})) as Order[];
-                setOrders(firestoreOrders);
-            }
-            setLoading(false);
-        };
+        setLoading(true);
+        if (user.uid.startsWith('proto-')) {
+            const allPrototypeOrders = getPrototypeOrders();
+            const storeOrders = allPrototypeOrders
+               .filter(o => o.storeId === user.storeId)
+               .map(o => ({...o, createdAt: new Date(o.createdAt)}));
+            storeOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            setOrders(storeOrders);
+        } else {
+            const ordersRef = collection(db, 'orders');
+            const q = query(ordersRef, where('storeId', '==', user.storeId), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            const firestoreOrders = querySnapshot.docs.map(doc => ({...doc.data(), id: doc.id, createdAt: doc.data().createdAt.toDate()})) as Order[];
+            setOrders(firestoreOrders);
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        if (!isClient || authLoading) return;
         
         fetchOrders();
 
         // Refetch on window focus to catch updates made in other tabs/windows for prototype
         const handleFocus = () => {
-          if (user.uid.startsWith('proto-')) {
+          if (user?.uid.startsWith('proto-')) {
             fetchOrders();
           }
         };

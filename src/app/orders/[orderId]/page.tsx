@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import { notFound, useParams } from 'next/navigation';
+import { notFound, useParams, useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -11,6 +12,7 @@ import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/context/auth-context';
 
 function OrderPageSkeleton() {
     return (
@@ -19,19 +21,8 @@ function OrderPageSkeleton() {
                 title={<Skeleton className="h-9 w-48" />}
                 description={<Skeleton className="h-5 w-64" />}
             />
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2">
-                    <Card className='h-[600px] flex flex-col'>
-                        <CardHeader>
-                            <Skeleton className="h-8 w-1/3 mb-2" />
-                            <Skeleton className="h-5 w-2/3" />
-                        </CardHeader>
-                        <CardContent className='flex-grow'>
-                            <Skeleton className="h-full w-full rounded-md" />
-                        </CardContent>
-                    </Card>
-                </div>
-                 <div className="md:col-span-1">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="md:col-span-1">
                     <Card>
                         <CardHeader>
                             <Skeleton className="h-8 w-1/2" />
@@ -55,6 +46,13 @@ function OrderPageSkeleton() {
                         </CardContent>
                     </Card>
                 </div>
+                 <div className="md:col-span-1">
+                     <Card className='min-h-[400px] flex items-center justify-center bg-muted/50'>
+                        <CardContent className='text-center text-muted-foreground'>
+                             <p>(Área de mapa deshabilitada)</p>
+                        </CardContent>
+                    </Card>
+                </div>
              </div>
         </div>
     )
@@ -64,11 +62,14 @@ function OrderPageSkeleton() {
 export default function OrderTrackingPage() {
   const params = useParams();
   const orderId = params.orderId as string;
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to be ready
     if (!orderId) return;
 
     const fetchOrderData = async () => {
@@ -79,15 +80,28 @@ export default function OrderTrackingPage() {
         notFound();
         return;
       }
+      
+      // Security check: ensure user has access to this order
+      const isOwner = user?.storeId === orderData.storeId;
+      const isBuyer = user?.uid === orderData.userId;
+      const isDriver = user?.uid === orderData.deliveryPersonId;
+      const isAdmin = user?.role === 'admin';
+
+      if (!isOwner && !isBuyer && !isDriver && !isAdmin) {
+          console.warn("Acceso no autorizado al pedido denegado.");
+          router.push('/orders'); // Redirect to their own orders page
+          return;
+      }
+
       setOrder(orderData);
       setLoading(false);
     };
 
     fetchOrderData();
-  }, [orderId]);
+  }, [orderId, user, authLoading, router]);
 
 
-  if (loading || !order) {
+  if (loading || authLoading || !order) {
     return <OrderPageSkeleton />;
   }
   
@@ -151,7 +165,6 @@ export default function OrderTrackingPage() {
             </Card>
         </div>
         <div className="md:col-span-1">
-            {/* Placeholder for map or other content */}
              <Card className='min-h-[400px] flex items-center justify-center bg-muted/50'>
                 <CardContent className='text-center text-muted-foreground'>
                     <p>(Área de mapa deshabilitada temporalmente)</p>

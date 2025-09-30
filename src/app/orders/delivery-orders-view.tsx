@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import Link from 'next/link';
@@ -18,7 +19,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function DeliveryOrdersView() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
@@ -164,7 +164,7 @@ export default function DeliveryOrdersView() {
         </TabsTrigger>
         <TabsTrigger value="assigned">
           Mis Entregas
-          <Badge variant="secondary" className="ml-2">{assignedOrders.length}</Badge>
+          <Badge variant="secondary" className="ml-2">{assignedOrders.filter(o => o.status === 'En reparto').length}</Badge>
         </TabsTrigger>
       </TabsList>
       <TabsContent value="available" className="mt-4">
@@ -211,10 +211,11 @@ export default function DeliveryOrdersView() {
       </TabsContent>
       <TabsContent value="assigned" className="mt-4">
          <div className="space-y-4">
-          {assignedOrders.length === 0 ? (
+          {assignedOrders.filter(o => o.status === 'En reparto').length === 0 ? (
             <NoOrdersView title="No tienes entregas activas" description="Acepta un pedido de la pestaña 'Disponibles'." />
           ) : (
             assignedOrders.map((order) => (
+              order.status === 'En reparto' &&
               <Card key={order.id} className="border-primary/50">
                 <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2"><Store className="h-5 w-5 text-primary" /> {order.storeName}</CardTitle>

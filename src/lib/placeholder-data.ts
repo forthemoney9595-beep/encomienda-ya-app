@@ -128,9 +128,7 @@ const initialPrototypeOrders: PrototypeOrder[] = [
  */
 function getAndInitializePrototypeOrders(): PrototypeOrder[] {
     if (typeof window === 'undefined') {
-        // Return a static copy on the server to prevent errors,
-        // client-side logic will take over with the real session data.
-        return initialPrototypeOrders;
+        return []; // Return empty array on server to avoid hydration mismatch
     }
 
     const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
@@ -146,7 +144,8 @@ function getAndInitializePrototypeOrders(): PrototypeOrder[] {
     }
 
     // If session is empty or corrupted, initialize it.
-    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+    const initialOrders = JSON.stringify(initialPrototypeOrders);
+    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, initialOrders);
     return initialPrototypeOrders;
 }
 
@@ -191,3 +190,4 @@ export const notifications = [
   { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
+
