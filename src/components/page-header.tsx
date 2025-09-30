@@ -1,8 +1,8 @@
 import React from 'react';
 
 interface PageHeaderProps {
-  title: string;
-  description?: string;
+  title: React.ReactNode;
+  description?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -14,7 +14,7 @@ const PageHeader = ({ title, description, children }: PageHeaderProps) => {
           {title}
         </h1>
         {description && (
-          <p className="mt-1 text-muted-foreground">{description}</p>
+          <div className="mt-1 text-muted-foreground">{description}</div>
         )}
       </div>
       {children && <div className="flex items-center gap-2">{children}</div>}
