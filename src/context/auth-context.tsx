@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase'; 
 
@@ -19,11 +19,11 @@ interface AuthContextType {
     loading: boolean;
     isAdmin: boolean;
     loginForPrototype: (email: string) => Promise<void>; 
+    logoutForPrototype: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Placeholder users for prototype mode
 const prototypeUsers: Record<string, UserProfile> = {
     'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
     'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-id', storeName: 'Tienda Proto' },
@@ -31,26 +31,27 @@ const prototypeUsers: Record<string, UserProfile> = {
     'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
 };
 
+const PROTOTYPE_SESSION_KEY = 'prototypeUserEmail';
+
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // This function will be called from the login page on failure
     const loginForPrototype = async (email: string) => {
-        const protoUser = prototypeUsers[email];
-        if (protoUser) {
-            console.log(`Prototype mode activated for: ${email}`);
-            setUser(protoUser);
-        } else {
-            console.log(`No prototype user found for: ${email}`);
-            setUser(null);
-        }
+        sessionStorage.setItem(PROTOTYPE_SESSION_KEY, email);
     };
+
+    const logoutForPrototype = () => {
+        sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
+        setUser(null);
+    }
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+            setLoading(true);
             if (firebaseUser) {
+                sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
                 const userDocRef = doc(db, 'users', firebaseUser.uid);
                 const userDoc = await getDoc(userDocRef);
 
@@ -70,23 +71,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             profile.storeId = querySnapshot.docs[0].id;
                         }
                     }
-
                     setUser(profile);
                 } else {
                     setUser(null);
                 }
             } else {
-                setUser(null);
+                // No real user, check for prototype session
+                const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
+                if (prototypeEmail && prototypeUsers[prototypeEmail]) {
+                    setUser(prototypeUsers[prototypeEmail]);
+                } else {
+                    setUser(null);
+                }
             }
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        const handleStorageChange = (event: StorageEvent) => {
+            if (event.key === PROTOTYPE_SESSION_KEY) {
+                const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
+                 if (prototypeEmail && prototypeUsers[prototypeEmail]) {
+                    setUser(prototypeUsers[prototypeEmail]);
+                } else {
+                    setUser(null);
+                }
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+
+
+        return () => {
+            unsubscribe();
+            window.removeEventListener('storage', handleStorageChange);
+        };
     }, []);
 
     const isAdmin = user?.role === 'admin';
 
-    const value = { user, loading, isAdmin, loginForPrototype };
+    const value = { user, loading, isAdmin, loginForPrototype, logoutForPrototype };
     
     return (
         <AuthContext.Provider value={value}>

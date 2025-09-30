@@ -27,6 +27,23 @@ export type DeliveryPersonnel = {
   status: 'Activo' | 'Pendiente' | 'Inactivo' | 'Rechazado';
 };
 
+export type UserProfile = {
+    uid: string;
+    name: string;
+    email: string;
+    role: 'buyer' | 'store' | 'delivery' | 'admin';
+    storeId?: string;
+    [key: string]: any;
+}
+
+export const prototypeUsers: Record<string, UserProfile> = {
+    'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
+    'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'Pizza-Paradise-1', storeName: 'Tienda Proto' },
+    'repartidor@test.com': { uid: 'proto-delivery', name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
+    'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
+};
+
+
 export const notifications = [
   { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Bonanza de Hamburguesas está en camino.', date: 'hace 5 min' },
   { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Estación de Sushi ha sido confirmado.', date: 'hace 1 hora' },

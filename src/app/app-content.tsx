@@ -16,12 +16,18 @@ import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
 export function AppContent({ children }: { children: React.ReactNode }) {
-    const { user, loading, isAdmin } = useAuth();
+    const { user, loading, isAdmin, logoutForPrototype } = useAuth();
     const router = useRouter();
 
     const handleSignOut = async () => {
-        await signOut(auth);
-        router.push('/login');
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Error signing out from Firebase:", error);
+        } finally {
+            logoutForPrototype();
+            router.push('/login');
+        }
     };
 
     return (

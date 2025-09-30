@@ -15,18 +15,14 @@ import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/context/auth-context';
+import { prototypeUsers } from '@/lib/placeholder-data';
+import { Loader2 } from 'lucide-react';
+
 
 const formSchema = z.object({
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
   password: z.string().min(1, "La contraseña no puede estar vacía."),
 });
-
-const testUsers = [
-    { role: 'Admin', email: 'admin@test.com', password: 'password' },
-    { role: 'Tienda', email: 'tienda@test.com', password: 'password' },
-    { role: 'Repartidor', email: 'repartidor@test.com', password: 'password' },
-    { role: 'Comprador', email: 'comprador@test.com', password: 'password' },
-]
 
 export default function LoginPage() {
   const { toast } = useToast();
@@ -43,28 +39,30 @@ export default function LoginPage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      // First, try real Firebase login
       await signInWithEmailAndPassword(auth, values.email, values.password);
       toast({
         title: "¡Inicio de Sesión Exitoso!",
         description: "Bienvenido de nuevo.",
       });
       router.push('/');
+      router.refresh();
     } catch (error: any) {
-      console.log("Firebase login failed, attempting prototype login.", error.code);
-      // If Firebase auth fails (e.g., user not found), try prototype login
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+       // If Firebase auth fails, check if it's a prototype user
+      if (prototypeUsers[values.email]) {
          await loginForPrototype(values.email);
          toast({
             title: "¡Inicio de Sesión Simulado!",
             description: `Modo de prototipo activado para ${values.email}.`,
          });
          router.push('/');
+         router.refresh();
       } else {
         console.error(error);
         toast({
           variant: "destructive",
           title: "Error al Iniciar Sesión",
-          description: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
+          description: "El correo electrónico o la contraseña son incorrectos. Por favor, inténtalo de nuevo.",
         });
       }
     }
@@ -112,7 +110,7 @@ export default function LoginPage() {
               </CardContent>
               <CardFooter className="flex flex-col">
                 <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Iniciando Sesión..." : "Iniciar Sesión"}
+                  {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Iniciando Sesión...</> : "Iniciar Sesión"}
                 </Button>
                 <div className="mt-4 text-center text-sm">
                   ¿No tienes una cuenta?{" "}
@@ -125,10 +123,10 @@ export default function LoginPage() {
           </Form>
         </Card>
         
-        <Card className="w-full max-w-sm">
+        <Card className="w-full max-w-lg">
             <CardHeader>
-                <CardTitle>Cuentas de Prueba</CardTitle>
-                <CardDescription>Usa estas cuentas para explorar los diferentes roles. La contraseña para todas es <Badge variant="secondary" className="font-mono">password</Badge>.</CardDescription>
+                <CardTitle>Cuentas de Prueba (Modo Prototipo)</CardTitle>
+                <CardDescription>Usa estas cuentas para explorar los diferentes roles. El inicio de sesión es simulado. La contraseña para todas es <Badge variant="secondary" className="font-mono">password</Badge>.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -139,9 +137,9 @@ export default function LoginPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {testUsers.map(user => (
-                            <TableRow key={user.role}>
-                                <TableCell className="font-medium">{user.role}</TableCell>
+                        {Object.entries(prototypeUsers).map(([email, user]) => (
+                            <TableRow key={user.uid}>
+                                <TableCell className="font-medium capitalize">{user.role}</TableCell>
                                 <TableCell>{user.email}</TableCell>
                             </TableRow>
                         ))}
