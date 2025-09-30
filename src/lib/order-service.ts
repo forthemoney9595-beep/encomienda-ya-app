@@ -360,4 +360,3 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     throw error;
   }
 }
-
