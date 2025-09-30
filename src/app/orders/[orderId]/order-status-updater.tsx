@@ -54,7 +54,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
             title: '¡Estado Actualizado!',
             description: `El pedido ahora está "${selectedStatus}".`,
         });
-        router.refresh(); // Refresh server component data
+        router.push('/orders'); // Redirect back to the orders list
     } catch (error) {
         console.error('Error updating order status:', error);
         toast({

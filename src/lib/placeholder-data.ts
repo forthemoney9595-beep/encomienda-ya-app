@@ -122,6 +122,41 @@ const initialPrototypeOrders: PrototypeOrder[] = [
 ];
 
 
+// Gets the current list of orders from session storage.
+// If empty, it seeds it with the initial data.
+function getPrototypeOrdersFromSession(): PrototypeOrder[] {
+    if (typeof window === 'undefined') return initialPrototypeOrders;
+    
+    let ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
+    
+    // If session storage is empty, initialize it with the seed data.
+    if (!ordersJson || ordersJson === '[]') {
+        const ordersToSeed = initialPrototypeOrders;
+        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(ordersToSeed));
+        return ordersToSeed;
+    }
+    
+    try {
+        return JSON.parse(ordersJson);
+    } catch (e) {
+        // If parsing fails, reset to initial data
+        console.error("Failed to parse prototype orders from session storage, resetting.", e);
+        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+        return initialPrototypeOrders;
+    }
+}
+
+// Public function to get all prototype orders.
+// Safe to call from both server and client.
+export function getPrototypeOrders(): PrototypeOrder[] {
+    if (typeof window === 'undefined') {
+        // On the server, always return the static initial list.
+        return initialPrototypeOrders;
+    }
+    // On the client, get the stateful list from session storage.
+    return getPrototypeOrdersFromSession();
+}
+
 export function savePrototypeOrder(order: PrototypeOrder) {
     if (typeof window === 'undefined') return;
     const existingOrders = getPrototypeOrdersFromSession();
@@ -129,26 +164,6 @@ export function savePrototypeOrder(order: PrototypeOrder) {
     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
 }
 
-// Function to get orders from session, used for writes
-function getPrototypeOrdersFromSession(): PrototypeOrder[] {
-    if (typeof window === 'undefined') return [];
-    const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-    // If session storage is empty, initialize it with the seed data.
-    if (!ordersJson) {
-        return initialPrototypeOrders;
-    }
-    return JSON.parse(ordersJson);
-}
-
-// This function is now safe to call on the server
-export function getPrototypeOrders(): PrototypeOrder[] {
-    // For server-side rendering and initial client render, always return the static seed data
-    if (typeof window === 'undefined') {
-        return initialPrototypeOrders;
-    }
-    // On the client, return the session data
-    return getPrototypeOrdersFromSession();
-}
 
 export function updatePrototypeOrder(orderId: string, updates: Partial<PrototypeOrder>) {
     if (typeof window === 'undefined') return;
