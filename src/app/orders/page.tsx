@@ -1,95 +1,100 @@
-import Link from 'next/link';
+
+'use client';
+import { useEffect, useState } from 'react';
 import PageHeader from '@/components/page-header';
-import { getOrdersByUser, getOrdersByStore, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson } from '@/lib/order-service';
-import { db } from "@/lib/firebase";
-import { cookies } from "next/headers";
-import { redirect } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
+import { getOrdersByUser, getOrdersByStore, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson, type Order } from '@/lib/order-service';
+import { useAuth } from '@/context/auth-context';
+import { useRouter } from 'next/navigation';
 import BuyerOrdersView from './buyer-orders-view';
 import StoreOrdersView from './store-orders-view';
 import DeliveryOrdersView from './delivery-orders-view';
+import { Skeleton } from '@/components/ui/skeleton';
 
+export default function OrdersPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const [pageProps, setPageProps] = useState<any>({});
+  const [pageInfo, setPageInfo] = useState({ title: '', description: '' });
+  const [loading, setLoading] = useState(true);
 
-async function getAuthenticatedUser() {
-  // This is a simplified server-side auth check. 
-  // In a production app, this would be more robust.
-  const sessionCookie = cookies().get("session")?.value;
-  if (!sessionCookie) return null;
-  
-  try {
-    // This is a placeholder for a real verification logic
-    // For this prototype, we assume the cookie is a UID.
-    // WARNING: Do not do this in production.
-    const userDocRef = doc(db, "users", sessionCookie);
-    const userDoc = await getDoc(userDocRef);
-    if (userDoc.exists()) {
-        const userData = userDoc.data();
-        return { 
-            uid: userDoc.id,
-            role: userData.role,
-            storeId: userData.storeId, // May not exist for all roles
-            name: userData.name,
-            ...userData
-        };
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.push('/login');
+      return;
     }
-    return null;
-  } catch (error) {
-    console.error("Auth check failed:", error);
-    return null;
-  }
-}
 
-export default async function OrdersPage() {
-  const user = await getAuthenticatedUser();
-  
-  if (!user) {
-    redirect('/login');
-  }
+    const fetchData = async () => {
+      setLoading(true);
+      const userRole = user.role;
+      let props: any = {};
+      let title = "";
+      let description = "";
 
-  const userRole = user.role;
-  let props: any = {};
-  let pageTitle = "";
-  let pageDescription = "";
+      try {
+        switch (userRole) {
+          case 'store':
+            const orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
+            title = "Gestión de Pedidos";
+            description = "Gestiona los pedidos de tu tienda.";
+            props = { orders };
+            break;
+          case 'delivery':
+            const [availableOrders, assignedOrders] = await Promise.all([
+              getAvailableOrdersForDelivery(),
+              getOrdersByDeliveryPerson(user.uid),
+            ]);
+            title = "Panel de Repartidor";
+            description = "Gestiona los pedidos disponibles y tus entregas activas.";
+            props = { availableOrders, assignedOrders };
+            break;
+          default: // 'buyer' and any other case
+            const buyerOrders = await getOrdersByUser(user.uid);
+            title = "Mis Pedidos";
+            description = "Ve tus pedidos recientes y en curso.";
+            props = { orders: buyerOrders };
+            break;
+        }
+        setPageProps(props);
+        setPageInfo({ title, description });
+      } catch (error) {
+        console.error("Error fetching orders:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  switch (userRole) {
-    case 'store':
-      const orders = user.storeId ? await getOrdersByStore(user.storeId) : [];
-      pageTitle = "Gestión de Pedidos";
-      pageDescription = "Gestiona los pedidos de tu tienda.";
-      props = { orders };
-      break;
-    case 'delivery':
-      const [availableOrders, assignedOrders] = await Promise.all([
-        getAvailableOrdersForDelivery(),
-        getOrdersByDeliveryPerson(user.uid),
-      ]);
-      pageTitle = "Panel de Repartidor";
-      pageDescription = "Gestiona los pedidos disponibles y tus entregas activas.";
-      props = { availableOrders, assignedOrders };
-      break;
-    default: // 'buyer' and any other case
-      const buyerOrders = await getOrdersByUser(user.uid);
-      pageTitle = "Mis Pedidos";
-      pageDescription = "Ve tus pedidos recientes y en curso.";
-      props = { orders: buyerOrders };
-      break;
-  }
-  
+    fetchData();
+  }, [user, authLoading, router]);
+
   const renderView = () => {
-    switch (userRole) {
+    if (!user) return null;
+    switch (user.role) {
       case 'store':
-        return <StoreOrdersView {...props} />;
+        return <StoreOrdersView {...pageProps} />;
       case 'delivery':
-        return <DeliveryOrdersView {...props} />;
+        return <DeliveryOrdersView {...pageProps} />;
       default:
-        return <BuyerOrdersView {...props} />;
+        return <BuyerOrdersView {...pageProps} />;
     }
-  }
+  };
 
+  if (authLoading || loading) {
+    return (
+      <div className="container mx-auto">
+        <PageHeader title="Cargando Pedidos..." description="Por favor, espera un momento." />
+        <div className="space-y-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto">
-      <PageHeader title={pageTitle} description={pageDescription} />
+      <PageHeader title={pageInfo.title} description={pageInfo.description} />
       {renderView()}
     </div>
   );
