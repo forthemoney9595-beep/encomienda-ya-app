@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import type { OrderStatus } from '@/lib/order-service';
 
@@ -24,7 +25,7 @@ const deliveryPersonIcon = new L.Icon({
 });
 
 const storeIcon = new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLXN0b3JlIj48cGF0aCBkPSJtMiA3IDQtMS4yQTYgNiAwIDAgMSAxMSA4djEwYy0uOSAwLTEuNjEuMy0yLjI0LjgzLS41My40My0xLjExIDEuMzQtMS4xMSAyLjE3IDAgLjg0LjU4IDEuNzQgMS4xMSAyLjE3LjYzLjUzIDEuMzUgLjgzIDIuMjQuODNzMS42MS0uMyAyLjI0LS44M2MxLjEyLS45MSAxLjMxLTIuNjYgLjQzLTMuOTgtLjE1ləş-.23-LjMwLS40Mi0uNDgtLjU5QTE1IDkuNSAwIDAgMCAxMyA5di43YTYgNiAwIDAgMCA1LjIgMS42N0w2MS45NCAyMnoiLz48cGF0aCBkPSJtMTYgMjItMSA0LTQgMVY4YTQgNCAwIDAgMSAuOS0yLjQ4Ii8+PC9zdmc+',
+    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveDoiMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLXN0b3JlIj48cGF0aCBkPSJtMiA3IDQtMS4yQTYgNiAwIDAgMSAxMSA4djEwYy0uOSAwLTEuNjEuMy0yLjI0LjgzLS41My40My0xLjExIDEuMzQtMS4xMSAyLjE3IDAgLjg0LjU4IDEuNzQgMS4xMSAyLjE3LjYzLjUzIDEuMzUgLjgzIDIuMjQuODNzMS42MS0uMyAyLjI0LS44M2MxLjEyLS45MSAxLjMxLTIuNjYgLjQzLTMuOTgtLjE1ləş-.23-LjMwLS40Mi0uNDgtLjU5QTE1IDkuNSAwIDAgMCAxMyA5di43YTYgNiAwIDAgMCA1LjIgMS42N0w2MS45NCAyMnoiLz48cGF0aCBkPSJtMTYgMjItMSA0LTQgMVY4YTQgNCAwIDAgMSAuOS0yLjQ4Ii8+PC9zdmc+',
     iconSize: [30, 30],
     iconAnchor: [15, 30],
     popupAnchor: [0, -32]
@@ -54,6 +55,11 @@ function MapUpdater({ center }: { center: L.LatLngExpression }) {
 
 export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapProps) {
   const [driverPosition, setDriverPosition] = useState({ lat: storeCoords.lat, lng: storeCoords.lon });
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
   
   const storePos: L.LatLngExpression = [storeCoords.lat, storeCoords.lon];
   const customerPos: L.LatLngExpression = [customerCoords.lat, customerCoords.lon];
@@ -90,8 +96,8 @@ export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapP
   }, [orderStatus, storeCoords, customerCoords]);
 
 
-  if (typeof window === 'undefined') {
-    return <div className="h-full w-full bg-muted animate-pulse"></div>;
+  if (!isClient) {
+    return <Skeleton className="h-full w-full rounded-md" />;
   }
   
   const driverPos: L.LatLngExpression = [driverPosition.lat, driverPosition.lng];
