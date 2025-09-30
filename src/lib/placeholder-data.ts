@@ -100,31 +100,6 @@ export function savePrototypeProducts(products: Product[]) {
     sessionStorage.setItem(PROTOTYPE_PRODUCTS_KEY, JSON.stringify(products));
 }
 
-export function addPrototypeProduct(productData: Omit<Product, 'id'>) {
-    if (typeof window === 'undefined') return;
-    const newProduct = { id: `proto-prod-${Date.now()}`, ...productData };
-    const existingProducts = getPrototypeProducts();
-    const updatedProducts = [...existingProducts, newProduct];
-    savePrototypeProducts(updatedProducts);
-}
-
-export function updatePrototypeProduct(productId: string, updatedData: Partial<Omit<Product, 'id'>>) {
-    if (typeof window === 'undefined') return;
-    const existingProducts = getPrototypeProducts();
-    const productIndex = existingProducts.findIndex(p => p.id === productId);
-    if (productIndex !== -1) {
-        existingProducts[productIndex] = { ...existingProducts[productIndex], ...updatedData };
-        savePrototypeProducts(existingProducts);
-    }
-}
-
-export function deletePrototypeProduct(productId: string) {
-    if (typeof window === 'undefined') return;
-    const existingProducts = getPrototypeProducts();
-    const updatedProducts = existingProducts.filter(p => p.id !== productId);
-    savePrototypeProducts(updatedProducts);
-}
-
 
 export const notifications = [
   { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Bonanza de Hamburguesas está en camino.', date: 'hace 5 min' },
@@ -170,3 +145,5 @@ export function getPrototypeOrdersByDeliveryPerson(driverId: string): PrototypeO
     const allOrders = getPrototypeOrders();
     return allOrders.filter(order => order.deliveryPersonId === driverId && order.status === 'En reparto');
 }
+
+    

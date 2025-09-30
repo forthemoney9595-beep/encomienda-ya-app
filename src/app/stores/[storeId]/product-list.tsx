@@ -10,11 +10,11 @@ import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { getProductsByStoreId, deleteProductFromStore } from '@/lib/data-service';
 import { ManageItemDialog } from './manage-item-dialog';
+import { getPrototypeProducts, savePrototypeProducts } from '@/lib/placeholder-data';
 
 interface ProductListProps {
     products: Product[];
@@ -29,7 +29,9 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
     
-    const [products, setProducts] = useState(initialProducts);
+    // Manage products in local state for immediate updates
+    const [products, setProducts] = useState<Product[]>(initialProducts);
+    
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
@@ -38,48 +40,45 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
-    const fetchProducts = useCallback(async () => {
-        const updatedProducts = await getProductsByStoreId(currentStoreId);
-        setProducts(updatedProducts);
-    }, [currentStoreId]);
-
+    // Save changes to sessionStorage whenever products state changes
     useEffect(() => {
-        const handleProductsUpdated = () => {
-            fetchProducts();
-        };
+        if (currentStoreId === 'proto-store-id') {
+            savePrototypeProducts(products);
+        }
+    }, [products, currentStoreId]);
 
-        window.addEventListener('products-updated', handleProductsUpdated);
-
-        return () => {
-            window.removeEventListener('products-updated', handleProductsUpdated);
-        };
-    }, [fetchProducts]);
-
-    const handleEditProduct = (product: Product) => {
+    const handleOpenDialogForEdit = (product: Product) => {
         setEditingProduct(product);
         setManageItemDialogOpen(true);
     };
 
-    const handleAddNewProduct = () => {
+    const handleOpenDialogForCreate = () => {
         setEditingProduct(null);
         setManageItemDialogOpen(true);
     };
 
-    const handleDeleteProduct = async (productId: string) => {
-        try {
-            await deleteProductFromStore(currentStoreId, productId);
-            toast({
-                title: "Producto Eliminado",
-                description: "El producto ha sido eliminado correctamente.",
-            });
-            fetchProducts(); // Refresh list
-        } catch (error) {
-            console.error("Error deleting product:", error);
-            toast({
-                variant: 'destructive',
-                title: "Error",
-                description: "No se pudo eliminar el producto.",
-            });
+    const handleDeleteProduct = (productId: string) => {
+        setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+        toast({
+            title: "Producto Eliminado",
+            description: "El producto ha sido eliminado correctamente.",
+        });
+    };
+    
+    const handleSaveProduct = (productData: Omit<Product, 'id'>, id?: string) => {
+        if (id) { // Editing existing product
+            setProducts(prevProducts => 
+                prevProducts.map(p => p.id === id ? { ...p, ...productData } : p)
+            );
+            toast({ title: "¡Artículo Actualizado!" });
+        } else { // Creating new product
+            const newProduct: Product = {
+                id: `proto-prod-${Date.now()}`,
+                imageUrl: `https://picsum.photos/seed/${productData.name.replace(/\s/g, '')}/200/200`,
+                ...productData,
+            };
+            setProducts(prevProducts => [...prevProducts, newProduct]);
+            toast({ title: "¡Artículo Guardado!" });
         }
     };
 
@@ -114,7 +113,7 @@ export function ProductList({ products: initialProducts, productCategories, owne
         <>
             {isOwner && (
               <div className="mb-4">
-                <Button onClick={handleAddNewProduct}>
+                <Button onClick={handleOpenDialogForCreate}>
                   Añadir Nuevo Artículo
                 </Button>
               </div>
@@ -147,7 +146,7 @@ export function ProductList({ products: initialProducts, productCategories, owne
                                     </div>
                                     {isOwner ? (
                                         <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
+                                            <Button variant="outline" size="sm" onClick={() => handleOpenDialogForEdit(product)}>
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 Editar
                                             </Button>
@@ -210,9 +209,11 @@ export function ProductList({ products: initialProducts, productCategories, owne
             <ManageItemDialog
                 isOpen={isManageItemDialogOpen}
                 setIsOpen={setManageItemDialogOpen}
-                storeId={currentStoreId}
                 product={editingProduct}
+                onSave={handleSaveProduct}
             />
         </>
     )
 }
+
+    

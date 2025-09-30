@@ -6,13 +6,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, PlusCircle, Edit } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { addProductToStore, updateProductInStore } from "@/lib/data-service";
 import type { Product } from "@/lib/placeholder-data";
 
 const formSchema = z.object({
@@ -22,19 +20,20 @@ const formSchema = z.object({
   category: z.string().min(1, "Por favor, especifica una categoría."),
 });
 
+type FormData = z.infer<typeof formSchema>;
+
 interface ManageItemDialogProps {
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
-    storeId: string;
     product: Product | null; // null for creating, product object for editing
+    onSave: (data: FormData, id?: string) => void;
 }
 
-export function ManageItemDialog({ isOpen, setIsOpen, storeId, product }: ManageItemDialogProps) {
-  const { toast } = useToast();
+export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const isEditing = product !== null;
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
@@ -45,59 +44,31 @@ export function ManageItemDialog({ isOpen, setIsOpen, storeId, product }: Manage
   });
 
   useEffect(() => {
-    if (product) {
-      form.reset({
-        name: product.name,
-        description: product.description,
-        price: product.price,
-        category: product.category,
-      });
-    } else {
-      form.reset({
-        name: "",
-        description: "",
-        price: 0,
-        category: "",
-      });
-    }
-  }, [product, form]);
-
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsProcessing(true);
-    
-    try {
-      const productData = {
-        ...values,
-        imageUrl: product?.imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`,
-      };
-
-      if (isEditing) {
-        await updateProductInStore(storeId, product.id, productData);
-        toast({
-          title: "¡Artículo Actualizado!",
-          description: `El artículo "${values.name}" ha sido actualizado correctamente.`,
+    if (isOpen) {
+      if (product) {
+        form.reset({
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          category: product.category,
         });
       } else {
-        await addProductToStore(storeId, productData);
-        toast({
-          title: "¡Artículo Guardado!",
-          description: `El artículo "${values.name}" ha sido añadido correctamente.`,
+        form.reset({
+          name: "",
+          description: "",
+          price: 0,
+          category: "",
         });
       }
-
-      window.dispatchEvent(new CustomEvent('products-updated'));
-      setIsOpen(false);
-      
-    } catch (error) {
-      console.error("Error managing item:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo guardar el artículo. Por favor, inténtalo de nuevo.",
-      });
-    } finally {
-        setIsProcessing(false);
     }
+  }, [product, form, isOpen]);
+
+  async function onSubmit(values: FormData) {
+    setIsProcessing(true);
+    // This component is now 'dumb'. It just passes the data up.
+    onSave(values, product?.id);
+    setIsProcessing(false);
+    setIsOpen(false);
   }
 
   return (
@@ -145,7 +116,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, storeId, product }: Manage
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ej. Comida Rápida, Bebidas" {...field} disabled={isProcessing} />
+                       <Input placeholder="Ej. Comida Rápida, Bebidas" {...field} disabled={isProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -186,3 +157,5 @@ export function ManageItemDialog({ isOpen, setIsOpen, storeId, product }: Manage
     </Dialog>
   );
 }
+
+    
