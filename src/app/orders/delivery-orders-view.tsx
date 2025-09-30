@@ -13,32 +13,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { useRouter } from 'next/navigation';
 
 export default function DeliveryOrdersView() {
   const { user, loading: authLoading } = useAuth();
-  const { 
-    prototypeOrders, 
-    loading: prototypeLoading, 
-    getAvailableOrdersForDelivery, 
-    getOrdersByDeliveryPerson 
-  } = usePrototypeData();
-  
+  const { prototypeOrders, loading: prototypeLoading, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson, updatePrototypeOrder } = usePrototypeData();
   const { toast } = useToast();
-  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
-  const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
+  const router = useRouter();
+  
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (authLoading || prototypeLoading || !user || user.role !== 'delivery') return;
-
-    if (user.uid.startsWith('proto-')) {
-      setAvailableOrders(getAvailableOrdersForDelivery());
-      setAssignedOrders(getOrdersByDeliveryPerson(user.uid));
-    } else {
-      // Logic for real DB would go here
-    }
-  }, [user, authLoading, prototypeLoading, prototypeOrders, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson]);
-
+  const availableOrders = user ? getAvailableOrdersForDelivery() : [];
+  const assignedOrders = user ? getOrdersByDeliveryPerson(user.uid) : [];
 
   const handleAcceptOrder = async (orderId: string) => {
     if (!user) {
@@ -52,7 +38,20 @@ export default function DeliveryOrdersView() {
 
     setLoadingOrderId(orderId);
     try {
-      await assignOrderToDeliveryPerson(orderId, user.uid, user.name, user.uid.startsWith('proto-'));
+       if (orderId.startsWith('proto-')) {
+        // Find the order to check its current status
+        const order = prototypeOrders.find(o => o.id === orderId);
+        if (!order || order.deliveryPersonId) {
+            throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
+        }
+        updatePrototypeOrder(orderId, { 
+            status: 'En reparto',
+            deliveryPersonId: user.uid,
+            deliveryPersonName: user.name,
+        });
+      } else {
+        await assignOrderToDeliveryPerson(orderId, user.uid, user.name);
+      }
       toast({
         title: '¡Pedido Aceptado!',
         description: 'El pedido ha sido asignado a ti. ¡Hora de ponerse en marcha!',
@@ -71,9 +70,12 @@ export default function DeliveryOrdersView() {
 
   const handleCompleteOrder = async (orderId: string) => {
     setLoadingOrderId(orderId);
-
     try {
-      await updateOrderStatus(orderId, 'Entregado', user?.uid.startsWith('proto-'));
+      if (orderId.startsWith('proto-')) {
+        updatePrototypeOrder(orderId, { status: 'Entregado' });
+      } else {
+        await updateOrderStatus(orderId, 'Entregado');
+      }
       toast({
         title: '¡Entrega Completada!',
         description: '¡Buen trabajo! El pedido ha sido marcado como entregado.',
