@@ -6,7 +6,6 @@ import Image from 'next/image';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getStoreById, getProductsByStoreId } from '@/lib/data-service';
-import { StoreOwnerTools } from './store-owner-tools';
 import { ProductList } from './product-list';
 import { ContactStore } from './contact-store';
 import { useEffect, useState } from 'react';
@@ -77,6 +76,7 @@ export default function StoreDetailPage() {
     async function fetchData() {
         if (!storeId) return;
         
+        setLoading(true);
         try {
             const storeData = await getStoreById(storeId);
             
@@ -84,12 +84,8 @@ export default function StoreDetailPage() {
                 notFound();
                 return;
             }
-            
-            // For prototype stores, we don't fetch products from the server
-            // as they are managed client-side in session storage to prevent hydration errors.
-            const productsData = storeId.startsWith('proto-')
-                ? [] 
-                : await getProductsByStoreId(storeId);
+
+            const productsData = await getProductsByStoreId(storeId);
 
             setStore(storeData);
             setProducts(productsData);

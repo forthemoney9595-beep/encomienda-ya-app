@@ -1,18 +1,16 @@
 
 'use server';
 import { db } from './firebase';
-import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc } from 'firebase/firestore';
-import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
+import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
+import type { Store, Product, DeliveryPersonnel, prototypeUsers } from './placeholder-data';
 import { 
     prototypeStore, 
     getPrototypeProducts, 
-    updatePrototypeStore, 
     addPrototypeProduct,
     updatePrototypeProduct,
     deletePrototypeProduct
 } from './placeholder-data';
 import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
-import { generateProductImage } from '@/ai/flows/generate-product-image';
 
 
 /**
@@ -65,11 +63,6 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
  */
 export async function getStoreById(id: string): Promise<Store | null> {
   if (id.startsWith('proto-')) {
-    // Ensure we get the latest from session storage if available
-    if (typeof window !== 'undefined') {
-        const stored = sessionStorage.getItem('prototypeStore');
-        return stored ? JSON.parse(stored) : prototypeStore;
-    }
     return prototypeStore;
   }
 
@@ -132,28 +125,25 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
   }
 }
 
-interface ProductData extends Omit<Product, 'id'> {
-  imageFile?: File;
-}
-
 /**
  * Adds a new product to a store's 'products' subcollection.
  * If the product's category is new, it adds it to the store's `productCategories` array.
  * @param storeId The ID of the store.
  * @param productData The data for the new product.
  */
-export async function addProductToStore(storeId: string, productData: Omit<Product, 'id'>): Promise<void> {
+export async function addProductToStore(storeId: string, productData: Product): Promise<void> {
     if (storeId.startsWith('proto-')) {
-        addPrototypeProduct(productData as Product);
+        // This is now handled in-memory in the component state for prototype mode.
+        console.log("Prototype mode: Product added to component state.", productData);
         return;
     }
     
     try {
         const storeRef = doc(db, 'stores', storeId);
-        const productsCollectionRef = collection(storeRef, 'products');
+        // Use the product's own ID for the document ID in the subcollection.
+        const productRef = doc(collection(storeRef, 'products'), productData.id);
         
-        // Add the product to the subcollection
-        await addDoc(productsCollectionRef, productData);
+        await setDoc(productRef, productData);
 
         // Check if the category is new and update the store document
         const storeSnap = await getDoc(storeRef);
@@ -172,9 +162,10 @@ export async function addProductToStore(storeId: string, productData: Omit<Produ
     }
 }
 
-export async function updateProductInStore(storeId: string, productId: string, productData: Partial<Omit<Product, 'id'>>) {
+export async function updateProductInStore(storeId: string, productId: string, productData: Partial<Product>) {
     if (storeId.startsWith('proto-')) {
-        updatePrototypeProduct(productId, productData);
+        // This is now handled in-memory in the component state for prototype mode.
+        console.log("Prototype mode: Product updated in component state.", productId, productData);
         return;
     }
 
@@ -189,7 +180,8 @@ export async function updateProductInStore(storeId: string, productId: string, p
 
 export async function deleteProductFromStore(storeId: string, productId: string) {
     if (storeId.startsWith('proto-')) {
-        deletePrototypeProduct(productId);
+        // This is now handled in-memory in the component state for prototype mode.
+        console.log("Prototype mode: Product deleted from component state.", productId);
         return;
     }
 
@@ -225,6 +217,7 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
         vehicle: data.vehicle || 'No especificado',
         zone: data.zone || 'No asignada',
         status: statusMap[data.status as keyof typeof statusMap] || 'Inactivo',
+        email: data.email || '',
       };
     });
 
@@ -236,7 +229,8 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
                 name: protoDeliveryUser.name,
                 status: 'Activo',
                 vehicle: 'Motocicleta',
-                zone: 'Centro'
+                zone: 'Centro',
+                email: protoDeliveryUser.email,
             });
         }
     }
@@ -252,7 +246,8 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
                 name: protoDeliveryUser.name,
                 status: 'Activo',
                 vehicle: 'Motocicleta',
-                zone: 'Centro'
+                zone: 'Centro',
+                email: protoDeliveryUser.email,
             }];
         }
     }
@@ -264,6 +259,19 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
  * Fetches a single delivery person by their user ID.
  */
 export async function getDeliveryPersonById(id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
+  // Check prototype users first
+  const protoUser = Object.values(prototypeUsers).find(u => u.uid === id && u.role === 'delivery');
+  if (protoUser) {
+      return {
+          id: protoUser.uid,
+          name: protoUser.name,
+          email: protoUser.email,
+          vehicle: 'Motocicleta',
+          zone: 'Centro',
+          status: 'Activo'
+      };
+  }
+
   try {
     const docRef = doc(db, "users", id);
     const docSnap = await getDoc(docRef);
@@ -355,7 +363,7 @@ export async function addDriverReview(driverId: string, reviewData: { reviewText
 export async function getDriverReviews(driverId: string): Promise<DriverReview[]> {
   try {
     const reviewsRef = collection(db, 'users', driverId, 'reviews');
-    const q = query(reviewsRef, where('createdAt', '!=', null)); // Simple query to enable ordering
+    const q = query(reviewsRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
 
     const reviews: DriverReview[] = querySnapshot.docs.map(doc => {
@@ -368,13 +376,9 @@ export async function getDriverReviews(driverId: string): Promise<DriverReview[]
       };
     });
 
-    // Sort by date client-side as Firestore requires a composite index for this query otherwise
-    reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
     return reviews;
   } catch (error) {
     console.error(`Error fetching reviews for driver ${driverId}:`, error);
     return [];
   }
 }
-

@@ -10,12 +10,11 @@ import { ShoppingCart, Edit, Trash2, Loader2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { addProductToStore, deleteProductFromStore, updateProductInStore } from '@/lib/data-service';
-import { getPrototypeProducts, savePrototypeProducts } from '@/lib/placeholder-data';
 
 interface ProductListProps {
     products: Product[];
@@ -31,7 +30,6 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const { user } = useAuth();
     
     const [products, setProducts] = useState<Product[]>(initialProducts);
-    const [isClient, setIsClient] = useState(false);
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -40,13 +38,10 @@ export function ProductList({ products: initialProducts, productCategories, owne
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
+    // If the initial products change (e.g. navigation), update the state
     useEffect(() => {
-        setIsClient(true);
-        if (currentStoreId.startsWith('proto-')) {
-            const storedProducts = getPrototypeProducts();
-            setProducts(storedProducts);
-        }
-    }, [currentStoreId]);
+        setProducts(initialProducts);
+    }, [initialProducts]);
 
     const handleSaveProduct = async (productData: Product) => {
         setManageItemDialogOpen(false);
@@ -55,20 +50,19 @@ export function ProductList({ products: initialProducts, productCategories, owne
         let updatedProducts;
         let successMessage = "";
     
-        if (editingProduct) {
-            updatedProducts = products.map(p => p.id === editingProduct.id ? { ...productData, id: editingProduct.id } : p);
-            await updateProductInStore(currentStoreId, editingProduct.id, productData);
+        if (productData.id && products.some(p => p.id === productData.id)) {
+            // Editing existing product
+            updatedProducts = products.map(p => p.id === productData.id ? productData : p);
+            await updateProductInStore(currentStoreId, productData.id, productData);
             successMessage = "¡Artículo Actualizado!";
         } else {
-            const newProductWithId = { ...productData, id: `proto-prod-${Date.now()}` };
+            // Adding new product
+            const newProductWithId = { ...productData, id: `prod-${Date.now()}` };
             updatedProducts = [...products, newProductWithId];
             await addProductToStore(currentStoreId, newProductWithId);
             successMessage = "¡Artículo Guardado!";
         }
         
-        if (currentStoreId.startsWith('proto-')) {
-            savePrototypeProducts(updatedProducts);
-        }
         setProducts(updatedProducts);
         toast({ title: successMessage });
     };
@@ -77,9 +71,6 @@ export function ProductList({ products: initialProducts, productCategories, owne
         const updatedProducts = products.filter(p => p.id !== productId);
         setProducts(updatedProducts);
         
-        if (currentStoreId.startsWith('proto-')) {
-            savePrototypeProducts(updatedProducts);
-        }
         await deleteProductFromStore(currentStoreId, productId);
         
         toast({
@@ -130,14 +121,6 @@ export function ProductList({ products: initialProducts, productCategories, owne
         }
         setOpenCartAlert(false);
         setPendingProduct(null);
-    }
-    
-    if (!isClient) {
-        return (
-            <div className="flex justify-center items-center h-48">
-                <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
-        );
     }
 
     return (
@@ -219,15 +202,15 @@ export function ProductList({ products: initialProducts, productCategories, owne
                                 </CardContent>
                             </Card>
                         ))}
+                         {products.filter(p => p.category.toLowerCase() === category.toLowerCase()).length === 0 && (
+                            <div className="text-center text-muted-foreground py-10">
+                                <p>No hay productos en esta categoría.</p>
+                            </div>
+                        )}
                     </div>
                     </TabsContent>
                 ))}
-                {products.length === 0 && !isClient && (
-                     <div className="flex justify-center items-center h-48">
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                    </div>
-                )}
-                {products.length === 0 && isClient && (
+                {products.length === 0 && (
                     <div className="text-center text-muted-foreground py-10">
                         <p>Esta tienda aún no tiene productos.</p>
                          {isOwner && <p>¡Añade tu primer artículo usando el botón de arriba!</p>}

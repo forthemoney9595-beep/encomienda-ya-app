@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { DeliveryPersonnel } from '@/lib/placeholder-data';
@@ -53,7 +54,7 @@ export function DeliveryPersonnelList({ personnel }: DeliveryPersonnelListProps)
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Vehículo</TableHead>
-                <TableHead className="hidden md:table-cell">Zona</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>
                   <span className="sr-only">Acciones</span>
@@ -80,7 +81,7 @@ export function DeliveryPersonnelList({ personnel }: DeliveryPersonnelListProps)
                         </Link>
                       </TableCell>
                     <TableCell>{driver.vehicle}</TableCell>
-                    <TableCell className="hidden md:table-cell">{driver.zone}</TableCell>
+                    <TableCell className="hidden md:table-cell">{driver.email}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
                     </TableCell>

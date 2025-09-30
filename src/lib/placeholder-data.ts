@@ -28,6 +28,7 @@ export type DeliveryPersonnel = {
   vehicle: string;
   zone: string;
   status: 'Activo' | 'Pendiente' | 'Inactivo' | 'Rechazado';
+  email: string;
 };
 
 export type UserProfile = {
@@ -46,7 +47,7 @@ export const prototypeUsers: Record<string, UserProfile> = {
     'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
 };
 
-let prototypeStoreInstance: Store = {
+export const prototypeStore: Store = {
     id: 'proto-store-id',
     name: "Hamburguesas IA",
     category: "Comida Rápida",
@@ -58,24 +59,6 @@ let prototypeStoreInstance: Store = {
     imageHint: "burger joint",
 };
 
-if (typeof window !== 'undefined') {
-    const storedStore = sessionStorage.getItem('prototypeStore');
-    if (storedStore) {
-        prototypeStoreInstance = JSON.parse(storedStore);
-    } else {
-        sessionStorage.setItem('prototypeStore', JSON.stringify(prototypeStoreInstance));
-    }
-}
-export const prototypeStore = prototypeStoreInstance;
-
-export function updatePrototypeStore(store: Store) {
-    if (typeof window === 'undefined') return;
-    prototypeStoreInstance = store;
-    sessionStorage.setItem('prototypeStore', JSON.stringify(store));
-}
-
-
-const PROTOTYPE_PRODUCTS_KEY = 'prototypeProducts';
 const initialPrototypeProducts: Product[] = [
     { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
     { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida Rápida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
@@ -83,21 +66,20 @@ const initialPrototypeProducts: Product[] = [
 ];
 
 export function getPrototypeProducts(): Product[] {
-    if (typeof window === 'undefined') {
-      return initialPrototypeProducts;
-    }
-    const productsJson = sessionStorage.getItem(PROTOTYPE_PRODUCTS_KEY);
-    if (productsJson) {
-      return JSON.parse(productsJson);
-    }
-    // If no products in session storage, initialize it
-    sessionStorage.setItem(PROTOTYPE_PRODUCTS_KEY, JSON.stringify(initialPrototypeProducts));
     return initialPrototypeProducts;
 }
 
-export function savePrototypeProducts(products: Product[]) {
-    if (typeof window === 'undefined') return;
-    sessionStorage.setItem(PROTOTYPE_PRODUCTS_KEY, JSON.stringify(products));
+// Functions for in-memory manipulation, they don't really do anything permanently.
+export function addPrototypeProduct(product: Product) {
+    console.log("Adding product (in-memory):", product);
+}
+
+export function updatePrototypeProduct(productId: string, productData: Partial<Product>) {
+    console.log("Updating product (in-memory):", productId, productData);
+}
+
+export function deletePrototypeProduct(productId: string) {
+    console.log("Deleting product (in-memory):", productId);
 }
 
 
@@ -145,5 +127,3 @@ export function getPrototypeOrdersByDeliveryPerson(driverId: string): PrototypeO
     const allOrders = getPrototypeOrders();
     return allOrders.filter(order => order.deliveryPersonId === driverId && order.status === 'En reparto');
 }
-
-    
