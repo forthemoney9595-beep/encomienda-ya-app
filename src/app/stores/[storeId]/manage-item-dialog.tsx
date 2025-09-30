@@ -45,7 +45,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       name: "",
       description: "",
       price: 0,
-      category: "Comida",
+      category: "",
       imageUrl: "",
     },
   });
@@ -65,12 +65,12 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           name: "",
           description: "",
           price: 0,
-          category: "Comida",
+          category: productCategories[0] || "",
           imageUrl: "",
         });
       }
     }
-  }, [product, form, isOpen]);
+  }, [product, form, isOpen, productCategories]);
 
   async function onSubmit(values: FormData) {
     setIsProcessing(true);
@@ -78,7 +78,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 
     try {
         const productData: Product = {
-          id: product?.id || `new-${Date.now()}-${Math.random()}`,
+          id: isEditing ? product.id : `new-${Date.now()}-${Math.random()}`,
           name: values.name,
           description: values.description,
           price: values.price,
@@ -153,8 +153,9 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Comida">Comida</SelectItem>
-                        <SelectItem value="Bebida">Bebida</SelectItem>
+                        {productCategories.map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
