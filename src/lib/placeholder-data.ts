@@ -1,3 +1,5 @@
+import type { CartItem, Order, OrderStatus } from "./order-service";
+
 export type Store = {
   id: string;
   name: string;
@@ -68,3 +70,27 @@ export const notifications = [
   { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
+
+// In-memory/session storage for prototype orders
+const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
+
+export type PrototypeOrder = Omit<Order, 'createdAt'> & { createdAt: string };
+
+
+export function savePrototypeOrder(order: PrototypeOrder) {
+    if (typeof window === 'undefined') return;
+    const existingOrders = getPrototypeOrders();
+    const updatedOrders = [...existingOrders, order];
+    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
+}
+
+export function getPrototypeOrders(): PrototypeOrder[] {
+    if (typeof window === 'undefined') return [];
+    const ordersJson = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
+    return ordersJson ? JSON.parse(ordersJson) : [];
+}
+
+export function getPrototypeOrdersByStore(storeId: string): PrototypeOrder[] {
+    const allOrders = getPrototypeOrders();
+    return allOrders.filter(order => order.storeId === storeId);
+}

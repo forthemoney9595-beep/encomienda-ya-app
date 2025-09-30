@@ -1,7 +1,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore, prototypeProducts } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore, prototypeProducts, type PrototypeOrder, savePrototypeOrder, getPrototypeOrdersByStore } from './placeholder-data';
 import { getStoreById } from './data-service';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
@@ -78,10 +78,30 @@ export async function createOrder(
     // Simulate order creation for prototype
     if (isPrototype) {
         console.log("PROTOTYPE: Simulating order creation.");
+        
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const deliveryFee = 5.00; // Mock fee
         const total = subtotal + deliveryFee;
         const mockOrderId = `proto-order-${Date.now()}`;
+        const buyer = prototypeUsers['comprador@test.com'];
+
+        const newOrder: PrototypeOrder = {
+            id: mockOrderId,
+            userId: buyer.uid,
+            customerName: buyer.name,
+            items: items,
+            total: total,
+            deliveryFee: deliveryFee,
+            status: 'Pedido Realizado',
+            createdAt: new Date().toISOString(),
+            storeId: prototypeStore.id,
+            storeName: prototypeStore.name,
+            storeAddress: prototypeStore.address,
+            shippingAddress: shippingInfo,
+        };
+
+        savePrototypeOrder(newOrder);
+
         return {
             orderId: mockOrderId,
             deliveryFee,
@@ -164,6 +184,11 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 }
 
 export async function getOrdersByStore(storeId: string): Promise<Order[]> {
+    if (storeId === prototypeStore.id) {
+        const protoOrders = getPrototypeOrdersByStore(storeId);
+        return protoOrders.map(o => ({ ...o, createdAt: new Date(o.createdAt) }));
+    }
+
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
 
