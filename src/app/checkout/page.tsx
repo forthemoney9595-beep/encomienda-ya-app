@@ -43,21 +43,22 @@ export default function CheckoutPage() {
     },
   });
 
-  if (authLoading) {
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [authLoading, user, router]);
+
+  if (authLoading || !user) {
      return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
   }
 
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
-
   if (totalItems === 0 || !storeId) {
+    router.push('/');
     return (
       <div className="container mx-auto text-center py-20">
         <h2 className="text-2xl font-bold">Tu carrito está vacío</h2>
-        <p className="text-muted-foreground mt-2">Añade productos a tu carrito antes de proceder al pago.</p>
-        <Button onClick={() => router.push('/')} className="mt-4">Volver a la tienda</Button>
+        <p className="text-muted-foreground mt-2">Redirigiendo a la página principal...</p>
       </div>
     )
   }
@@ -66,10 +67,9 @@ export default function CheckoutPage() {
     if (!user || !storeId) return;
 
     try {
-      // Pass the storeId to createOrder
       const orderData = await createOrder({
         userId: user.uid,
-        items,
+        items: cart,
         shippingInfo: {
           name: values.name,
           address: values.address
@@ -182,7 +182,7 @@ export default function CheckoutPage() {
                         </CardContent>
                     </Card>
                      <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
-                        {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando Pedido...</> : `Pagar $${totalPrice.toFixed(2)}`}
+                        {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando Pedido...</> : `Pagar $${(totalPrice + 5.00).toFixed(2)}`}
                     </Button>
                 </form>
             </Form>
