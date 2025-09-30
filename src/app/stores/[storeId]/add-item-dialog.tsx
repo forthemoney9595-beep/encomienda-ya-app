@@ -7,13 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Wand2 } from "lucide-react";
+import { Loader2, PlusCircle, Upload } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { addProductToStore } from "@/lib/data-service";
 import { useRouter } from "next/navigation";
-import { generateProductImage } from "@/ai/flows/generate-product-image";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
 
 const formSchema = z.object({
@@ -21,6 +20,7 @@ const formSchema = z.object({
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
   category: z.string().min(1, "Por favor, especifica una categoría."),
+  image: z.instanceof(File).optional(),
 });
 
 interface AddItemDialogProps {
@@ -28,13 +28,20 @@ interface AddItemDialogProps {
     productCategories: string[];
 }
 
+// Function to convert file to data URI
+const toDataURL = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+});
+
+
 export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingState, setProcessingState] = useState('');
-
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -49,34 +56,37 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsProcessing(true);
     let imageUrl = '';
+
     try {
-        setProcessingState('Generando imagen del producto...');
-        const imageResult = await generateProductImage({
-            productName: values.name,
-            productDescription: values.description,
-        });
-        imageUrl = imageResult.imageUrl;
+      if (values.image) {
+        imageUrl = await toDataURL(values.image);
+      } else {
+        imageUrl = getPlaceholderImage(values.name.replace(/\s/g, ''), 400, 400);
+      }
     } catch (error) {
-        console.error("Error al generar la imagen:", error);
-        toast({
-            variant: "destructive",
-            title: "Error de IA",
-            description: "No se pudo generar la imagen del producto. Se usará una imagen de marcador de posición.",
-        });
+      console.error("Error converting image:", error);
+      toast({
+        variant: "destructive",
+        title: "Error de Imagen",
+        description: "No se pudo procesar la imagen. Se usará una de marcador de posición.",
+      });
+      imageUrl = getPlaceholderImage(values.name.replace(/\s/g, ''), 400, 400);
     }
 
     try {
-      setProcessingState('Guardando producto...');
-      await addProductToStore(storeId, {...values, imageUrl: imageUrl || getPlaceholderImage(values.name.replace(/\s/g, ''), 400, 400) });
+      // Exclude the 'image' file object from the data being sent to Firestore
+      const { image, ...productData } = values;
+
+      await addProductToStore(storeId, {...productData, imageUrl });
       toast({
         title: "¡Artículo Guardado!",
         description: `El artículo "${values.name}" ha sido añadido correctamente.`,
       });
       setOpen(false);
       form.reset();
-      router.refresh(); // Vuelve a cargar los datos del servidor para esta ruta
+      router.refresh(); // Re-fetches server data for this route
     } catch (error) {
-      console.error("Error al añadir el artículo:", error);
+      console.error("Error adding item:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -84,7 +94,6 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
       });
     } finally {
         setIsProcessing(false);
-        setProcessingState('');
     }
   }
 
@@ -102,7 +111,7 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
             <DialogHeader>
               <DialogTitle>Añadir Nuevo Artículo</DialogTitle>
               <DialogDescription>
-                Rellena los detalles del nuevo producto. Se generará una imagen con IA.
+                Rellena los detalles y sube una imagen para el nuevo producto.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -158,18 +167,42 @@ export function AddItemDialog({ storeId, productCategories }: AddItemDialogProps
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="image"
+                render={({ field: { onChange, value, ...rest }}) => (
+                  <FormItem>
+                    <FormLabel>Imagen del Producto</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            onChange(file);
+                          }
+                        }}
+                        {...rest}
+                        disabled={isProcessing}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
             <DialogFooter>
               <Button type="submit" disabled={isProcessing}>
                 {isProcessing ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {processingState}
+                    Guardando...
                    </>
                 ) : (
                   <>
-                    <Wand2 className="mr-2 h-4 w-4" />
-                    Guardar y Generar Imagen
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Guardar Artículo
                   </>
                 )}
               </Button>

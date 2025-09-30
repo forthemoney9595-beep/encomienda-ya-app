@@ -71,7 +71,7 @@ export function ProductList({ products, productCategories, ownerId }: ProductLis
                 {productCategories.map(category => (
                     <TabsContent key={category} value={category}>
                     <div className="space-y-4">
-                        {products.filter(p => p.category === category).map((product) => (
+                        {products.filter(p => p.category.toLowerCase() === category.toLowerCase()).map((product) => (
                             <Card key={product.id}>
                                 <CardContent className="flex items-center gap-4 p-4">
                                     <div className="relative h-20 w-20 flex-shrink-0">
