@@ -32,6 +32,12 @@ const PROTOTYPE_SESSION_KEY = 'prototypeUserEmail';
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+      // This effect runs only once on the client after initial render
+      setIsClient(true);
+    }, []);
 
     const fetchUserProfile = async (firebaseUser: FirebaseUser) => {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -80,6 +86,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     useEffect(() => {
+        // Only run auth logic on the client
+        if (!isClient) {
+            return;
+        }
+
         const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
         if (prototypeEmail) {
             loginForPrototype(prototypeEmail).finally(() => setLoading(false));
@@ -94,12 +105,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
             setLoading(false);
         });
-        return () => unsubscribe();
-    }, []);
+
+        // If no user is found after a short delay (for firebase to init), stop loading
+        const timer = setTimeout(() => {
+            if (auth.currentUser === null) {
+                setLoading(false);
+            }
+        }, 500);
+
+        return () => {
+            unsubscribe();
+            clearTimeout(timer);
+        };
+    }, [isClient]);
 
     const isAdmin = user?.role === 'admin';
 
-    const value = { user, loading, isAdmin, loginForPrototype, logoutForPrototype };
+    // The context value now depends on isClient to prevent hydration mismatch
+    const value = { 
+        user: isClient ? user : null, 
+        loading: loading || !isClient, // Stay in loading state until client is mounted
+        isAdmin: isClient ? isAdmin : false, 
+        loginForPrototype, 
+        logoutForPrototype 
+    };
     
     return (
         <AuthContext.Provider value={value}>
