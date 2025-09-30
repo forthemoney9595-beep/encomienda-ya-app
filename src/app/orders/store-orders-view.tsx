@@ -12,7 +12,7 @@ import type { Order } from '@/lib/order-service';
 import { getOrdersByStore } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getPrototypeOrders } from '@/lib/placeholder-data';
+import { getPrototypeOrders, getPrototypeOrdersByStore } from '@/lib/placeholder-data';
 
 const getBadgeVariant = (status: string) => {
     switch (status) {
@@ -53,9 +53,7 @@ export default function StoreOrdersView() {
             let storeOrders: Order[] = [];
             if (user.uid.startsWith('proto-')) {
                 // Correctly fetch from session-aware function and then filter
-                const allProtoOrders = getPrototypeOrders();
-                storeOrders = allProtoOrders
-                    .filter(o => o.storeId === user.storeId)
+                storeOrders = getPrototypeOrdersByStore(user.storeId)
                     .map(o => ({...o, createdAt: new Date(o.createdAt)}));
             } else {
                 storeOrders = await getOrdersByStore(user.storeId!);
