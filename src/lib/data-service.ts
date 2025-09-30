@@ -11,14 +11,16 @@ function isPrototypeMode() {
 }
 
 /**
- * Fetches all stores from the 'stores' collection in Firestore.
+ * Fetches stores from Firestore.
+ * @param all - If true, fetches all stores regardless of status. Otherwise, fetches only 'Aprobado' stores.
  */
-export async function getStores(): Promise<Store[]> {
+export async function getStores(all: boolean = false): Promise<Store[]> {
   const isProto = isPrototypeMode();
 
   try {
     const storesCollectionRef = collection(db, 'stores');
-    const q = query(storesCollectionRef, where("status", "==", "Aprobado"));
+    const q = all ? query(storesCollectionRef) : query(storesCollectionRef, where("status", "==", "Aprobado"));
+    
     const querySnapshot = await getDocs(q);
     
     const stores: Store[] = querySnapshot.docs.map(doc => {
