@@ -18,7 +18,6 @@ import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { prototypeStore } from '@/lib/placeholder-data';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
@@ -32,7 +31,7 @@ const formSchema = z.object({
 export default function CheckoutPage() {
   const { cart, totalPrice, totalItems, clearCart, storeId } = useCart();
   const { user, loading: authLoading } = useAuth();
-  const { createPrototypeOrder } = usePrototypeData();
+  const { addPrototypeOrder } = usePrototypeData();
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,39 +82,19 @@ export default function CheckoutPage() {
     };
 
     try {
-      let orderId;
-      if (user.uid.startsWith('proto-')) {
-          const deliveryFee = 5.00;
-          const total = totalPrice + deliveryFee;
-          const newOrderData = {
-              userId: user.uid,
-              customerName: user.name,
-              items: cart,
-              total: total,
-              deliveryFee: deliveryFee,
-              status: 'En preparación' as const,
-              storeId: storeId,
-              storeName: prototypeStore.name,
-              storeAddress: prototypeStore.address,
-              shippingAddress: {
-                  name: values.name,
-                  address: values.address
-              },
-          };
-          const createdOrder = await createPrototypeOrder(newOrderData);
-          orderId = createdOrder.id;
+      const createdOrder = await createOrder({
+        userId: user.uid,
+        customerName: user.name,
+        items: cart,
+        shippingInfo: {
+          name: values.name,
+          address: values.address
+        },
+        storeId: storeId,
+      });
 
-      } else {
-          const orderData = await createOrder({
-            userId: user.uid,
-            items: cart,
-            shippingInfo: {
-              name: values.name,
-              address: values.address
-            },
-            storeId: storeId,
-          });
-          orderId = orderData.orderId;
+      if (createdOrder.id.startsWith('proto-')) {
+        addPrototypeOrder(createdOrder);
       }
 
       toast({
@@ -123,7 +102,7 @@ export default function CheckoutPage() {
         description: "Gracias por tu compra. Tu pedido está siendo procesado.",
       });
       clearCart();
-      setTimeout(() => router.push(`/orders/${orderId}`), 100);
+      setTimeout(() => router.push(`/orders/${createdOrder.id}`), 100);
 
     } catch (error) {
       console.error("Error creating order:", error);

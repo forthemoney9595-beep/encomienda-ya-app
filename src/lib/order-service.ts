@@ -2,7 +2,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product } from './placeholder-data';
+import { type Product, prototypeStore } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
@@ -36,39 +36,65 @@ export interface Order {
 
 interface CreateOrderInput {
     userId: string;
+    customerName: string;
     items: CartItem[];
     shippingInfo: { name: string, address: string };
     storeId: string;
 }
 
-interface CreateOrderOutput {
-    orderId: string;
-    deliveryFee: number;
-    total: number;
-}
-
-
+/**
+ * Creates an order. If it's a prototype order, it generates the data object with coordinates.
+ * If it's a real order, it saves it to Firestore.
+ * @param input The data for the new order.
+ * @returns The created order object.
+ */
 export async function createOrder(
    input: CreateOrderInput
-): Promise<CreateOrderOutput> {
-    const { userId, items, shippingInfo, storeId } = input;
+): Promise<Order> {
+    const { userId, customerName, items, shippingInfo, storeId } = input;
 
     if (items.length === 0) {
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // Real order logic
+    // --- Prototype Logic ---
+    if (storeId.startsWith('proto-')) {
+        const deliveryFee = 5.00;
+        const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0) + deliveryFee;
+
+        const [storeCoords, customerCoords] = await Promise.all([
+            geocodeAddress({ address: prototypeStore.address }),
+            geocodeAddress({ address: shippingInfo.address })
+        ]);
+
+        const newPrototypeOrder: Order = {
+            id: `proto-order-${Date.now()}`,
+            userId: userId,
+            customerName: customerName,
+            items: items,
+            total: total,
+            deliveryFee: deliveryFee,
+            status: 'En preparación' as const,
+            storeId: storeId,
+            storeName: prototypeStore.name,
+            storeAddress: prototypeStore.address,
+            shippingAddress: {
+                name: shippingInfo.name,
+                address: shippingInfo.address
+            },
+            createdAt: new Date(),
+            storeCoords: storeCoords,
+            customerCoords: customerCoords,
+        };
+        return newPrototypeOrder;
+    }
+
+    // --- Real Firestore Order Logic ---
     const storeDoc = await getDoc(doc(db, 'stores', storeId));
     if (!storeDoc.exists()) {
         throw new Error(`No se pudo encontrar la tienda con ID ${storeId}`);
     }
     const store = storeDoc.data();
-
-    let customerName = shippingInfo.name;
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    if (userDoc.exists()) {
-        customerName = userDoc.data().name;
-    }
 
     const [storeCoords, customerCoords] = await Promise.all([
         geocodeAddress({ address: store.address }),
@@ -83,7 +109,7 @@ export async function createOrder(
 
     const orderRef = await addDoc(collection(db, 'orders'), {
         userId,
-        customerName: customerName, 
+        customerName, 
         items: items.map(item => ({...item})), // Store a clean copy of item data
         subtotal,
         deliveryFee,
@@ -100,11 +126,24 @@ export async function createOrder(
         customerCoords,
     });
     
-    return {
-        orderId: orderRef.id,
-        deliveryFee,
-        total
+    const createdOrder: Order = {
+      id: orderRef.id,
+      userId,
+      customerName,
+      items,
+      total,
+      deliveryFee,
+      status: 'En preparación',
+      createdAt: new Date(), // Approximate, actual is server timestamp
+      storeId,
+      storeName: store.name,
+      storeAddress: store.address,
+      shippingAddress: shippingInfo,
+      storeCoords,
+      customerCoords,
     };
+
+    return createdOrder;
 }
 
 

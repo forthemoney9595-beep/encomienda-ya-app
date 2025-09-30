@@ -3,14 +3,13 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
-import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY, prototypeStore, prototypeUsers } from '@/lib/placeholder-data';
-import { geocodeAddress } from '@/ai/flows/geocode-address';
+import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY } from '@/lib/placeholder-data';
 
 interface PrototypeDataContextType {
     prototypeOrders: Order[];
     loading: boolean;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
-    createPrototypeOrder: (orderData: Omit<Order, 'id' | 'createdAt'>) => Promise<Order>;
+    addPrototypeOrder: (order: Order) => void;
     getOrdersByStore: (storeId: string) => Order[];
     getAvailableOrdersForDelivery: () => Order[];
     getOrdersByDeliveryPerson: (driverId: string) => Order[];
@@ -66,27 +65,12 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         });
     };
 
-    const createPrototypeOrder = async (orderData: Omit<Order, 'id' | 'createdAt'>): Promise<Order> => {
-        
-        const [storeCoords, customerCoords] = await Promise.all([
-            geocodeAddress({ address: orderData.storeAddress || '' }),
-            geocodeAddress({ address: orderData.shippingAddress.address })
-        ]);
-
-        const newOrder: Order = {
-            ...orderData,
-            id: `proto-order-${Date.now()}`,
-            createdAt: new Date(),
-            storeCoords,
-            customerCoords,
-        };
-
+    const addPrototypeOrder = (order: Order) => {
         setOrders(prevOrders => {
-            const updatedOrders = [...prevOrders, newOrder];
+            const updatedOrders = [...prevOrders, order];
             updateSessionStorage(updatedOrders);
             return updatedOrders;
         });
-        return newOrder;
     };
     
     const getOrdersByStore = useCallback((storeId: string) => {
@@ -116,7 +100,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         prototypeOrders: orders,
         loading: loading || !isClient,
         updatePrototypeOrder,
-        createPrototypeOrder,
+        addPrototypeOrder,
         getOrdersByStore,
         getAvailableOrdersForDelivery,
         getOrdersByDeliveryPerson,
