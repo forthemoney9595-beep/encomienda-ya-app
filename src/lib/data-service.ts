@@ -27,36 +27,11 @@ export async function getStores(): Promise<Store[]> {
         productCategories: data.productCategories || [data.category] || [],
       };
     });
-
-    // Add a mock store for easy testing
-    const mockStore: Store = {
-      id: "IA-Test-Store-1",
-      name: "Tienda de Prueba IA",
-      category: "Comida Rápida",
-      address: "Av. Ficticia 123, Ciudad Gema",
-      imageUrl: "https://picsum.photos/seed/ia-store/600/400",
-      imageHint: "test store",
-      status: 'Aprobado',
-      ownerId: "proto-store-owner",
-      productCategories: ["Destacados"],
-    };
     
-    return [...stores, mockStore];
+    return stores;
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
-     // Return mock data on error to allow testing
-    const mockStore: Store = {
-      id: "IA-Test-Store-1",
-      name: "Tienda de Prueba IA",
-      category: "Comida Rápida",
-      address: "Av. Ficticia 123, Ciudad Gema",
-      imageUrl: "https://picsum.photos/seed/ia-store/600/400",
-      imageHint: "test store",
-      status: 'Aprobado',
-      ownerId: "proto-store-owner",
-      productCategories: ["Destacados"],
-    };
-    return [mockStore];
+    return [];
   }
 }
 
@@ -66,20 +41,6 @@ export async function getStores(): Promise<Store[]> {
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(id: string): Promise<Store | null> {
-  // Return mock data if mock ID is provided
-  if (id === "IA-Test-Store-1") {
-     return {
-        id: "IA-Test-Store-1",
-        name: "Tienda de Prueba IA",
-        category: "Comida Rápida",
-        address: "Av. Ficticia 123, Ciudad Gema",
-        imageUrl: "https://picsum.photos/seed/ia-store/600/400",
-        imageHint: "test store",
-        status: 'Aprobado',
-        ownerId: "proto-store-owner",
-        productCategories: ["Destacados"],
-      };
-  }
   try {
     const docRef = doc(db, "stores", id);
     const docSnap = await getDoc(docRef);
@@ -111,19 +72,6 @@ export async function getStoreById(id: string): Promise<Store | null> {
  * @param storeId The ID of the store whose products to fetch.
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
-  const mockProduct: Product = {
-      id: "IA-Test-Product-1",
-      name: "Producto de Prueba IA",
-      description: "Este es un producto generado por IA para facilitar las pruebas del flujo de pedidos.",
-      price: 9.99,
-      category: "Destacados",
-      imageUrl: "https://picsum.photos/seed/ia-product/200/200",
-  };
-
-  if (storeId === "IA-Test-Store-1") {
-    return [mockProduct];
-  }
-
   try {
     const productsCollectionRef = collection(db, 'stores', storeId, 'products');
     const q = query(productsCollectionRef);
@@ -144,7 +92,7 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
     return products;
   } catch (error) {
     console.error(`Error fetching products for store ${storeId}:`, error);
-    return storeId === "IA-Test-Store-1" ? [mockProduct] : [];
+    return [];
   }
 }
 
@@ -184,13 +132,6 @@ export async function addProductToStore(storeId: string, productData: Omit<Produ
  * Fetches all delivery personnel from the 'users' collection in Firestore.
  */
 export async function getDeliveryPersonnel(): Promise<DeliveryPersonnel[]> {
-    const mockDeliveryPerson: DeliveryPersonnel = {
-      id: "proto-delivery",
-      name: "Repartidor Proto",
-      vehicle: "Motocicleta",
-      zone: "Central",
-      status: 'Activo',
-    };
   try {
     const usersCollectionRef = collection(db, 'users');
     const q = query(usersCollectionRef, where('role', '==', 'delivery'));
@@ -207,10 +148,10 @@ export async function getDeliveryPersonnel(): Promise<DeliveryPersonnel[]> {
       };
     });
     
-    return [...personnel, mockDeliveryPerson];
+    return personnel;
   } catch (error) {
     console.error("Error fetching delivery personnel from Firestore: ", error);
-    return [mockDeliveryPerson];
+    return [];
   }
 }
 
@@ -219,16 +160,6 @@ export async function getDeliveryPersonnel(): Promise<DeliveryPersonnel[]> {
  * @param id The user ID of the delivery person.
  */
 export async function getDeliveryPersonById(id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
-    if (id === 'proto-delivery') {
-        return {
-            id: "proto-delivery",
-            name: "Repartidor Proto",
-            email: "repartidor@test.com",
-            vehicle: "Motocicleta",
-            zone: "Central",
-            status: 'Activo',
-        }
-    }
   try {
     const docRef = doc(db, "users", id);
     const docSnap = await getDoc(docRef);

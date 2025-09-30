@@ -36,8 +36,8 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
             ownerId: uid,
             status: 'Pendiente',
             createdAt: serverTimestamp(),
-            imageUrl: `https://picsum.photos/seed/${data.storeName}/600/400`,
-            imageHint: 'store food',
+            imageUrl: `https://picsum.photos/seed/${data.storeName.replace(/\s/g, '')}/600/400`,
+            imageHint: data.storeCategory.toLowerCase().split('-')[0] || 'store',
         });
     }
     

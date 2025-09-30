@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase'; 
+import { auth, db } from '@/lib/firebase';
+import { prototypeUsers } from '@/lib/placeholder-data';
 
 interface UserProfile {
     uid: string;
@@ -24,12 +25,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const prototypeUsers: Record<string, UserProfile> = {
-    'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
-    'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-id', storeName: 'Tienda Proto' },
-    'repartidor@test.com': { uid: 'proto-delivery', name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
-    'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
-};
 
 const PROTOTYPE_SESSION_KEY = 'prototypeUserEmail';
 
@@ -46,55 +41,74 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
         setUser(null);
     }
+    
+    const fetchUserProfile = async (firebaseUser: FirebaseUser | null, prototypeEmail?: string | null) => {
+        if (firebaseUser) {
+            sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
+            const userDocRef = doc(db, 'users', firebaseUser.uid);
+            const userDoc = await getDoc(userDocRef);
 
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-            setLoading(true);
-            if (firebaseUser) {
-                sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
-                const userDocRef = doc(db, 'users', firebaseUser.uid);
-                const userDoc = await getDoc(userDocRef);
-
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    let profile: UserProfile = {
-                        uid: firebaseUser.uid,
-                        email: firebaseUser.email!,
-                        ...userData
-                    } as UserProfile;
-                    
-                    if (profile.role === 'store') {
-                        const storesRef = collection(db, 'stores');
-                        const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
-                        const querySnapshot = await getDocs(q);
-                        if (!querySnapshot.empty) {
-                            profile.storeId = querySnapshot.docs[0].id;
-                        }
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                let profile: UserProfile = {
+                    uid: firebaseUser.uid,
+                    email: firebaseUser.email!,
+                    ...userData
+                } as UserProfile;
+                
+                if (profile.role === 'store') {
+                    const storesRef = collection(db, 'stores');
+                    const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
+                    const querySnapshot = await getDocs(q);
+                    if (!querySnapshot.empty) {
+                        profile.storeId = querySnapshot.docs[0].id;
                     }
-                    setUser(profile);
-                } else {
-                    setUser(null);
                 }
+                setUser(profile);
             } else {
-                // No real user, check for prototype session
-                const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
-                if (prototypeEmail && prototypeUsers[prototypeEmail]) {
-                    setUser(prototypeUsers[prototypeEmail]);
+                setUser(null); // User exists in Auth but not in Firestore profiles
+            }
+        } else if (prototypeEmail && prototypeUsers[prototypeEmail]) {
+            let protoUser = { ...prototypeUsers[prototypeEmail] };
+            
+            // If the proto user is a store, we need to find its storeId from the database
+            if (protoUser.role === 'store') {
+                const storesRef = collection(db, 'stores');
+                const q = query(storesRef, where('ownerId', '==', protoUser.uid));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    protoUser.storeId = querySnapshot.docs[0].id;
+                    protoUser.storeName = querySnapshot.docs[0].data().name;
                 } else {
-                    setUser(null);
+                    // This can happen if the store is not yet created. For prototype, we might need a fallback.
+                     console.warn(`Prototype store owner ${protoUser.email} has no store in DB.`);
                 }
             }
-            setLoading(false);
+            setUser(protoUser);
+        } else {
+            setUser(null);
+        }
+        setLoading(false);
+    }
+
+    useEffect(() => {
+        const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+            await fetchUserProfile(firebaseUser, prototypeEmail);
         });
+
+        // Initial check in case onAuthStateChanged doesn't fire immediately
+        if (!auth.currentUser && prototypeEmail) {
+            fetchUserProfile(null, prototypeEmail);
+        } else if (!auth.currentUser && !prototypeEmail) {
+            setLoading(false);
+        }
+
 
         const handleStorageChange = (event: StorageEvent) => {
             if (event.key === PROTOTYPE_SESSION_KEY) {
-                const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
-                 if (prototypeEmail && prototypeUsers[prototypeEmail]) {
-                    setUser(prototypeUsers[prototypeEmail]);
-                } else {
-                    setUser(null);
-                }
+                const newPrototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
+                fetchUserProfile(auth.currentUser, newPrototypeEmail);
             }
         };
 
