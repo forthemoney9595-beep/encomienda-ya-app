@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc } from 'firebase/firestore';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -9,6 +9,30 @@ type UserProfileData = {
   status?: 'pending' | 'approved' | 'rejected';
   [key: string]: any; // Permite otras propiedades como storeName, vehicle, etc.
 };
+
+export interface UserProfile extends UserProfileData {
+    uid: string;
+}
+
+/**
+ * Fetches a user profile from Firestore.
+ * @param uid The user's ID.
+ * @returns The user profile object or null if not found.
+ */
+export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+    try {
+        const userDocRef = doc(db, 'users', uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+            return { uid, ...userDoc.data() } as UserProfile;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error fetching user profile:", error);
+        return null;
+    }
+}
+
 
 /**
  * Crea o actualiza un documento de perfil de usuario en Firestore.
