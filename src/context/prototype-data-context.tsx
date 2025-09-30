@@ -4,12 +4,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
 import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY, prototypeStore, prototypeUsers } from '@/lib/placeholder-data';
+import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 interface PrototypeDataContextType {
     prototypeOrders: Order[];
     loading: boolean;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
-    createPrototypeOrder: (orderData: Omit<Order, 'id' | 'createdAt'>) => Order;
+    createPrototypeOrder: (orderData: Omit<Order, 'id' | 'createdAt'>) => Promise<Order>;
     getOrdersByStore: (storeId: string) => Order[];
     getAvailableOrdersForDelivery: () => Order[];
     getOrdersByDeliveryPerson: (driverId: string) => Order[];
@@ -65,12 +66,21 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         });
     };
 
-    const createPrototypeOrder = (orderData: Omit<Order, 'id' | 'createdAt'>): Order => {
+    const createPrototypeOrder = async (orderData: Omit<Order, 'id' | 'createdAt'>): Promise<Order> => {
+        
+        const [storeCoords, customerCoords] = await Promise.all([
+            geocodeAddress({ address: orderData.storeAddress || '' }),
+            geocodeAddress({ address: orderData.shippingAddress.address })
+        ]);
+
         const newOrder: Order = {
             ...orderData,
             id: `proto-order-${Date.now()}`,
             createdAt: new Date(),
+            storeCoords,
+            customerCoords,
         };
+
         setOrders(prevOrders => {
             const updatedOrders = [...prevOrders, newOrder];
             updateSessionStorage(updatedOrders);

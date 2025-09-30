@@ -49,8 +49,11 @@ interface OrderMapProps {
 function MapUpdater({ center, bounds }: { center: L.LatLngExpression, bounds: L.LatLngBounds }) {
     const map = useMap();
     useEffect(() => {
-        map.setView(center, map.getZoom());
-        map.fitBounds(bounds, { padding: [50, 50] });
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+        } else {
+            map.setView(center, 13);
+        }
     }, [center, bounds, map]);
     return null;
 }
@@ -67,7 +70,7 @@ export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapP
   const customerPos: L.LatLngExpression = [customerCoords.lat, customerCoords.lon];
   
   const bounds = L.latLngBounds(storePos, customerPos);
-  const center = bounds.getCenter();
+  const center = bounds.isValid() ? bounds.getCenter() : storePos;
 
   useEffect(() => {
     // Reset driver position if status is not 'En reparto'
@@ -84,7 +87,6 @@ export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapP
     const lonStep = (customerCoords.lon - storeCoords.lon) / totalSteps;
     
     let currentStep = 0;
-    // Ensure the simulation starts from the store
     setDriverPosition({ lat: storeCoords.lat, lng: storeCoords.lon });
 
     const interval = setInterval(() => {
@@ -132,4 +134,3 @@ export function OrderMap({ orderStatus, storeCoords, customerCoords }: OrderMapP
       </MapContainer>
   );
 }
-

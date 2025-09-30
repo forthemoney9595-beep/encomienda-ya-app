@@ -102,8 +102,7 @@ export default function CheckoutPage() {
                   address: values.address
               },
           };
-          // Use the centralized context function to create the order
-          const createdOrder = createPrototypeOrder(newOrderData);
+          const createdOrder = await createPrototypeOrder(newOrderData);
           orderId = createdOrder.id;
 
       } else {
@@ -124,7 +123,6 @@ export default function CheckoutPage() {
         description: "Gracias por tu compra. Tu pedido está siendo procesado.",
       });
       clearCart();
-      // Wait a moment for context to update before redirecting
       setTimeout(() => router.push(`/orders/${orderId}`), 100);
 
     } catch (error) {
