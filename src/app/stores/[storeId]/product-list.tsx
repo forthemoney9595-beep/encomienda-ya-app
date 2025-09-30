@@ -54,20 +54,15 @@ export function ProductList({ products: initialProducts, productCategories: init
     }, [currentStoreId, initialProducts, initialCategories]);
 
 
-    const handleSaveProduct = async (productData: Product) => {
-        let updatedProducts;
-        const isEditing = !productData.id.startsWith('new-');
+    const handleSaveProduct = (productData: Product) => {
+        const isEditing = products.some(p => p.id === productData.id);
 
         if (isEditing) {
-            // Logic for editing an existing product
-            updatedProducts = products.map(p => (p.id === productData.id ? productData : p));
+            setProducts(products.map(p => p.id === productData.id ? productData : p));
         } else {
-            // Logic for adding a new product
-            updatedProducts = [...products, productData];
+            setProducts([...products, productData]);
         }
-
-        setProducts(updatedProducts);
-
+        
         // Update categories list in memory if a new one was added
         if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
             setProductCategories([...productCategories, productData.category]);
@@ -144,6 +139,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
                 onSave={handleSaveProduct}
+                productCategories={productCategories}
             />
             {isOwner && (
               <div className="mb-4">
