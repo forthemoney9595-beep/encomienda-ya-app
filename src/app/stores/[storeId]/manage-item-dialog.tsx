@@ -13,7 +13,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
 import { useToast } from "@/hooks/use-toast";
-import { generateProductImage } from "@/ai/flows/generate-product-image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const formSchema = z.object({
@@ -31,9 +30,10 @@ interface ManageItemDialogProps {
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
     onSave: (data: Product) => void;
+    productCategories: string[];
 }
 
-export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageItemDialogProps) {
+export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const isEditing = product !== null;
@@ -74,27 +74,16 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
 
   async function onSubmit(values: FormData) {
     setIsProcessing(true);
+    setStatusMessage('Guardando producto...');
 
     try {
-        let finalImageUrl = values.imageUrl;
-        if (!finalImageUrl) {
-            setStatusMessage('Generando imagen del producto...');
-            const imageResult = await generateProductImage({
-                productName: values.name,
-                productDescription: values.description,
-            });
-            finalImageUrl = imageResult.imageUrl;
-        }
-
-        setStatusMessage('Guardando producto...');
-      
         const productData: Product = {
           id: product?.id || `new-${Date.now()}-${Math.random()}`,
           name: values.name,
           description: values.description,
           price: values.price,
           category: values.category,
-          imageUrl: finalImageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
+          imageUrl: values.imageUrl || `https://picsum.photos/seed/${values.name.replace(/\s/g, '')}/200/200`
         };
 
         onSave(productData);
@@ -121,7 +110,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave }: ManageI
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellene los detalles del producto. Si no proporciona una URL de imagen, se generará una con IA.
+                Rellene los detalles del producto. Si no proporciona una URL de imagen, se asignará una automáticamente.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
