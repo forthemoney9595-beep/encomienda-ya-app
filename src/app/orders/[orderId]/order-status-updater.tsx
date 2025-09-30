@@ -26,7 +26,6 @@ const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
 
 export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { user, loading: authLoading } = useAuth();
-  const { updatePrototypeOrder } = usePrototypeData();
   const router = useRouter();
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
@@ -52,7 +51,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     setIsUpdating(true);
     try {
         const isPrototype = user?.uid.startsWith('proto-');
-        await updateOrderStatus(order.id, selectedStatus, isPrototype, updatePrototypeOrder);
+        await updateOrderStatus(order.id, selectedStatus, isPrototype);
 
         toast({
             title: '¡Estado Actualizado!',

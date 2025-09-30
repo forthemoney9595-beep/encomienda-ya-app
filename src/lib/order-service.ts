@@ -1,7 +1,8 @@
+
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeUsers, prototypeStore } from './placeholder-data';
+import { type Product, prototypeUsers, prototypeStore, savePrototypeOrder } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
@@ -38,7 +39,6 @@ interface CreateOrderInput {
     items: CartItem[];
     shippingInfo: { name: string, address: string };
     storeId: string;
-    isPrototype?: boolean;
 }
 
 interface CreateOrderOutput {
@@ -47,8 +47,7 @@ interface CreateOrderOutput {
     total: number;
 }
 
-// This function now only handles REAL database orders.
-// The prototype data context will have its own `createPrototypeOrder` function.
+
 export async function createOrder(
    input: CreateOrderInput
 ): Promise<CreateOrderOutput> {
@@ -108,8 +107,6 @@ export async function createOrder(
     };
 }
 
-// These functions for getting orders are kept for real DB users,
-// but prototype users will get their data from the context.
 
 export async function getOrdersByUser(userId: string): Promise<Order[]> {
     const ordersRef = collection(db, 'orders');
@@ -129,16 +126,14 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
 }
 
 /**
- * Updates the status of an order. Now accepts a callback for prototype data.
+ * Updates the status of an order.
  * @param orderId The ID of the order to update.
  * @param status The new status for the order.
- * @param isPrototype If true, will expect a callback to update prototype state.
+ * @param isPrototype If true, will update prototype data.
  */
-export async function updateOrderStatus(orderId: string, status: OrderStatus, isPrototype: boolean = false, updatePrototype?: (orderId: string, updates: Partial<Order>) => void): Promise<void> {
+export async function updateOrderStatus(orderId: string, status: OrderStatus, isPrototype: boolean = false): Promise<void> {
   if (isPrototype) {
-    if (updatePrototype) {
-        updatePrototype(orderId, { status });
-    }
+    savePrototypeOrder({ id: orderId, status });
     return;
   }
   try {
@@ -155,16 +150,16 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, is
  * @param orderId The ID of the order to assign.
  * @param driverId The ID of the delivery person.
  * @param driverName The name of the delivery person.
+ * @param isPrototype If true, will update prototype data.
  */
-export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string, isPrototype: boolean = false, updatePrototype?: (orderId: string, updates: Partial<Order>) => void): Promise<void> {
+export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string, isPrototype: boolean = false): Promise<void> {
     if (isPrototype) {
-        if (updatePrototype) {
-            updatePrototype(orderId, {
-                status: 'En reparto',
-                deliveryPersonId: driverId,
-                deliveryPersonName: driverName,
-            });
-        }
+        savePrototypeOrder({
+            id: orderId,
+            status: 'En reparto',
+            deliveryPersonId: driverId,
+            deliveryPersonName: driverName,
+        });
         return;
     }
     
@@ -185,4 +180,33 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     console.error(`Error assigning order ${orderId} to driver ${driverId}:`, error);
     throw error;
   }
+}
+
+export async function getOrderById(orderId: string): Promise<Order | null> {
+    if (orderId.startsWith('proto-order-')) {
+        const protoOrders = getPrototypeOrders();
+        const order = protoOrders.find(o => o.id === orderId);
+        if (order) {
+            return { ...order, createdAt: new Date(order.createdAt) };
+        }
+        return null;
+    }
+
+    // This function is now only for REAL database orders.
+    // Prototype orders are handled by the PrototypeDataContext.
+    try {
+        const orderDoc = await getDoc(doc(db, 'orders', orderId));
+        if (orderDoc.exists()) {
+            const data = orderDoc.data();
+            return {
+                id: orderDoc.id,
+                ...data,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            } as Order;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error fetching order by ID:", error);
+        return null;
+    }
 }
