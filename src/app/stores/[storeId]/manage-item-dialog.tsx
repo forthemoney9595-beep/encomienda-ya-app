@@ -17,6 +17,7 @@ import Image from "next/image";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
 import { uploadImage } from "@/lib/upload-service";
 import { Progress } from "@/components/ui/progress";
+import { useParams } from "next/navigation";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -45,6 +46,8 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
   
   const isEditing = product !== null;
   const { toast } = useToast();
+  const params = useParams();
+  const isPrototypeMode = (params.storeId as string)?.startsWith('proto-');
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -91,21 +94,45 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       setPreviewImage(URL.createObjectURL(file));
       setIsUploading(true);
       setUploadProgress(0);
-      try {
-        // En una app real, las reglas de Firebase Storage deben permitir la subida.
-        // Simulamos la subida para el prototipo.
-        const downloadURL = await uploadImage(file, setUploadProgress);
-        form.setValue('imageUrl', downloadURL, { shouldValidate: true });
-        toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
-      } catch (error: any) {
-        toast({
-          variant: 'destructive',
-          title: 'Error de Subida',
-          description: error.message || 'No se pudo subir la imagen.',
-        });
-        setPreviewImage(isEditing ? product?.imageUrl || null : null); // Revertir al original
-      } finally {
-        setIsUploading(false);
+      
+      if (isPrototypeMode) {
+        // --- PROTOTYPE SIMULATION ---
+        // Simulate upload progress
+        const interval = setInterval(() => {
+          setUploadProgress(prev => {
+            if (prev >= 95) {
+              clearInterval(interval);
+              return 100;
+            }
+            return prev + 10;
+          });
+        }, 150);
+
+        setTimeout(() => {
+          clearInterval(interval);
+          setUploadProgress(100);
+          const randomSeed = file.name + Date.now();
+          const placeholderUrl = getPlaceholderImage(randomSeed, 200, 200);
+          form.setValue('imageUrl', placeholderUrl, { shouldValidate: true });
+          toast({ title: '¡Imagen Subida! (Simulado)', description: 'La imagen de marcador de posición se ha establecido.' });
+          setIsUploading(false);
+        }, 2000);
+      } else {
+        // --- REAL UPLOAD LOGIC ---
+        try {
+          const downloadURL = await uploadImage(file, setUploadProgress);
+          form.setValue('imageUrl', downloadURL, { shouldValidate: true });
+          toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
+        } catch (error: any) {
+          toast({
+            variant: 'destructive',
+            title: 'Error de Subida',
+            description: error.message || 'No se pudo subir la imagen.',
+          });
+          setPreviewImage(isEditing ? product?.imageUrl || null : null); // Revertir al original
+        } finally {
+          setIsUploading(false);
+        }
       }
     }
   };
@@ -234,7 +261,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                     </Button>
                     {(isUploading || uploadProgress > 0) && (
                       <div className="flex items-center gap-2">
-                        <Progress value={uploadProgress} className="w-full" />
+                        <Progress value={uploadProgress} className="w-full h-2" />
                         <span className="text-xs">{Math.round(uploadProgress)}%</span>
                       </div>
                     )}
