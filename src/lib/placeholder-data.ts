@@ -122,8 +122,8 @@ export const initialPrototypeOrders: Order[] = [
         shippingAddress: { name: 'Comprador Proto', address: 'Calle Pizza 123' },
         deliveryPersonId: undefined,
         deliveryPersonName: undefined,
-        storeCoords: { lat: 34.0522, lon: -118.2437 }, // LA
-        customerCoords: { lat: 40.7128, lon: -74.0060 }, // NYC
+        storeCoords: { lat: 34.0522, lon: -118.2437 },
+        customerCoords: { lat: 40.7128, lon: -74.0060 },
     },
     {
         id: 'proto-order-2',
@@ -142,8 +142,8 @@ export const initialPrototypeOrders: Order[] = [
         shippingAddress: { name: 'Juan Pérez', address: 'Paseo Sushi 789' },
         deliveryPersonId: undefined,
         deliveryPersonName: undefined,
-        storeCoords: { lat: 34.0522, lon: -118.2437 }, // LA
-        customerCoords: { lat: 35.6895, lon: 139.6917 }, // Tokyo
+        storeCoords: { lat: 34.0522, lon: -118.2437 },
+        customerCoords: { lat: 35.6895, lon: 139.6917 },
     }
 ];
 
@@ -154,4 +154,3 @@ export const notifications = [
   { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
-

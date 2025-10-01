@@ -97,9 +97,8 @@ export async function createOrder(
 
     // --- Real Firestore Order Logic ---
     
-    // Using static coordinates to prevent IA flow from breaking the build.
-    const storeCoords = { lat: 40.7128, lon: -74.0060 }; // Example: NYC
-    const customerCoords = { lat: 34.0522, lon: -118.2437 }; // Example: LA
+    const storeCoords = { lat: 40.7128, lon: -74.0060 };
+    const customerCoords = { lat: 34.0522, lon: -118.2437 };
 
     const distanceKm = 1 + Math.random() * 10;
     const deliveryFee = 2 + (distanceKm * 1.5);
@@ -265,5 +264,3 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
         return null;
     }
 }
-
-

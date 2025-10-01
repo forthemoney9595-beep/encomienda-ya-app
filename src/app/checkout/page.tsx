@@ -39,7 +39,6 @@ export default function CheckoutPage() {
   const [clientLoaded, setClientLoaded] = useState(false);
 
   useEffect(() => {
-    // This guard ensures all client-side logic runs only after the component has mounted.
     setClientLoaded(true);
   }, []);
 
@@ -54,7 +53,6 @@ export default function CheckoutPage() {
     },
   });
 
-  // Effect to populate user's name in the form once authenticated.
   useEffect(() => {
     if (user && !authLoading) {
         form.reset({
@@ -64,14 +62,12 @@ export default function CheckoutPage() {
     }
   }, [user, authLoading, form]);
 
-  // Effect for security: redirect unauthenticated users.
   useEffect(() => {
     if (clientLoaded && !authLoading && !user) {
       router.push('/login');
     }
   }, [clientLoaded, authLoading, user, router]);
 
-  // Effect for cart validation: redirect if cart is empty.
   useEffect(() => {
     if (clientLoaded && !authLoading && (totalItems === 0 || !storeId)) {
       toast({
@@ -96,11 +92,10 @@ export default function CheckoutPage() {
 
     try {
       const isPrototype = storeId.startsWith('proto-');
-      // For prototype, we need to manually pass store details from our placeholder data.
-      const storeName = isPrototype ? prototypeStore.name : "Nombre de Tienda Real"; // Placeholder for real logic
-      const storeAddress = isPrototype ? prototypeStore.address : "Dirección de Tienda Real"; // Placeholder for real logic
+      
+      const storeName = isPrototype ? prototypeStore.name : "Nombre de Tienda Real";
+      const storeAddress = isPrototype ? prototypeStore.address : "Dirección de Tienda Real";
 
-      // This single service function handles both prototype and real order creation.
       const createdOrder = await createOrder({
         userId: user.uid,
         customerName: user.name,
@@ -114,7 +109,6 @@ export default function CheckoutPage() {
         storeAddress: storeAddress,
       });
 
-      // If the order came from the prototype logic, add it to our client-side context.
       if (createdOrder.id.startsWith('proto-')) {
         addPrototypeOrder(createdOrder);
       }
@@ -138,12 +132,10 @@ export default function CheckoutPage() {
     }
   }
 
-  // Loading state: wait for client to mount and authentication to resolve.
   if (!clientLoaded || authLoading || !user || totalItems === 0) {
      return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
   }
 
-  // Main component render
   return (
     <div className="container mx-auto">
       <PageHeader title="Finalizar Compra" description="Confirma tu pedido y realiza el pago." />
@@ -277,5 +269,3 @@ export default function CheckoutPage() {
     </div>
   );
 }
-
-    
