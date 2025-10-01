@@ -10,39 +10,52 @@ import type { DeliveryPersonnel } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { prototypeUsers } from '@/lib/placeholder-data';
+import { Button } from '@/components/ui/button';
+import { PlusCircle } from 'lucide-react';
+
 
 export default function AdminDeliveryPage() {
   const { user, loading: authLoading } = useAuth();
   const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const { updatePrototypeDelivery, loading: prototypeLoading } = usePrototypeData();
-  const isPrototype = user?.uid.startsWith('proto-') ?? false;
+  const { prototypeDelivery, updatePrototypeDelivery, loading: prototypeLoading } = usePrototypeData();
+  const isPrototypeAdmin = user?.uid === prototypeUsers['admin@test.com'].uid;
 
   const fetchPersonnel = async () => {
     setLoading(true);
-    const fetchedPersonnel = await getDeliveryPersonnel(isPrototype);
-    setPersonnel(fetchedPersonnel);
+    const fetchedPersonnel = await getDeliveryPersonnel(false);
+    
+    if (isPrototypeAdmin) {
+      const protoDeliveryExists = fetchedPersonnel.some(p => p.id === prototypeDelivery.id);
+      if (!protoDeliveryExists) {
+        setPersonnel([prototypeDelivery, ...fetchedPersonnel]);
+      } else {
+        setPersonnel(fetchedPersonnel.map(p => p.id === prototypeDelivery.id ? prototypeDelivery : p));
+      }
+    } else {
+      setPersonnel(fetchedPersonnel);
+    }
     setLoading(false);
   };
   
   useEffect(() => {
-    if (!authLoading && !prototypeLoading) {
+    if (!authLoading) {
       fetchPersonnel();
     }
-  }, [user, authLoading, prototypeLoading]);
+  }, [user, authLoading, prototypeDelivery]);
 
 
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
     try {
-        if (personnelId.startsWith('proto-')) {
+        if (personnelId === prototypeDelivery.id) {
             const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
             updatePrototypeDelivery({ status: newStatus });
         } else {
             await updateDeliveryPersonnelStatus(personnelId, status);
+            await fetchPersonnel(); // Refetch for real users
         }
-
-        await fetchPersonnel();
         
         toast({
             title: '¡Éxito!',
@@ -60,7 +73,12 @@ export default function AdminDeliveryPage() {
 
   return (
     <div className="container mx-auto">
-      <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto." />
+      <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto.">
+         <Button onClick={() => alert('Próximamente: Añadir nuevo conductor')}>
+           <PlusCircle className="mr-2 h-4 w-4" />
+           Agregar Nuevo Conductor
+         </Button>
+      </PageHeader>
       {loading || authLoading || prototypeLoading ? (
          <div className="border rounded-lg p-4">
             <Skeleton className="h-8 w-1/4 mb-4" />

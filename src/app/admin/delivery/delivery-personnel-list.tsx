@@ -39,12 +39,6 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate }: DeliveryPer
 
   return (
     <>
-       <div className="mb-6 flex justify-end">
-         <Button>
-           <PlusCircle className="mr-2 h-4 w-4" />
-           Agregar Nuevo Conductor
-         </Button>
-       </div>
        <Card>
         <CardHeader>
           <CardTitle>Personal de Reparto</CardTitle>

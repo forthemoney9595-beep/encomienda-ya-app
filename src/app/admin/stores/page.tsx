@@ -12,39 +12,52 @@ import type { Store } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useToast } from '@/hooks/use-toast';
+import { prototypeUsers } from '@/lib/placeholder-data';
 
 export default function AdminStoresPage() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const { updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
+  const { prototypeStore, updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
   const { toast } = useToast();
-  const isPrototype = user?.uid.startsWith('proto-') ?? false;
+  const isPrototypeAdmin = user?.uid === prototypeUsers['admin@test.com'].uid;
 
   const fetchStores = async () => {
     setLoading(true);
-    const fetchedStores = await getStores(true, isPrototype);
-    setStores(fetchedStores);
+    // In prototype mode, we fetch real stores and then merge our prototype store
+    const fetchedStores = await getStores(true, false); 
+    
+    if (isPrototypeAdmin) {
+       const protoStoreExists = fetchedStores.some(s => s.id === prototypeStore.id);
+       if (!protoStoreExists) {
+         setStores([prototypeStore, ...fetchedStores]);
+       } else {
+         setStores(fetchedStores.map(s => s.id === prototypeStore.id ? prototypeStore : s));
+       }
+    } else {
+        setStores(fetchedStores);
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
-    if (!authLoading && !prototypeLoading) {
+    if (!authLoading) {
       fetchStores();
     }
-  }, [user, authLoading, prototypeLoading]);
+  }, [user, authLoading, prototypeStore]); // Depend on prototypeStore to re-fetch when it changes
 
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
     try {
-      if (storeId.startsWith('proto-')) {
+      if (storeId === prototypeStore.id) {
         updatePrototypeStore({ status });
       } else {
+        // This would be for real stores in a mixed environment
         await updateStoreStatus(storeId, status);
+        // We need to refetch for real stores too
+        await fetchStores(); 
       }
       
-      // Refresca la lista para mostrar el cambio
-      await fetchStores();
-
       toast({
         title: '¡Éxito!',
         description: `La tienda ha sido marcada como ${status.toLowerCase()}.`,
@@ -61,12 +74,12 @@ export default function AdminStoresPage() {
   return (
     <div className="container mx-auto">
       <PageHeader title="Gestión de Tiendas" description="Agrega, edita o elimina cuentas de tiendas.">
-        <Button>
+        <Button onClick={() => alert('Próximamente: Añadir nueva tienda')}>
           <PlusCircle className="mr-2 h-4 w-4" />
           Agregar Nueva Tienda
         </Button>
       </PageHeader>
-      {loading ? (
+      {loading || authLoading || prototypeLoading ? (
         <div className="border rounded-lg p-4">
             <Skeleton className="h-8 w-1/4 mb-4" />
             <div className="space-y-2">
