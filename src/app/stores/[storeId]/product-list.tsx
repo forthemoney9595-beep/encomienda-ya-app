@@ -6,7 +6,7 @@ import type { Product } from '@/lib/placeholder-data';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Edit, Trash2 } from 'lucide-react';
+import { ShoppingCart, Edit, Trash2, PlusCircle } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -54,22 +54,36 @@ export function ProductList({ products: initialProducts, productCategories: init
     }, [currentStoreId, initialProducts, initialCategories]);
 
 
-    const handleSaveProduct = (productData: Product) => {
+    const handleSaveProduct = async (productData: Product) => {
         const isEditing = products.some(p => p.id === productData.id);
-
+        
+        // Optimistically update UI
         if (isEditing) {
             setProducts(products.map(p => p.id === productData.id ? productData : p));
         } else {
             setProducts([...products, productData]);
         }
         
-        // Update categories list in memory if a new one was added
         if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
             setProductCategories([...productCategories, productData.category]);
         }
 
-        // For non-prototype, you would update the backend here. We've simplified this out for now.
-        // await isEditing ? updateProductInStore(...) : addProductToStore(...);
+        // Persist change to DB if not prototype
+        if (!currentStoreId.startsWith('proto-')) {
+            try {
+                if (isEditing) {
+                    await updateProductInStore(currentStoreId, productData.id, productData);
+                } else {
+                    await addProductToStore(currentStoreId, productData, productCategories);
+                }
+            } catch (error) {
+                // Revert optimistic update on error
+                toast({ title: "Error", description: "No se pudo guardar el artículo en la base de datos.", variant: 'destructive'});
+                setProducts(initialProducts);
+                setProductCategories(initialCategories);
+                return;
+            }
+        }
         
         toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
         setManageItemDialogOpen(false);
@@ -77,14 +91,22 @@ export function ProductList({ products: initialProducts, productCategories: init
     };
 
     const handleDeleteProduct = async (productId: string) => {
+        const originalProducts = products;
         setProducts(products.filter(p => p.id !== productId));
+        
         if (!currentStoreId.startsWith('proto-')) {
-            await deleteProductFromStore(currentStoreId, productId);
+            try {
+                await deleteProductFromStore(currentStoreId, productId);
+            } catch(error) {
+                toast({ title: "Error", description: "No se pudo eliminar el artículo de la base de datos.", variant: 'destructive'});
+                setProducts(originalProducts); // Revert
+                return;
+            }
         }
        
         toast({
             title: "Producto Eliminado",
-            description: "El producto ha sido eliminado de esta sesión. Se restaurará al recargar.",
+            description: "El producto ha sido eliminado.",
         });
     };
 
@@ -144,7 +166,8 @@ export function ProductList({ products: initialProducts, productCategories: init
             {isOwner && (
               <div className="mb-4">
                 <Button onClick={handleOpenDialogForCreate}>
-                  Añadir Nuevo Artículo
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Añadir Nuevo Artículo
                 </Button>
               </div>
             )}
@@ -191,7 +214,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                                                         <AlertDialogDescription>
-                                                            Esta acción no se puede deshacer. El producto se eliminará de la vista hasta que se recargue la página.
+                                                            Esta acción no se puede deshacer y eliminará permanentemente el producto.
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter>
