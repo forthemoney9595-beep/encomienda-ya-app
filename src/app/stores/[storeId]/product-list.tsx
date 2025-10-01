@@ -47,6 +47,10 @@ export function ProductList({ products: initialProducts, productCategories: init
         const categories = Array.from(new Set(products.map(p => p.category)));
         setProductCategories(categories.length > 0 ? categories : initialCategories);
     }, [products, initialCategories]);
+    
+    const findFirstCategoryWithProducts = () => {
+        return productCategories.find(category => products.some(p => p.category.toLowerCase() === category.toLowerCase()));
+    };
 
     const handleSaveProduct = async (productData: Product) => {
         const isEditing = products.some(p => p.id === productData.id);
@@ -160,7 +164,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                 </Button>
               </div>
             )}
-            <Tabs defaultValue={productCategories[0] || 'all'} className="w-full" value={productCategories.length > 0 ? productCategories[0] : undefined}>
+            <Tabs defaultValue={findFirstCategoryWithProducts()} className="w-full">
                 <TabsList className="mb-4">
                     {productCategories.map(category => (
                     <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
