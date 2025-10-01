@@ -24,25 +24,9 @@ export function StoresList({ stores, onStatusUpdate }: StoresListProps) {
 
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
     setIsUpdating(storeId);
-    try {
-      if (storeId.startsWith('proto-')) {
-        onStatusUpdate(storeId, status); // Call parent handler for prototype
-      } else {
-        await updateStoreStatus(storeId, status); // Call server action for real stores
-      }
-      toast({
-        title: '¡Éxito!',
-        description: `La tienda ha sido marcada como ${status.toLowerCase()}.`,
-      });
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo actualizar el estado de la tienda.',
-      });
-    } finally {
-      setIsUpdating(null);
-    }
+    // The onStatusUpdate is passed from the parent and will handle both prototype and real data
+    await onStatusUpdate(storeId, status);
+    setIsUpdating(null);
   };
 
   const getStatusVariant = (status: string) => {
@@ -119,11 +103,11 @@ export function StoresList({ stores, onStatusUpdate }: StoresListProps) {
                           <DropdownMenuSeparator />
                         </>
                       )}
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => alert('Editar: Próximamente!')}>
                         <Edit className="mr-2 h-4 w-4" />
                         Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem className="text-destructive" onClick={() => alert('Eliminar: Próximamente!')}>
                         <Trash2 className="mr-2 h-4 w-4" />
                         Eliminar
                       </DropdownMenuItem>
