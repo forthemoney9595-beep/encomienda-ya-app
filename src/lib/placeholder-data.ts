@@ -1,4 +1,4 @@
-import type { CartItem, Order, OrderStatus } from "./order-service";
+
 
 export type Store = {
   id: string;
@@ -38,6 +38,34 @@ export interface UserProfile {
     storeId?: string;
     [key: string]: any;
 }
+
+// Re-defining Order types here to avoid circular dependency
+export interface CartItem extends Product {
+  quantity: number;
+}
+export type OrderStatus = 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado';
+export interface Order {
+    id: string;
+    userId: string;
+    items: CartItem[];
+    total: number;
+    deliveryFee: number;
+    status: OrderStatus;
+    createdAt: Date;
+    storeId: string; 
+    storeName: string; 
+    shippingAddress: {
+        name: string;
+        address: string;
+    };
+    customerName?: string;
+    storeAddress?: string; 
+    deliveryPersonId?: string;
+    deliveryPersonName?: string;
+    storeCoords?: { lat: number; lon: number };
+    customerCoords?: { lat: number; lon: number };
+}
+
 
 export const prototypeUsers: Record<string, UserProfile> = {
     'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },

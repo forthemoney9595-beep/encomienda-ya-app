@@ -18,6 +18,7 @@ import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { prototypeStore } from '@/lib/placeholder-data';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
@@ -53,6 +54,15 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
+    if (!authLoading && user) {
+        form.reset({
+            ...form.getValues(),
+            name: user.name || "",
+        });
+    }
+  }, [authLoading, user, form]);
+
+  useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
     }
@@ -82,6 +92,11 @@ export default function CheckoutPage() {
     };
 
     try {
+      // For prototype, we need to manually pass store details
+      const isPrototype = storeId.startsWith('proto-');
+      const storeName = isPrototype ? prototypeStore.name : "Nombre de Tienda Real"; // Placeholder for real logic
+      const storeAddress = isPrototype ? prototypeStore.address : "Dirección de Tienda Real"; // Placeholder for real logic
+
       const createdOrder = await createOrder({
         userId: user.uid,
         customerName: user.name,
@@ -91,6 +106,8 @@ export default function CheckoutPage() {
           address: values.address
         },
         storeId: storeId,
+        storeName: storeName,
+        storeAddress: storeAddress,
       });
 
       if (createdOrder.id.startsWith('proto-')) {

@@ -2,7 +2,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { type Product, prototypeStore } from './placeholder-data';
+import type { Product } from './placeholder-data';
 import { geocodeAddress } from '@/ai/flows/geocode-address';
 
 // A CartItem is a Product with a quantity.
@@ -40,6 +40,8 @@ interface CreateOrderInput {
     items: CartItem[];
     shippingInfo: { name: string, address: string };
     storeId: string;
+    storeName: string;
+    storeAddress: string;
 }
 
 /**
@@ -51,21 +53,21 @@ interface CreateOrderInput {
 export async function createOrder(
    input: CreateOrderInput
 ): Promise<Order> {
-    const { userId, customerName, items, shippingInfo, storeId } = input;
+    const { userId, customerName, items, shippingInfo, storeId, storeName, storeAddress } = input;
 
     if (items.length === 0) {
         throw new Error("No se puede crear un pedido sin artículos.");
     }
+
+    const [storeCoords, customerCoords] = await Promise.all([
+        geocodeAddress({ address: storeAddress }),
+        geocodeAddress({ address: shippingInfo.address })
+    ]);
     
     // --- Prototype Logic ---
     if (storeId.startsWith('proto-')) {
         const deliveryFee = 5.00;
         const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0) + deliveryFee;
-
-        const [storeCoords, customerCoords] = await Promise.all([
-            geocodeAddress({ address: prototypeStore.address }),
-            geocodeAddress({ address: shippingInfo.address })
-        ]);
 
         const newPrototypeOrder: Order = {
             id: `proto-order-${Date.now()}`,
@@ -76,8 +78,8 @@ export async function createOrder(
             deliveryFee: deliveryFee,
             status: 'En preparación' as const,
             storeId: storeId,
-            storeName: prototypeStore.name,
-            storeAddress: prototypeStore.address,
+            storeName: storeName,
+            storeAddress: storeAddress,
             shippingAddress: {
                 name: shippingInfo.name,
                 address: shippingInfo.address
@@ -90,17 +92,6 @@ export async function createOrder(
     }
 
     // --- Real Firestore Order Logic ---
-    const storeDoc = await getDoc(doc(db, 'stores', storeId));
-    if (!storeDoc.exists()) {
-        throw new Error(`No se pudo encontrar la tienda con ID ${storeId}`);
-    }
-    const store = storeDoc.data();
-
-    const [storeCoords, customerCoords] = await Promise.all([
-        geocodeAddress({ address: store.address }),
-        geocodeAddress({ address: shippingInfo.address })
-    ]);
-
     const distanceKm = 1 + Math.random() * 10;
     const deliveryFee = 2 + (distanceKm * 1.5);
 
@@ -116,9 +107,9 @@ export async function createOrder(
         total,
         status: 'En preparación',
         createdAt: serverTimestamp(),
-        storeId: storeDoc.id,
-        storeName: store.name,
-        storeAddress: store.address,
+        storeId: storeId,
+        storeName: storeName,
+        storeAddress: storeAddress,
         shippingAddress: shippingInfo,
         deliveryPersonId: null, // Initially unassigned
         deliveryPersonName: null,
@@ -136,8 +127,8 @@ export async function createOrder(
       status: 'En preparación',
       createdAt: new Date(), // Approximate, actual is server timestamp
       storeId,
-      storeName: store.name,
-      storeAddress: store.address,
+      storeName: storeName,
+      storeAddress: storeAddress,
       shippingAddress: shippingInfo,
       storeCoords,
       customerCoords,
