@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -107,9 +108,9 @@ function OrderProgress({ status }: { status: Order['status'] }) {
         <div className="space-y-8">
             <div>
                 <Progress value={progressValue} className="h-2" />
-                <div className="mt-4 grid grid-cols-4 gap-2 text-xs text-center">
+                <div className="mt-4 grid grid-cols-4 gap-4 text-center text-[11px] lg:text-xs">
                     {steps.map((stepInfo) => (
-                        <div key={stepInfo.step} className={cn("flex flex-col items-center gap-1", currentStatusInfo.step >= stepInfo.step ? 'text-primary font-semibold' : 'text-muted-foreground')}>
+                        <div key={stepInfo.step} className={cn("flex flex-col items-center gap-1.5", currentStatusInfo.step >= stepInfo.step ? 'text-primary font-semibold' : 'text-muted-foreground')}>
                             <stepInfo.icon className="h-5 w-5" />
                             <span>{stepInfo.label}</span>
                         </div>
