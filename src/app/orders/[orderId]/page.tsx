@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -10,7 +8,8 @@ import { type Order, getOrderById as getOrderFromDb } from '@/lib/order-service'
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
@@ -54,25 +53,10 @@ function OrderPageSkeleton() {
                  <div className="md:col-span-1">
                      <Card>
                         <CardHeader>
-                            <CardTitle>Estado del Pedido</CardTitle>
+                            <CardTitle>Mapa de Entrega</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="space-y-8">
-                                <div>
-                                    <Skeleton className="h-2 w-full" />
-                                    <div className="mt-4 grid grid-cols-4 gap-2 text-xs text-center">
-                                        <Skeleton className="h-10 w-full" />
-                                        <Skeleton className="h-10 w-full" />
-                                        <Skeleton className="h-10 w-full" />
-                                        <Skeleton className="h-10 w-full" />
-                                    </div>
-                                </div>
-                                <div className="text-center bg-muted/50 p-4 rounded-lg">
-                                    <Skeleton className="h-5 w-1/4 mx-auto" />
-                                    <Skeleton className="h-4 w-3/4 mx-auto mt-2" />
-                                    <Skeleton className="h-6 w-1/2 mx-auto mt-2" />
-                                </div>
-                            </div>
+                        <CardContent className="h-64">
+                            <Skeleton className="h-full w-full" />
                         </CardContent>
                     </Card>
                 </div>
@@ -138,6 +122,12 @@ export default function OrderTrackingPage() {
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Dynamically import the map component to avoid SSR issues
+  const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { 
+    ssr: false,
+    loading: () => <Skeleton className="h-full w-full" />,
+  }), []);
 
   useEffect(() => {
     async function fetchOrderData() {
@@ -209,8 +199,8 @@ export default function OrderTrackingPage() {
         title={`Pedido #${order.id.substring(0, 7)}`} 
         description={`Realizado el ${format(order.createdAt, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`} 
       />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
             <Card>
                 <CardHeader>
                     <CardTitle>Resumen del Pedido</CardTitle>
@@ -261,14 +251,29 @@ export default function OrderTrackingPage() {
                 </CardContent>
                  <OrderStatusUpdater order={order} />
             </Card>
-        </div>
-        <div className="md:col-span-1">
              <Card>
                 <CardHeader>
                     <CardTitle>Estado del Pedido</CardTitle>
                 </CardHeader>
                 <CardContent>
                    <OrderProgress status={order.status} />
+                </CardContent>
+            </Card>
+        </div>
+        <div className="lg:col-span-1">
+             <Card>
+                <CardHeader>
+                    <CardTitle>Mapa de Entrega</CardTitle>
+                </CardHeader>
+                <CardContent className="h-96">
+                   {order.storeCoords && order.customerCoords ? (
+                       <OrderMap 
+                           storeCoords={order.storeCoords}
+                           customerCoords={order.customerCoords}
+                           storeName={order.storeName}
+                           customerName={order.customerName || order.shippingAddress.name}
+                        />
+                   ) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">No hay datos de ubicación para este pedido.</div>}
                 </CardContent>
             </Card>
         </div>

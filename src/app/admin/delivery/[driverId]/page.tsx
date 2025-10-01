@@ -4,7 +4,7 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { getDeliveryPersonById, getDriverReviews, type DriverReview } from '@/lib/data-service';
+import { getDeliveryPersonById } from '@/lib/data-service';
 import { Car, Mail, Phone, ThumbsUp, ThumbsDown, Meh } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -20,17 +20,6 @@ function getStatusVariant(status: string) {
     }
 }
 
-const SentimentIcon = ({ sentiment }: { sentiment: string }) => {
-    switch (sentiment.toLowerCase()) {
-        case 'positivo':
-            return <ThumbsUp className="h-5 w-5 text-green-500" />;
-        case 'negativo':
-            return <ThumbsDown className="h-5 w-5 text-red-500" />;
-        default:
-            return <Meh className="h-5 w-5 text-yellow-500" />;
-    }
-};
-
 export default async function DriverProfilePage({ params }: { params: { driverId: string } }) {
     const driver = await getDeliveryPersonById(params.driverId);
 
@@ -38,7 +27,7 @@ export default async function DriverProfilePage({ params }: { params: { driverId
         notFound();
     }
 
-    const reviews = await getDriverReviews(params.driverId);
+    // const reviews = await getDriverReviews(params.driverId);
 
     return (
         <div className="container mx-auto">
@@ -78,38 +67,9 @@ export default async function DriverProfilePage({ params }: { params: { driverId
                             <CardTitle>Historial de Reseñas Analizadas</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            {reviews.length === 0 ? (
-                                <div className="text-center text-muted-foreground py-10">
-                                    <p>Este conductor aún no tiene reseñas.</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-6">
-                                    {reviews.map(review => (
-                                        <div key={review.id} className="p-4 border rounded-lg bg-card-foreground/5">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <SentimentIcon sentiment={review.analysis.sentiment} />
-                                                    <p className="font-semibold capitalize">{review.analysis.sentiment}</p>
-                                                </div>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {format(review.createdAt, "d MMM, yyyy", { locale: es })}
-                                                </p>
-                                            </div>
-                                            <p className="text-sm text-muted-foreground italic mb-3">"{review.reviewText}"</p>
-                                            
-                                            <h4 className="font-semibold text-sm mb-1">Resumen de IA:</h4>
-                                            <p className="text-sm mb-3">{review.analysis.summary}</p>
-                                            
-                                            <h4 className="font-semibold text-sm mb-2">Etiquetas de Desempeño:</h4>
-                                            <div className="flex flex-wrap gap-2">
-                                                {review.analysis.tags.map((tag, index) => (
-                                                    <Badge key={index} variant="secondary">{tag}</Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            <div className="text-center text-muted-foreground py-10">
+                                <p>La funcionalidad de análisis de reseñas con IA ha sido desactivada temporalmente.</p>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
