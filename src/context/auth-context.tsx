@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 sessionStorage.setItem(sessionStoreIdKey, finalStoreId);
             } else {
                 // On subsequent logins, try to retrieve it.
-                finalStoreId = sessionStorage.getItem(sessionStoreIdKey) || protoUser.storeId;
+                finalStoreId = sessionStorage.getItem(sessionStoreIdKey) || undefined;
             }
 
             const userProfile: UserProfile = {
@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 name: protoUser.name,
                 email: protoUser.email,
                 role: protoUser.role,
-                storeId: finalStoreId
+                storeId: finalStoreId,
             };
             setUser(userProfile); // This is the crucial part: update the state reactively.
         }

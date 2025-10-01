@@ -26,7 +26,8 @@ import {
   MessageCircle,
   ChevronDown,
   Home,
-  Package
+  Package,
+  Edit
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
@@ -45,7 +46,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = user?.role === 'buyer' || !user; // Default to buyer if no role/user
+  const isBuyer = !isStoreOwner && !isDelivery; // Default to buyer if not other roles
   
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
 
@@ -66,7 +67,7 @@ export function MainNav() {
         </SidebarMenuItem>
       )}
 
-      {/* Buyer specific menu */}
+      {/* Buyer & Guest specific menu */}
       {!loading && isBuyer && (
         <>
           <SidebarMenuItem>
@@ -75,11 +76,13 @@ export function MainNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
-                <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {user && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
+                  <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
 
           <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
             <SidebarMenuItem>
@@ -159,7 +162,7 @@ export function MainNav() {
                    <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store')}>
                       <Link href="/admin/my-store">
-                        <Shield />
+                        <Edit />
                         <span>Editar Tienda</span>
                       </Link>
                     </SidebarMenuSubButton>
