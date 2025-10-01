@@ -35,7 +35,17 @@ export async function uploadImage(
             },
             (error) => {
                 console.error("Error en la subida:", error);
-                reject(new Error("No se pudo subir la imagen. Código de error: " + error.code));
+                switch (error.code) {
+                    case 'storage/unauthorized':
+                        reject(new Error("No tienes permiso para subir archivos. Revisa las reglas de seguridad de Firebase Storage."));
+                        break;
+                    case 'storage/canceled':
+                        reject(new Error("La subida de la imagen ha sido cancelada."));
+                        break;
+                    default:
+                        reject(new Error("No se pudo subir la imagen. Código de error: " + error.code));
+                        break;
+                }
             },
             async () => {
                 try {
