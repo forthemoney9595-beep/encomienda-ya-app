@@ -79,7 +79,7 @@ export async function createOrder(
         items: items.map(item => ({ ...item })), // Store a clean copy
         total,
         deliveryFee,
-        status: 'En preparación' as const,
+        status: 'Pedido Realizado' as const,
         storeId,
         storeName,
         storeAddress,
