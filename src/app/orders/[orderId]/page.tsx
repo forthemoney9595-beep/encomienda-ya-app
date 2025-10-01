@@ -124,10 +124,10 @@ export default function OrderTrackingPage() {
   const [loading, setLoading] = useState(true);
 
   // Dynamically import the map component to avoid SSR issues
-  const OrderMap = dynamic(() => import('./order-map'), { 
+  const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { 
     ssr: false,
     loading: () => <Skeleton className="h-full w-full" />,
-  });
+  }), []);
 
   useEffect(() => {
     async function fetchOrderData() {
@@ -267,12 +267,7 @@ export default function OrderTrackingPage() {
                 </CardHeader>
                 <CardContent className="h-96">
                    {order.storeCoords && order.customerCoords ? (
-                       <OrderMap 
-                           storeCoords={order.storeCoords}
-                           customerCoords={order.customerCoords}
-                           storeName={order.storeName}
-                           customerName={order.customerName || order.shippingAddress.name}
-                        />
+                       <OrderMap order={order} />
                    ) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">No hay datos de ubicación para este pedido.</div>}
                 </CardContent>
             </Card>
