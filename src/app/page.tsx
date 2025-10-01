@@ -9,22 +9,7 @@ import PageHeader from '@/components/page-header';
 import { getStores } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
-import { Skeleton } from '@/components/ui/skeleton';
-
-function StoreCardSkeleton() {
-  return (
-    <Card className="overflow-hidden">
-      <Skeleton className="h-48 w-full" />
-      <CardHeader>
-        <Skeleton className="h-6 w-3/4" />
-        <Skeleton className="h-4 w-1/2 mt-2" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-4 w-full" />
-      </CardContent>
-    </Card>
-  );
-}
+import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
