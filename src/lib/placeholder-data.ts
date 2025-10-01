@@ -49,6 +49,7 @@ export interface CartItem extends Product {
 export interface Order {
     id: string;
     userId: string;
+    customerName: string;
     items: CartItem[];
     total: number;
     deliveryFee: number;
@@ -60,7 +61,6 @@ export interface Order {
         name: string;
         address: string;
     };
-    customerName?: string;
     storeAddress?: string; 
     deliveryPersonId?: string;
     deliveryPersonName?: string;
@@ -114,14 +114,14 @@ export const initialPrototypeOrders: Order[] = [
         ],
         deliveryFee: 4.50,
         total: (9.99 * 2) + (2.50 * 2) + 4.50,
-        status: 'Pedido Realizado',
+        status: 'Entregado',
         createdAt: new Date(Date.now() - 1000 * 60 * 65),
         storeId: 'proto-store-id',
         storeName: prototypeStore.name,
         storeAddress: prototypeStore.address,
         shippingAddress: { name: 'Comprador Proto', address: 'Calle Pizza 123' },
-        deliveryPersonId: undefined,
-        deliveryPersonName: undefined,
+        deliveryPersonId: 'proto-delivery',
+        deliveryPersonName: 'Repartidor Proto',
         storeCoords: { lat: 34.0522, lon: -118.2437 },
         customerCoords: { lat: 40.7128, lon: -74.0060 },
     },
