@@ -23,9 +23,12 @@ import {
   ShoppingBag,
   User,
   MessageCircle,
+  ChevronDown
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
+import { Separator } from './ui/separator';
+import { cn } from '@/lib/utils';
 
 
 export function MainNav() {
@@ -61,7 +64,7 @@ export function MainNav() {
             >
               <Link href="/orders">
                 <ClipboardList />
-                <span>Pedidos</span>
+                <span>Mis Pedidos</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -77,27 +80,18 @@ export function MainNav() {
                 </Link>
               </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              isActive={pathname === '/profile'}
-              tooltip="Perfil"
-            >
-              <Link href="/profile">
-                <User />
-                <span>Perfil</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
         </>
       )}
+
+      <Separator className="my-2" />
 
       <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
         <SidebarMenuItem>
           <CollapsibleTrigger asChild>
             <SidebarMenuButton>
               <Store />
-              <span>Tiendas</span>
+              <span>Explorar Tiendas</span>
+              <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isStoresOpen && "rotate-180")} />
             </SidebarMenuButton>
           </CollapsibleTrigger>
         </SidebarMenuItem>
@@ -132,52 +126,56 @@ export function MainNav() {
       </Collapsible>
 
       {!loading && isAdmin && (
-        <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
-          <SidebarMenuItem>
-            <CollapsibleTrigger asChild>
-              <SidebarMenuButton>
-                <Shield />
-                <span>Admin</span>
-              </SidebarMenuButton>
-            </CollapsibleTrigger>
-          </SidebarMenuItem>
-          <CollapsibleContent>
-            <SidebarMenuSub>
-              <SidebarMenuSubItem>
-              <SidebarMenuSubButton asChild isActive={pathname === '/admin'}>
-                  <Link href="/admin">
-                    <LayoutGrid />
-                    <span>Panel</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/admin/stores'}>
-                  <Link href="/admin/stores">
-                    <Store />
-                    <span>Tiendas</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/admin/delivery'}>
-                  <Link href="/admin/delivery">
-                    <Truck />
-                    <span>Reparto</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/admin/driver-reviews'}>
-                  <Link href="/admin/driver-reviews">
-                    <MessageSquareQuote />
-                    <span>Reseñas de Conductores</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            </SidebarMenuSub>
-          </CollapsibleContent>
-        </Collapsible>
+        <>
+          <Separator className="my-2" />
+          <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton>
+                  <Shield />
+                  <span>Admin</span>
+                   <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isAdminOpen && "rotate-180")} />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                <SidebarMenuSubButton asChild isActive={pathname === '/admin'}>
+                    <Link href="/admin">
+                      <LayoutGrid />
+                      <span>Panel</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname === '/admin/stores'}>
+                    <Link href="/admin/stores">
+                      <Store />
+                      <span>Tiendas</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname === '/admin/delivery'}>
+                    <Link href="/admin/delivery">
+                      <Truck />
+                      <span>Reparto</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname === '/admin/driver-reviews'}>
+                    <Link href="/admin/driver-reviews">
+                      <MessageSquareQuote />
+                      <span>Reseñas</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        </>
       )}
     </SidebarMenu>
   );

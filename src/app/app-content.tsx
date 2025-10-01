@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { Notifications } from '@/components/notifications';
 import { Cart } from '@/components/cart';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { User, LogOut, Shield, Loader2 } from 'lucide-react';
+import { User, LogOut, Shield, Loader2, ChevronsUpDown } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -65,22 +65,25 @@ export function AppContent({ children }: { children: React.ReactNode }) {
                     </SidebarContent>
                     {isClient && (
                          loading ? (
-                            <div className='p-3 flex items-center gap-3 group-data-[collapsible=icon]:justify-center'>
-                               <Loader2 className="h-9 w-9 animate-spin text-sidebar-primary" />
-                            </div>
+                            <SidebarFooter>
+                                <div className='p-3 flex items-center gap-3'>
+                                   <Loader2 className="h-9 w-9 animate-spin text-sidebar-primary" />
+                                </div>
+                            </SidebarFooter>
                         ) : user ? (
                             <SidebarFooter>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent/50 cursor-pointer rounded-md">
-                                            <Avatar className="h-9 w-9">
+                                        <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent/50 cursor-pointer rounded-md transition-colors">
+                                            <Avatar className="h-9 w-9 border-2 border-sidebar-accent">
                                                 <AvatarImage src={getPlaceholderImage(user.name, 40, 40)} alt={user.name} />
                                                 <AvatarFallback>{user.name?.[0].toUpperCase()}</AvatarFallback>
                                             </Avatar>
-                                            <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                                                <span className="text-sm font-semibold text-sidebar-foreground">{user.name}</span>
-                                                <span className="text-xs text-sidebar-foreground/70">{user.email}</span>
+                                            <div className="flex-1 flex-col truncate group-data-[collapsible=icon]:hidden">
+                                                <span className="text-sm font-semibold text-sidebar-foreground truncate">{user.name}</span>
+                                                <span className="text-xs text-sidebar-foreground/70 truncate">{user.email}</span>
                                             </div>
+                                            <ChevronsUpDown className="h-4 w-4 text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden" />
                                         </div>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent side="top" align="start" className="w-56 mb-2 ml-2">
@@ -101,7 +104,7 @@ export function AppContent({ children }: { children: React.ReactNode }) {
                                             </DropdownMenuItem>
                                         )}
                                         <DropdownMenuSeparator />
-                                        <DropdownMenuItem onClick={handleSignOut}>
+                                        <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
                                             <LogOut className="mr-2 h-4 w-4" />
                                             <span>Cerrar Sesión</span>
                                         </DropdownMenuItem>
