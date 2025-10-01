@@ -45,7 +45,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = !isStoreOwner && !isDelivery && !isAdmin;
+  const isBuyer = !isStoreOwner && !isDelivery;
 
   const isStoreOrdersActive = isStoreOwner && pathname.startsWith('/orders');
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
@@ -88,10 +88,11 @@ export function MainNav() {
         </>
       )}
 
-      <Separator className="my-2" />
+      {/* Show separator if there's a user and they aren't a buyer */}
+      {!loading && user && !isBuyer && <Separator className="my-2" />}
       
       {/* Role specific menus */}
-      { isBuyer && !isAdmin && (
+      { isBuyer && (
          <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>
