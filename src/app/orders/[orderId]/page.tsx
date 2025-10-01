@@ -196,7 +196,7 @@ export default function OrderTrackingPage() {
   return (
     <div className="container mx-auto">
       <PageHeader 
-        title={`Pedido #${order.id.substring(0, 7)}`} 
+        title={`Pedido #${order.id}`} 
         description={`Realizado el ${format(order.createdAt, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`} 
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
