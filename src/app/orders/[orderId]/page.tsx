@@ -124,10 +124,10 @@ export default function OrderTrackingPage() {
   const [loading, setLoading] = useState(true);
 
   // Dynamically import the map component to avoid SSR issues
-  const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { 
+  const OrderMap = dynamic(() => import('./order-map'), { 
     ssr: false,
     loading: () => <Skeleton className="h-full w-full" />,
-  }), []);
+  });
 
   useEffect(() => {
     async function fetchOrderData() {
