@@ -1,18 +1,26 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Store, Home } from 'lucide-react';
 import ReactDOMServer from 'react-dom/server';
 import type { Order } from '@/lib/order-service';
-import OrderRoute from './order-route';
+
+// Fix para el ícono de marcador por defecto que a veces no carga
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
 
 interface OrderMapProps {
     order: Order;
 }
 
-// Function to create custom icons
+// Función para crear íconos personalizados
 const createIcon = (icon: React.ReactElement, className: string) => {
   return L.divIcon({
     html: ReactDOMServer.renderToString(
@@ -40,9 +48,11 @@ export default function OrderMap({ order }: OrderMapProps) {
 
     const storePosition: L.LatLngExpression = [storeCoords.latitude, storeCoords.longitude];
     const customerPosition: L.LatLngExpression = [customerCoords.latitude, customerCoords.longitude];
-
-    const bounds: L.LatLngBoundsExpression = L.latLngBounds(storePosition, customerPosition);
     
+    const bounds = L.latLngBounds(storePosition, customerPosition);
+
+    const polylineOptions = { color: 'hsl(var(--primary))', weight: 5 };
+
     return (
         <MapContainer
             bounds={bounds}
@@ -54,21 +64,21 @@ export default function OrderMap({ order }: OrderMapProps) {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {status === 'En reparto' && storeCoords && customerCoords ? (
-                <OrderRoute start={storePosition} end={customerPosition} />
-            ) : (
-                <>
-                    <Marker position={storePosition} icon={storeIcon}>
-                        <Popup>
-                            <strong>Tienda:</strong> {storeName}
-                        </Popup>
-                    </Marker>
-                    <Marker position={customerPosition} icon={customerIcon}>
-                        <Popup>
-                            <strong>Cliente:</strong> {customerName || shippingAddress.name}
-                        </Popup>
-                    </Marker>
-                </>
+            
+            <Marker position={storePosition} icon={storeIcon}>
+                <Popup>
+                    <strong>Tienda:</strong> {storeName}
+                </Popup>
+            </Marker>
+            
+            <Marker position={customerPosition} icon={customerIcon}>
+                <Popup>
+                    <strong>Cliente:</strong> {customerName || shippingAddress.name}
+                </Popup>
+            </Marker>
+
+            {status === 'En reparto' && (
+                <Polyline positions={[storePosition, customerPosition]} pathOptions={polylineOptions} />
             )}
         </MapContainer>
     );
