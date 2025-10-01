@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -13,7 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { createUserProfile } from '@/lib/user';
+import { createUserProfile, createStoreForUser } from '@/lib/user';
+import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 
 const formSchema = z.object({
@@ -28,6 +30,9 @@ const formSchema = z.object({
 export default function SignupStorePage() {
   const { toast } = useToast();
   const router = useRouter();
+  const { addStoreIdToPrototypeUser } = useAuth();
+  const { addPrototypeStore } = usePrototypeData();
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -40,25 +45,55 @@ export default function SignupStorePage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    
+    // Prototype Mode Check
+    if (values.email.includes('@test.com')) {
+        const newStore = {
+            id: `proto-store-${Date.now()}`,
+            name: values.storeName,
+            category: values.category,
+            address: values.address,
+            ownerId: `proto-${values.ownerName.replace(/\s/g, '')}`,
+            status: 'Aprobado' as const,
+            imageUrl: `https://picsum.photos/seed/${values.storeName.replace(/\s/g, '')}/600/400`,
+            imageHint: values.category.toLowerCase(),
+            productCategories: [values.category],
+            products: [],
+        };
+
+        addPrototypeStore(newStore);
+        addStoreIdToPrototypeUser(newStore.id);
+        
+        toast({
+            title: "¡Tienda de Prototipo Creada!",
+            description: "Tu tienda de prueba está activa.",
+        });
+        router.push('/');
+        return;
+    }
+
+    // Real Firebase Logic
     try {
-      // In a real app, you might not want to auto-login, but for the prototype cycle this is helpful.
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      
-      await createUserProfile(userCredential.user.uid, {
+      const user = userCredential.user;
+
+      await createUserProfile(user.uid, {
         name: values.ownerName,
         email: values.email,
         role: 'store',
-        status: 'approved', // Auto-approve for prototype cycle
-        storeName: values.storeName,
-        storeCategory: values.category,
-        storeAddress: values.address,
+      });
+      
+      const newStore = await createStoreForUser(user.uid, {
+          name: values.storeName,
+          category: values.category,
+          address: values.address,
       });
 
       toast({
         title: "¡Tienda Registrada y Aprobada!",
         description: "Tu tienda está activa. Serás redirigido para gestionarla.",
       });
-      router.push('/'); // Redirect to home, which will then redirect to /orders
+      router.push('/');
     } catch (error: any)
 {
       console.error(error);

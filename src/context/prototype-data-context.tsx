@@ -13,6 +13,7 @@ interface PrototypeDataContextType {
     loading: boolean;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
     addPrototypeOrder: (order: Order) => void;
+    addPrototypeStore: (store: Store) => void;
     updatePrototypeProduct: (storeId: string, product: Product) => void;
     addPrototypeProduct: (storeId: string, product: Product) => void;
     deletePrototypeProduct: (storeId: string, productId: string) => void;
@@ -96,9 +97,16 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         });
     };
 
+    const addPrototypeStore = (store: Store) => {
+        setStores(prevStores => {
+            const updatedStores = [...prevStores, store];
+            updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
+            return updatedStores;
+        });
+    };
+
     const updatePrototypeStore = (updates: Partial<Store>) => {
        setStores(prevStores => {
-            // This is designed to update the first store, which is the main prototype store
             const updatedStores = prevStores.map(s => s.id === initialPrototypeStores[0].id ? { ...s, ...updates} : s)
             updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
             return updatedStores;
@@ -198,6 +206,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         loading: loading || !isClient,
         updatePrototypeOrder,
         addPrototypeOrder,
+        addPrototypeStore,
         addPrototypeProduct,
         updatePrototypeProduct,
         deletePrototypeProduct,

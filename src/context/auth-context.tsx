@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -21,6 +22,7 @@ interface AuthContextType {
     isAdmin: boolean;
     loginForPrototype: (email: string) => Promise<void>; 
     logoutForPrototype: () => void;
+    addStoreIdToPrototypeUser: (storeId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -79,6 +81,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(userProfile);
         }
     };
+    
+    const addStoreIdToPrototypeUser = (storeId: string) => {
+        setUser(currentUser => {
+            if (currentUser && currentUser.role === 'store') {
+                const updatedUser = { ...currentUser, storeId };
+                return updatedUser;
+            }
+            return currentUser;
+        });
+    };
 
     const logoutForPrototype = () => {
         sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
@@ -127,7 +139,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading: loading || !isClient, // Stay in loading state until client is mounted
         isAdmin: isClient ? isAdmin : false, 
         loginForPrototype, 
-        logoutForPrototype 
+        logoutForPrototype,
+        addStoreIdToPrototypeUser,
     };
     
     return (

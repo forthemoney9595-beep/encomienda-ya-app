@@ -1,3 +1,4 @@
+
 import { db } from './firebase';
 import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc } from 'firebase/firestore';
 
@@ -48,34 +49,45 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
       ...data,
       createdAt: serverTimestamp(),
     };
-    
-    // For prototype cycle, we auto-approve stores, otherwise they are pending
-    if (data.role === 'store') {
-        profileData.status = data.email.includes('@test.com') ? 'approved' : 'pending';
-    } else if (data.role === 'delivery') {
+
+    if (data.role === 'delivery') {
         profileData.status = 'pending';
     }
 
     await setDoc(userDocRef, profileData);
-
-    if (data.role === 'store') {
-        const storeCollectionRef = collection(db, 'stores');
-        await addDoc(storeCollectionRef, {
-            name: data.storeName,
-            category: data.storeCategory,
-            productCategories: data.storeCategory ? [data.storeCategory] : [], 
-            address: data.storeAddress,
-            ownerId: uid,
-            status: profileData.status === 'approved' ? 'Aprobado' : 'Pendiente',
-            createdAt: serverTimestamp(),
-            imageUrl: `https://picsum.photos/seed/${data.storeName.replace(/\s/g, '')}/600/400`,
-            imageHint: data.storeCategory?.toLowerCase().split('-')[0] || 'store',
-        });
-    }
     
     console.log(`Perfil de usuario creado/actualizado para UID: ${uid}`);
   } catch (error) {
     console.error("Error al crear el perfil de usuario en Firestore: ", error);
     throw new Error("No se pudo crear el perfil de usuario.");
   }
+}
+
+/**
+ * Creates a store and associates it with a user.
+ * @param ownerId The UID of the user who owns the store.
+ * @param storeData Data for the new store.
+ */
+export async function createStoreForUser(ownerId: string, storeData: { name: string, category: string, address: string }) {
+    try {
+        const storeCollectionRef = collection(db, 'stores');
+        const newStoreRef = await addDoc(storeCollectionRef, {
+            ...storeData,
+            ownerId: ownerId,
+            status: 'Aprobado', // Auto-approve for faster prototype cycle
+            createdAt: serverTimestamp(),
+            productCategories: storeData.category ? [storeData.category] : [],
+            imageUrl: `https://picsum.photos/seed/${storeData.name.replace(/\s/g, '')}/600/400`,
+            imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
+        });
+
+        // Update the user's profile with the new storeId
+        const userDocRef = doc(db, 'users', ownerId);
+        await setDoc(userDocRef, { storeId: newStoreRef.id }, { merge: true });
+
+        return { id: newStoreRef.id, ...storeData };
+    } catch (error) {
+        console.error("Error creating store for user: ", error);
+        throw new Error("Could not create store.");
+    }
 }
