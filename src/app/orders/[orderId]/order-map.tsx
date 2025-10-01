@@ -38,8 +38,8 @@ export default function OrderMap({ order }: OrderMapProps) {
         return <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Faltan datos de coordenadas.</div>;
     }
 
-    const storePosition: L.LatLngExpression = [storeCoords.lat, storeCoords.lon];
-    const customerPosition: L.LatLngExpression = [customerCoords.lat, customerCoords.lon];
+    const storePosition: L.LatLngExpression = [storeCoords.latitude, storeCoords.longitude];
+    const customerPosition: L.LatLngExpression = [customerCoords.latitude, customerCoords.longitude];
 
     const bounds: L.LatLngBoundsExpression = L.latLngBounds(storePosition, customerPosition);
     

@@ -64,8 +64,8 @@ export interface Order {
     storeAddress?: string; 
     deliveryPersonId?: string;
     deliveryPersonName?: string;
-    storeCoords?: { lat: number; lon: number };
-    customerCoords?: { lat: number; lon: number };
+    storeCoords?: { latitude: number; longitude: number };
+    customerCoords?: { latitude: number; longitude: number };
 }
 
 
@@ -122,8 +122,8 @@ export const initialPrototypeOrders: Order[] = [
         shippingAddress: { name: 'Comprador Proto', address: 'Calle Falsa 123' },
         deliveryPersonId: 'proto-delivery',
         deliveryPersonName: 'Repartidor Proto',
-        storeCoords: { lat: 34.0522, lon: -118.2437 },
-        customerCoords: { lat: 40.7128, lon: -74.0060 },
+        storeCoords: { latitude: 34.0522, longitude: -118.2437 },
+        customerCoords: { latitude: 40.7128, longitude: -74.0060 },
     },
     {
         id: 'proto-order-2',
@@ -142,8 +142,8 @@ export const initialPrototypeOrders: Order[] = [
         shippingAddress: { name: 'Juan Pérez', address: 'Avenida Siempre Viva 742' },
         deliveryPersonId: 'proto-delivery',
         deliveryPersonName: 'Repartidor Proto',
-        storeCoords: { lat: 34.0522, lon: -118.2437 },
-        customerCoords: { lat: 35.6895, lon: 139.6917 },
+        storeCoords: { latitude: 34.0522, longitude: -118.2437 },
+        customerCoords: { latitude: 35.6895, longitude: 139.6917 },
     },
     {
         id: 'proto-order-3',
@@ -162,8 +162,8 @@ export const initialPrototypeOrders: Order[] = [
         shippingAddress: { name: 'Comprador Proto', address: 'Calle Falsa 123' },
         deliveryPersonId: undefined,
         deliveryPersonName: undefined,
-        storeCoords: { lat: 48.8566, lon: 2.3522 },
-        customerCoords: { lat: 48.8584, lon: 2.2945 },
+        storeCoords: { latitude: 48.8566, longitude: 2.3522 },
+        customerCoords: { latitude: 48.8584, longitude: 2.2945 },
     }
 ];
 

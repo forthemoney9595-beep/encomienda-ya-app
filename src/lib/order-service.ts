@@ -34,8 +34,8 @@ export interface Order {
     storeAddress?: string; 
     deliveryPersonId?: string;
     deliveryPersonName?: string;
-    storeCoords?: { lat: number, lon: number };
-    customerCoords?: { lat: number, lon: number };
+    storeCoords?: { latitude: number, longitude: number };
+    customerCoords?: { latitude: number, longitude: number };
 }
 
 interface CreateOrderInput {
@@ -67,8 +67,8 @@ export async function createOrder(
     
     // --- Geocoding and Fee Calculation Logic ---
     // In a real app, this would involve a geocoding API. Here we use static/random values.
-    const storeCoords = isPrototype ? { lat: 40.7128, lon: -74.0060 } : { lat: 40.7128, lon: -74.0060 }; // Example: NYC
-    const customerCoords = isPrototype ? { lat: 34.0522, lon: -118.2437 } : { lat: 34.0522, lon: -118.2437 }; // Example: LA
+    const storeCoords = isPrototype ? { latitude: 40.7128, longitude: -74.0060 } : { latitude: 40.7128, longitude: -74.0060 }; // Example: NYC
+    const customerCoords = isPrototype ? { latitude: 34.0522, longitude: -118.2437 } : { latitude: 34.0522, longitude: -118.2437 }; // Example: LA
     const deliveryFee = 5.00 + Math.random() * 5; // Example fee
     const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0) + deliveryFee;
 
