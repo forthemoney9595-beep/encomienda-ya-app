@@ -168,8 +168,17 @@ export async function updateProductInStore(storeId: string, productId: string, p
     }
 
     try {
+        const storeRef = doc(db, 'stores', storeId);
         const productRef = doc(db, 'stores', storeId, 'products', productId);
         await updateDoc(productRef, productData);
+        
+        // Also ensure category exists on parent store
+        if (productData.category) {
+            await updateDoc(storeRef, {
+                productCategories: arrayUnion(productData.category)
+            });
+        }
+
     } catch (error) {
         console.error(`Error updating product ${productId} in store ${storeId}:`, error);
         throw error;
