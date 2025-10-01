@@ -40,10 +40,13 @@ const generateProductImageFlow = ai.defineFlow(
   async (input) => {
     const { media } = await ai.generate({
         model: 'googleai/imagen-4.0-fast-generate-001',
-        prompt: `Genera una fotografía de alta calidad, de aspecto profesional y apetitosa de un producto para el menú de un restaurante. 
+        prompt: `Eres un asistente de fotografía culinaria experto. Tu trabajo es generar una foto para el menú de un restaurante que sea apetitosa y profesional.
         El producto es: '${input.productName}'. 
         Descripción: '${input.productDescription}'.
-        La imagen debe estar sobre un fondo limpio y neutro. La imagen debe parecer realista y atractiva.`,
+        
+        Si la descripción es breve o genérica, toma la iniciativa creativa para imaginar una escena visualmente atractiva para el producto. Por ejemplo, si el producto es solo 'Refresco', podrías imaginarlo en un vaso alto con hielo, una rodaja de limón y gotas de condensación.
+        
+        La imagen debe estar sobre un fondo limpio y neutro, y parecer realista y atractiva.`,
     });
 
     if (!media.url) {
