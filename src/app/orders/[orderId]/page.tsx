@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -50,8 +51,28 @@ function OrderPageSkeleton() {
                     </Card>
                 </div>
                  <div className="md:col-span-1">
-                     <Card className='min-h-[400px] flex items-center justify-center bg-muted/50'>
-                         <Skeleton className="h-full w-full" />
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>Estado del Pedido</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-8">
+                                <div>
+                                    <Skeleton className="h-2 w-full" />
+                                    <div className="mt-4 grid grid-cols-4 gap-2 text-xs text-center">
+                                        <Skeleton className="h-10 w-full" />
+                                        <Skeleton className="h-10 w-full" />
+                                        <Skeleton className="h-10 w-full" />
+                                        <Skeleton className="h-10 w-full" />
+                                    </div>
+                                </div>
+                                <div className="text-center bg-muted/50 p-4 rounded-lg">
+                                    <Skeleton className="h-5 w-1/4 mx-auto" />
+                                    <Skeleton className="h-4 w-3/4 mx-auto mt-2" />
+                                    <Skeleton className="h-6 w-1/2 mx-auto mt-2" />
+                                </div>
+                            </div>
+                        </CardContent>
                     </Card>
                 </div>
              </div>
@@ -62,7 +83,7 @@ function OrderPageSkeleton() {
 const statusSteps = {
   'Pedido Realizado': { step: 1, label: 'Realizado', icon: Package, description: 'Tu pedido ha sido recibido por la tienda.' },
   'En preparación': { step: 2, label: 'Preparando', icon: CookingPot, description: 'La tienda está preparando tu pedido.' },
-  'En reparto': { step: 3- , label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
+  'En reparto': { step: 3, label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
   'Entregado': { step: 4, label: 'Entregado', icon: Home, description: '¡Tu pedido ha sido entregado! Disfrútalo.' },
   'Cancelado': { step: 0, label: 'Cancelado', icon: CheckCircle, description: 'Este pedido ha sido cancelado.' }
 };
