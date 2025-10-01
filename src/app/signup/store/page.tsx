@@ -48,9 +48,9 @@ export default function SignupStorePage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     
     // Prototype Mode Check
-    const isPrototypeUser = Object.keys(prototypeUsers).includes(values.email);
+    const isPrototypeUserEmail = Object.keys(prototypeUsers).includes(values.email);
 
-    if (isPrototypeUser) {
+    if (isPrototypeUserEmail) {
         const protoUser = prototypeUsers[values.email as keyof typeof prototypeUsers];
        
         const newStore = {

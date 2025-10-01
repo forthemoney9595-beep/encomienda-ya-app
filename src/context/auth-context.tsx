@@ -100,7 +100,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (prototypeEmail) {
             const protoUser = Object.values(prototypeUsers).find(u => u.email === prototypeEmail);
             if (protoUser) {
-                 sessionStorage.removeItem(`proto_store_id_${protoUser.uid}`);
+                 // Do not remove the store id, so it can be retrieved on next login
+                 // sessionStorage.removeItem(`proto_store_id_${protoUser.uid}`);
             }
         }
         sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
