@@ -156,10 +156,12 @@ export default function OrderTrackingPage() {
           
           const isOwner = user?.storeId === orderData.storeId;
           const isBuyer = user?.uid === orderData.userId;
-          const isDriver = user?.uid === orderData.deliveryPersonId;
+          const isAssignedDriver = user?.uid === orderData.deliveryPersonId;
           const isAdmin = user?.role === 'admin';
+          // A delivery person can view an order if it's available for pickup
+          const isAvailableForDelivery = user?.role === 'delivery' && orderData.status === 'En preparación' && !orderData.deliveryPersonId;
     
-          if (!isOwner && !isBuyer && !isDriver && !isAdmin) {
+          if (!isOwner && !isBuyer && !isAssignedDriver && !isAdmin && !isAvailableForDelivery) {
               console.warn("Acceso no autorizado al pedido denegado.");
               toast({
                 variant: 'destructive',
