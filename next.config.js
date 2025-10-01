@@ -27,11 +27,15 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: "firebasestorage.googleapis.com",
+        port: "",
+        pathname: "/**",
+      },
     ],
   },
   serverActions: {
     bodySizeLimit: '2mb',
-    serverActionsTimeout: 120, // Aumentado a 120 segundos para la generación de imágenes
   },
 };
 

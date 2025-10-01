@@ -13,9 +13,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
+import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
-import { getPrototypeProducts } from '@/lib/placeholder-data';
 
 interface ProductListProps {
     products: Product[];
@@ -29,60 +29,51 @@ export function ProductList({ products: initialProducts, productCategories: init
     const params = useParams();
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
+    const { prototypeProducts, addPrototypeProduct, updatePrototypeProduct, deletePrototypeProduct } = usePrototypeData();
     
-    // State to manage products and categories in memory
-    const [products, setProducts] = useState<Product[]>(initialProducts);
+    const isPrototypeMode = currentStoreId.startsWith('proto-');
+    const products = isPrototypeMode ? prototypeProducts : initialProducts;
+    
+    // State for local UI management
     const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
-    
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-    const isOwner = user?.uid === ownerId;
-
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
-    
-    useEffect(() => {
-        if (currentStoreId.startsWith('proto-')) {
-            const protoProducts = getPrototypeProducts();
-            setProducts(protoProducts);
-            const categories = Array.from(new Set(protoProducts.map(p => p.category)));
-            setProductCategories(categories);
-        } else {
-            setProducts(initialProducts);
-            setProductCategories(initialCategories);
-        }
-    }, [currentStoreId, initialProducts, initialCategories]);
 
+    const isOwner = user?.uid === ownerId;
+
+    useEffect(() => {
+        const categories = Array.from(new Set(products.map(p => p.category)));
+        setProductCategories(categories.length > 0 ? categories : initialCategories);
+    }, [products, initialCategories]);
 
     const handleSaveProduct = async (productData: Product) => {
         const isEditing = products.some(p => p.id === productData.id);
         
-        // Optimistically update UI
-        if (isEditing) {
-            setProducts(products.map(p => p.id === productData.id ? productData : p));
+        if (isPrototypeMode) {
+            isEditing ? updatePrototypeProduct(productData) : addPrototypeProduct(productData);
         } else {
-            setProducts([...products, productData]);
-        }
-        
-        if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
-            setProductCategories([...productCategories, productData.category]);
-        }
-
-        // Persist change to DB if not prototype
-        if (!currentStoreId.startsWith('proto-')) {
+            // Optimistically update UI
+            // This is complex, for now we rely on DB call and re-fetch which is slower but safer
             try {
                 if (isEditing) {
                     await updateProductInStore(currentStoreId, productData.id, productData);
                 } else {
                     await addProductToStore(currentStoreId, productData, productCategories);
                 }
+                // Here we should ideally re-fetch or pass new data up to the parent.
+                // For simplicity, we can toast and let the user see the change on next visit,
+                // or implement a more robust state management.
             } catch (error) {
-                // Revert optimistic update on error
                 toast({ title: "Error", description: "No se pudo guardar el artículo en la base de datos.", variant: 'destructive'});
-                setProducts(initialProducts);
-                setProductCategories(initialCategories);
-                return;
+                return; // Prevent UI change if DB fails
             }
+        }
+        
+        // This will now be updated via the useEffect
+        if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+            setProductCategories([...productCategories, productData.category]);
         }
         
         toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
@@ -91,15 +82,13 @@ export function ProductList({ products: initialProducts, productCategories: init
     };
 
     const handleDeleteProduct = async (productId: string) => {
-        const originalProducts = products;
-        setProducts(products.filter(p => p.id !== productId));
-        
-        if (!currentStoreId.startsWith('proto-')) {
+        if (isPrototypeMode) {
+            deletePrototypeProduct(productId);
+        } else {
             try {
                 await deleteProductFromStore(currentStoreId, productId);
             } catch(error) {
                 toast({ title: "Error", description: "No se pudo eliminar el artículo de la base de datos.", variant: 'destructive'});
-                setProducts(originalProducts); // Revert
                 return;
             }
         }
@@ -171,7 +160,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                 </Button>
               </div>
             )}
-            <Tabs defaultValue={productCategories[0] || 'all'} className="w-full">
+            <Tabs defaultValue={productCategories[0] || 'all'} className="w-full" value={productCategories[0]}>
                 <TabsList className="mb-4">
                     {productCategories.map(category => (
                     <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
@@ -243,7 +232,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                     </div>
                     </TabsContent>
                 ))}
-                {products.length === 0 && productCategories.length === 0 && (
+                {products.length === 0 && (
                     <div className="text-center text-muted-foreground py-10">
                         <p>{isOwner ? 'Esta tienda aún no tiene productos. ¡Añade tu primer artículo usando el botón de arriba!' : 'Esta tienda aún no tiene productos.'}</p>
                     </div>

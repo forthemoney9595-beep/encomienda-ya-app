@@ -7,7 +7,6 @@ import {
     prototypeStore, 
     getPrototypeProducts, 
 } from './placeholder-data';
-import type { AnalyzeDriverReviewsOutput } from '@/ai/flows/analyze-driver-reviews';
 
 
 /**
@@ -187,6 +186,7 @@ export async function deleteProductFromStore(storeId: string, productId: string)
  * Fetches all delivery personnel from the 'users' collection in Firestore.
  */
 export async function getDeliveryPersonnel(isPrototype: boolean = false): Promise<DeliveryPersonnel[]> {
+  const { prototypeUsers } = await import('./placeholder-data');
   try {
     const usersCollectionRef = collection(db, 'users');
     const q = query(usersCollectionRef, where('role', '==', 'delivery'));
@@ -247,6 +247,7 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
  * Fetches a single delivery person by their user ID.
  */
 export async function getDeliveryPersonById(id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
+  const { prototypeUsers } = await import('./placeholder-data');
   // Check prototype users first
   const protoUser = Object.values(prototypeUsers).find(u => u.uid === id && u.role === 'delivery');
   if (protoUser) {
@@ -315,58 +316,5 @@ export async function updateDeliveryPersonnelStatus(personnelId: string, status:
   } catch (error) {
     console.error(`Error updating delivery personnel status for ${personnelId}:`, error);
     throw error;
-  }
-}
-
-
-export type DriverReview = {
-  id: string;
-  reviewText: string;
-  analysis: Omit<AnalyzeDriverReviewsOutput, 'driverId'>;
-  createdAt: Date;
-}
-
-/**
- * Adds a new driver review to the 'reviews' subcollection for a specific driver.
- * @param driverId The ID of the driver.
- * @param reviewData The review text and AI analysis data.
- */
-export async function addDriverReview(driverId: string, reviewData: { reviewText: string, analysis: Omit<AnalyzeDriverReviewsOutput, 'driverId'> }): Promise<void> {
-  try {
-    const reviewsCollectionRef = collection(db, 'users', driverId, 'reviews');
-    await addDoc(reviewsCollectionRef, {
-      ...reviewData,
-      createdAt: serverTimestamp(),
-    });
-  } catch (error) {
-    console.error(`Error adding review for driver ${driverId}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Fetches all reviews for a specific driver.
- * @param driverId The ID of the driver.
- */
-export async function getDriverReviews(driverId: string): Promise<DriverReview[]> {
-  try {
-    const reviewsRef = collection(db, 'users', driverId, 'reviews');
-    const q = query(reviewsRef, orderBy('createdAt', 'desc'));
-    const querySnapshot = await getDocs(q);
-
-    const reviews: DriverReview[] = querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        reviewText: data.reviewText,
-        analysis: data.analysis,
-        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-      };
-    });
-
-    return reviews;
-  } catch (error) {
-    console.error(`Error fetching reviews for driver ${driverId}:`, error);
-    return [];
   }
 }

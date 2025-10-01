@@ -1,5 +1,4 @@
-import { collection, doc, getDoc, getDocs, writeBatch, type Firestore } from "firebase/firestore";
-import { prototypeUsers } from "./placeholder-data";
+import { type Firestore } from "firebase/firestore";
 
 /**
  * Seeds the database with prototype users and a store if they don't exist.

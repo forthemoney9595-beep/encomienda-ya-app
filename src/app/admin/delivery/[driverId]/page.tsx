@@ -1,13 +1,11 @@
 
 import { notFound } from 'next/navigation';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getDeliveryPersonById } from '@/lib/data-service';
-import { Car, Mail, Phone, ThumbsUp, ThumbsDown, Meh } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Car, Mail, Phone } from 'lucide-react';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 function getStatusVariant(status: string) {
@@ -26,8 +24,6 @@ export default async function DriverProfilePage({ params }: { params: { driverId
     if (!driver) {
         notFound();
     }
-
-    // const reviews = await getDriverReviews(params.driverId);
 
     return (
         <div className="container mx-auto">
@@ -64,11 +60,11 @@ export default async function DriverProfilePage({ params }: { params: { driverId
                 <div className="md:col-span-2">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Historial de Reseñas Analizadas</CardTitle>
+                            <CardTitle>Historial de Reseñas</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-center text-muted-foreground py-10">
-                                <p>La funcionalidad de análisis de reseñas con IA ha sido desactivada temporalmente.</p>
+                                <p>La funcionalidad de reseñas de conductores no está implementada.</p>
                             </div>
                         </CardContent>
                     </Card>

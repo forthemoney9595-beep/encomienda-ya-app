@@ -1,7 +1,7 @@
 
 'use server';
 import { db } from './firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem {
@@ -63,92 +63,63 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // --- Prototype Logic ---
-    if (storeId.startsWith('proto-')) {
-        const deliveryFee = 5.00;
-        const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0) + deliveryFee;
+    const isPrototype = storeId.startsWith('proto-');
+    
+    // --- Geocoding and Fee Calculation Logic ---
+    // In a real app, this would involve a geocoding API. Here we use static/random values.
+    const storeCoords = isPrototype ? { lat: 40.7128, lon: -74.0060 } : { lat: 40.7128, lon: -74.0060 }; // Example: NYC
+    const customerCoords = isPrototype ? { lat: 34.0522, lon: -118.2437 } : { lat: 34.0522, lon: -118.2437 }; // Example: LA
+    const deliveryFee = 5.00 + Math.random() * 5; // Example fee
+    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0) + deliveryFee;
 
-        // Static coordinates for prototype to ensure map functionality.
-        const storeCoords = { lat: 40.7128, lon: -74.0060 }; // Example: NYC
-        const customerCoords = { lat: 34.0522, lon: -118.2437 }; // Example: LA
-
-        const newPrototypeOrder: Order = {
+    const newOrderData = {
+        userId,
+        customerName,
+        items: items.map(item => ({ ...item })), // Store a clean copy
+        total,
+        deliveryFee,
+        status: 'En preparación' as const,
+        storeId,
+        storeName,
+        storeAddress,
+        shippingAddress: shippingInfo,
+        storeCoords,
+        customerCoords,
+        deliveryPersonId: undefined,
+        deliveryPersonName: undefined,
+    };
+    
+    // --- Prototype Order Handling (Client-side via context) ---
+    if (isPrototype) {
+        return {
+            ...newOrderData,
             id: `proto-order-${Date.now()}`,
-            userId: userId,
-            customerName: customerName,
-            items: items,
-            total: total,
-            deliveryFee: deliveryFee,
-            status: 'En preparación' as const,
-            storeId: storeId,
-            storeName: storeName,
-            storeAddress: storeAddress,
-            shippingAddress: {
-                name: shippingInfo.name,
-                address: shippingInfo.address
-            },
             createdAt: new Date(),
-            storeCoords: storeCoords,
-            customerCoords: customerCoords,
         };
-        return newPrototypeOrder;
     }
 
     // --- Real Firestore Order Logic ---
-    // In a real app, geocoding would happen here. For now, using static coords.
-    const storeCoords = { lat: 40.7128, lon: -74.0060 };
-    const customerCoords = { lat: 34.0522, lon: -118.2437 };
-
-    const distanceKm = 1 + Math.random() * 10;
-    const deliveryFee = 2 + (distanceKm * 1.5);
-
-    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const total = subtotal + deliveryFee;
-
     const orderRef = await addDoc(collection(db, 'orders'), {
-        userId,
-        customerName, 
-        items: items.map(item => ({...item})), // Store a clean copy of item data
-        subtotal,
-        deliveryFee,
-        total,
-        status: 'En preparación',
+        ...newOrderData,
         createdAt: serverTimestamp(),
-        storeId: storeId,
-        storeName: storeName,
-        storeAddress: storeAddress,
-        shippingAddress: shippingInfo,
-        deliveryPersonId: null, // Initially unassigned
-        deliveryPersonName: null,
-        storeCoords,
-        customerCoords,
     });
     
     const createdOrderDoc = await getDoc(orderRef);
     const createdOrderData = createdOrderDoc.data();
 
-    const createdOrder: Order = {
+    return {
       id: orderRef.id,
-      userId,
-      customerName,
-      items,
-      total,
-      deliveryFee,
-      status: 'En preparación',
+      ...newOrderData,
       createdAt: (createdOrderData!.createdAt as Timestamp)?.toDate() || new Date(),
-      storeId,
-      storeName: storeName,
-      storeAddress: storeAddress,
-      shippingAddress: shippingInfo,
-      storeCoords,
-      customerCoords,
     };
-
-    return createdOrder;
 }
 
 
 export async function getOrdersByUser(userId: string): Promise<Order[]> {
+    if (userId.startsWith('proto-')) {
+        console.warn('getOrdersByUser (server) called for prototype user. Data should be fetched from context on client.');
+        return [];
+    }
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
 
@@ -219,9 +190,8 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
 
 export async function getAvailableOrdersForDelivery(isPrototype: boolean): Promise<Order[]> {
   if (isPrototype) {
-    // This logic is now client-side in usePrototypeData, but we can keep a server-side
-    // representation for other potential uses, though it won't be from session storage.
-    // For this app, client-side is sufficient.
+    // This logic is now client-side in usePrototypeData. This server function
+    // will only fetch real data.
     return [];
   }
   const ordersRef = collection(db, 'orders');
@@ -242,7 +212,7 @@ export async function getAvailableOrdersForDelivery(isPrototype: boolean): Promi
 
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
-    if (orderId.startsWith('proto-order-')) {
+    if (orderId.startsWith('proto-')) {
         console.warn('getOrderById server action called for a prototype order. This should be handled on the client.');
         return null;
     }

@@ -3,14 +3,21 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
-import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY } from '@/lib/placeholder-data';
+import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY, prototypeStore, initialPrototypeProducts } from '@/lib/placeholder-data';
+import type { Store, Product } from '@/lib/placeholder-data';
 
 interface PrototypeDataContextType {
     prototypeOrders: Order[];
+    prototypeStore: Store;
+    prototypeProducts: Product[];
     loading: boolean;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
     addPrototypeOrder: (order: Order) => void;
+    updatePrototypeProduct: (product: Product) => void;
+    addPrototypeProduct: (product: Product) => void;
+    deletePrototypeProduct: (productId: string) => void;
     getOrdersByStore: (storeId: string) => Order[];
+    getOrdersByUser: (userId: string) => Order[];
     getAvailableOrdersForDelivery: () => Order[];
     getOrdersByDeliveryPerson: (driverId: string) => Order[];
     getOrderById: (orderId: string) => Order | undefined;
@@ -20,6 +27,7 @@ const PrototypeDataContext = createContext<PrototypeDataContextType | undefined>
 
 export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => {
     const [orders, setOrders] = useState<Order[]>([]);
+    const [products, setProducts] = useState<Product[]>(initialPrototypeProducts);
     const [loading, setLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
 
@@ -27,28 +35,22 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         setIsClient(true);
     }, []);
 
+    // Load and manage orders from session storage
     useEffect(() => {
         if (isClient) {
             try {
                 const storedOrders = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-                if (storedOrders) {
-                    const parsedOrders = JSON.parse(storedOrders, (key, value) => {
-                        if (key === 'createdAt') return new Date(value);
-                        return value;
-                    });
+                const loadedOrders = storedOrders 
+                    ? JSON.parse(storedOrders, (key, value) => key === 'createdAt' ? new Date(value) : value)
+                    : initialPrototypeOrders;
 
-                    // Self-healing: Check if data is outdated (missing coords). If so, reset.
-                    const isDataOutdated = parsedOrders.some((order: Order) => !order.storeCoords || !order.customerCoords);
-                    if (isDataOutdated) {
-                        console.warn("Outdated prototype data detected. Resetting to initial state.");
-                        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
-                        setOrders(initialPrototypeOrders);
-                    } else {
-                        setOrders(parsedOrders);
-                    }
-                } else {
+                const isDataOutdated = loadedOrders.some((order: Order) => !order.storeCoords || !order.customerCoords);
+                if (isDataOutdated) {
+                    console.warn("Outdated prototype order data detected. Resetting to initial state.");
                     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
                     setOrders(initialPrototypeOrders);
+                } else {
+                    setOrders(loadedOrders);
                 }
             } catch (error) {
                 console.error("Failed to load prototype orders from session storage, resetting.", error);
@@ -61,7 +63,9 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     }, [isClient]);
 
     const updateSessionStorage = (updatedOrders: Order[]) => {
-        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
+        if (isClient) {
+            sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
+        }
     };
 
     const updatePrototypeOrder = (orderId: string, updates: Partial<Order>) => {
@@ -81,23 +85,39 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             return updatedOrders;
         });
     };
+
+    const addPrototypeProduct = (product: Product) => {
+        setProducts(prev => [...prev, product]);
+    }
+    const updatePrototypeProduct = (productData: Product) => {
+        setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
+    }
+    const deletePrototypeProduct = (productId: string) => {
+        setProducts(prev => prev.filter(p => p.id !== productId));
+    }
     
     const getOrdersByStore = useCallback((storeId: string) => {
         return orders
             .filter(o => o.storeId === storeId)
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [orders]);
+
+    const getOrdersByUser = useCallback((userId: string) => {
+        return orders
+            .filter(o => o.userId === userId)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [orders]);
 
     const getAvailableOrdersForDelivery = useCallback(() => {
         return orders
             .filter(order => order.status === 'En preparación' && !order.deliveryPersonId)
-            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     }, [orders]);
 
     const getOrdersByDeliveryPerson = useCallback((driverId: string) => {
         return orders
             .filter(order => order.deliveryPersonId === driverId)
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [orders]);
 
     const getOrderById = useCallback((orderId: string) => {
@@ -107,10 +127,16 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
     const value = {
         prototypeOrders: orders,
+        prototypeStore: prototypeStore,
+        prototypeProducts: products,
         loading: loading || !isClient,
         updatePrototypeOrder,
         addPrototypeOrder,
+        addPrototypeProduct,
+        updatePrototypeProduct,
+        deletePrototypeProduct,
         getOrdersByStore,
+        getOrdersByUser,
         getAvailableOrdersForDelivery,
         getOrdersByDeliveryPerson,
         getOrderById

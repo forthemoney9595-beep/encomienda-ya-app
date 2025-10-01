@@ -7,12 +7,12 @@ export default async function DriverReviewsPage() {
     <div className="container mx-auto">
       <PageHeader 
         title="Análisis de Reseñas de Conductores"
-        description="Usa IA para analizar las reseñas de los clientes y etiquetar automáticamente el desempeño del conductor."
+        description="Esta funcionalidad fue eliminada debido a la complejidad con las dependencias de IA."
       />
       <Card>
         <CardContent className="pt-6">
             <div className="text-center text-muted-foreground">
-                <p>La funcionalidad de análisis de reseñas con IA ha sido desactivada temporalmente.</p>
+                <p>La funcionalidad de análisis de reseñas con IA ha sido desactivada.</p>
             </div>
         </CardContent>
       </Card>

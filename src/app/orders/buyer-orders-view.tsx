@@ -8,8 +8,9 @@ import { ArrowRight, PackageSearch } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Order } from '@/lib/order-service';
-import { getOrdersByUser } from '@/lib/order-service';
+import { getOrdersByUser as getOrdersFromDb } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
+import { usePrototypeData } from '@/context/prototype-data-context';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const getBadgeVariant = (status: string) => {
@@ -54,22 +55,27 @@ function OrderRowSkeleton() {
 
 export default function BuyerOrdersView() {
   const { user, loading: authLoading } = useAuth();
+  const { getOrdersByUser: getPrototypeOrders, loading: prototypeLoading } = usePrototypeData();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) return;
+    if (authLoading || prototypeLoading || !user) return;
 
     const fetchOrders = async () => {
       setLoading(true);
-      const userOrders = await getOrdersByUser(user.uid);
+      let userOrders: Order[] = [];
+      if (user.uid.startsWith('proto-')) {
+        userOrders = getPrototypeOrders(user.uid);
+      } else {
+        userOrders = await getOrdersFromDb(user.uid);
+      }
       setOrders(userOrders);
       setLoading(false);
     };
 
     fetchOrders();
-  }, [user, authLoading]);
+  }, [user, authLoading, prototypeLoading, getPrototypeOrders]);
 
 
   if (loading) {
