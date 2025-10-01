@@ -54,7 +54,7 @@ export default function OrderMap({ order }: OrderMapProps) {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {status === 'En reparto' ? (
+            {status === 'En reparto' && storeCoords && customerCoords ? (
                 <OrderRoute start={storePosition} end={customerPosition} />
             ) : (
                 <>

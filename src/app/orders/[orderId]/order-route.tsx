@@ -6,12 +6,12 @@ import L from 'leaflet';
 import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
-// Fix for default icon issues with webpack
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+// Fix for default icon issues. This is a common problem with bundlers like Webpack.
+// We are resetting the icon paths to point to the correct images from the leaflet package.
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png').default,
-  iconUrl: require('leaflet/dist/images/marker-icon.png').default,
-  shadowUrl: require('leaflet/dist/images/marker-shadow.png').default,
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
 
@@ -24,12 +24,12 @@ const OrderRoute = ({ start, end }: OrderRouteProps) => {
     const map = useMap();
 
     useEffect(() => {
-        if (!map) return;
+        if (!map || !start || !end) return;
 
         const routingControl = L.Routing.control({
             waypoints: [
-                L.latLng(start as L.LatLng),
-                L.latLng(end as L.LatLng)
+                L.latLng(start as L.LatLngTuple),
+                L.latLng(end as L.LatLngTuple)
             ],
             routeWhileDragging: false,
             show: false, // Hide the turn-by-turn instructions
@@ -43,7 +43,9 @@ const OrderRoute = ({ start, end }: OrderRouteProps) => {
         }).addTo(map);
 
         return () => {
-            map.removeControl(routingControl);
+            if (map && routingControl) {
+               map.removeControl(routingControl);
+            }
         };
     }, [map, start, end]);
 
