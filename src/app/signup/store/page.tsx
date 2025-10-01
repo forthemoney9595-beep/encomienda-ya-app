@@ -18,6 +18,7 @@ import { createUserProfile, createStoreForUser } from '@/lib/user';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { prototypeUsers } from '@/lib/placeholder-data';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
@@ -47,31 +48,45 @@ export default function SignupStorePage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     
-    // Prototype Mode Check - This mode is now deprecated for store creation
-    const isPrototypeUserEmail = Object.keys(prototypeUsers).includes(values.email);
+    // Check if it's the dedicated prototype store owner email
+    if (values.email === prototypeUsers['tienda@test.com'].email) {
+      // Create a new store for the prototype user
+      const newStoreId = `proto-store-${Date.now()}`;
+      const newStore = {
+        id: newStoreId,
+        name: values.storeName,
+        category: values.category,
+        address: values.address,
+        status: 'Pendiente' as const, // All new prototype stores need approval
+        ownerId: prototypeUsers['tienda@test.com'].uid,
+        imageUrl: getPlaceholderImage(values.storeName),
+        imageHint: values.category.toLowerCase(),
+        products: [],
+        productCategories: [values.category]
+      };
+      
+      addPrototypeStore(newStore);
+      await loginForPrototype(values.email, newStoreId);
 
-    if (isPrototypeUserEmail) {
-        toast({
-            variant: "destructive",
-            title: "Modo de Prototipo no disponible",
-            description: "El registro de tiendas de prototipo está deshabilitado. Por favor, usa un correo electrónico real para registrar una tienda en la base de datos.",
-        });
-        return;
+      toast({
+        title: "¡Tienda de Prototipo Registrada!",
+        description: "Tu tienda está pendiente de aprobación por el administrador.",
+      });
+      router.push('/');
+      return;
     }
 
-    // Real Firebase Logic
+    // Real Firebase Logic for any other email
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
-      // Create the user profile document in Firestore
       await createUserProfile(user.uid, {
         name: values.ownerName,
         email: values.email,
         role: 'store',
       });
       
-      // Create the store document and associate it with the user
       const newStore = await createStoreForUser(user.uid, {
           name: values.storeName,
           category: values.category,
@@ -83,8 +98,7 @@ export default function SignupStorePage() {
         description: "Tu tienda está activa y es visible para todos. Serás redirigido.",
       });
       router.push('/');
-    } catch (error: any)
-{
+    } catch (error: any) {
       console.error(error);
       toast({
         variant: "destructive",
@@ -104,7 +118,7 @@ export default function SignupStorePage() {
             <CardHeader>
               <CardTitle className="text-2xl">Registrar tu Tienda</CardTitle>
               <CardDescription>
-                Rellena los datos para registrar tu negocio en la plataforma. Tu tienda será visible públicamente.
+                Rellena los datos para registrar tu negocio en la plataforma. Tu tienda necesitará ser aprobada.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">

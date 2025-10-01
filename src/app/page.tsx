@@ -8,30 +8,25 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import PageHeader from '@/components/page-header';
 import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
+import { usePrototypeData } from '@/context/prototype-data-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { useRouter } from 'next/navigation';
-import { getStores } from '@/lib/data-service';
+
 
 export default function Home() {
-  const { loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    async function fetchStores() {
-        setLoading(true);
-        // Fetch only approved stores from the real database
-        const approvedStores = await getStores(false);
-        setStores(approvedStores);
-        setLoading(false);
+    // In prototype mode, we just use the stores from the context
+    if (!prototypeLoading) {
+      setStores(prototypeStores.filter(s => s.status === 'Aprobado'));
+      setLoading(false);
     }
-    
-    if (!authLoading) {
-      fetchStores();
-    }
-
-  }, [authLoading]);
+  }, [prototypeStores, prototypeLoading]);
 
 
   return (

@@ -71,7 +71,15 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
 export async function createStoreForUser(ownerId: string, storeData: { name: string, category: string, address: string }) {
     try {
         const storeCollectionRef = collection(db, 'stores');
-        const newStoreRef = await addDoc(storeCollectionRef, {
+        const newStoreRef = doc(storeCollectionRef); // Create a new doc reference with an auto-generated ID
+
+        // Update the user's profile with the new storeId first
+        const userDocRef = doc(db, 'users', ownerId);
+        await updateDoc(userDocRef, { storeId: newStoreRef.id });
+
+        // Then, set the store document
+        await setDoc(newStoreRef, {
+            id: newStoreRef.id,
             ...storeData,
             ownerId: ownerId,
             status: 'Aprobado', // Auto-approve for faster prototype cycle
@@ -81,9 +89,6 @@ export async function createStoreForUser(ownerId: string, storeData: { name: str
             imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
         });
 
-        // Update the user's profile with the new storeId
-        const userDocRef = doc(db, 'users', ownerId);
-        await updateDoc(userDocRef, { storeId: newStoreRef.id });
 
         return { id: newStoreRef.id, ...storeData };
     } catch (error) {

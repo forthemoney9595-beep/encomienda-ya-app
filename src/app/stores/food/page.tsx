@@ -8,31 +8,25 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import PageHeader from '@/components/page-header';
 import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
+import { usePrototypeData } from '@/context/prototype-data-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
-import { getStores } from '@/lib/data-service';
 
 export default function FoodStoresPage() {
   const { loading: authLoading } = useAuth();
+  const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
   const [foodStores, setFoodStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchFoodStores() {
-      setLoading(true);
-      const allApprovedStores = await getStores(false);
+    if (!prototypeLoading) {
       const foodCategories = ['italiana', 'comida-rapida', 'japonesa', 'mexicana', 'saludable', 'dulces'];
-      const filteredStores = allApprovedStores.filter(store => 
-        foodCategories.includes(store.category.toLowerCase())
+      const filteredStores = prototypeStores.filter(store => 
+        store.status === 'Aprobado' && foodCategories.includes(store.category.toLowerCase())
       );
       setFoodStores(filteredStores);
       setLoading(false);
     }
-    
-    if (!authLoading) {
-      fetchFoodStores();
-    }
-    
-  }, [authLoading]);
+  }, [prototypeStores, prototypeLoading]);
 
   return (
     <div className="container mx-auto">
