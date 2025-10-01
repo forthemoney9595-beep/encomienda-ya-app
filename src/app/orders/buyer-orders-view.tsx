@@ -72,8 +72,10 @@ export default function BuyerOrdersView() {
     const fetchOrders = async () => {
       let userOrders: Order[] = [];
       if (user.uid.startsWith('proto-')) {
+        // Use the corrected function from the context
         userOrders = getOrdersByUser(user.uid);
       } else {
+        // This is for real users, which is not the case here
         userOrders = await getOrdersFromDb(user.uid);
       }
       setOrders(userOrders);
@@ -111,7 +113,7 @@ export default function BuyerOrdersView() {
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
                   <div>
                     <CardTitle className="text-lg">{order.storeName}</CardTitle>
-                    <CardDescription>Pedido #{order.id.substring(0, 7)}</CardDescription>
+                    <CardDescription>Pedido #{order.id.substring(0, 12)}</CardDescription>
                   </div>
                   <Badge variant={getBadgeVariant(order.status)} className="w-fit">{order.status}</Badge>
                 </div>
