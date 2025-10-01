@@ -23,9 +23,9 @@ export default function FoodStoresPage() {
       return;
     }
     
-    const foodCategories = ['Italiana', 'Comida Rápida', 'Japonesa', 'Mexicana', 'Saludable', 'Dulces'];
+    const foodCategories = ['italiana', 'comida-rapida', 'japonesa', 'mexicana', 'saludable', 'dulces'];
     const filteredStores = prototypeStores.filter(store => 
-      store.status === 'Aprobado' && foodCategories.includes(store.category)
+      store.status === 'Aprobado' && foodCategories.includes(store.category.toLowerCase())
     );
     setFoodStores(filteredStores);
     setLoading(false);
