@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -43,6 +44,13 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
 
+  // For store owners, `/orders` is their main management page.
+  // We check if the path starts with `/orders` for the main "Mi Tienda > Pedidos" link.
+  // For the user-level "Mis Pedidos", we check for exact match to avoid highlighting both.
+  const isStoreOrdersActive = isStoreOwner && pathname.startsWith('/orders');
+  const isBuyerOrdersActive = !isStoreOwner && pathname.startsWith('/orders');
+
+
   return (
     <SidebarMenu>
        {/* General Navigation */}
@@ -60,11 +68,14 @@ export function MainNav() {
               <Link href="/profile"><User /><span>Mi Perfil</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Pedidos">
-              <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {/* "Mis Pedidos" for buyers/delivery/admin shows orders they've placed */}
+          {!isStoreOwner &&
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Pedidos">
+                <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          }
           <SidebarMenuItem>
              <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
                 <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
@@ -90,7 +101,7 @@ export function MainNav() {
           <CollapsibleContent>
             <SidebarMenuSub>
               <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders')}>
+                <SidebarMenuSubButton asChild isActive={isStoreOrdersActive}>
                   <Link href="/orders">
                     <ClipboardList />
                     <span>Pedidos</span>

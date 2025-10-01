@@ -28,11 +28,8 @@ export default function Home() {
       return;
     }
     
-    // If the user is a store owner, redirect them to their order management page
-    if (user && user.role === 'store') {
-        router.push('/orders');
-        return;
-    }
+    // The redirect logic has been removed from here.
+    // The main-nav component now handles role-specific menus.
 
     const fetchStores = async () => {
       setLoading(true);
@@ -45,14 +42,6 @@ export default function Home() {
     fetchStores();
   }, [user, authLoading, isClient, router]);
 
-  // Don't render the page content if we're about to redirect for a store owner
-  if (user && user.role === 'store') {
-      return (
-        <div className="container mx-auto text-center py-20">
-          <p>Redirigiendo a tu panel de tienda...</p>
-        </div>
-      );
-  }
 
   return (
     <div className="container mx-auto">
