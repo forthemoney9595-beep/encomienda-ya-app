@@ -7,13 +7,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Edit } from "lucide-react";
+import { Loader2, PlusCircle, Edit, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { generateProductImage } from "@/ai/flows/generate-product-image";
+import Image from "next/image";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -35,6 +37,7 @@ interface ManageItemDialogProps {
 
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const isEditing = product !== null;
   const { toast } = useToast();
@@ -49,6 +52,8 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       imageUrl: "",
     },
   });
+
+  const imageUrlValue = form.watch('imageUrl');
 
   useEffect(() => {
     if (isOpen) {
@@ -71,6 +76,46 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       }
     }
   }, [product, form, isOpen, productCategories]);
+
+  async function handleGenerateImage() {
+    const productName = form.getValues('name');
+    const productDescription = form.getValues('description');
+
+    if (!productName || !productDescription) {
+        toast({
+            variant: "destructive",
+            title: "Faltan datos",
+            description: "Por favor, introduce el nombre y la descripción del producto antes de generar una imagen."
+        });
+        return;
+    }
+
+    setIsGenerating(true);
+    setStatusMessage('Generando imagen con IA...');
+    try {
+        const result = await generateProductImage({ productName, productDescription });
+        if (result.imageUrl) {
+            form.setValue('imageUrl', result.imageUrl, { shouldValidate: true });
+            toast({
+                title: "¡Imagen Generada!",
+                description: "La imagen ha sido creada y añadida al formulario."
+            });
+        } else {
+            throw new Error("La respuesta de la IA no contenía una URL de imagen.");
+        }
+    } catch (error) {
+        console.error("Error al generar la imagen:", error);
+        toast({
+            variant: "destructive",
+            title: "Error de IA",
+            description: "No se pudo generar la imagen. Por favor, inténtalo de nuevo."
+        });
+    } finally {
+        setIsGenerating(false);
+        setStatusMessage('');
+    }
+  }
+
 
   async function onSubmit(values: FormData) {
     setIsProcessing(true);
@@ -102,15 +147,17 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     }
   }
 
+  const isFormProcessing = isProcessing || isGenerating;
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!isProcessing) setIsOpen(open)}}>
-      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isProcessing) e.preventDefault() }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!isFormProcessing) setIsOpen(open)}}>
+      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isFormProcessing) e.preventDefault() }}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellene los detalles del producto. Si no proporciona una URL de imagen, se asignará una automáticamente.
+                Rellene los detalles del producto. Puede generar una imagen con IA basada en el nombre y la descripción.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -121,7 +168,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Nombre del Producto</FormLabel>
                     <FormControl>
-                      <Input placeholder="Pizza Margarita" {...field} disabled={isProcessing} />
+                      <Input placeholder="Pizza Margarita" {...field} disabled={isFormProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -134,7 +181,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Descripción</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isProcessing} />
+                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isFormProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -146,7 +193,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isFormProcessing}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecciona una categoría" />
@@ -169,7 +216,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Precio</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isProcessing} />
+                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isFormProcessing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -180,22 +227,39 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 name="imageUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>URL de la Imagen (Opcional)</FormLabel>
+                    <FormLabel>URL de la Imagen</FormLabel>
                     <FormControl>
-                      <Input placeholder="https://ejemplo.com/imagen.jpg" {...field} disabled={isProcessing} />
+                      <div className="flex items-center gap-2">
+                        <Input placeholder="O genera una con IA" {...field} disabled={isFormProcessing} />
+                         <Button type="button" variant="outline" size="icon" onClick={handleGenerateImage} disabled={isFormProcessing}>
+                            <Wand2 className={`h-4 w-4 ${isGenerating ? 'animate-pulse' : ''}`} />
+                            <span className="sr-only">Generar Imagen con IA</span>
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {imageUrlValue && (
+                <div className="relative h-48 w-full">
+                    <Image
+                        src={imageUrlValue}
+                        alt="Vista previa de la imagen del producto"
+                        fill
+                        style={{ objectFit: 'contain' }}
+                        className="rounded-md border bg-muted"
+                    />
+                </div>
+              )}
             </div>
             <DialogFooter>
-               {isProcessing && <p className="text-sm text-muted-foreground mr-auto">{statusMessage}</p>}
-              <Button type="submit" disabled={isProcessing}>
+               {isFormProcessing && <p className="text-sm text-muted-foreground mr-auto">{statusMessage}</p>}
+              <Button type="submit" disabled={isFormProcessing}>
                 {isProcessing ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Procesando...
+                    Guardando...
                    </>
                 ) : (
                   <>
