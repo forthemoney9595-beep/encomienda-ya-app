@@ -83,7 +83,7 @@ export const prototypeUsers: Record<string, UserProfile> = {
 const prototypeProductsBurger: Product[] = [
     { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
     { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
-    { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebida", imageUrl: "https://picsum.photos/seed/soda/200/200" },
+    { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebidas", imageUrl: "https://picsum.photos/seed/soda/200/200" },
 ];
 
 const prototypeProductsPizza: Product[] = [
@@ -98,13 +98,23 @@ const prototypeProductsSushi: Product[] = [
     { id: 'proto-prod-9', name: "Té Verde", description: "El acompañamiento perfecto.", price: 3.00, category: 'Bebidas', imageUrl: "https://picsum.photos/seed/greentea/200/200" },
 ];
 
+const prototypeProductsClothing: Product[] = [
+    { id: 'proto-prod-10', name: "Camiseta Básica", description: "Algodón 100% de alta calidad.", price: 19.99, category: 'Camisetas', imageUrl: "https://picsum.photos/seed/tshirt/200/200" },
+    { id: 'proto-prod-11', name: "Pantalones Vaqueros", description: "Corte moderno y cómodo.", price: 49.99, category: 'Pantalones', imageUrl: "https://picsum.photos/seed/jeans/200/200" },
+];
+
+const prototypeProductsBooks: Product[] = [
+    { id: 'proto-prod-12', name: "La Sombra del Viento", description: "Una novela de misterio y romance en Barcelona.", price: 22.50, category: 'Ficción', imageUrl: "https://picsum.photos/seed/fictionbook/200/200" },
+    { id: 'proto-prod-13', name: "Sapiens: De animales a dioses", description: "Una breve historia de la humanidad.", price: 25.00, category: 'No Ficción', imageUrl: "https://picsum.photos/seed/nonfictionbook/200/200" },
+];
+
 
 export const initialPrototypeStores: Store[] = [
     {
         id: 'proto-store-burger',
         name: "Hamburguesas IA",
         category: "Comida Rápida",
-        productCategories: ["Comida", "Bebida"],
+        productCategories: ["Comida", "Bebidas"],
         address: "Av. Hamburguesa 456",
         ownerId: 'proto-store-owner',
         status: 'Pendiente',
@@ -135,6 +145,30 @@ export const initialPrototypeStores: Store[] = [
         imageUrl: "https://picsum.photos/seed/sushiplace/600/400",
         imageHint: "sushi bar",
         products: prototypeProductsSushi,
+    },
+    {
+        id: 'proto-store-clothing',
+        name: "Estilo Urbano",
+        category: "Ropa",
+        productCategories: ["Camisetas", "Pantalones"],
+        address: "Plaza de la Moda 101",
+        ownerId: 'another-owner-id',
+        status: 'Aprobado',
+        imageUrl: "https://picsum.photos/seed/clothingstore/600/400",
+        imageHint: "clothing store",
+        products: prototypeProductsClothing,
+    },
+    {
+        id: 'proto-store-books',
+        name: "El Rincón del Lector",
+        category: "Otros",
+        productCategories: ["Ficción", "No Ficción"],
+        address: "Paseo del Saber 202",
+        ownerId: 'yet-another-owner-id',
+        status: 'Aprobado',
+        imageUrl: "https://picsum.photos/seed/bookstore/600/400",
+        imageHint: "bookstore",
+        products: prototypeProductsBooks,
     }
 ];
 
@@ -242,6 +276,26 @@ export const initialPrototypeOrders: Order[] = [
         deliveryPersonName: undefined,
         storeCoords: { latitude: 48.8566, longitude: 2.3522 },
         customerCoords: { latitude: 48.8584, longitude: 2.2945 },
+    },
+    {
+        id: 'proto-order-5',
+        userId: 'proto-buyer',
+        customerName: 'Comprador Proto',
+        items: [
+             { ...prototypeProductsClothing[0], quantity: 2 } // Camisetas
+        ],
+        deliveryFee: 7.10,
+        total: (19.99 * 2) + 7.10,
+        status: 'Pedido Realizado',
+        createdAt: new Date(Date.now() - 1000 * 60 * 120), // 120 mins ago
+        storeId: 'proto-store-clothing',
+        storeName: "Estilo Urbano",
+        storeAddress: "Plaza de la Moda 101",
+        shippingAddress: { name: 'Comprador Proto', address: 'Avenida Siempre Viva 742' },
+        deliveryPersonId: undefined,
+        deliveryPersonName: undefined,
+        storeCoords: { latitude: 51.5074, longitude: -0.1278 },
+        customerCoords: { latitude: 51.5098, longitude: -0.0789 },
     }
 ];
 
