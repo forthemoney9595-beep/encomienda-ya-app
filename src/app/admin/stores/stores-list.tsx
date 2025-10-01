@@ -64,7 +64,7 @@ export function StoresList({ stores, onStatusUpdate }: StoresListProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {stores.map((store) => (
+            {stores.filter(Boolean).map((store) => (
               <TableRow key={store.id}>
                 <TableCell className="hidden sm:table-cell">
                   <Image
