@@ -10,30 +10,43 @@ import { StoresList } from './stores-list';
 import { useAuth } from '@/context/auth-context';
 import type { Store } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 export default function AdminStoresPage() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isClient, setIsClient] = useState(false);
+  const { prototypeStore, updatePrototypeStore } = usePrototypeData();
+  const isPrototype = user?.uid.startsWith('proto-') ?? false;
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isClient || authLoading) return;
-
     const fetchStores = async () => {
       setLoading(true);
-      const isPrototype = user?.uid.startsWith('proto-') ?? false;
-      const fetchedStores = await getStores(true, isPrototype);
-      setStores(fetchedStores);
+      if (isPrototype) {
+        // In prototype mode, we might want to manage a list of stores in context
+        // For now, we just use the single prototype store
+        setStores([prototypeStore]);
+      } else {
+        const fetchedStores = await getStores(true, false);
+        setStores(fetchedStores);
+      }
       setLoading(false);
     };
 
-    fetchStores();
-  }, [user, authLoading, isClient]);
+    if (!authLoading) {
+      fetchStores();
+    }
+  }, [user, authLoading, isPrototype, prototypeStore]);
+
+  const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
+      if (isPrototype && storeId === prototypeStore.id) {
+          updatePrototypeStore({ status });
+          setStores([ { ...prototypeStore, status } ]); // Force re-render with new status
+      } else {
+          // This would be a call to a server action for real stores
+          console.log("Real store status update not implemented for admin prototype page yet.");
+      }
+  }
 
   return (
     <div className="container mx-auto">
@@ -43,7 +56,7 @@ export default function AdminStoresPage() {
           Agregar Nueva Tienda
         </Button>
       </PageHeader>
-      {loading || !isClient ? (
+      {loading ? (
         <div className="border rounded-lg p-4">
             <Skeleton className="h-8 w-1/4 mb-4" />
             <div className="space-y-2">
@@ -52,7 +65,7 @@ export default function AdminStoresPage() {
             </div>
         </div>
       ) : (
-        <StoresList stores={stores} />
+        <StoresList stores={stores} onStatusUpdate={handleStatusUpdate} />
       )}
     </div>
   );

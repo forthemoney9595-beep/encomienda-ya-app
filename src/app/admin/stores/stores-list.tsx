@@ -15,22 +15,25 @@ import { useRouter } from 'next/navigation';
 
 interface StoresListProps {
   stores: Store[];
+  onStatusUpdate: (storeId: string, status: 'Aprobado' | 'Rechazado') => void;
 }
 
-export function StoresList({ stores }: StoresListProps) {
+export function StoresList({ stores, onStatusUpdate }: StoresListProps) {
   const { toast } = useToast();
-  const router = useRouter();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
     setIsUpdating(storeId);
     try {
-      await updateStoreStatus(storeId, status);
+      if (storeId.startsWith('proto-')) {
+        onStatusUpdate(storeId, status); // Call parent handler for prototype
+      } else {
+        await updateStoreStatus(storeId, status); // Call server action for real stores
+      }
       toast({
         title: '¡Éxito!',
         description: `La tienda ha sido marcada como ${status.toLowerCase()}.`,
       });
-      router.refresh();
     } catch (error) {
       toast({
         variant: 'destructive',

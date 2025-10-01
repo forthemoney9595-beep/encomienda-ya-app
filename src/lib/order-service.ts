@@ -2,6 +2,7 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem {
@@ -188,12 +189,8 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
   }
 }
 
-export async function getAvailableOrdersForDelivery(isPrototype: boolean): Promise<Order[]> {
-  if (isPrototype) {
-    // This logic is now client-side in usePrototypeData. This server function
-    // will only fetch real data.
-    return [];
-  }
+// This function is now only for real data, prototype data is handled by the context
+export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
   const ordersRef = collection(db, 'orders');
   const q = query(
     ordersRef,

@@ -8,7 +8,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getStores, getDeliveryPersonnel } from '@/lib/data-service';
-import { getAvailableOrdersForDelivery } from '@/lib/order-service';
+import { usePrototypeData } from '@/context/prototype-data-context';
+import type { Store as StoreType, DeliveryPersonnel } from '@/lib/placeholder-data';
 
 
 export default function AdminDashboard() {
@@ -19,6 +20,8 @@ export default function AdminDashboard() {
   const [pendingOrders, setPendingOrders] = useState(0);
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
+  const { prototypeOrders, getAvailableOrdersForDelivery, loading: prototypeLoading } = usePrototypeData();
+
   useEffect(() => {
     if (!loading && !isAdmin) {
       router.push('/login');
@@ -27,19 +30,35 @@ export default function AdminDashboard() {
       const fetchData = async () => {
         setDashboardLoading(true);
         const isPrototype = user?.uid.startsWith('proto-') ?? false;
-        const [stores, drivers, availableOrders] = await Promise.all([
-          getStores(true, isPrototype),
-          getDeliveryPersonnel(isPrototype),
-          getAvailableOrdersForDelivery(isPrototype),
-        ]);
+        
+        let stores: StoreType[] = [];
+        let drivers: DeliveryPersonnel[] = [];
+        let availableOrderCount = 0;
+
+        if (isPrototype) {
+            // For prototype admin, use prototype data directly
+            stores = await getStores(true, true); // this already includes the proto-store
+            drivers = await getDeliveryPersonnel(true); // this includes proto-delivery
+            availableOrderCount = getAvailableOrdersForDelivery().length;
+        } else {
+            const [fetchedStores, fetchedDrivers, fetchedAvailableOrders] = await Promise.all([
+              getStores(true, false),
+              getDeliveryPersonnel(false),
+              getAvailableOrdersForDelivery(), // This uses the prototype context method
+            ]);
+            stores = fetchedStores;
+            drivers = fetchedDrivers;
+            availableOrderCount = fetchedAvailableOrders.length;
+        }
+
         setTotalStores(stores.length);
         setTotalDrivers(drivers.length);
-        setPendingOrders(availableOrders.length);
+        setPendingOrders(availableOrderCount);
         setDashboardLoading(false);
       }
       fetchData();
     }
-  }, [user, isAdmin, loading, router]);
+  }, [user, isAdmin, loading, router, prototypeOrders, prototypeLoading, getAvailableOrdersForDelivery]);
   
   if (loading || dashboardLoading || !isAdmin) {
     return (
