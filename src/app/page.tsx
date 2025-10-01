@@ -45,9 +45,13 @@ export default function Home() {
     fetchStores();
   }, [user, authLoading, isClient, router]);
 
-  // Don't render the page content if we're about to redirect
+  // Don't render the page content if we're about to redirect for a store owner
   if (user && user.role === 'store') {
-      return null;
+      return (
+        <div className="container mx-auto text-center py-20">
+          <p>Redirigiendo a tu panel de tienda...</p>
+        </div>
+      );
   }
 
   return (

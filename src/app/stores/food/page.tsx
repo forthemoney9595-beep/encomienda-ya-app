@@ -19,10 +19,8 @@ export default function FoodStoresPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (user && user.role === 'store') {
-        router.push('/orders');
-        return;
-    }
+    // Redirecting store owners is now handled by the main navigation logic
+    // so this page should just load data for buyers/guests.
     
     const fetchStores = async () => {
       setLoading(true);
@@ -42,7 +40,12 @@ export default function FoodStoresPage() {
   }, [user, authLoading, router]);
 
   if (user && user.role === 'store') {
-    return null;
+    // While navigation should prevent this, show a friendly message if accessed directly
+     return (
+        <div className="container mx-auto text-center py-20">
+          <p>Redirigiendo a tu panel de tienda...</p>
+        </div>
+      );
   }
 
   return (
