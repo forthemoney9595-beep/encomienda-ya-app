@@ -50,7 +50,6 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         if (isClient) {
             try {
                 const storedOrders = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-                // Start with an empty array if nothing is stored
                 const loadedOrders = storedOrders 
                     ? JSON.parse(storedOrders, (key, value) => key === 'createdAt' ? new Date(value) : value)
                     : [];
@@ -64,7 +63,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
             } catch (error) {
                 console.error("Failed to load prototype data from session storage, resetting.", error);
-                sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify([])); // Reset to empty
+                sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify([]));
                 setOrders([]);
                 sessionStorage.setItem(PROTOTYPE_STORES_KEY, JSON.stringify(initialPrototypeStores));
                 setStores(initialPrototypeStores);
