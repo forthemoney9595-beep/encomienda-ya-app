@@ -18,7 +18,6 @@ import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { prototypeStore } from '@/lib/placeholder-data';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
@@ -32,7 +31,7 @@ const formSchema = z.object({
 export default function CheckoutPage() {
   const { cart, totalPrice, totalItems, clearCart, storeId } = useCart();
   const { user, loading: authLoading } = useAuth();
-  const { addPrototypeOrder } = usePrototypeData();
+  const { addPrototypeOrder, prototypeStores } = usePrototypeData();
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,8 +92,18 @@ export default function CheckoutPage() {
     try {
       const isPrototype = storeId.startsWith('proto-');
       
-      const storeName = isPrototype ? prototypeStore.name : "Nombre de Tienda Real"; // Placeholder for real store
-      const storeAddress = isPrototype ? prototypeStore.address : "Dirección de Tienda Real"; // Placeholder for real store
+      let storeName = "Nombre de Tienda Real"; // Placeholder for real store
+      let storeAddress = "Dirección de Tienda Real"; // Placeholder for real store
+
+      if (isPrototype) {
+        const protoStore = prototypeStores.find(s => s.id === storeId);
+        if (protoStore) {
+            storeName = protoStore.name;
+            storeAddress = protoStore.address;
+        }
+      } else {
+        // In a real app, you might fetch store details if not already available
+      }
 
       const createdOrder = await createOrder({
         userId: user.uid,

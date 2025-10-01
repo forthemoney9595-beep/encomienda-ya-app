@@ -29,10 +29,10 @@ export function ProductList({ products: initialProducts, productCategories: init
     const params = useParams();
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
-    const { prototypeProducts, addPrototypeProduct, updatePrototypeProduct, deletePrototypeProduct } = usePrototypeData();
+    const { addPrototypeProduct, updatePrototypeProduct, deletePrototypeProduct } = usePrototypeData();
     
     const isPrototypeMode = currentStoreId.startsWith('proto-');
-    const products = isPrototypeMode ? prototypeProducts : initialProducts;
+    const products = initialProducts; // This will now be correctly passed from the parent which uses context
     
     // State for local UI management
     const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
@@ -52,7 +52,7 @@ export function ProductList({ products: initialProducts, productCategories: init
         const isEditing = products.some(p => p.id === productData.id);
         
         if (isPrototypeMode) {
-            isEditing ? updatePrototypeProduct(productData) : addPrototypeProduct(productData);
+            isEditing ? updatePrototypeProduct(currentStoreId, productData) : addPrototypeProduct(currentStoreId, productData);
         } else {
             // Optimistically update UI
             // This is complex, for now we rely on DB call and re-fetch which is slower but safer
@@ -83,7 +83,7 @@ export function ProductList({ products: initialProducts, productCategories: init
 
     const handleDeleteProduct = async (productId: string) => {
         if (isPrototypeMode) {
-            deletePrototypeProduct(productId);
+            deletePrototypeProduct(currentStoreId, productId);
         } else {
             try {
                 await deleteProductFromStore(currentStoreId, productId);
@@ -160,7 +160,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                 </Button>
               </div>
             )}
-            <Tabs defaultValue={productCategories[0] || 'all'} className="w-full" value={productCategories[0]}>
+            <Tabs defaultValue={productCategories[0] || 'all'} className="w-full" value={productCategories.length > 0 ? productCategories[0] : undefined}>
                 <TabsList className="mb-4">
                     {productCategories.map(category => (
                     <TabsTrigger key={category} value={category}>{category}</TabsTrigger>

@@ -5,12 +5,14 @@ import { notFound, useParams } from 'next/navigation';
 import Image from 'next/image';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getStoreById, getProductsByStoreId } from '@/lib/data-service';
+import { getStoreById as getStoreFromDb, getProductsByStoreId as getProductsFromDb } from '@/lib/data-service';
 import { ProductList } from './product-list';
 import { ContactStore } from './contact-store';
 import { useEffect, useState } from 'react';
 import type { Store, Product } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/context/auth-context';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 function StoreDetailSkeleton() {
     return (
@@ -67,28 +69,34 @@ function StoreDetailSkeleton() {
 export default function StoreDetailPage() {
   const params = useParams();
   const storeId = params.storeId as string;
+  const { user, loading: authLoading } = useAuth();
+  const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
+  const isPrototype = user?.uid.startsWith('proto-') ?? false;
 
   const [store, setStore] = useState<Store | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
-        if (!storeId) return;
+        if (!storeId || authLoading || (isPrototype && prototypeLoading)) return;
         
         setLoading(true);
         try {
-            const storeData = await getStoreById(storeId);
+            let storeData: Store | null | undefined = null;
+            if (isPrototype) {
+                storeData = prototypeStores.find(s => s.id === storeId);
+            } else {
+                storeData = await getStoreFromDb(storeId);
+                if (storeData) {
+                    storeData.products = await getProductsFromDb(storeId);
+                }
+            }
             
             if (!storeData) {
                 notFound();
                 return;
             }
-
-            const productsData = await getProductsByStoreId(storeId);
-
             setStore(storeData);
-            setProducts(productsData);
         } catch (error) {
             console.error("Failed to fetch store data:", error);
             // Handle error appropriately, maybe show a toast
@@ -97,7 +105,7 @@ export default function StoreDetailPage() {
         }
     }
     fetchData();
-  }, [storeId]);
+  }, [storeId, isPrototype, prototypeStores, prototypeLoading, authLoading]);
 
 
   if (loading) {
@@ -130,7 +138,7 @@ export default function StoreDetailPage() {
                     <CardTitle>Productos</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ProductList products={products} productCategories={productCategories} ownerId={store.ownerId} />
+                  <ProductList products={store.products} productCategories={productCategories} ownerId={store.ownerId} />
                 </CardContent>
             </Card>
         </div>

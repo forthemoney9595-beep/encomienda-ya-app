@@ -3,20 +3,19 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
-import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY, prototypeStore as initialPrototypeStore, initialPrototypeProducts, prototypeUsers, DeliveryPersonnel } from '@/lib/placeholder-data';
-import type { Store, Product } from '@/lib/placeholder-data';
+import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY, initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery } from '@/lib/placeholder-data';
+import type { Store, Product, DeliveryPersonnel } from '@/lib/placeholder-data';
 
 interface PrototypeDataContextType {
     prototypeOrders: Order[];
-    prototypeStore: Store;
+    prototypeStores: Store[];
     prototypeDelivery: DeliveryPersonnel;
-    prototypeProducts: Product[];
     loading: boolean;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
     addPrototypeOrder: (order: Order) => void;
-    updatePrototypeProduct: (product: Product) => void;
-    addPrototypeProduct: (product: Product) => void;
-    deletePrototypeProduct: (productId: string) => void;
+    updatePrototypeProduct: (storeId: string, product: Product) => void;
+    addPrototypeProduct: (storeId: string, product: Product) => void;
+    deletePrototypeProduct: (storeId: string, productId: string) => void;
     updatePrototypeStore: (updates: Partial<Store>) => void;
     updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => void;
     getOrdersByStore: (storeId: string) => Order[];
@@ -28,24 +27,13 @@ interface PrototypeDataContextType {
 
 const PrototypeDataContext = createContext<PrototypeDataContextType | undefined>(undefined);
 
-const PROTOTYPE_STORE_KEY = 'prototypeStore';
+const PROTOTYPE_STORES_KEY = 'prototypeStores';
 const PROTOTYPE_DELIVERY_KEY = 'prototypeDelivery';
-
-const initialProtoDeliveryUser = Object.values(prototypeUsers).find(u => u.role === 'delivery');
-const initialPrototypeDelivery: DeliveryPersonnel = {
-    id: initialProtoDeliveryUser!.uid,
-    name: initialProtoDeliveryUser!.name,
-    email: initialProtoDeliveryUser!.email,
-    status: 'Activo',
-    vehicle: 'motocicleta',
-    zone: 'Centro'
-};
 
 
 export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => {
     const [orders, setOrders] = useState<Order[]>([]);
-    const [products, setProducts] = useState<Product[]>(initialPrototypeProducts);
-    const [prototypeStore, setPrototypeStore] = useState<Store>(initialPrototypeStore);
+    const [stores, setStores] = useState<Store[]>(initialPrototypeStores);
     const [prototypeDelivery, setPrototypeDelivery] = useState<DeliveryPersonnel>(initialPrototypeDelivery);
     const [loading, setLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
@@ -64,8 +52,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
                     : initialPrototypeOrders;
                  setOrders(loadedOrders);
 
-                const storedStore = sessionStorage.getItem(PROTOTYPE_STORE_KEY);
-                setPrototypeStore(storedStore ? JSON.parse(storedStore) : initialPrototypeStore);
+                const storedStores = sessionStorage.getItem(PROTOTYPE_STORES_KEY);
+                setStores(storedStores ? JSON.parse(storedStores) : initialPrototypeStores);
                 
                 const storedDelivery = sessionStorage.getItem(PROTOTYPE_DELIVERY_KEY);
                 setPrototypeDelivery(storedDelivery ? JSON.parse(storedDelivery) : initialPrototypeDelivery);
@@ -74,8 +62,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
                 console.error("Failed to load prototype data from session storage, resetting.", error);
                 sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
                 setOrders(initialPrototypeOrders);
-                sessionStorage.setItem(PROTOTYPE_STORE_KEY, JSON.stringify(initialPrototypeStore));
-                setPrototypeStore(initialPrototypeStore);
+                sessionStorage.setItem(PROTOTYPE_STORES_KEY, JSON.stringify(initialPrototypeStores));
+                setStores(initialPrototypeStores);
                 sessionStorage.setItem(PROTOTYPE_DELIVERY_KEY, JSON.stringify(initialPrototypeDelivery));
                 setPrototypeDelivery(initialPrototypeDelivery);
             } finally {
@@ -84,30 +72,18 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         }
     }, [isClient]);
 
-    const updateOrdersInSession = (updatedOrders: Order[]) => {
+    const updateSessionStorage = (key: string, data: any) => {
         if (isClient) {
-            sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(updatedOrders));
+            sessionStorage.setItem(key, JSON.stringify(data));
         }
     };
     
-    const updateStoreInSession = (updatedStore: Store) => {
-        if (isClient) {
-            sessionStorage.setItem(PROTOTYPE_STORE_KEY, JSON.stringify(updatedStore));
-        }
-    };
-    
-    const updateDeliveryInSession = (updatedDelivery: DeliveryPersonnel) => {
-        if (isClient) {
-            sessionStorage.setItem(PROTOTYPE_DELIVERY_KEY, JSON.stringify(updatedDelivery));
-        }
-    };
-
     const updatePrototypeOrder = (orderId: string, updates: Partial<Order>) => {
         setOrders(prevOrders => {
             const updatedOrders = prevOrders.map(order => 
                 order.id === orderId ? { ...order, ...updates } : order
             );
-            updateOrdersInSession(updatedOrders);
+            updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
             return updatedOrders;
         });
     };
@@ -115,35 +91,67 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     const addPrototypeOrder = (order: Order) => {
         setOrders(prevOrders => {
             const updatedOrders = [...prevOrders, order];
-            updateOrdersInSession(updatedOrders);
+            updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
             return updatedOrders;
         });
     };
 
     const updatePrototypeStore = (updates: Partial<Store>) => {
-        setPrototypeStore(prevStore => {
-            const updatedStore = { ...prevStore, ...updates };
-            updateStoreInSession(updatedStore);
-            return updatedStore;
+       setStores(prevStores => {
+            // This is designed to update the first store, which is the main prototype store
+            const updatedStores = prevStores.map(s => s.id === initialPrototypeStores[0].id ? { ...s, ...updates} : s)
+            updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
+            return updatedStores;
         });
     };
 
     const updatePrototypeDelivery = (updates: Partial<DeliveryPersonnel>) => {
         setPrototypeDelivery(prev => {
             const updatedDelivery = { ...prev, ...updates };
-            updateDeliveryInSession(updatedDelivery);
+            updateSessionStorage(PROTOTYPE_DELIVERY_KEY, updatedDelivery);
             return updatedDelivery;
         });
     };
 
-    const addPrototypeProduct = (product: Product) => {
-        setProducts(prev => [...prev, product]);
+    const addPrototypeProduct = (storeId: string, product: Product) => {
+        setStores(prev => {
+            const newStores = prev.map(s => {
+                if (s.id === storeId) {
+                    return { ...s, products: [...s.products, product] };
+                }
+                return s;
+            });
+            updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
+            return newStores;
+        });
     }
-    const updatePrototypeProduct = (productData: Product) => {
-        setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
+
+    const updatePrototypeProduct = (storeId: string, productData: Product) => {
+        setStores(prev => {
+            const newStores = prev.map(s => {
+                if (s.id === storeId) {
+                    const updatedProducts = s.products.map(p => p.id === productData.id ? productData : p);
+                    return { ...s, products: updatedProducts };
+                }
+                return s;
+            });
+            updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
+            return newStores;
+        });
     }
-    const deletePrototypeProduct = (productId: string) => {
-        setProducts(prev => prev.filter(p => p.id !== productId));
+
+    const deletePrototypeProduct = (storeId: string, productId: string) => {
+        setStores(prev => {
+            const newStores = prev.map(s => {
+                if (s.id === storeId) {
+                    const updatedProducts = s.products.filter(p => p.id !== productId);
+                    return { ...s, products: updatedProducts };
+                }
+                return s;
+            });
+            updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
+            return newStores;
+        });
     }
     
     const getOrdersByStore = useCallback((storeId: string) => {
@@ -177,9 +185,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
     const value = {
         prototypeOrders: orders,
-        prototypeStore: prototypeStore,
-        prototypeDelivery: prototypeDelivery,
-        prototypeProducts: products,
+        prototypeStores: stores,
+        prototypeDelivery,
         loading: loading || !isClient,
         updatePrototypeOrder,
         addPrototypeOrder,

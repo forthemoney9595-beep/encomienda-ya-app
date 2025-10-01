@@ -10,6 +10,7 @@ export type Store = {
   status: 'Aprobado' | 'Pendiente' | 'Rechazado';
   ownerId: string;
   productCategories: string[];
+  products: Product[];
 }
 
 export type Product = {
@@ -71,22 +72,79 @@ export interface Order {
 
 export const prototypeUsers: Record<string, UserProfile> = {
     'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
-    'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-id' },
+    'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-burger' },
+    'tienda-pizza@test.com': { uid: 'proto-store-pizza-owner', name: 'Dueña Pizza Proto', email: 'tienda-pizza@test.com', role: 'store', storeId: 'proto-store-pizza' },
     'repartidor@test.com': { uid: 'proto-delivery', name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
     'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
 };
 
-export const prototypeStore: Store = {
-    id: 'proto-store-id',
-    name: "Hamburguesas IA",
-    category: "Comida Rápida",
-    productCategories: ["Comida", "Bebida"],
-    address: "Av. Hamburguesa 456",
-    ownerId: 'proto-store-owner',
-    status: 'Pendiente',
-    imageUrl: "https://picsum.photos/seed/burger/600/400",
-    imageHint: "burger joint",
-};
+// --- STORES AND PRODUCTS ---
+
+const prototypeProductsBurger: Product[] = [
+    { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
+    { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
+    { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebida", imageUrl: "https://picsum.photos/seed/soda/200/200" },
+];
+
+const prototypeProductsPizza: Product[] = [
+    { id: 'proto-prod-4', name: "Pizza Margarita", description: "La simpleza perfecta: tomate, mozzarella y albahaca.", price: 14.50, category: 'Pizzas', imageUrl: "https://picsum.photos/seed/margarita/200/200" },
+    { id: 'proto-prod-5', name: "Pizza Pepperoni", description: "Un clásico que nunca falla.", price: 16.00, category: 'Pizzas', imageUrl: "https://picsum.photos/seed/pepperoni/200/200" },
+    { id: 'proto-prod-6', name: "Ensalada César", description: "Lechuga fresca, crutones y aderezo especial.", price: 8.50, category: 'Ensaladas', imageUrl: "https://picsum.photos/seed/caesarsalad/200/200" },
+];
+
+const prototypeProductsSushi: Product[] = [
+    { id: 'proto-prod-7', name: "Rollo California", description: "Cangrejo, aguacate y pepino.", price: 11.00, category: 'Rollos', imageUrl: "https://picsum.photos/seed/california/200/200" },
+    { id: 'proto-prod-8', name: "Nigiri de Salmón", description: "Fresco salmón sobre arroz de sushi.", price: 5.00, category: 'Nigiris', imageUrl: "https://picsum.photos/seed/salmonigiri/200/200" },
+    { id: 'proto-prod-9', name: "Té Verde", description: "El acompañamiento perfecto.", price: 3.00, category: 'Bebidas', imageUrl: "https://picsum.photos/seed/greentea/200/200" },
+];
+
+
+export const initialPrototypeStores: Store[] = [
+    {
+        id: 'proto-store-burger',
+        name: "Hamburguesas IA",
+        category: "Comida Rápida",
+        productCategories: ["Comida", "Bebida"],
+        address: "Av. Hamburguesa 456",
+        ownerId: 'proto-store-owner',
+        status: 'Pendiente',
+        imageUrl: "https://picsum.photos/seed/burger/600/400",
+        imageHint: "burger joint",
+        products: prototypeProductsBurger,
+    },
+    {
+        id: 'proto-store-pizza',
+        name: "Paraíso de la Pizza",
+        category: "Italiana",
+        productCategories: ["Pizzas", "Ensaladas"],
+        address: "Calle Pizza 123",
+        ownerId: 'proto-store-pizza-owner',
+        status: 'Aprobado',
+        imageUrl: "https://picsum.photos/seed/pizzaplace/600/400",
+        imageHint: "pizza restaurant",
+        products: prototypeProductsPizza,
+    },
+    {
+        id: 'proto-store-sushi',
+        name: "Estación de Sushi",
+        category: "Japonesa",
+        productCategories: ["Rollos", "Nigiris", "Bebidas"],
+        address: "Ruta del Sashimi 789",
+        ownerId: 'some-other-owner',
+        status: 'Aprobado',
+        imageUrl: "https://picsum.photos/seed/sushiplace/600/400",
+        imageHint: "sushi bar",
+        products: prototypeProductsSushi,
+    }
+];
+
+export const prototypeStore = initialPrototypeStores[0];
+export function getPrototypeProducts(storeId?: string): Product[] {
+  if (!storeId) return initialPrototypeStores[0].products;
+  const store = initialPrototypeStores.find(s => s.id === storeId);
+  return store ? store.products : [];
+}
+
 
 const protoDeliveryUser = Object.values(prototypeUsers).find(u => u.role === 'delivery');
 export const prototypeDelivery: DeliveryPersonnel = {
@@ -98,16 +156,8 @@ export const prototypeDelivery: DeliveryPersonnel = {
     zone: 'Centro'
 };
 
-export const initialPrototypeProducts: Product[] = [
-    { id: 'proto-prod-1', name: "Hamburguesa Clásica IA", description: "La clásica con queso, lechuga y tomate.", price: 9.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/classicburger/200/200" },
-    { id: 'proto-prod-2', name: "Hamburguesa Doble IA", description: "Doble carne, doble queso, para los con más hambre.", price: 12.99, category: 'Comida', imageUrl: "https://picsum.photos/seed/doubleburger/200/200" },
-    { id: 'proto-prod-3', name: "Refresco", description: "Burbujas refrescantes.", price: 2.50, category: "Bebida", imageUrl: "https://picsum.photos/seed/soda/200/200" },
-];
 
-export function getPrototypeProducts(): Product[] {
-    return initialPrototypeProducts;
-}
-
+// --- ORDERS ---
 
 // In-memory/session storage for prototype orders
 export const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
@@ -119,16 +169,16 @@ export const initialPrototypeOrders: Order[] = [
         userId: 'proto-buyer',
         customerName: 'Comprador Proto',
         items: [
-            { ...initialPrototypeProducts[0], quantity: 2 },
-            { ...initialPrototypeProducts[2], quantity: 2 }
+            { ...prototypeProductsPizza[0], quantity: 1 }, // Pizza Margarita
+            { ...prototypeProductsPizza[2], quantity: 1 }  // Ensalada
         ],
         deliveryFee: 4.50,
-        total: (9.99 * 2) + (2.50 * 2) + 4.50,
+        total: (14.50 + 8.50) + 4.50,
         status: 'Entregado',
-        createdAt: new Date(Date.now() - 1000 * 60 * 65),
-        storeId: 'proto-store-id',
-        storeName: prototypeStore.name,
-        storeAddress: prototypeStore.address,
+        createdAt: new Date(Date.now() - 1000 * 60 * 65), // 65 mins ago
+        storeId: 'proto-store-pizza',
+        storeName: "Paraíso de la Pizza",
+        storeAddress: "Calle Pizza 123",
         shippingAddress: { name: 'Comprador Proto', address: 'Calle Falsa 123' },
         deliveryPersonId: 'proto-delivery',
         deliveryPersonName: 'Repartidor Proto',
@@ -138,18 +188,18 @@ export const initialPrototypeOrders: Order[] = [
     {
         id: 'proto-order-2',
         userId: 'proto-buyer',
-        customerName: 'Juan Pérez',
+        customerName: 'Comprador Proto',
         items: [
-             { ...initialPrototypeProducts[1], quantity: 1 }
+             { ...prototypeProductsSushi[0], quantity: 2 } // Rollo California
         ],
         deliveryFee: 6.00,
-        total: 12.99 + 6.00,
+        total: (11.00 * 2) + 6.00,
         status: 'En reparto',
-        createdAt: new Date(Date.now() - 1000 * 60 * 20),
-        storeId: 'proto-store-id',
-        storeName: prototypeStore.name,
-        storeAddress: prototypeStore.address,
-        shippingAddress: { name: 'Juan Pérez', address: 'Avenida Siempre Viva 742' },
+        createdAt: new Date(Date.now() - 1000 * 60 * 20), // 20 mins ago
+        storeId: 'proto-store-sushi',
+        storeName: "Estación de Sushi",
+        storeAddress: "Ruta del Sashimi 789",
+        shippingAddress: { name: 'Comprador Proto', address: 'Avenida Siempre Viva 742' },
         deliveryPersonId: 'proto-delivery',
         deliveryPersonName: 'Repartidor Proto',
         storeCoords: { latitude: 34.0522, longitude: -118.2437 },
@@ -157,18 +207,36 @@ export const initialPrototypeOrders: Order[] = [
     },
     {
         id: 'proto-order-3',
+        userId: 'some-other-buyer-id', // Belongs to another user, won't show for proto-buyer
+        customerName: 'Juan Pérez',
+        items: [ { ...prototypeProductsBurger[2], quantity: 4 } ],
+        deliveryFee: 3.20,
+        total: (2.50 * 4) + 3.20,
+        status: 'En preparación',
+        createdAt: new Date(Date.now() - 1000 * 60 * 15), // 15 mins ago
+        storeId: 'proto-store-burger',
+        storeName: "Hamburguesas IA",
+        storeAddress: "Av. Hamburguesa 456",
+        shippingAddress: { name: 'Juan Pérez', address: 'Boulevard de los Sueños Rotos' },
+        deliveryPersonId: undefined,
+        deliveryPersonName: undefined,
+        storeCoords: { latitude: 48.8566, longitude: 2.3522 },
+        customerCoords: { latitude: 48.8584, longitude: 2.2945 },
+    },
+    {
+        id: 'proto-order-4',
         userId: 'proto-buyer',
         customerName: 'Comprador Proto',
         items: [
-             { ...initialPrototypeProducts[2], quantity: 4 }
+             { ...prototypeProductsPizza[1], quantity: 1 } // Pizza Pepperoni
         ],
-        deliveryFee: 3.20,
-        total: (2.50 * 4) + 3.20,
-        status: 'Pedido Realizado',
-        createdAt: new Date(Date.now() - 1000 * 60 * 5),
-        storeId: 'proto-store-id',
-        storeName: prototypeStore.name,
-        storeAddress: prototypeStore.address,
+        deliveryFee: 3.80,
+        total: 16.00 + 3.80,
+        status: 'En preparación',
+        createdAt: new Date(Date.now() - 1000 * 60 * 5), // 5 mins ago
+        storeId: 'proto-store-pizza',
+        storeName: "Paraíso de la Pizza",
+        storeAddress: "Calle Pizza 123",
         shippingAddress: { name: 'Comprador Proto', address: 'Calle Falsa 123' },
         deliveryPersonId: undefined,
         deliveryPersonName: undefined,
@@ -179,8 +247,8 @@ export const initialPrototypeOrders: Order[] = [
 
 
 export const notifications = [
-  { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Bonanza de Hamburguesas está en camino.', date: 'hace 5 min' },
-  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Estación de Sushi ha sido confirmado.', date: 'hace 1 hora' },
-  { id: 'n3', title: 'Nueva reseña', description: 'Has recibido una nueva reseña para Paraíso de la Pizza.', date: 'hace 3 horas' },
+  { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Estación de Sushi está en camino.', date: 'hace 5 min' },
+  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Paraíso de la Pizza ha sido confirmado.', date: 'hace 1 hora' },
+  { id: 'n3', title: 'Nueva tienda aprobada', description: '¡Paraíso de la Pizza ya está disponible!', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];

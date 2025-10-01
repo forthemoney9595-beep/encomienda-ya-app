@@ -2,12 +2,11 @@
 'use server';
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
-import type { Store, Product, DeliveryPersonnel, prototypeUsers } from './placeholder-data';
+import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 import { 
-    prototypeStore, 
+    initialPrototypeStores, 
     getPrototypeProducts, 
 } from './placeholder-data';
-import { usePrototypeData } from '@/context/prototype-data-context';
 
 
 /**
@@ -38,6 +37,7 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
         status: data.status || 'Pendiente',
         ownerId: data.ownerId || '',
         productCategories: data.productCategories || [data.category] || [],
+        products: [], // Products are fetched separately
       };
     });
 
@@ -46,14 +46,15 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
   }
   
   // If the user is in prototype mode, the client will supplement this data
-  // with the store from the context. For admin views, we need to add it here.
+  // with the store from the context. For other views, we add it here.
   if (isPrototype) {
-     if (!stores.find(s => s.id === prototypeStore.id)) {
-        // In an admin context (`all` = true), we want to show all stores.
-        // We get the latest status from a placeholder file as we can't access context here.
-        const { prototypeStore: protoStoreFromData } = await import('./placeholder-data');
-        stores.unshift(protoStoreFromData);
-     }
+    const { initialPrototypeStores: protoStoresFromData } = await import('./placeholder-data');
+    // Create a Set of existing store IDs for efficient lookup
+    const existingStoreIds = new Set(stores.map(s => s.id));
+    // Filter out prototype stores that are already in the list
+    const storesToAdd = protoStoresFromData.filter(ps => !existingStoreIds.has(ps.id));
+    // Add the unique prototype stores to the beginning of the list
+    stores.unshift(...storesToAdd);
   }
   
   return stores;
@@ -66,9 +67,8 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
  */
 export async function getStoreById(id: string): Promise<Store | null> {
   if (id.startsWith('proto-')) {
-    // Cannot access context here. The client should handle this with usePrototypeData.
-    // However, returning the initial state is a good fallback for server components.
-    return prototypeStore;
+    const store = initialPrototypeStores.find(s => s.id === id);
+    return store || null;
   }
 
   try {
@@ -86,6 +86,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
         status: data.status || 'Pendiente',
         ownerId: data.ownerId || '',
         productCategories: data.productCategories || [data.category] || [],
+        products: [], // Products are fetched separately
       } as Store;
     } else {
       console.log(`No store found with id: ${id}`);
@@ -103,7 +104,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
   if (storeId.startsWith('proto-')) {
-    return getPrototypeProducts();
+    return getPrototypeProducts(storeId);
   }
 
   try {
@@ -195,7 +196,6 @@ export async function deleteProductFromStore(storeId: string, productId: string)
  * Fetches all delivery personnel from the 'users' collection in Firestore.
  */
 export async function getDeliveryPersonnel(isPrototype: boolean = false): Promise<DeliveryPersonnel[]> {
-  const { prototypeUsers } = await import('./placeholder-data');
   let personnel: DeliveryPersonnel[] = [];
   try {
     const usersCollectionRef = collection(db, 'users');
