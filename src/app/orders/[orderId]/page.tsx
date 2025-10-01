@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, notFound } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { OrderMap } from './order-map';
+import { useToast } from '@/hooks/use-toast';
 
 function OrderPageSkeleton() {
     return (
@@ -49,9 +50,7 @@ function OrderPageSkeleton() {
                 </div>
                  <div className="md:col-span-1">
                      <Card className='min-h-[400px] flex items-center justify-center bg-muted/50'>
-                        <CardContent className='text-center text-muted-foreground'>
-                             <p>(Área de mapa deshabilitada)</p>
-                        </CardContent>
+                         <Skeleton className="h-full w-full" />
                     </Card>
                 </div>
              </div>
@@ -64,6 +63,7 @@ export default function OrderTrackingPage() {
   const params = useParams();
   const orderId = params.orderId as string;
   const router = useRouter();
+  const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const { getOrderById: getPrototypeOrderById, loading: prototypeLoading } = usePrototypeData();
   
@@ -77,52 +77,68 @@ export default function OrderTrackingPage() {
         setLoading(true);
         let orderData: Order | null | undefined = null;
 
-        if (orderId.startsWith('proto-')) {
-            orderData = getPrototypeOrderById(orderId);
-        } else {
-            orderData = await getOrderFromDb(orderId);
+        try {
+            if (orderId.startsWith('proto-')) {
+                orderData = getPrototypeOrderById(orderId);
+            } else {
+                orderData = await getOrderFromDb(orderId);
+            }
+          
+          if (!orderData) {
+            console.warn(`Pedido no encontrado (ID: ${orderId}), redirigiendo a /orders.`);
+            toast({
+                variant: 'destructive',
+                title: 'Pedido no encontrado',
+                description: `No se pudo encontrar el pedido con ID: ${orderId}`
+            });
+            router.push('/orders');
+            return;
+          }
+          
+          const isOwner = user?.storeId === orderData.storeId;
+          const isBuyer = user?.uid === orderData.userId;
+          const isDriver = user?.uid === orderData.deliveryPersonId;
+          const isAdmin = user?.role === 'admin';
+    
+          if (!isOwner && !isBuyer && !isDriver && !isAdmin) {
+              console.warn("Acceso no autorizado al pedido denegado.");
+              toast({
+                variant: 'destructive',
+                title: 'Acceso Denegado',
+                description: 'No tienes permiso para ver este pedido.',
+            });
+              router.push('/orders'); 
+              return;
+          }
+    
+          setOrder(orderData);
+
+        } catch (error) {
+            console.error('Error fetching order data:', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron cargar los datos del pedido.' });
+        } finally {
+            setLoading(false);
         }
-      
-      if (!orderData) {
-        console.warn(`Pedido no encontrado (ID: ${orderId}), redirigiendo a /orders.`);
-        toast({
-            variant: 'destructive',
-            title: 'Pedido no encontrado',
-            description: `No se pudo encontrar el pedido con ID: ${orderId}`
-        });
-        router.push('/orders');
-        return;
-      }
-      
-      const isOwner = user?.storeId === orderData.storeId;
-      const isBuyer = user?.uid === orderData.userId;
-      const isDriver = user?.uid === orderData.deliveryPersonId;
-      const isAdmin = user?.role === 'admin';
-
-      if (!isOwner && !isBuyer && !isDriver && !isAdmin) {
-          console.warn("Acceso no autorizado al pedido denegado.");
-          toast({
-            variant: 'destructive',
-            title: 'Acceso Denegado',
-            description: 'No tienes permiso para ver este pedido.',
-        });
-          router.push('/orders'); 
-          return;
-      }
-
-      setOrder(orderData);
-      setLoading(false);
     }
     
     if (!authLoading && !prototypeLoading) {
         fetchOrderData();
     }
 
-  }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading]);
+  }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading, toast]);
 
 
-  if (loading || authLoading || prototypeLoading || !order) {
+  if (loading || authLoading || prototypeLoading) {
     return <OrderPageSkeleton />;
+  }
+
+  if (!order) {
+    // This handles the case where loading is finished but the order is still null for some reason.
+    return (
+        <div className="container mx-auto">
+            <PageHeader title="Pedido no encontrado" description="No se pudo cargar la información del pedido. Por favor, vuelve a intentarlo." />
+        </div>
+    )
   }
   
   const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + order.deliveryFee;
@@ -188,7 +204,7 @@ export default function OrderTrackingPage() {
         </div>
         <div className="md:col-span-1">
              <Card className='min-h-[400px]'>
-                {order.storeCoords && order.customerCoords ? (
+                {order && order.storeCoords && order.customerCoords ? (
                     <OrderMap 
                         orderStatus={order.status}
                         storeCoords={order.storeCoords}
@@ -205,5 +221,3 @@ export default function OrderTrackingPage() {
     </div>
   );
 }
-
-    
