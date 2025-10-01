@@ -6,8 +6,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Edit, Image as ImageIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Loader2, PlusCircle, Edit, Image as ImageIcon, UploadCloud } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Image from "next/image";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
+import { uploadImage } from "@/lib/upload-service";
+import { Progress } from "@/components/ui/progress";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -36,6 +38,11 @@ interface ManageItemDialogProps {
 
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const isEditing = product !== null;
   const { toast } = useToast();
 
@@ -62,6 +69,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           category: product.category,
           imageUrl: product.imageUrl || "",
         });
+        setPreviewImage(product.imageUrl || null);
       } else {
         form.reset({
           name: "",
@@ -70,9 +78,37 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           category: productCategories[0] || "",
           imageUrl: "",
         });
+        setPreviewImage(null);
       }
+      setUploadProgress(0);
+      setIsUploading(false);
     }
   }, [product, form, isOpen, productCategories]);
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setPreviewImage(URL.createObjectURL(file));
+      setIsUploading(true);
+      setUploadProgress(0);
+      try {
+        // En una app real, las reglas de Firebase Storage deben permitir la subida.
+        // Simulamos la subida para el prototipo.
+        const downloadURL = await uploadImage(file, setUploadProgress);
+        form.setValue('imageUrl', downloadURL, { shouldValidate: true });
+        toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
+      } catch (error: any) {
+        toast({
+          variant: 'destructive',
+          title: 'Error de Subida',
+          description: error.message || 'No se pudo subir la imagen.',
+        });
+        setPreviewImage(isEditing ? product?.imageUrl || null : null); // Revertir al original
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
 
   async function onSubmit(values: FormData) {
     setIsProcessing(true);
@@ -110,7 +146,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellena los detalles del producto. Para la imagen, pega una URL válida.
+                Rellena los detalles del producto y sube una imagen.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -175,37 +211,52 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="imageUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>URL de la Imagen</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://ejemplo.com/imagen.jpg" {...field} disabled={isProcessing} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {imageUrlValue && (
-                <div className="relative h-32 w-full rounded-md border-2 border-dashed">
-                    <Image
-                        src={imageUrlValue}
-                        alt="Vista previa de la imagen"
-                        fill
-                        style={{ objectFit: 'cover' }}
-                        className="rounded-md"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              <FormItem>
+                <FormLabel>Imagen del Producto</FormLabel>
+                <FormControl>
+                  <div className="space-y-2">
+                    <Input 
+                      type="file" 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                      onChange={handleFileChange}
+                      accept="image/png, image/jpeg, image/gif"
+                      disabled={isUploading || isProcessing}
                     />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100">
-                        <ImageIcon className="text-white" />
-                    </div>
-                </div>
-              )}
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading || isProcessing}
+                    >
+                      <UploadCloud className="mr-2 h-4 w-4" />
+                      {isUploading ? 'Subiendo...' : 'Seleccionar Archivo'}
+                    </Button>
+                    {(isUploading || uploadProgress > 0) && (
+                      <div className="flex items-center gap-2">
+                        <Progress value={uploadProgress} className="w-full" />
+                        <span className="text-xs">{Math.round(uploadProgress)}%</span>
+                      </div>
+                    )}
+                  </div>
+                </FormControl>
+                {(previewImage || imageUrlValue) && (
+                  <div className="relative mt-2 h-32 w-full rounded-md border-2 border-dashed">
+                      <Image
+                          src={previewImage || imageUrlValue || ''}
+                          alt="Vista previa de la imagen"
+                          fill
+                          style={{ objectFit: 'cover' }}
+                          className="rounded-md"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                  </div>
+                )}
+                <FormMessage />
+              </FormItem>
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isProcessing}>
+              <Button type="submit" disabled={isProcessing || isUploading}>
                 {isProcessing ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
