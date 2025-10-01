@@ -46,7 +46,7 @@ export function MainNav() {
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
   // A buyer is anyone who is not a store owner or delivery person.
-  const isBuyer = user ? !isStoreOwner && !isDelivery : true;
+  const isBuyer = user ? !isStoreOwner && !isDelivery : !user; // Also true for guests
 
   const isStoreOrdersActive = isStoreOwner && pathname.startsWith('/orders');
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
@@ -71,7 +71,7 @@ export function MainNav() {
       )}
          
       {/* Navigation for Buyers and Guests */}
-      {!loading && (isBuyer || isDelivery) && (
+      {!loading && isBuyer && (
         <>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
@@ -127,8 +127,25 @@ export function MainNav() {
         </>
       )}
 
+      {/* Delivery person specific menu */}
+      {!loading && isDelivery && (
+        <>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Entregas">
+              <Link href="/orders"><Truck /><span>Entregas</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
+                <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </>
+      )}
+
+
       {/* Store Owner specific menu */}
-      {isStoreOwner && (
+      {!loading && isStoreOwner && (
         <>
           <Separator className="my-2" />
           <Collapsible open={true}>
