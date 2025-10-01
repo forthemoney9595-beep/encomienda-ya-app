@@ -55,7 +55,7 @@ function OrderRowSkeleton() {
 
 export default function BuyerOrdersView() {
   const { user, loading: authLoading } = useAuth();
-  const { getOrdersByUser: getPrototypeOrders, loading: prototypeLoading } = usePrototypeData();
+  const { getOrdersByUser, loading: prototypeLoading } = usePrototypeData();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -66,7 +66,7 @@ export default function BuyerOrdersView() {
       setLoading(true);
       let userOrders: Order[] = [];
       if (user.uid.startsWith('proto-')) {
-        userOrders = getPrototypeOrders(user.uid);
+        userOrders = getOrdersByUser(user.uid);
       } else {
         userOrders = await getOrdersFromDb(user.uid);
       }
@@ -75,7 +75,7 @@ export default function BuyerOrdersView() {
     };
 
     fetchOrders();
-  }, [user, authLoading, prototypeLoading, getPrototypeOrders]);
+  }, [user, authLoading, prototypeLoading, getOrdersByUser]);
 
 
   if (loading) {
