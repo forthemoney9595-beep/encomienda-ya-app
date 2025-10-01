@@ -45,7 +45,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = user?.role === 'buyer' || (!user && !loading);
+  const isBuyer = !user?.role || user.role === 'buyer';
   
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
 
