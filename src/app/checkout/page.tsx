@@ -39,6 +39,7 @@ export default function CheckoutPage() {
   const [clientLoaded, setClientLoaded] = useState(false);
 
   useEffect(() => {
+    // This guard ensures all client-side logic runs only after the component has mounted.
     setClientLoaded(true);
   }, []);
 
@@ -53,50 +54,53 @@ export default function CheckoutPage() {
     },
   });
 
+  // Effect to populate user's name in the form once authenticated.
   useEffect(() => {
-    if (!authLoading && user) {
+    if (user && !authLoading) {
         form.reset({
             ...form.getValues(),
             name: user.name || "",
         });
     }
-  }, [authLoading, user, form]);
+  }, [user, authLoading, form]);
 
+  // Effect for security: redirect unauthenticated users.
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (clientLoaded && !authLoading && !user) {
       router.push('/login');
     }
-  }, [authLoading, user, router]);
+  }, [clientLoaded, authLoading, user, router]);
 
+  // Effect for cart validation: redirect if cart is empty.
   useEffect(() => {
-    // This check needs to run only on the client after hydration
-    if (clientLoaded && !authLoading && user && (totalItems === 0 || !storeId)) {
+    if (clientLoaded && !authLoading && (totalItems === 0 || !storeId)) {
       toast({
-        title: 'Tu carrito está vacío o la tienda no está definida',
-        description: 'Redirigiendo a la página principal...',
+        title: 'Tu carrito está vacío',
+        description: 'Serás redirigido a la página principal.',
       })
       router.push('/');
     }
-  }, [totalItems, storeId, authLoading, router, toast, user, clientLoaded]);
+  }, [clientLoaded, authLoading, totalItems, storeId, router, toast]);
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    setIsSubmitting(true);
     if (!user || !storeId || cart.length === 0) {
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "Error de Validación",
         description: "Falta información del usuario, la tienda o el carrito está vacío.",
       });
-      setIsSubmitting(false);
       return;
     };
 
+    setIsSubmitting(true);
+
     try {
-      // For prototype, we need to manually pass store details
       const isPrototype = storeId.startsWith('proto-');
+      // For prototype, we need to manually pass store details from our placeholder data.
       const storeName = isPrototype ? prototypeStore.name : "Nombre de Tienda Real"; // Placeholder for real logic
       const storeAddress = isPrototype ? prototypeStore.address : "Dirección de Tienda Real"; // Placeholder for real logic
 
+      // This single service function handles both prototype and real order creation.
       const createdOrder = await createOrder({
         userId: user.uid,
         customerName: user.name,
@@ -110,22 +114,23 @@ export default function CheckoutPage() {
         storeAddress: storeAddress,
       });
 
+      // If the order came from the prototype logic, add it to our client-side context.
       if (createdOrder.id.startsWith('proto-')) {
         addPrototypeOrder(createdOrder);
       }
 
       toast({
-        title: "¡Pedido Realizado!",
+        title: "¡Pedido Realizado con Éxito!",
         description: "Gracias por tu compra. Tu pedido está siendo procesado.",
       });
       clearCart();
-      setTimeout(() => router.push(`/orders/${createdOrder.id}`), 100);
+      router.push(`/orders/${createdOrder.id}`);
 
     } catch (error) {
       console.error("Error creating order:", error);
       toast({
         variant: "destructive",
-        title: "Error al realizar el pedido",
+        title: "Error al Realizar el Pedido",
         description: "Hubo un problema al guardar tu pedido. Por favor, inténtalo de nuevo.",
       });
     } finally {
@@ -133,10 +138,12 @@ export default function CheckoutPage() {
     }
   }
 
-   if (authLoading || !user || !clientLoaded || (clientLoaded && totalItems === 0)) {
+  // Loading state: wait for client to mount and authentication to resolve.
+  if (!clientLoaded || authLoading || !user || totalItems === 0) {
      return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
   }
 
+  // Main component render
   return (
     <div className="container mx-auto">
       <PageHeader title="Finalizar Compra" description="Confirma tu pedido y realiza el pago." />
@@ -270,3 +277,5 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
+    
