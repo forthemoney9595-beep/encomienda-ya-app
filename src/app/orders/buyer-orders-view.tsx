@@ -60,10 +60,16 @@ export default function BuyerOrdersView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (authLoading || prototypeLoading || !user) return;
+    if (authLoading || prototypeLoading) {
+      setLoading(true);
+      return;
+    }
+    if (!user) {
+      setLoading(false);
+      return;
+    };
 
     const fetchOrders = async () => {
-      setLoading(true);
       let userOrders: Order[] = [];
       if (user.uid.startsWith('proto-')) {
         userOrders = getOrdersByUser(user.uid);
