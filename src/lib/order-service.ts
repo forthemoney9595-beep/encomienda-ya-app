@@ -58,14 +58,14 @@ export async function createOrder(
     if (items.length === 0) {
         throw new Error("No se puede crear un pedido sin artículos.");
     }
-
-    const [storeCoords, customerCoords] = await Promise.all([
-        geocodeAddress({ address: storeAddress }),
-        geocodeAddress({ address: shippingInfo.address })
-    ]);
     
     // --- Prototype Logic ---
     if (storeId.startsWith('proto-')) {
+        const [storeCoords, customerCoords] = await Promise.all([
+            geocodeAddress({ address: storeAddress }),
+            geocodeAddress({ address: shippingInfo.address })
+        ]);
+
         const deliveryFee = 5.00;
         const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0) + deliveryFee;
 
@@ -92,6 +92,11 @@ export async function createOrder(
     }
 
     // --- Real Firestore Order Logic ---
+    const [storeCoords, customerCoords] = await Promise.all([
+        geocodeAddress({ address: storeAddress }),
+        geocodeAddress({ address: shippingInfo.address })
+    ]);
+
     const distanceKm = 1 + Math.random() * 10;
     const deliveryFee = 2 + (distanceKm * 1.5);
 
@@ -117,6 +122,9 @@ export async function createOrder(
         customerCoords,
     });
     
+    const createdOrderDoc = await getDoc(orderRef);
+    const createdOrderData = createdOrderDoc.data();
+
     const createdOrder: Order = {
       id: orderRef.id,
       userId,
@@ -125,7 +133,7 @@ export async function createOrder(
       total,
       deliveryFee,
       status: 'En preparación',
-      createdAt: new Date(), // Approximate, actual is server timestamp
+      createdAt: (createdOrderData!.createdAt as Timestamp)?.toDate() || new Date(),
       storeId,
       storeName: storeName,
       storeAddress: storeAddress,
@@ -206,6 +214,30 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
     throw error;
   }
 }
+
+export async function getAvailableOrdersForDelivery(isPrototype: boolean): Promise<Order[]> {
+  if (isPrototype) {
+    // This logic is now client-side in usePrototypeData, but we can keep a server-side
+    // representation for other potential uses, though it won't be from session storage.
+    // For this app, client-side is sufficient.
+    return [];
+  }
+  const ordersRef = collection(db, 'orders');
+  const q = query(
+    ordersRef,
+    where('status', '==', 'En preparación'),
+    where('deliveryPersonId', '==', null),
+    orderBy('createdAt', 'asc')
+  );
+
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    createdAt: (doc.data().createdAt as Timestamp).toDate(),
+  })) as Order[];
+}
+
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
     if (orderId.startsWith('proto-order-')) {
