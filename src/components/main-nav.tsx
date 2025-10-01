@@ -70,8 +70,8 @@ export function MainNav() {
         </SidebarMenuItem>
       )}
          
-      {/* Navigation for Buyers and Delivery Personnel */}
-      {!loading && user && (isBuyer || isDelivery) && (
+      {/* Navigation for Buyers and Guests */}
+      {!loading && (isBuyer || isDelivery) && (
         <>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
@@ -84,52 +84,50 @@ export function MainNav() {
                 <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
+
+          <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton>
+                  <Store />
+                  <span>Explorar Tiendas</span>
+                  <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isStoresOpen && "rotate-180")} />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname === '/stores/food'}>
+                    <Link href="/stores/food">
+                      <Utensils />
+                      <span>Comida</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname === '/stores/clothing'}>
+                    <Link href="/stores/clothing">
+                      <Shirt />
+                      <span>Ropa</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname === '/stores/other'}>
+                    <Link href="/stores/other">
+                      <ShoppingBag />
+                      <span>Otros</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
         </>
       )}
 
-      {/* Role specific menus */}
-      { isBuyer && (
-         <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
-          <SidebarMenuItem>
-            <CollapsibleTrigger asChild>
-              <SidebarMenuButton>
-                <Store />
-                <span>Explorar Tiendas</span>
-                <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isStoresOpen && "rotate-180")} />
-              </SidebarMenuButton>
-            </CollapsibleTrigger>
-          </SidebarMenuItem>
-          <CollapsibleContent>
-            <SidebarMenuSub>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/stores/food'}>
-                  <Link href="/stores/food">
-                    <Utensils />
-                    <span>Comida</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/stores/clothing'}>
-                  <Link href="/stores/clothing">
-                    <Shirt />
-                    <span>Ropa</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/stores/other'}>
-                  <Link href="/stores/other">
-                    <ShoppingBag />
-                    <span>Otros</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            </SidebarMenuSub>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-
+      {/* Store Owner specific menu */}
       {isStoreOwner && (
         <>
           <Separator className="my-2" />
@@ -168,15 +166,6 @@ export function MainNav() {
           </Collapsible>
         </>
       )}
-
-      {isDelivery && (
-         <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Entregas">
-              <Link href="/orders"><Truck /><span>Panel de Entrega</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-      )}
-
 
       {/* Admin Menu */}
       {!loading && isAdmin && (
