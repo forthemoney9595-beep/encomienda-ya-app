@@ -1,6 +1,6 @@
 
 import { db } from './firebase';
-import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -83,7 +83,7 @@ export async function createStoreForUser(ownerId: string, storeData: { name: str
 
         // Update the user's profile with the new storeId
         const userDocRef = doc(db, 'users', ownerId);
-        await setDoc(userDocRef, { storeId: newStoreRef.id }, { merge: true });
+        await updateDoc(userDocRef, { storeId: newStoreRef.id });
 
         return { id: newStoreRef.id, ...storeData };
     } catch (error) {

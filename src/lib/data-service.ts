@@ -67,12 +67,8 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(id: string): Promise<Store | null> {
-  if (id.startsWith('proto-')) {
-    const { prototypeStores } = await import('@/context/prototype-data-context');
-    const store = prototypeStores.find(s => s.id === id);
-    return store || null;
-  }
-
+  // Prototype data is now primarily handled by the client context.
+  // This function will focus on fetching from Firestore.
   try {
     const docRef = doc(db, "stores", id);
     const docSnap = await getDoc(docRef);
@@ -105,10 +101,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
  * @param storeId The ID of the store whose products to fetch.
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
-  if (storeId.startsWith('proto-')) {
-    return getPrototypeProducts(storeId);
-  }
-
+  // Prototype data is now primarily handled by the client context.
   try {
     const productsCollectionRef = collection(db, 'stores', storeId, 'products');
     const q = query(productsCollectionRef);
@@ -141,15 +134,19 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
  * @param currentCategories The current list of categories for the store.
  */
 export async function addProductToStore(storeId: string, productData: Product, currentCategories: string[]): Promise<void> {
-    if (storeId.startsWith('proto-')) {
-      console.log("Prototype mode: Add handled in-memory.");
-      return;
-    }
     try {
         const storeRef = doc(db, 'stores', storeId);
-        const productRef = doc(collection(storeRef, 'products'), productData.id);
-        
-        await setDoc(productRef, productData);
+        // Use the product ID from the client if available, otherwise Firestore generates one
+        const productRef = productData.id.startsWith('new-') 
+            ? doc(collection(storeRef, 'products')) 
+            : doc(storeRef, 'products', productData.id);
+
+        const dataToSave = { ...productData };
+        if (productData.id.startsWith('new-')) {
+          (dataToSave as any).id = productRef.id;
+        }
+
+        await setDoc(productRef, dataToSave);
 
         // Check if the category is new and update the store document
         if (!currentCategories.map((c: string) => c.toLowerCase()).includes(productData.category.toLowerCase())) {
@@ -164,11 +161,6 @@ export async function addProductToStore(storeId: string, productData: Product, c
 }
 
 export async function updateProductInStore(storeId: string, productId: string, productData: Partial<Product>) {
-    if (storeId.startsWith('proto-')) {
-        console.log("Prototype mode: Update handled in-memory.");
-        return;
-    }
-
     try {
         const storeRef = doc(db, 'stores', storeId);
         const productRef = doc(db, 'stores', storeId, 'products', productId);
@@ -188,11 +180,6 @@ export async function updateProductInStore(storeId: string, productId: string, p
 }
 
 export async function deleteProductFromStore(storeId: string, productId: string) {
-    if (storeId.startsWith('proto-')) {
-        console.log("Prototype mode: Delete handled in-memory.");
-        return;
-    }
-
     try {
         const productRef = doc(db, 'stores', storeId, 'products', productId);
         await deleteDoc(productRef);

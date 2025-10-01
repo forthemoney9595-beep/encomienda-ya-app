@@ -39,7 +39,7 @@ export default function Home() {
       <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
       
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {loading ? (
+        {loading || authLoading ? (
           <>
             <StoreCardSkeleton />
             <StoreCardSkeleton />
