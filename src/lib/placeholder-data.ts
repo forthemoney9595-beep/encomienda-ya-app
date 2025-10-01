@@ -39,11 +39,13 @@ export interface UserProfile {
     [key: string]: any;
 }
 
-// Re-defining Order types here to avoid circular dependency
+// Redefining Order types here to break circular dependency with order-service.
+// This file should be pure data and type definitions with no code imports.
+export type OrderStatus = 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado';
+
 export interface CartItem extends Product {
   quantity: number;
 }
-export type OrderStatus = 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado';
 export interface Order {
     id: string;
     userId: string;
