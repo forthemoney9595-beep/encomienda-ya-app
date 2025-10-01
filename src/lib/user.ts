@@ -48,11 +48,13 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
       ...data,
       createdAt: serverTimestamp(),
     };
-    // Ensure status is set for roles that need it
-    if ((data.role === 'store' || data.role === 'delivery') && !data.status) {
-      profileData.status = 'pending';
+    
+    // For prototype cycle, we auto-approve stores, otherwise they are pending
+    if (data.role === 'store') {
+        profileData.status = data.email.includes('@test.com') ? 'approved' : 'pending';
+    } else if (data.role === 'delivery') {
+        profileData.status = 'pending';
     }
-
 
     await setDoc(userDocRef, profileData);
 
@@ -64,7 +66,7 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
             productCategories: data.storeCategory ? [data.storeCategory] : [], 
             address: data.storeAddress,
             ownerId: uid,
-            status: 'Pendiente',
+            status: profileData.status === 'approved' ? 'Aprobado' : 'Pendiente',
             createdAt: serverTimestamp(),
             imageUrl: `https://picsum.photos/seed/${data.storeName.replace(/\s/g, '')}/600/400`,
             imageHint: data.storeCategory?.toLowerCase().split('-')[0] || 'store',

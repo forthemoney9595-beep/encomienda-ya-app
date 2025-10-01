@@ -13,11 +13,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { CreditCard, Home, Loader2 } from 'lucide-react';
+import { CreditCard, Home, Loader2, Info } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
@@ -270,7 +271,13 @@ export default function CheckoutPage() {
               </div>
             </CardContent>
              <CardFooter>
-                <p className="text-xs text-muted-foreground">El costo de envío final se calculará al confirmar la dirección.</p>
+                 <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertTitle>¡Todo Listo!</AlertTitle>
+                    <AlertDescription>
+                        La tienda ha confirmado la disponibilidad de tu pedido. Tiempo de entrega estimado: 25-40 min.
+                    </AlertDescription>
+                </Alert>
             </CardFooter>
           </Card>
         </div>

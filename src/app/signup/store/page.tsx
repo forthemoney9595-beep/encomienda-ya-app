@@ -14,6 +14,7 @@ import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { createUserProfile } from '@/lib/user';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
@@ -40,23 +41,24 @@ export default function SignupStorePage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      // In a real app, you might not want to auto-login, but for the prototype cycle this is helpful.
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       
       await createUserProfile(userCredential.user.uid, {
         name: values.ownerName,
         email: values.email,
         role: 'store',
-        status: 'pending',
+        status: 'approved', // Auto-approve for prototype cycle
         storeName: values.storeName,
         storeCategory: values.category,
         storeAddress: values.address,
       });
 
       toast({
-        title: "¡Solicitud de Registro Enviada!",
-        description: "Tu tienda ha sido registrada y está pendiente de aprobación.",
+        title: "¡Tienda Registrada y Aprobada!",
+        description: "Tu tienda está activa. Serás redirigido para gestionarla.",
       });
-      router.push('/');
+      router.push('/'); // Redirect to home, which will then redirect to /orders
     } catch (error: any)
 {
       console.error(error);
@@ -114,6 +116,8 @@ export default function SignupStorePage() {
                         <SelectItem value="mexicana">Mexicana</SelectItem>
                         <SelectItem value="saludable">Saludable</SelectItem>
                         <SelectItem value="dulces">Dulces</SelectItem>
+                        <SelectItem value="Ropa">Ropa</SelectItem>
+                        <SelectItem value="Otros">Otros</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
