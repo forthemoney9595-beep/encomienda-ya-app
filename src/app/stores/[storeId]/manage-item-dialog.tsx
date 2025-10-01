@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -6,13 +7,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Edit, Image as ImageIcon, UploadCloud } from "lucide-react";
+import { Loader2, PlusCircle, Edit, UploadCloud } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
 import { useToast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Image from "next/image";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
 import { uploadImage } from "@/lib/upload-service";
@@ -23,7 +23,7 @@ const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
-  category: z.string().min(1, "Por favor, selecciona una categoría."),
+  category: z.string().min(1, "Por favor, introduce una categoría."),
   imageUrl: z.string().url("Debe ser una URL válida.").optional().or(z.literal('')),
 });
 
@@ -96,8 +96,6 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       setUploadProgress(0);
       
       if (isPrototypeMode) {
-        // --- PROTOTYPE SIMULATION ---
-        // Simulate upload progress
         const interval = setInterval(() => {
           setUploadProgress(prev => {
             if (prev >= 95) {
@@ -118,7 +116,6 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           setIsUploading(false);
         }, 2000);
       } else {
-        // --- REAL UPLOAD LOGIC ---
         try {
           const downloadURL = await uploadImage(file, setUploadProgress);
           form.setValue('imageUrl', downloadURL, { shouldValidate: true });
@@ -129,7 +126,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
             title: 'Error de Subida',
             description: error.message || 'No se pudo subir la imagen.',
           });
-          setPreviewImage(isEditing ? product?.imageUrl || null : null); // Revertir al original
+          setPreviewImage(isEditing ? product?.imageUrl || null : null);
         } finally {
           setIsUploading(false);
         }
@@ -209,19 +206,10 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una categoría" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {productCategories.map(cat => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
+                    <FormControl>
+                       <Input placeholder="Ej. Pizzas, Bebidas, Postres" {...field} disabled={isProcessing} />
+                    </FormControl>
+                     <FormMessage />
                   </FormItem>
                 )}
               />

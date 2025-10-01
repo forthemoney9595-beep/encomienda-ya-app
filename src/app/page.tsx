@@ -10,12 +10,14 @@ import { getStores } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [isClient, setIsClient] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setIsClient(true);
@@ -24,6 +26,12 @@ export default function Home() {
   useEffect(() => {
     if (!isClient || authLoading) {
       return;
+    }
+    
+    // If the user is a store owner, redirect them to their order management page
+    if (user && user.role === 'store') {
+        router.push('/orders');
+        return;
     }
 
     const fetchStores = async () => {
@@ -35,7 +43,12 @@ export default function Home() {
     };
 
     fetchStores();
-  }, [user, authLoading, isClient]);
+  }, [user, authLoading, isClient, router]);
+
+  // Don't render the page content if we're about to redirect
+  if (user && user.role === 'store') {
+      return null;
+  }
 
   return (
     <div className="container mx-auto">
@@ -50,7 +63,7 @@ export default function Home() {
             <StoreCardSkeleton />
           </>
         ) : stores.length > 0 ? (
-          stores.map((store) => (
+          stores.filter(Boolean).map((store) => (
             <Link href={`/stores/${store.id}`} key={store.id} className="group">
               <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
                 <div className="relative h-48 w-full">

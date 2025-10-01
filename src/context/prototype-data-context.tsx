@@ -117,7 +117,11 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         setStores(prev => {
             const newStores = prev.map(s => {
                 if (s.id === storeId) {
-                    return { ...s, products: [...s.products, product] };
+                    const newProductCategories = [...s.productCategories];
+                    if (!newProductCategories.map(c => c.toLowerCase()).includes(product.category.toLowerCase())) {
+                        newProductCategories.push(product.category);
+                    }
+                    return { ...s, products: [...s.products, product], productCategories: newProductCategories };
                 }
                 return s;
             });
@@ -131,7 +135,11 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             const newStores = prev.map(s => {
                 if (s.id === storeId) {
                     const updatedProducts = s.products.map(p => p.id === productData.id ? productData : p);
-                    return { ...s, products: updatedProducts };
+                     const newProductCategories = [...s.productCategories];
+                    if (!newProductCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+                        newProductCategories.push(productData.category);
+                    }
+                    return { ...s, products: updatedProducts, productCategories: newProductCategories };
                 }
                 return s;
             });

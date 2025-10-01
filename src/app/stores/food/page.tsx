@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,13 +10,20 @@ import { getStores } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
+import { useRouter } from 'next/navigation';
 
 export default function FoodStoresPage() {
   const { user, loading: authLoading } = useAuth();
   const [foodStores, setFoodStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
+    if (user && user.role === 'store') {
+        router.push('/orders');
+        return;
+    }
+    
     const fetchStores = async () => {
       setLoading(true);
       const foodCategories = ['Italiana', 'Comida Rápida', 'Japonesa', 'Mexicana', 'Saludable', 'Dulces'];
@@ -31,7 +39,11 @@ export default function FoodStoresPage() {
     if (!authLoading) {
       fetchStores();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
+
+  if (user && user.role === 'store') {
+    return null;
+  }
 
   return (
     <div className="container mx-auto">
