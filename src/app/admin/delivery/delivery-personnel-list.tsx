@@ -14,6 +14,7 @@ import { PersonnelActions } from './personnel-actions';
 
 interface DeliveryPersonnelListProps {
     personnel: DeliveryPersonnel[];
+    onStatusUpdate: (personnelId: string, status: 'approved' | 'rejected') => void;
 }
 
 const getStatusVariant = (status: string) => {
@@ -30,7 +31,7 @@ const getStatusVariant = (status: string) => {
     }
 };
 
-export function DeliveryPersonnelList({ personnel }: DeliveryPersonnelListProps) {
+export function DeliveryPersonnelList({ personnel, onStatusUpdate }: DeliveryPersonnelListProps) {
   
   if (!personnel) {
     return null;
@@ -86,7 +87,7 @@ export function DeliveryPersonnelList({ personnel }: DeliveryPersonnelListProps)
                       <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <PersonnelActions driver={driver} />
+                      <PersonnelActions driver={driver} onStatusUpdate={onStatusUpdate} />
                     </TableCell>
                   </TableRow>
                 ))

@@ -7,6 +7,7 @@ import {
     prototypeStore, 
     getPrototypeProducts, 
 } from './placeholder-data';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 
 /**
@@ -16,6 +17,9 @@ import {
  */
 export async function getStores(all: boolean = false, isPrototype: boolean = false): Promise<Store[]> {
   let stores: Store[] = [];
+  
+  // This part runs on the server, so it doesn't have access to client-side session storage.
+  // It fetches real data.
   try {
     const storesCollectionRef = collection(db, 'stores');
     const q = all ? query(storesCollectionRef) : query(storesCollectionRef, where("status", "==", "Aprobado"));
@@ -39,14 +43,17 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
 
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
-    // If fetching fails, we can still proceed with prototype data if requested.
   }
-
+  
+  // If the user is in prototype mode, the client will supplement this data
+  // with the store from the context. For admin views, we need to add it here.
   if (isPrototype) {
-    // Ensure prototype store is included and not duplicated
-    if (!stores.find(s => s.id === prototypeStore.id)) {
-        stores.unshift(prototypeStore);
-    }
+     if (!stores.find(s => s.id === prototypeStore.id)) {
+        // In an admin context (`all` = true), we want to show all stores.
+        // We get the latest status from a placeholder file as we can't access context here.
+        const { prototypeStore: protoStoreFromData } = await import('./placeholder-data');
+        stores.unshift(protoStoreFromData);
+     }
   }
   
   return stores;
@@ -59,6 +66,8 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
  */
 export async function getStoreById(id: string): Promise<Store | null> {
   if (id.startsWith('proto-')) {
+    // Cannot access context here. The client should handle this with usePrototypeData.
+    // However, returning the initial state is a good fallback for server components.
     return prototypeStore;
   }
 
@@ -187,12 +196,13 @@ export async function deleteProductFromStore(storeId: string, productId: string)
  */
 export async function getDeliveryPersonnel(isPrototype: boolean = false): Promise<DeliveryPersonnel[]> {
   const { prototypeUsers } = await import('./placeholder-data');
+  let personnel: DeliveryPersonnel[] = [];
   try {
     const usersCollectionRef = collection(db, 'users');
     const q = query(usersCollectionRef, where('role', '==', 'delivery'));
     const querySnapshot = await getDocs(q);
     
-    const personnel: DeliveryPersonnel[] = querySnapshot.docs.map(doc => {
+    personnel = querySnapshot.docs.map(doc => {
       const data = doc.data();
       const statusMap = {
         'pending': 'Pendiente',
@@ -208,39 +218,18 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
         email: data.email || '',
       };
     });
-
-    if (isPrototype) {
-        const protoDeliveryUser = Object.values(prototypeUsers).find(u => u.role === 'delivery');
-        if (protoDeliveryUser && !personnel.find(p => p.id === protoDeliveryUser.uid)) {
-            personnel.unshift({
-                id: protoDeliveryUser.uid,
-                name: protoDeliveryUser.name,
-                status: 'Activo',
-                vehicle: 'Motocicleta',
-                zone: 'Centro',
-                email: protoDeliveryUser.email,
-            });
-        }
-    }
-    
-    return personnel;
   } catch (error) {
     console.error("Error fetching delivery personnel from Firestore: ", error);
-    if (isPrototype) {
-        const protoDeliveryUser = Object.values(prototypeUsers).find(u => u.role === 'delivery');
-        if (protoDeliveryUser) {
-            return [{
-                id: protoDeliveryUser.uid,
-                name: protoDeliveryUser.name,
-                status: 'Activo',
-                vehicle: 'Motocicleta',
-                zone: 'Centro',
-                email: protoDeliveryUser.email,
-            }];
-        }
-    }
-    return [];
   }
+  
+  if (isPrototype) {
+      const { prototypeDelivery: protoDeliveryFromData } = await import('./placeholder-data');
+      if (!personnel.find(p => p.id === protoDeliveryFromData.id)) {
+          personnel.unshift(protoDeliveryFromData);
+      }
+  }
+    
+  return personnel;
 }
 
 /**
@@ -251,14 +240,9 @@ export async function getDeliveryPersonById(id: string): Promise<(DeliveryPerson
   // Check prototype users first
   const protoUser = Object.values(prototypeUsers).find(u => u.uid === id && u.role === 'delivery');
   if (protoUser) {
-      return {
-          id: protoUser.uid,
-          name: protoUser.name,
-          email: protoUser.email,
-          vehicle: 'Motocicleta',
-          zone: 'Centro',
-          status: 'Activo'
-      };
+      // This part can't access client-side context, so it returns the initial state.
+      const { prototypeDelivery } = await import('./placeholder-data');
+      return prototypeDelivery;
   }
 
   try {

@@ -4,38 +4,20 @@ import type { DeliveryPersonnel } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Edit, Trash2, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { updateDeliveryPersonnelStatus } from '@/lib/data-service';
-import { useToast } from '@/hooks/use-toast';
 
 interface PersonnelActionsProps {
     driver: DeliveryPersonnel;
+    onStatusUpdate: (personnelId: string, status: 'approved' | 'rejected') => void;
 }
 
-export function PersonnelActions({ driver }: PersonnelActionsProps) {
-  const router = useRouter();
-  const { toast } = useToast();
+export function PersonnelActions({ driver, onStatusUpdate }: PersonnelActionsProps) {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
     setIsUpdating(true);
-    try {
-      await updateDeliveryPersonnelStatus(personnelId, status);
-      toast({
-        title: '¡Éxito!',
-        description: `El repartidor ha sido ${status === 'approved' ? 'aprobado' : 'rechazado'}.`,
-      });
-      router.refresh(); // Vuelve a cargar los datos del servidor
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo actualizar el estado del repartidor.',
-      });
-    } finally {
-      setIsUpdating(false);
-    }
+    await onStatusUpdate(personnelId, status);
+    setIsUpdating(false);
   };
 
   return (

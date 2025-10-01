@@ -3,12 +3,13 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
-import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY, prototypeStore as initialPrototypeStore, initialPrototypeProducts } from '@/lib/placeholder-data';
+import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY, prototypeStore as initialPrototypeStore, initialPrototypeProducts, prototypeUsers, DeliveryPersonnel } from '@/lib/placeholder-data';
 import type { Store, Product } from '@/lib/placeholder-data';
 
 interface PrototypeDataContextType {
     prototypeOrders: Order[];
     prototypeStore: Store;
+    prototypeDelivery: DeliveryPersonnel;
     prototypeProducts: Product[];
     loading: boolean;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
@@ -17,6 +18,7 @@ interface PrototypeDataContextType {
     addPrototypeProduct: (product: Product) => void;
     deletePrototypeProduct: (productId: string) => void;
     updatePrototypeStore: (updates: Partial<Store>) => void;
+    updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => void;
     getOrdersByStore: (storeId: string) => Order[];
     getOrdersByUser: (userId: string) => Order[];
     getAvailableOrdersForDelivery: () => Order[];
@@ -27,11 +29,24 @@ interface PrototypeDataContextType {
 const PrototypeDataContext = createContext<PrototypeDataContextType | undefined>(undefined);
 
 const PROTOTYPE_STORE_KEY = 'prototypeStore';
+const PROTOTYPE_DELIVERY_KEY = 'prototypeDelivery';
+
+const initialProtoDeliveryUser = Object.values(prototypeUsers).find(u => u.role === 'delivery');
+const initialPrototypeDelivery: DeliveryPersonnel = {
+    id: initialProtoDeliveryUser!.uid,
+    name: initialProtoDeliveryUser!.name,
+    email: initialProtoDeliveryUser!.email,
+    status: 'Activo',
+    vehicle: 'motocicleta',
+    zone: 'Centro'
+};
+
 
 export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => {
     const [orders, setOrders] = useState<Order[]>([]);
     const [products, setProducts] = useState<Product[]>(initialPrototypeProducts);
     const [prototypeStore, setPrototypeStore] = useState<Store>(initialPrototypeStore);
+    const [prototypeDelivery, setPrototypeDelivery] = useState<DeliveryPersonnel>(initialPrototypeDelivery);
     const [loading, setLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
 
@@ -39,21 +54,21 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         setIsClient(true);
     }, []);
 
-    // Load and manage orders and store from session storage
+    // Load and manage data from session storage
     useEffect(() => {
         if (isClient) {
             try {
-                // Orders
                 const storedOrders = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
                 const loadedOrders = storedOrders 
                     ? JSON.parse(storedOrders, (key, value) => key === 'createdAt' ? new Date(value) : value)
                     : initialPrototypeOrders;
                  setOrders(loadedOrders);
 
-                // Store
                 const storedStore = sessionStorage.getItem(PROTOTYPE_STORE_KEY);
-                const loadedStore = storedStore ? JSON.parse(storedStore) : initialPrototypeStore;
-                setPrototypeStore(loadedStore);
+                setPrototypeStore(storedStore ? JSON.parse(storedStore) : initialPrototypeStore);
+                
+                const storedDelivery = sessionStorage.getItem(PROTOTYPE_DELIVERY_KEY);
+                setPrototypeDelivery(storedDelivery ? JSON.parse(storedDelivery) : initialPrototypeDelivery);
 
             } catch (error) {
                 console.error("Failed to load prototype data from session storage, resetting.", error);
@@ -61,6 +76,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
                 setOrders(initialPrototypeOrders);
                 sessionStorage.setItem(PROTOTYPE_STORE_KEY, JSON.stringify(initialPrototypeStore));
                 setPrototypeStore(initialPrototypeStore);
+                sessionStorage.setItem(PROTOTYPE_DELIVERY_KEY, JSON.stringify(initialPrototypeDelivery));
+                setPrototypeDelivery(initialPrototypeDelivery);
             } finally {
                 setLoading(false);
             }
@@ -76,6 +93,12 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     const updateStoreInSession = (updatedStore: Store) => {
         if (isClient) {
             sessionStorage.setItem(PROTOTYPE_STORE_KEY, JSON.stringify(updatedStore));
+        }
+    };
+    
+    const updateDeliveryInSession = (updatedDelivery: DeliveryPersonnel) => {
+        if (isClient) {
+            sessionStorage.setItem(PROTOTYPE_DELIVERY_KEY, JSON.stringify(updatedDelivery));
         }
     };
 
@@ -102,6 +125,14 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             const updatedStore = { ...prevStore, ...updates };
             updateStoreInSession(updatedStore);
             return updatedStore;
+        });
+    };
+
+    const updatePrototypeDelivery = (updates: Partial<DeliveryPersonnel>) => {
+        setPrototypeDelivery(prev => {
+            const updatedDelivery = { ...prev, ...updates };
+            updateDeliveryInSession(updatedDelivery);
+            return updatedDelivery;
         });
     };
 
@@ -147,6 +178,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     const value = {
         prototypeOrders: orders,
         prototypeStore: prototypeStore,
+        prototypeDelivery: prototypeDelivery,
         prototypeProducts: products,
         loading: loading || !isClient,
         updatePrototypeOrder,
@@ -155,6 +187,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         updatePrototypeProduct,
         deletePrototypeProduct,
         updatePrototypeStore,
+        updatePrototypeDelivery,
         getOrdersByStore,
         getOrdersByUser,
         getAvailableOrdersForDelivery,

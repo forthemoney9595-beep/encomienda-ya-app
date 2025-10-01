@@ -5,48 +5,58 @@ import { useState, useEffect } from 'react';
 import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
-import { getStores } from '@/lib/data-service';
+import { getStores, updateStoreStatus } from '@/lib/data-service';
 import { StoresList } from './stores-list';
 import { useAuth } from '@/context/auth-context';
 import type { Store } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminStoresPage() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const { prototypeStore, updatePrototypeStore } = usePrototypeData();
+  const { updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
+  const { toast } = useToast();
   const isPrototype = user?.uid.startsWith('proto-') ?? false;
 
-  useEffect(() => {
-    const fetchStores = async () => {
-      setLoading(true);
-      if (isPrototype) {
-        // In prototype mode, we might want to manage a list of stores in context
-        // For now, we just use the single prototype store
-        setStores([prototypeStore]);
-      } else {
-        const fetchedStores = await getStores(true, false);
-        setStores(fetchedStores);
-      }
-      setLoading(false);
-    };
+  const fetchStores = async () => {
+    setLoading(true);
+    const fetchedStores = await getStores(true, isPrototype);
+    setStores(fetchedStores);
+    setLoading(false);
+  };
 
-    if (!authLoading) {
+  useEffect(() => {
+    if (!authLoading && !prototypeLoading) {
       fetchStores();
     }
-  }, [user, authLoading, isPrototype, prototypeStore]);
+  }, [user, authLoading, prototypeLoading]);
 
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
-      if (isPrototype && storeId === prototypeStore.id) {
-          updatePrototypeStore({ status });
-          setStores([ { ...prototypeStore, status } ]); // Force re-render with new status
+    try {
+      if (storeId.startsWith('proto-')) {
+        updatePrototypeStore({ status });
       } else {
-          // This would be a call to a server action for real stores
-          console.log("Real store status update not implemented for admin prototype page yet.");
+        await updateStoreStatus(storeId, status);
       }
-  }
+      
+      // Refresca la lista para mostrar el cambio
+      await fetchStores();
+
+      toast({
+        title: '¡Éxito!',
+        description: `La tienda ha sido marcada como ${status.toLowerCase()}.`,
+      });
+    } catch (error) {
+       toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo actualizar el estado de la tienda.',
+      });
+    }
+  };
 
   return (
     <div className="container mx-auto">

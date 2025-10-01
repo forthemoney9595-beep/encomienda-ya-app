@@ -20,36 +20,35 @@ export default function AdminDashboard() {
   const [pendingOrders, setPendingOrders] = useState(0);
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
-  const { prototypeOrders, getAvailableOrdersForDelivery, loading: prototypeLoading } = usePrototypeData();
+  const { getAvailableOrdersForDelivery, loading: prototypeLoading } = usePrototypeData();
+  const isPrototype = user?.uid.startsWith('proto-') ?? false;
 
   useEffect(() => {
     if (!loading && !isAdmin) {
       router.push('/login');
     }
-    if (isAdmin) {
+  }, [loading, isAdmin, router]);
+
+  useEffect(() => {
+    if (isAdmin && !prototypeLoading) {
       const fetchData = async () => {
         setDashboardLoading(true);
-        const isPrototype = user?.uid.startsWith('proto-') ?? false;
         
         let stores: StoreType[] = [];
         let drivers: DeliveryPersonnel[] = [];
         let availableOrderCount = 0;
 
-        if (isPrototype) {
-            // For prototype admin, use prototype data directly
-            stores = await getStores(true, true); // this already includes the proto-store
-            drivers = await getDeliveryPersonnel(true); // this includes proto-delivery
-            availableOrderCount = getAvailableOrdersForDelivery().length;
-        } else {
-            const [fetchedStores, fetchedDrivers, fetchedAvailableOrders] = await Promise.all([
-              getStores(true, false),
-              getDeliveryPersonnel(false),
-              getAvailableOrdersForDelivery(), // This uses the prototype context method
-            ]);
-            stores = fetchedStores;
-            drivers = fetchedDrivers;
-            availableOrderCount = fetchedAvailableOrders.length;
-        }
+        // For all users (including prototype admin), we fetch real data first
+        // and then supplement with prototype data if needed.
+        const [fetchedStores, fetchedDrivers, fetchedAvailableOrders] = await Promise.all([
+          getStores(true, isPrototype),
+          getDeliveryPersonnel(isPrototype),
+          getAvailableOrdersForDelivery(),
+        ]);
+        
+        stores = fetchedStores;
+        drivers = fetchedDrivers;
+        availableOrderCount = fetchedAvailableOrders.length;
 
         setTotalStores(stores.length);
         setTotalDrivers(drivers.length);
@@ -58,7 +57,7 @@ export default function AdminDashboard() {
       }
       fetchData();
     }
-  }, [user, isAdmin, loading, router, prototypeOrders, prototypeLoading, getAvailableOrdersForDelivery]);
+  }, [user, isAdmin, loading, router, prototypeLoading, getAvailableOrdersForDelivery, isPrototype]);
   
   if (loading || dashboardLoading || !isAdmin) {
     return (

@@ -83,9 +83,19 @@ export const prototypeStore: Store = {
     productCategories: ["Comida", "Bebida"],
     address: "Av. Hamburguesa 456",
     ownerId: 'proto-store-owner',
-    status: 'Aprobado',
+    status: 'Pendiente',
     imageUrl: "https://picsum.photos/seed/burger/600/400",
     imageHint: "burger joint",
+};
+
+const protoDeliveryUser = Object.values(prototypeUsers).find(u => u.role === 'delivery');
+export const prototypeDelivery: DeliveryPersonnel = {
+    id: protoDeliveryUser!.uid,
+    name: protoDeliveryUser!.name,
+    email: protoDeliveryUser!.email,
+    status: 'Pendiente',
+    vehicle: 'motocicleta',
+    zone: 'Centro'
 };
 
 export const initialPrototypeProducts: Product[] = [
