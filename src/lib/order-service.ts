@@ -3,10 +3,15 @@
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import type { Product } from './placeholder-data';
 
 // A CartItem is a Product with a quantity.
-export interface CartItem extends Product {
+export interface CartItem {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    category: string;
+    imageUrl?: string;
     quantity: number;
 }
 
@@ -59,14 +64,14 @@ export async function createOrder(
         throw new Error("No se puede crear un pedido sin artículos.");
     }
     
-    // Using static coordinates to prevent IA flow from breaking the build.
-    const storeCoords = { lat: 40.7128, lon: -74.0060 }; // Example: NYC
-    const customerCoords = { lat: 34.0522, lon: -118.2437 }; // Example: LA
-
     // --- Prototype Logic ---
     if (storeId.startsWith('proto-')) {
         const deliveryFee = 5.00;
         const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0) + deliveryFee;
+
+        // Static coordinates for prototype to ensure map functionality.
+        const storeCoords = { lat: 40.7128, lon: -74.0060 }; // Example: NYC
+        const customerCoords = { lat: 34.0522, lon: -118.2437 }; // Example: LA
 
         const newPrototypeOrder: Order = {
             id: `proto-order-${Date.now()}`,
@@ -91,6 +96,11 @@ export async function createOrder(
     }
 
     // --- Real Firestore Order Logic ---
+    
+    // Using static coordinates to prevent IA flow from breaking the build.
+    const storeCoords = { lat: 40.7128, lon: -74.0060 }; // Example: NYC
+    const customerCoords = { lat: 34.0522, lon: -118.2437 }; // Example: LA
+
     const distanceKm = 1 + Math.random() * 10;
     const deliveryFee = 2 + (distanceKm * 1.5);
 
@@ -255,4 +265,5 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
         return null;
     }
 }
+
 
