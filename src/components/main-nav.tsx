@@ -45,7 +45,8 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = !isStoreOwner && !isDelivery;
+  // A buyer is anyone who is not a store owner or delivery person.
+  const isBuyer = user ? !isStoreOwner && !isDelivery : true;
 
   const isStoreOrdersActive = isStoreOwner && pathname.startsWith('/orders');
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
@@ -62,35 +63,30 @@ export function MainNav() {
 
       {/* User Specific Navigation */}
       { !loading && user && (
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild isActive={pathname.startsWith('/profile')} tooltip="Perfil">
+            <Link href="/profile"><User /><span>Mi Perfil</span></Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      )}
+         
+      {/* Navigation for Buyers and Delivery Personnel */}
+      {!loading && user && (isBuyer || isDelivery) && (
         <>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/profile')} tooltip="Perfil">
-              <Link href="/profile"><User /><span>Mi Perfil</span></Link>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
+              <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-         
-          {/* "Mis Pedidos" and "Chat" only for Buyers and Delivery */}
-          {(isBuyer || isDelivery) && (
-            <>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
-                  <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
-                    <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </>
-          )}
+          
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
+                <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </>
       )}
 
-      {/* Show separator if there's a user and they aren't a buyer */}
-      {!loading && user && !isBuyer && <Separator className="my-2" />}
-      
       {/* Role specific menus */}
       { isBuyer && (
          <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
@@ -135,39 +131,42 @@ export function MainNav() {
       )}
 
       {isStoreOwner && (
-         <Collapsible open={true}>
-          <SidebarMenuItem>
-            <CollapsibleTrigger asChild>
-              <SidebarMenuButton>
-                <Store />
-                <span>Mi Tienda</span>
-                <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", "rotate-180")} />
-              </SidebarMenuButton>
-            </CollapsibleTrigger>
-          </SidebarMenuItem>
-          <CollapsibleContent>
-            <SidebarMenuSub>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={isStoreOrdersActive}>
-                  <Link href="/orders">
-                    <ClipboardList />
-                    <span>Pedidos</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-              {user.storeId && (
+        <>
+          <Separator className="my-2" />
+          <Collapsible open={true}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton>
+                  <Store />
+                  <span>Mi Tienda</span>
+                  <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", "rotate-180")} />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
                 <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
-                    <Link href={`/stores/${user.storeId}`}>
-                      <Package />
-                      <span>Productos</span>
+                  <SidebarMenuSubButton asChild isActive={isStoreOrdersActive}>
+                    <Link href="/orders">
+                      <ClipboardList />
+                      <span>Pedidos</span>
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
-              )}
-            </SidebarMenuSub>
-          </CollapsibleContent>
-        </Collapsible>
+                {user.storeId && (
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
+                      <Link href={`/stores/${user.storeId}`}>
+                        <Package />
+                        <span>Productos</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                )}
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        </>
       )}
 
       {isDelivery && (
