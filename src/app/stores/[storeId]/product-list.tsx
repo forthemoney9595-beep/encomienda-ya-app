@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -6,16 +7,17 @@ import type { Product } from '@/lib/placeholder-data';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Edit, Trash2, PlusCircle } from 'lucide-react';
+import { ShoppingCart, Edit, Trash2, PlusCircle, Search } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
+import { Input } from '@/components/ui/input';
 
 interface ProductListProps {
     products: Product[];
@@ -32,14 +34,14 @@ export function ProductList({ products: initialProducts, productCategories: init
     const { addPrototypeProduct, updatePrototypeProduct, deletePrototypeProduct } = usePrototypeData();
     
     const isPrototypeMode = currentStoreId.startsWith('proto-');
-    const products = initialProducts; // This will now be correctly passed from the parent which uses context
+    const products = initialProducts;
     
-    // State for local UI management
     const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const isOwner = user?.uid === ownerId;
 
@@ -48,8 +50,16 @@ export function ProductList({ products: initialProducts, productCategories: init
         setProductCategories(categories.length > 0 ? categories : initialCategories);
     }, [products, initialCategories]);
     
+    const filteredProducts = useMemo(() => {
+        if (!searchQuery) return products;
+        return products.filter(p => 
+            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.description.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [products, searchQuery]);
+
     const findFirstCategoryWithProducts = () => {
-        return productCategories.find(category => products.some(p => p.category.toLowerCase() === category.toLowerCase()));
+        return productCategories.find(category => filteredProducts.some(p => p.category.toLowerCase() === category.toLowerCase()));
     };
 
     const handleSaveProduct = async (productData: Product) => {
@@ -58,24 +68,18 @@ export function ProductList({ products: initialProducts, productCategories: init
         if (isPrototypeMode) {
             isEditing ? updatePrototypeProduct(currentStoreId, productData) : addPrototypeProduct(currentStoreId, productData);
         } else {
-            // Optimistically update UI
-            // This is complex, for now we rely on DB call and re-fetch which is slower but safer
             try {
                 if (isEditing) {
                     await updateProductInStore(currentStoreId, productData.id, productData);
                 } else {
                     await addProductToStore(currentStoreId, productData, productCategories);
                 }
-                // Here we should ideally re-fetch or pass new data up to the parent.
-                // For simplicity, we can toast and let the user see the change on next visit,
-                // or implement a more robust state management.
             } catch (error) {
                 toast({ title: "Error", description: "No se pudo guardar el artículo en la base de datos.", variant: 'destructive'});
-                return; // Prevent UI change if DB fails
+                return;
             }
         }
         
-        // This will now be updated via the useEffect
         if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
             setProductCategories([...productCategories, productData.category]);
         }
@@ -156,89 +160,107 @@ export function ProductList({ products: initialProducts, productCategories: init
                 onSave={handleSaveProduct}
                 productCategories={productCategories}
             />
-            {isOwner && (
-              <div className="mb-4">
-                <Button onClick={handleOpenDialogForCreate}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Añadir Nuevo Artículo
-                </Button>
-              </div>
-            )}
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                <div className="relative w-full sm:flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Buscar productos..."
+                        className="w-full pl-8"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
+                {isOwner && (
+                    <Button onClick={handleOpenDialogForCreate} className="w-full sm:w-auto">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Añadir Artículo
+                    </Button>
+                )}
+            </div>
+
             <Tabs defaultValue={findFirstCategoryWithProducts()} className="w-full">
                 <TabsList className="mb-4">
                     {productCategories.map(category => (
-                    <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
+                        filteredProducts.some(p => p.category.toLowerCase() === category.toLowerCase()) &&
+                        <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
                     ))}
                 </TabsList>
-                {productCategories.map(category => (
-                    <TabsContent key={category} value={category}>
-                    <div className="space-y-4">
-                        {products.filter(p => p.category.toLowerCase() === category.toLowerCase()).map((product) => (
-                            <Card key={product.id}>
-                                <CardContent className="flex items-center gap-4 p-4">
-                                    <div className="relative h-20 w-20 flex-shrink-0">
-                                        <Image 
-                                            src={product.imageUrl || ''}
-                                            alt={product.name} 
-                                            fill
-                                            style={{ objectFit: 'cover' }}
-                                            className="rounded-md bg-muted" 
-                                        />
-                                    </div>
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold">{product.name}</h3>
-                                        <p className="text-sm text-muted-foreground">{product.description}</p>
-                                        <p className="font-semibold">${product.price.toFixed(2)}</p>
-                                    </div>
-                                    {isOwner ? (
-                                        <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => handleOpenDialogForEdit(product)}>
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                Editar
-                                            </Button>
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive" size="sm">
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Eliminar
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Esta acción no se puede deshacer y eliminará permanentemente el producto.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleDeleteProduct(product.id)}>
-                                                            Sí, eliminar
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+
+                {productCategories.map(category => {
+                    const categoryProducts = filteredProducts.filter(p => p.category.toLowerCase() === category.toLowerCase());
+                    if (categoryProducts.length === 0) return null;
+
+                    return (
+                        <TabsContent key={category} value={category}>
+                        <div className="space-y-4">
+                            {categoryProducts.map((product) => (
+                                <Card key={product.id}>
+                                    <CardContent className="flex items-center gap-4 p-4">
+                                        <div className="relative h-20 w-20 flex-shrink-0">
+                                            <Image 
+                                                src={product.imageUrl || ''}
+                                                alt={product.name} 
+                                                fill
+                                                style={{ objectFit: 'cover' }}
+                                                className="rounded-md bg-muted" 
+                                            />
                                         </div>
-                                    ) : (
-                                        <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)}>
-                                            <ShoppingCart className="mr-2 h-4 w-4" />
-                                            Añadir
-                                        </Button>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        ))}
-                         {products.filter(p => p.category.toLowerCase() === category.toLowerCase()).length === 0 && (
-                            <div className="text-center text-muted-foreground py-10">
-                                <p>No hay productos en esta categoría.</p>
-                            </div>
-                        )}
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold">{product.name}</h3>
+                                            <p className="text-sm text-muted-foreground">{product.description}</p>
+                                            <p className="font-semibold">${product.price.toFixed(2)}</p>
+                                        </div>
+                                        {isOwner ? (
+                                            <div className="flex gap-2">
+                                                <Button variant="outline" size="sm" onClick={() => handleOpenDialogForEdit(product)}>
+                                                    <Edit className="mr-2 h-4 w-4" />
+                                                    Editar
+                                                </Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="destructive" size="sm">
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Eliminar
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta acción no se puede deshacer y eliminará permanentemente el producto.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteProduct(product.id)}>
+                                                                Sí, eliminar
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
+                                        ) : (
+                                            <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)}>
+                                                <ShoppingCart className="mr-2 h-4 w-4" />
+                                                Añadir
+                                            </Button>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                        </TabsContent>
+                    );
+                })}
+                {filteredProducts.length === 0 && products.length > 0 && (
+                    <div className="text-center text-muted-foreground py-10">
+                        <p>No se encontraron productos para "{searchQuery}".</p>
                     </div>
-                    </TabsContent>
-                ))}
+                )}
                 {products.length === 0 && (
                     <div className="text-center text-muted-foreground py-10">
-                        <p>{isOwner ? 'Esta tienda aún no tiene productos. ¡Añade tu primer artículo usando el botón de arriba!' : 'Esta tienda aún no tiene productos.'}</p>
+                        <p>{isOwner ? 'Esta tienda aún no tiene productos. ¡Añade tu primer artículo!' : 'Esta tienda aún no tiene productos.'}</p>
                     </div>
                 )}
             </Tabs>
@@ -259,3 +281,5 @@ export function ProductList({ products: initialProducts, productCategories: init
         </>
     )
 }
+
+    
