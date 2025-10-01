@@ -1,14 +1,61 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // DEBUGGING RULE: This is insecure.
-    // Allows any authenticated user to read and write to all collections.
-    // This is to test if rules are being deployed at all.
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function getRole(userId) {
+        return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+
+    // USERS collection
+    match /users/{userId} {
+      // Anyone can create their own user profile upon signing up
+      allow create: if isSignedIn() && isOwner(userId);
+      
+      // Users can only read and update their own profile
+      allow read, update: if isSignedIn() && isOwner(userId);
+      
+      // Users cannot delete their profiles through the app
+      allow delete: if false;
+    }
+
+    // STORES collection
+    match /stores/{storeId} {
+      // Anyone can view stores
+      allow get, list: if true;
+      
+      // Only authenticated users with the 'store' role can create a store
+      // We check that the ownerId in the new document matches the user's UID
+      allow create: if isSignedIn() && getRole(request.auth.uid) == 'store' && request.resource.data.ownerId == request.auth.uid;
+      
+      // Only the store owner can update their store information
+      allow update: if isSignedIn() && getRole(request.auth.uid) == 'store' && resource.data.ownerId == request.auth.uid;
+
+      // Deleting stores might be an admin-only task
+      allow delete: if false; // Or check for admin role
+      
+      // PRODUCTS subcollection
+      match /products/{productId} {
+        // Anyone can view the products of a store
+        allow get, list: if true;
+        
+        // Only the owner of the parent store can create, update, or delete products
+        allow write: if isSignedIn() && getRole(request.auth.uid) == 'store' && get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid;
+      }
+    }
+    
+    // Default deny all other reads/writes
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }
