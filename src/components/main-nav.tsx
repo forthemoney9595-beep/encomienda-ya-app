@@ -46,7 +46,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = !isStoreOwner && !isDelivery; // Default to buyer if not other roles
+  const isBuyer = user?.role === 'buyer' || !user;
   
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
 
@@ -59,29 +59,22 @@ export function MainNav() {
         </SidebarMenuButton>
       </SidebarMenuItem>
 
-      { !loading && user && (
-        <SidebarMenuItem>
-          <SidebarMenuButton asChild isActive={pathname.startsWith('/profile')} tooltip="Perfil">
-            <Link href="/profile"><User /><span>Mi Perfil</span></Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      )}
-
       {/* Buyer & Guest specific menu */}
       {!loading && isBuyer && (
         <>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
-              <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          
           {user && (
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
-                  <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
+                  <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
+                    <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </>
           )}
 
           <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>

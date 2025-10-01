@@ -6,41 +6,31 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
-import { getStores } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { useRouter } from 'next/navigation';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
+  const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isClient, setIsClient] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isClient || authLoading) {
+    if (authLoading || prototypeLoading) {
+      setLoading(true);
       return;
     }
     
-    // The redirect logic has been removed from here.
-    // The main-nav component now handles role-specific menus.
+    // In prototype mode, all data comes from the context.
+    const approvedStores = prototypeStores.filter(s => s.status === 'Aprobado');
+    setStores(approvedStores);
+    setLoading(false);
 
-    const fetchStores = async () => {
-      setLoading(true);
-      const isPrototype = user?.uid.startsWith('proto-') ?? false;
-      const fetchedStores = await getStores(false, isPrototype);
-      setStores(fetchedStores.filter(s => s.status === 'Aprobado'));
-      setLoading(false);
-    };
-
-    fetchStores();
-  }, [user, authLoading, isClient, router]);
+  }, [user, authLoading, prototypeLoading, prototypeStores]);
 
 
   return (
@@ -48,7 +38,7 @@ export default function Home() {
       <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
       
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {loading || !isClient ? (
+        {loading ? (
           <>
             <StoreCardSkeleton />
             <StoreCardSkeleton />
@@ -82,6 +72,7 @@ export default function Home() {
         ) : (
           <div className="col-span-full text-center text-muted-foreground py-10">
             <p>No hay tiendas aprobadas disponibles en este momento.</p>
+            <p className="text-sm">Si eres dueño de una tienda, puedes crear una yendo a "Registrarse".</p>
           </div>
         )}
       </div>

@@ -6,47 +6,31 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
-import { getStores } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
-import { useRouter } from 'next/navigation';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 export default function FoodStoresPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
+  const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
   const [foodStores, setFoodStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
-    // Redirecting store owners is now handled by the main navigation logic
-    // so this page should just load data for buyers/guests.
-    
-    const fetchStores = async () => {
+    if (authLoading || prototypeLoading) {
       setLoading(true);
-      const foodCategories = ['Italiana', 'Comida Rápida', 'Japonesa', 'Mexicana', 'Saludable', 'Dulces'];
-      const isPrototype = user?.uid.startsWith('proto-') ?? false;
-      const allStores = await getStores(false, isPrototype);
-      const filteredStores = allStores.filter(store => 
-        store.status === 'Aprobado' && foodCategories.includes(store.category)
-      );
-      setFoodStores(filteredStores);
-      setLoading(false);
-    };
-    
-    if (!authLoading) {
-      fetchStores();
+      return;
     }
-  }, [user, authLoading, router]);
-
-  if (user && user.role === 'store') {
-    // While navigation should prevent this, show a friendly message if accessed directly
-     return (
-        <div className="container mx-auto text-center py-20">
-          <p>Redirigiendo a tu panel de tienda...</p>
-        </div>
-      );
-  }
+    
+    const foodCategories = ['Italiana', 'Comida Rápida', 'Japonesa', 'Mexicana', 'Saludable', 'Dulces'];
+    const filteredStores = prototypeStores.filter(store => 
+      store.status === 'Aprobado' && foodCategories.includes(store.category)
+    );
+    setFoodStores(filteredStores);
+    setLoading(false);
+    
+  }, [authLoading, prototypeLoading, prototypeStores]);
 
   return (
     <div className="container mx-auto">
