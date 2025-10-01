@@ -36,7 +36,16 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
                         if (key === 'createdAt') return new Date(value);
                         return value;
                     });
-                    setOrders(parsedOrders);
+
+                    // Self-healing: Check if data is outdated (missing coords). If so, reset.
+                    const isDataOutdated = parsedOrders.some((order: Order) => !order.storeCoords || !order.customerCoords);
+                    if (isDataOutdated) {
+                        console.warn("Outdated prototype data detected. Resetting to initial state.");
+                        sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+                        setOrders(initialPrototypeOrders);
+                    } else {
+                        setOrders(parsedOrders);
+                    }
                 } else {
                     sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
                     setOrders(initialPrototypeOrders);
