@@ -2,7 +2,7 @@
 
 import { useParams, useRouter, notFound } from 'next/navigation';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { type Order, getOrderById as getOrderFromDb } from '@/lib/order-service';
 import { format } from 'date-fns';
@@ -270,6 +270,14 @@ export default function OrderTrackingPage() {
                        <OrderMap order={order} />
                    ) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">No hay datos de ubicación para este pedido.</div>}
                 </CardContent>
+                <CardFooter>
+                    <p className="text-xs text-muted-foreground">
+                        {order.status === 'En reparto' 
+                            ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación."
+                            : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."
+                        }
+                    </p>
+                </CardFooter>
             </Card>
         </div>
       </div>
