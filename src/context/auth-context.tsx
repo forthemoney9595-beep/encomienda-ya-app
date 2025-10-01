@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 ...userData
             } as UserProfile;
             
-            if (profileToSet.role === 'store') {
+            if (profileToSet.role === 'store' && !profileToSet.storeId) {
                 const storesRef = collection(db, 'stores');
                 const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
                 const querySnapshot = await getDocs(q);
@@ -71,12 +71,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const protoUser = Object.values(prototypeUsers).find(u => u.email === email);
         if (protoUser) {
             sessionStorage.setItem(PROTOTYPE_SESSION_KEY, email);
+            
+            // Check if there is a storeId stored in session for this user
+            const sessionStoreId = sessionStorage.getItem(`proto_store_id_${protoUser.uid}`);
+
             const userProfile: UserProfile = {
                 uid: protoUser.uid,
                 name: protoUser.name,
                 email: protoUser.email,
                 role: protoUser.role,
-                storeId: protoUser.storeId
+                storeId: sessionStoreId || protoUser.storeId
             };
             setUser(userProfile);
         }
@@ -86,6 +90,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(currentUser => {
             if (currentUser && currentUser.role === 'store') {
                 const updatedUser = { ...currentUser, storeId };
+                // Also save this to session storage to persist across refreshes
+                sessionStorage.setItem(`proto_store_id_${currentUser.uid}`, storeId);
                 return updatedUser;
             }
             return currentUser;
@@ -93,6 +99,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const logoutForPrototype = () => {
+        const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
+        if (prototypeEmail) {
+            const protoUser = Object.values(prototypeUsers).find(u => u.email === prototypeEmail);
+            if (protoUser) {
+                 sessionStorage.removeItem(`proto_store_id_${protoUser.uid}`);
+            }
+        }
         sessionStorage.removeItem(PROTOTYPE_SESSION_KEY);
         setUser(null);
     }

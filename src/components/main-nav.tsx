@@ -45,7 +45,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = !isStoreOwner && !isDelivery && !isAdmin;
+  const isBuyer = user?.role === 'buyer' || (!user && !loading);
   
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
 
@@ -127,38 +127,38 @@ export function MainNav() {
       {!loading && isStoreOwner && (
         <>
           <Separator className="my-2" />
-          <Collapsible open={true}>
-             <SidebarMenuItem>
+          <Collapsible open={true} asChild>
+            <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton>
                   <Store />
                   <span>Mi Tienda</span>
-                  <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", "rotate-180")} />
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform rotate-180" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
-            </SidebarMenuItem>
-            <CollapsibleContent>
-              <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders')}>
-                    <Link href="/orders">
-                      <ClipboardList />
-                      <span>Pedidos</span>
-                    </Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                {user.storeId && (
+              <CollapsibleContent>
+                <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
-                      <Link href={`/stores/${user.storeId}`}>
-                        <Package />
-                        <span>Productos</span>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders')}>
+                      <Link href="/orders">
+                        <ClipboardList />
+                        <span>Pedidos</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
-                )}
-              </SidebarMenuSub>
-            </CollapsibleContent>
+                  {user.storeId && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
+                        <Link href={`/stores/${user.storeId}`}>
+                          <Package />
+                          <span>Productos</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  )}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </SidebarMenuItem>
           </Collapsible>
         </>
       )}
