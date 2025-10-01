@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -13,8 +12,10 @@ import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { OrderMap } from './order-map';
 import { useToast } from '@/hooks/use-toast';
+import { Progress } from '@/components/ui/progress';
+import { CheckCircle, CookingPot, Bike, Home, Package } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 function OrderPageSkeleton() {
     return (
@@ -23,8 +24,8 @@ function OrderPageSkeleton() {
                 title={<Skeleton className="h-9 w-48" />}
                 description={<Skeleton className="h-5 w-64" />}
             />
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="md:col-span-1">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="md:col-span-2">
                     <Card>
                         <CardHeader>
                             <Skeleton className="h-8 w-1/2" />
@@ -58,6 +59,52 @@ function OrderPageSkeleton() {
     )
 }
 
+const statusSteps = {
+  'Pedido Realizado': { step: 1, label: 'Realizado', icon: Package, description: 'Tu pedido ha sido recibido por la tienda.' },
+  'En preparación': { step: 2, label: 'Preparando', icon: CookingPot, description: 'La tienda está preparando tu pedido.' },
+  'En reparto': { step: 3- , label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
+  'Entregado': { step: 4, label: 'Entregado', icon: Home, description: '¡Tu pedido ha sido entregado! Disfrútalo.' },
+  'Cancelado': { step: 0, label: 'Cancelado', icon: CheckCircle, description: 'Este pedido ha sido cancelado.' }
+};
+
+function OrderProgress({ status }: { status: Order['status'] }) {
+    const currentStatusInfo = statusSteps[status] || { step: 0, label: 'Desconocido' };
+    const progressValue = currentStatusInfo.step * 25;
+    
+    if (status === 'Cancelado') {
+        return (
+             <div className="text-center">
+                <CheckCircle className="mx-auto h-12 w-12 text-destructive" />
+                <h3 className="mt-2 text-lg font-semibold">Pedido Cancelado</h3>
+             </div>
+        )
+    }
+
+    const steps = Object.values(statusSteps).filter(s => s.step > 0).sort((a,b) => a.step - b.step);
+
+    return (
+        <div className="space-y-8">
+            <div>
+                <Progress value={progressValue} className="h-2" />
+                <div className="mt-4 grid grid-cols-4 gap-2 text-xs text-center">
+                    {steps.map((stepInfo) => (
+                        <div key={stepInfo.step} className={cn("flex flex-col items-center gap-1", currentStatusInfo.step >= stepInfo.step ? 'text-primary font-semibold' : 'text-muted-foreground')}>
+                            <stepInfo.icon className="h-5 w-5" />
+                            <span>{stepInfo.label}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div className="text-center bg-muted/50 p-4 rounded-lg">
+                <h3 className="font-semibold text-base">{currentStatusInfo.label}</h3>
+                <p className="text-sm text-muted-foreground">{currentStatusInfo.description}</p>
+                {status !== 'Entregado' && status !== 'Cancelado' && (
+                  <p className="mt-2 text-lg font-bold text-primary">Entrega estimada: 25-40 min</p>
+                )}
+            </div>
+        </div>
+    )
+}
 
 export default function OrderTrackingPage() {
   const params = useParams();
@@ -72,7 +119,7 @@ export default function OrderTrackingPage() {
 
   useEffect(() => {
     async function fetchOrderData() {
-        if (!orderId || !user) return;
+        if (!orderId || authLoading || prototypeLoading) return;
         
         setLoading(true);
         let orderData: Order | null | undefined = null;
@@ -128,17 +175,8 @@ export default function OrderTrackingPage() {
   }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading, toast]);
 
 
-  if (loading || authLoading || prototypeLoading) {
+  if (loading || authLoading || prototypeLoading || !order) {
     return <OrderPageSkeleton />;
-  }
-
-  if (!order) {
-    // This handles the case where loading is finished but the order is still null for some reason.
-    return (
-        <div className="container mx-auto">
-            <PageHeader title="Pedido no encontrado" description="No se pudo cargar la información del pedido. Por favor, vuelve a intentarlo." />
-        </div>
-    )
   }
   
   const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + order.deliveryFee;
@@ -149,8 +187,8 @@ export default function OrderTrackingPage() {
         title={`Pedido #${order.id.substring(0, 7)}`} 
         description={`Realizado el ${format(order.createdAt, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`} 
       />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="md:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="md:col-span-2">
             <Card>
                 <CardHeader>
                     <CardTitle>Resumen del Pedido</CardTitle>
@@ -203,18 +241,13 @@ export default function OrderTrackingPage() {
             </Card>
         </div>
         <div className="md:col-span-1">
-             <Card className='min-h-[400px]'>
-                {order && order.storeCoords && order.customerCoords ? (
-                    <OrderMap 
-                        orderStatus={order.status}
-                        storeCoords={order.storeCoords}
-                        customerCoords={order.customerCoords}
-                    />
-                ) : (
-                    <CardContent className='flex h-full items-center justify-center text-center text-muted-foreground'>
-                         <p>Las coordenadas para este pedido no están disponibles.</p>
-                    </CardContent>
-                )}
+             <Card>
+                <CardHeader>
+                    <CardTitle>Estado del Pedido</CardTitle>
+                </CardHeader>
+                <CardContent>
+                   <OrderProgress status={order.status} />
+                </CardContent>
             </Card>
         </div>
       </div>
