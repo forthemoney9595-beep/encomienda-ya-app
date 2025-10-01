@@ -45,7 +45,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = !user?.role || user.role === 'buyer';
+  const isBuyer = user?.role === 'buyer' || !user; // Default to buyer if no role/user
   
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
 
@@ -130,10 +130,10 @@ export function MainNav() {
           <Collapsible open={true} asChild>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
-                <SidebarMenuButton>
-                  <Store />
-                  <span>Mi Tienda</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform rotate-180" />
+                 <SidebarMenuButton>
+                    <Store />
+                    <span>Mi Tienda</span>
+                    <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform rotate-180" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
               <CollapsibleContent>
@@ -156,6 +156,14 @@ export function MainNav() {
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   )}
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store')}>
+                      <Link href="/admin/my-store">
+                        <Shield />
+                        <span>Editar Tienda</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </CollapsibleContent>
             </SidebarMenuItem>
