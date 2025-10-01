@@ -52,15 +52,7 @@ export default function SignupStorePage() {
 
     if (isPrototypeUser) {
         const protoUser = prototypeUsers[values.email as keyof typeof prototypeUsers];
-        if (protoUser.role !== 'store') {
-            toast({
-                title: "Error de Rol",
-                description: "Este email de prototipo no es para dueños de tienda. Por favor, usa 'tienda@test.com'.",
-                variant: 'destructive',
-            });
-            return;
-        }
-
+       
         const newStore = {
             id: `proto-store-${Date.now()}`,
             name: values.storeName,
