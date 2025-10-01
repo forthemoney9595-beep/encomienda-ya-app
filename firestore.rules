@@ -1,63 +1,14 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Reglas para Perfiles de Usuario
-    match /users/{userId} {
-      // Un usuario solo puede crear su propio perfil
-      allow create: if request.auth != null && request.auth.uid == userId;
-      // Un usuario solo puede leer y actualizar su propio perfil
-      allow read, update: if request.auth != null && request.auth.uid == userId;
-      // Nadie puede eliminar perfiles (por seguridad)
-      allow delete: if false;
-    }
-
-    // Reglas para Tiendas
-    match /stores/{storeId} {
-      // Cualquiera puede ver las tiendas (incluso usuarios no autenticados)
-      allow get, list: if true;
-      // Solo usuarios autenticados pueden crear una tienda
-      allow create: if request.auth != null;
-      // Solo el dueño de la tienda (ownerId) puede actualizarla o eliminarla
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
-
-      // Reglas para Productos (subcolección de Tiendas)
-      match /products/{productId} {
-        // Cualquiera puede ver los productos de una tienda
-        allow get, list: if true;
-        // Solo el dueño de la tienda puede crear, actualizar o eliminar productos
-        allow create, update, delete: if request.auth != null && request.auth.uid == get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId;
-      }
-    }
-    
-    // Reglas para Pedidos
-    match /orders/{orderId} {
-        // El comprador, el dueño de la tienda, o un admin pueden leer el pedido
-        allow get: if request.auth != null && (request.auth.uid == resource.data.userId || request.auth.uid == get(/databases/$(database)/documents/stores/$(resource.data.storeId)).data.ownerId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-        // Solo usuarios autenticados pueden listar sus propios pedidos
-        allow list: if request.auth != null;
-        // Solo usuarios autenticados pueden crear pedidos
-        allow create: if request.auth != null;
-        // El dueño de la tienda o el repartidor asignado pueden actualizar el pedido
-        allow update: if request.auth != null && (request.auth.uid == get(/databases/$(database)/documents/stores/$(resource.data.storeId)).data.ownerId || request.auth.uid == resource.data.deliveryPersonId);
-        // Nadie puede eliminar pedidos (por seguridad)
-        allow delete: if false;
-    }
-    
-    // Reglas para Chats
-    match /chats/{chatId} {
-        // Solo los participantes del chat pueden leerlo y actualizarlo (para el último mensaje)
-        allow get, update: if request.auth != null && request.auth.uid in resource.data.participants;
-        // Solo usuarios autenticados pueden crear chats
-        allow create: if request.auth != null;
-        
-        // Reglas para Mensajes (subcolección de Chats)
-        match /messages/{messageId} {
-            // Solo los participantes del chat pueden leer y enviar mensajes
-            allow get, list, create: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-            allow update, delete: if false; // Nadie puede editar/eliminar mensajes
-        }
+    // DEBUGGING RULE: This is insecure.
+    // Allows any authenticated user to read and write to all collections.
+    // This is to test if rules are being deployed at all.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
