@@ -47,34 +47,15 @@ export default function SignupStorePage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     
-    // Prototype Mode Check
+    // Prototype Mode Check - This mode is now deprecated for store creation
     const isPrototypeUserEmail = Object.keys(prototypeUsers).includes(values.email);
 
     if (isPrototypeUserEmail) {
-        const protoUser = prototypeUsers[values.email as keyof typeof prototypeUsers];
-       
-        const newStore = {
-            id: `proto-store-${Date.now()}`,
-            name: values.storeName,
-            category: values.category,
-            address: values.address,
-            ownerId: protoUser.uid,
-            status: 'Aprobado' as const,
-            imageUrl: `https://picsum.photos/seed/${values.storeName.replace(/\s/g, '')}/600/400`,
-            imageHint: values.category.toLowerCase(),
-            productCategories: [values.category],
-            products: [],
-        };
-
-        addPrototypeStore(newStore);
-        
-        await loginForPrototype(values.email, newStore.id);
-        
         toast({
-            title: "¡Tienda de Prototipo Creada!",
-            description: "Tu tienda de prueba está activa.",
+            variant: "destructive",
+            title: "Modo de Prototipo no disponible",
+            description: "El registro de tiendas de prototipo está deshabilitado. Por favor, usa un correo electrónico real para registrar una tienda en la base de datos.",
         });
-        router.push('/');
         return;
     }
 
@@ -83,12 +64,14 @@ export default function SignupStorePage() {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
+      // Create the user profile document in Firestore
       await createUserProfile(user.uid, {
         name: values.ownerName,
         email: values.email,
         role: 'store',
       });
       
+      // Create the store document and associate it with the user
       const newStore = await createStoreForUser(user.uid, {
           name: values.storeName,
           category: values.category,
@@ -97,7 +80,7 @@ export default function SignupStorePage() {
 
       toast({
         title: "¡Tienda Registrada y Aprobada!",
-        description: "Tu tienda está activa. Serás redirigido para gestionarla.",
+        description: "Tu tienda está activa y es visible para todos. Serás redirigido.",
       });
       router.push('/');
     } catch (error: any)
@@ -121,7 +104,7 @@ export default function SignupStorePage() {
             <CardHeader>
               <CardTitle className="text-2xl">Registrar tu Tienda</CardTitle>
               <CardDescription>
-                Rellena los datos para registrar tu negocio en la plataforma.
+                Rellena los datos para registrar tu negocio en la plataforma. Tu tienda será visible públicamente.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
