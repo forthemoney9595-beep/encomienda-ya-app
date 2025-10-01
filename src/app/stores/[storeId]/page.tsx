@@ -78,7 +78,7 @@ export default function StoreDetailPage() {
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const isOwner = user?.uid === store?.ownerId;
+  const isOwner = user?.storeId === storeId;
 
   useEffect(() => {
     async function fetchData() {

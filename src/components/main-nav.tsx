@@ -45,7 +45,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = !isStoreOwner && !isDelivery;
+  const isBuyer = !isStoreOwner && !isDelivery && !isAdmin;
   
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
 
@@ -128,7 +128,7 @@ export function MainNav() {
         <>
           <Separator className="my-2" />
           <Collapsible open={true}>
-            <SidebarMenuItem>
+             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton>
                   <Store />
@@ -216,6 +216,14 @@ export function MainNav() {
                     <Link href="/admin/delivery">
                       <Truck />
                       <span>Reparto</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                 <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname === '/admin/my-store'}>
+                    <Link href="/admin/my-store">
+                      <Store />
+                      <span>Mi Tienda</span>
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
