@@ -54,13 +54,13 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
-    if (user && !authLoading) {
+    if (clientLoaded && user && !authLoading) {
         form.reset({
             ...form.getValues(),
             name: user.name || "",
         });
     }
-  }, [user, authLoading, form]);
+  }, [user, authLoading, form, clientLoaded]);
 
   useEffect(() => {
     if (clientLoaded && !authLoading && !user) {
@@ -93,8 +93,8 @@ export default function CheckoutPage() {
     try {
       const isPrototype = storeId.startsWith('proto-');
       
-      const storeName = isPrototype ? prototypeStore.name : "Nombre de Tienda Real";
-      const storeAddress = isPrototype ? prototypeStore.address : "Dirección de Tienda Real";
+      const storeName = isPrototype ? prototypeStore.name : "Nombre de Tienda Real"; // Placeholder for real store
+      const storeAddress = isPrototype ? prototypeStore.address : "Dirección de Tienda Real"; // Placeholder for real store
 
       const createdOrder = await createOrder({
         userId: user.uid,

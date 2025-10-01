@@ -1,5 +1,4 @@
 
-
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
@@ -35,8 +34,8 @@ export interface Order {
     storeAddress?: string; 
     deliveryPersonId?: string;
     deliveryPersonName?: string;
-    storeCoords?: { lat: number; lon: number };
-    customerCoords?: { lat: number; lon: number };
+    storeCoords?: { lat: number, lon: number };
+    customerCoords?: { lat: number, lon: number };
 }
 
 interface CreateOrderInput {
@@ -96,7 +95,7 @@ export async function createOrder(
     }
 
     // --- Real Firestore Order Logic ---
-    
+    // In a real app, geocoding would happen here. For now, using static coords.
     const storeCoords = { lat: 40.7128, lon: -74.0060 };
     const customerCoords = { lat: 34.0522, lon: -118.2437 };
 
