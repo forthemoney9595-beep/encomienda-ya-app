@@ -45,7 +45,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = user?.role === 'buyer';
+  const isBuyer = !isStoreOwner && !isDelivery && !isAdmin;
 
   const isStoreOrdersActive = isStoreOwner && pathname.startsWith('/orders');
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
@@ -91,7 +91,7 @@ export function MainNav() {
       <Separator className="my-2" />
       
       {/* Role specific menus */}
-      { !isStoreOwner && !isAdmin && (
+      { isBuyer && !isAdmin && (
          <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>
@@ -133,7 +133,7 @@ export function MainNav() {
         </Collapsible>
       )}
 
-      {isStoreOwner && user?.storeId && (
+      {isStoreOwner && (
          <Collapsible open={true}>
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>
@@ -154,14 +154,16 @@ export function MainNav() {
                   </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
-                  <Link href={`/stores/${user.storeId}`}>
-                    <Package />
-                    <span>Mi Tienda</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
+              {user.storeId && (
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
+                    <Link href={`/stores/${user.storeId}`}>
+                      <Package />
+                      <span>Productos</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              )}
             </SidebarMenuSub>
           </CollapsibleContent>
         </Collapsible>
