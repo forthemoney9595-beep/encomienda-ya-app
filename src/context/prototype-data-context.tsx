@@ -4,7 +4,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
-import { initialPrototypeOrders, PROTOTYPE_ORDERS_KEY, initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery } from '@/lib/placeholder-data';
+import { initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery } from '@/lib/placeholder-data';
 import type { Store, Product, DeliveryPersonnel } from '@/lib/placeholder-data';
 
 interface PrototypeDataContextType {
@@ -29,6 +29,7 @@ interface PrototypeDataContextType {
 
 const PrototypeDataContext = createContext<PrototypeDataContextType | undefined>(undefined);
 
+const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
 const PROTOTYPE_STORES_KEY = 'prototypeStores';
 const PROTOTYPE_DELIVERY_KEY = 'prototypeDelivery';
 
@@ -49,9 +50,10 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         if (isClient) {
             try {
                 const storedOrders = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
+                // Start with an empty array if nothing is stored
                 const loadedOrders = storedOrders 
                     ? JSON.parse(storedOrders, (key, value) => key === 'createdAt' ? new Date(value) : value)
-                    : initialPrototypeOrders;
+                    : [];
                  setOrders(loadedOrders);
 
                 const storedStores = sessionStorage.getItem(PROTOTYPE_STORES_KEY);
@@ -62,8 +64,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
             } catch (error) {
                 console.error("Failed to load prototype data from session storage, resetting.", error);
-                sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
-                setOrders(initialPrototypeOrders);
+                sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify([])); // Reset to empty
+                setOrders([]);
                 sessionStorage.setItem(PROTOTYPE_STORES_KEY, JSON.stringify(initialPrototypeStores));
                 setStores(initialPrototypeStores);
                 sessionStorage.setItem(PROTOTYPE_DELIVERY_KEY, JSON.stringify(initialPrototypeDelivery));
