@@ -20,9 +20,8 @@ interface AuthContextType {
     user: UserProfile | null;
     loading: boolean;
     isAdmin: boolean;
-    loginForPrototype: (email: string) => Promise<void>; 
+    loginForPrototype: (email: string, storeId?: string) => Promise<void>; 
     logoutForPrototype: () => void;
-    addStoreIdToPrototypeUser: (storeId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -67,13 +66,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }
     
-    const loginForPrototype = async (email: string) => {
+    const loginForPrototype = async (email: string, newStoreId?: string) => {
         const protoUser = Object.values(prototypeUsers).find(u => u.email === email);
         if (protoUser) {
             sessionStorage.setItem(PROTOTYPE_SESSION_KEY, email);
             
-            // Check if there is a storeId stored in session for this user
-            const sessionStoreId = sessionStorage.getItem(`proto_store_id_${protoUser.uid}`);
+            // If a new store ID is provided (e.g. after creation), use it. Otherwise, check session storage.
+            const sessionStoreId = newStoreId || sessionStorage.getItem(`proto_store_id_${protoUser.uid}`);
+            if (sessionStoreId) {
+                sessionStorage.setItem(`proto_store_id_${protoUser.uid}`, sessionStoreId);
+            }
 
             const userProfile: UserProfile = {
                 uid: protoUser.uid,
@@ -86,18 +88,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     };
     
-    const addStoreIdToPrototypeUser = (storeId: string) => {
-        setUser(currentUser => {
-            if (currentUser && currentUser.role === 'store') {
-                const updatedUser = { ...currentUser, storeId };
-                // Also save this to session storage to persist across refreshes
-                sessionStorage.setItem(`proto_store_id_${currentUser.uid}`, storeId);
-                return updatedUser;
-            }
-            return currentUser;
-        });
-    };
-
     const logoutForPrototype = () => {
         const prototypeEmail = sessionStorage.getItem(PROTOTYPE_SESSION_KEY);
         if (prototypeEmail) {
@@ -153,7 +143,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isAdmin: isClient ? isAdmin : false, 
         loginForPrototype, 
         logoutForPrototype,
-        addStoreIdToPrototypeUser,
     };
     
     return (

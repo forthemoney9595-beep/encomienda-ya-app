@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { createUserProfile, createStoreForUser } from '@/lib/user';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { prototypeUsers } from '@/lib/placeholder-data';
 
 const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
@@ -30,7 +31,7 @@ const formSchema = z.object({
 export default function SignupStorePage() {
   const { toast } = useToast();
   const router = useRouter();
-  const { addStoreIdToPrototypeUser } = useAuth();
+  const { loginForPrototype } = useAuth();
   const { addPrototypeStore } = usePrototypeData();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -47,13 +48,16 @@ export default function SignupStorePage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     
     // Prototype Mode Check
-    if (values.email.includes('@test.com')) {
+    const isPrototypeUser = Object.keys(prototypeUsers).includes(values.email);
+
+    if (isPrototypeUser) {
+        const protoUser = prototypeUsers[values.email as keyof typeof prototypeUsers];
         const newStore = {
             id: `proto-store-${Date.now()}`,
             name: values.storeName,
             category: values.category,
             address: values.address,
-            ownerId: `proto-${values.ownerName.replace(/\s/g, '')}`,
+            ownerId: protoUser.uid,
             status: 'Aprobado' as const,
             imageUrl: `https://picsum.photos/seed/${values.storeName.replace(/\s/g, '')}/600/400`,
             imageHint: values.category.toLowerCase(),
@@ -62,7 +66,9 @@ export default function SignupStorePage() {
         };
 
         addPrototypeStore(newStore);
-        addStoreIdToPrototypeUser(newStore.id);
+        
+        // This is the fix: Re-login with the new storeId to force a global state update.
+        await loginForPrototype(values.email, newStore.id);
         
         toast({
             title: "¡Tienda de Prototipo Creada!",
