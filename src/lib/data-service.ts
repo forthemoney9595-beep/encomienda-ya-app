@@ -1,4 +1,5 @@
 
+
 'use server';
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
@@ -67,7 +68,8 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
  */
 export async function getStoreById(id: string): Promise<Store | null> {
   if (id.startsWith('proto-')) {
-    const store = initialPrototypeStores.find(s => s.id === id);
+    const { prototypeStores } = await import('@/context/prototype-data-context');
+    const store = prototypeStores.find(s => s.id === id);
     return store || null;
   }
 
@@ -296,6 +298,26 @@ export async function updateStoreStatus(storeId: string, status: 'Aprobado' | 'R
     throw error;
   }
 }
+
+/**
+ * Updates store data in Firestore.
+ * @param storeId The ID of the store to update.
+ * @param storeData The data to update.
+ */
+export async function updateStoreData(storeId: string, storeData: Partial<Store>): Promise<void> {
+    if (storeId.startsWith('proto-')) {
+        console.warn('updateStoreData server action called for a prototype store. This should be handled on the client.');
+        return;
+    }
+    try {
+        const storeRef = doc(db, 'stores', storeId);
+        await updateDoc(storeRef, storeData);
+    } catch (error) {
+        console.error(`Error updating store data for ${storeId}:`, error);
+        throw error;
+    }
+}
+
 
 /**
  * Updates the status of a delivery person in Firestore.

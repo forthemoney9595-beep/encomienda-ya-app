@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -107,7 +108,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
     const updatePrototypeStore = (updates: Partial<Store>) => {
        setStores(prevStores => {
-            const updatedStores = prevStores.map(s => s.id === initialPrototypeStores[0].id ? { ...s, ...updates} : s)
+            const updatedStores = prevStores.map(s => s.id === updates.id ? { ...s, ...updates} : s)
             updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
             return updatedStores;
         });

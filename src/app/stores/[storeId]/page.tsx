@@ -1,7 +1,7 @@
 
 'use client';
 
-import { notFound, useParams } from 'next/navigation';
+import { notFound, useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,8 @@ import type { Store, Product } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { Button } from '@/components/ui/button';
+import { Edit } from 'lucide-react';
 
 function StoreDetailSkeleton() {
     return (
@@ -68,22 +70,24 @@ function StoreDetailSkeleton() {
 
 export default function StoreDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const storeId = params.storeId as string;
   const { user, loading: authLoading } = useAuth();
   const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
-  const isPrototype = user?.uid.startsWith('proto-') ?? false;
-
+  
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isOwner = user?.uid === store?.ownerId;
+
   useEffect(() => {
     async function fetchData() {
-        if (!storeId || authLoading || (isPrototype && prototypeLoading)) return;
+        if (!storeId || authLoading || prototypeLoading) return;
         
         setLoading(true);
         try {
             let storeData: Store | null | undefined = null;
-            if (isPrototype) {
+            if (storeId.startsWith('proto-')) {
                 storeData = prototypeStores.find(s => s.id === storeId);
             } else {
                 storeData = await getStoreFromDb(storeId);
@@ -105,7 +109,7 @@ export default function StoreDetailPage() {
         }
     }
     fetchData();
-  }, [storeId, isPrototype, prototypeStores, prototypeLoading, authLoading]);
+  }, [storeId, prototypeStores, prototypeLoading, authLoading]);
 
 
   if (loading) {
@@ -129,6 +133,12 @@ export default function StoreDetailPage() {
   return (
     <div className="container mx-auto">
         <PageHeader title={store.name} description={store.category}>
+            {isOwner && (
+                <Button onClick={() => router.push(`/admin/my-store`)}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Editar Tienda
+                </Button>
+            )}
         </PageHeader>
       
       <div className="grid gap-6 md:grid-cols-3">
