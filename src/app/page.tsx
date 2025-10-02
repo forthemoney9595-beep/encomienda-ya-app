@@ -24,25 +24,23 @@ export default function Home() {
   useEffect(() => {
     async function fetchAndMergeStores() {
       if (prototypeLoading) return;
-
       setLoading(true);
-      // Fetch real stores from Firestore
+
+      // Fetch all approved real stores from Firestore
       const realStores = await getStoresFromDb(false, false);
       
-      // Create a map of real stores for quick lookup
-      const realStoresMap = new Map(realStores.map(s => [s.id, s]));
+      // Create a Set of real store IDs for efficient lookup
+      const realStoreIds = new Set(realStores.map(s => s.id));
 
-      // Merge with prototype stores, giving precedence to real data if IDs conflict
-      const allStores = [...prototypeStores];
-      realStores.forEach(realStore => {
-        const index = allStores.findIndex(s => s.id === realStore.id);
-        if (index !== -1) {
-          allStores[index] = realStore; // Replace prototype with real
-        } else {
-          allStores.push(realStore); // Add new real store
-        }
-      });
+      // Filter prototype stores to only include those not present in the real database
+      const uniquePrototypeStores = prototypeStores.filter(
+        protoStore => !realStoreIds.has(protoStore.id)
+      );
+
+      // Combine real stores and unique prototype stores
+      const allStores = [...realStores, ...uniquePrototypeStores];
       
+      // Filter the final combined list for 'Aprobado' status
       setStores(allStores.filter(s => s.status === 'Aprobado'));
       setLoading(false);
     }
