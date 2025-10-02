@@ -1,4 +1,5 @@
 
+
 'use server';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
@@ -38,6 +39,8 @@ export interface Order {
     deliveryPersonName?: string;
     storeCoords?: { latitude: number, longitude: number };
     customerCoords?: { latitude: number, longitude: number };
+    deliveryRating?: number;
+    deliveryReview?: string;
 }
 
 interface CreateOrderInput {

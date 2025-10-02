@@ -73,6 +73,8 @@ export interface Order {
     deliveryPersonName?: string;
     storeCoords?: { latitude: number; longitude: number };
     customerCoords?: { latitude: number; longitude: number };
+    deliveryRating?: number;
+    deliveryReview?: string;
 }
 
 export type Notification = {

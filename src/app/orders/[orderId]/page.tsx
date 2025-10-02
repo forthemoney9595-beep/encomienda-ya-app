@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -22,6 +23,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { CartItem } from '@/context/cart-context';
 import { LeaveReviewDialog } from './leave-review-dialog';
 import { Button } from '@/components/ui/button';
+import { DeliveryReviewCard } from './delivery-review-card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 
 function OrderPageSkeleton() {
@@ -132,7 +135,7 @@ export default function OrderTrackingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { getOrderById: getPrototypeOrderById, loading: prototypeLoading, prototypeOrders, addReviewToProduct } = usePrototypeData();
+  const { getOrderById: getPrototypeOrderById, loading: prototypeLoading, prototypeOrders, addReviewToProduct, addDeliveryReviewToOrder } = usePrototypeData();
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -205,7 +208,6 @@ export default function OrderTrackingPage() {
         if (!reviewingItem || !order) return;
         addReviewToProduct(order.storeId, reviewingItem.id, rating, review);
         
-        // Update order state to mark item as reviewed
         setOrder(prevOrder => {
             if (!prevOrder) return null;
             const updatedItems = prevOrder.items.map(item => 
@@ -215,10 +217,20 @@ export default function OrderTrackingPage() {
         });
 
         toast({
-            title: "¡Reseña Enviada!",
+            title: "¡Reseña de producto enviada!",
             description: `Gracias por tu opinión sobre ${reviewingItem.name}.`
         });
         setReviewingItem(null);
+    };
+
+    const handleDeliveryReviewSubmit = (rating: number, review: string) => {
+        if (!order) return;
+        addDeliveryReviewToOrder(order.id, rating, review);
+        setOrder(prev => prev ? { ...prev, deliveryRating: rating, deliveryReview: review } : null);
+        toast({
+            title: "¡Reseña de entrega enviada!",
+            description: `Gracias por calificar a ${order.deliveryPersonName}.`
+        });
     };
 
 
@@ -311,7 +323,7 @@ export default function OrderTrackingPage() {
                 </CardContent>
             </Card>
         </div>
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-8">
              <Card>
                 <CardHeader>
                     <CardTitle>Mapa de Entrega</CardTitle>
@@ -330,6 +342,32 @@ export default function OrderTrackingPage() {
                     </p>
                 </CardFooter>
             </Card>
+
+            {isBuyer && order.status === 'Entregado' && order.deliveryPersonName && (
+                order.deliveryRating ? (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Tu Valoración de la Entrega</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                             <div className="flex items-center gap-1">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30')} />
+                                ))}
+                                <span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span>
+                            </div>
+                            {order.deliveryReview && (
+                                <blockquote className="border-l-2 pl-4 italic text-muted-foreground">
+                                    "{order.deliveryReview}"
+                                </blockquote>
+                            )}
+                             <p className="text-xs text-muted-foreground pt-2">Valoración para {order.deliveryPersonName}.</p>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <DeliveryReviewCard order={order} onSubmit={handleDeliveryReviewSubmit} />
+                )
+            )}
         </div>
       </div>
        {reviewingItem && (

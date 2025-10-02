@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -21,6 +22,7 @@ interface PrototypeDataContextType {
     addPrototypeProduct: (storeId: string, product: Product) => void;
     deletePrototypeProduct: (storeId: string, productId: string) => void;
     addReviewToProduct: (storeId: string, productId: string, rating: number, reviewText: string) => void;
+    addDeliveryReviewToOrder: (orderId: string, rating: number, review: string) => void;
     updatePrototypeStore: (updates: Partial<Store>) => void;
     updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => void;
     getOrdersByStore: (storeId: string) => Order[];
@@ -248,6 +250,18 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             return newStores;
         });
     };
+
+    const addDeliveryReviewToOrder = (orderId: string, rating: number, review: string) => {
+        setOrders(prevOrders => {
+            const updatedOrders = prevOrders.map(order => 
+                order.id === orderId 
+                    ? { ...order, deliveryRating: rating, deliveryReview: review } 
+                    : order
+            );
+            updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
+            return updatedOrders;
+        });
+    };
     
     const getOrdersByStore = useCallback((storeId: string) => {
         return orders
@@ -291,6 +305,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         updatePrototypeProduct,
         deletePrototypeProduct,
         addReviewToProduct,
+        addDeliveryReviewToOrder,
         updatePrototypeStore,
         updatePrototypeDelivery,
         getOrdersByStore,
