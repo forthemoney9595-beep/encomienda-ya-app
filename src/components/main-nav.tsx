@@ -22,12 +22,12 @@ import {
   Utensils,
   Shirt,
   ShoppingBag,
-  User,
   MessageCircle,
   ChevronDown,
   Home,
   Package,
-  Edit
+  Edit,
+  BarChart3,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
@@ -48,7 +48,7 @@ export function MainNav() {
   const isDelivery = user?.role === 'delivery';
   const isBuyer = user?.role === 'buyer' || !user;
   
-  const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname.includes(user.storeId);
+  const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname.includes(`/stores/${user.storeId}`);
 
 
   return (
@@ -152,6 +152,14 @@ export function MainNav() {
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   )}
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store/analytics')}>
+                      <Link href="/admin/my-store/analytics">
+                        <BarChart3 />
+                        <span>Analíticas</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
                    <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store')}>
                       <Link href="/admin/my-store">
