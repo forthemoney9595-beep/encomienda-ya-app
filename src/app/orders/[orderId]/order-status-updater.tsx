@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -40,6 +41,8 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const isStoreOwner = user?.storeId === order.storeId;
   const isBuyer = user?.uid === order.userId;
   const isDeliveryPerson = user?.role === 'delivery';
+
+  const possibleNextStatuses = statusTransitions[order.status] || [];
 
   const handleUpdateStatus = async (newStatus: OrderStatus) => {
     setIsUpdating(true);
@@ -169,5 +172,3 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
 
   return null; // Return null if not the right user or no actions are possible
 }
-
-    
