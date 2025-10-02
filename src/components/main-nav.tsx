@@ -231,14 +231,6 @@ export function MainNav() {
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
-                 <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store')}>
-                    <Link href="/admin/my-store">
-                      <Store />
-                      <span>Mi Tienda</span>
-                    </Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
                   <SidebarMenuSubButton asChild isActive={pathname === '/admin/driver-reviews'}>
                     <Link href="/admin/driver-reviews">
