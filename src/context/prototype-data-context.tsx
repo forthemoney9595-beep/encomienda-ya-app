@@ -3,13 +3,16 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
-import { initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery } from '@/lib/placeholder-data';
-import type { Store, Product, DeliveryPersonnel } from '@/lib/placeholder-data';
+import { initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery, initialPrototypeNotifications } from '@/lib/placeholder-data';
+import type { Store, Product, DeliveryPersonnel, Notification } from '@/lib/placeholder-data';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface PrototypeDataContextType {
     prototypeOrders: Order[];
     prototypeStores: Store[];
     prototypeDelivery: DeliveryPersonnel;
+    prototypeNotifications: Notification[];
     loading: boolean;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
     addPrototypeOrder: (order: Order) => void;
@@ -32,12 +35,14 @@ const PrototypeDataContext = createContext<PrototypeDataContextType | undefined>
 const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
 const PROTOTYPE_STORES_KEY = 'prototypeStores';
 const PROTOTYPE_DELIVERY_KEY = 'prototypeDelivery';
+const PROTOTYPE_NOTIFICATIONS_KEY = 'prototypeNotifications';
 
 
 export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => {
     const [orders, setOrders] = useState<Order[]>([]);
     const [stores, setStores] = useState<Store[]>(initialPrototypeStores);
     const [prototypeDelivery, setPrototypeDelivery] = useState<DeliveryPersonnel>(initialPrototypeDelivery);
+    const [notifications, setNotifications] = useState<Notification[]>(initialPrototypeNotifications);
     const [loading, setLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
 
@@ -61,6 +66,9 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
                 const storedDelivery = sessionStorage.getItem(PROTOTYPE_DELIVERY_KEY);
                 setPrototypeDelivery(storedDelivery ? JSON.parse(storedDelivery) : initialPrototypeDelivery);
 
+                const storedNotifications = sessionStorage.getItem(PROTOTYPE_NOTIFICATIONS_KEY);
+                setNotifications(storedNotifications ? JSON.parse(storedNotifications) : initialPrototypeNotifications);
+
             } catch (error) {
                 console.error("Failed to load prototype data from session storage, resetting.", error);
                 sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify([]));
@@ -69,6 +77,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
                 setStores(initialPrototypeStores);
                 sessionStorage.setItem(PROTOTYPE_DELIVERY_KEY, JSON.stringify(initialPrototypeDelivery));
                 setPrototypeDelivery(initialPrototypeDelivery);
+                sessionStorage.setItem(PROTOTYPE_NOTIFICATIONS_KEY, JSON.stringify(initialPrototypeNotifications));
+                setNotifications(initialPrototypeNotifications);
             } finally {
                 setLoading(false);
             }
@@ -81,11 +91,33 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         }
     };
     
+    const addNotification = (notification: Omit<Notification, 'id' | 'date'>) => {
+        setNotifications(prev => {
+            const newNotification: Notification = {
+                ...notification,
+                id: `notif-${Date.now()}`,
+                date: formatDistanceToNow(new Date(), { addSuffix: true, locale: es })
+            };
+            const updatedNotifications = [newNotification, ...prev];
+            updateSessionStorage(PROTOTYPE_NOTIFICATIONS_KEY, updatedNotifications);
+            return updatedNotifications;
+        });
+    }
+
     const updatePrototypeOrder = (orderId: string, updates: Partial<Order>) => {
         setOrders(prevOrders => {
+            const originalOrder = prevOrders.find(o => o.id === orderId);
             const updatedOrders = prevOrders.map(order => 
                 order.id === orderId ? { ...order, ...updates } : order
             );
+            
+            if (originalOrder && updates.status && originalOrder.status !== updates.status) {
+                 addNotification({
+                    title: `Pedido Actualizado: #${orderId.substring(0,4)}`,
+                    description: `Tu pedido de ${originalOrder.storeName} ahora está: ${updates.status}.`
+                });
+            }
+
             updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
             return updatedOrders;
         });
@@ -96,6 +128,10 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             const updatedOrders = [...prevOrders, order];
             updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
             return updatedOrders;
+        });
+         addNotification({
+            title: "Pedido Solicitado",
+            description: `Tu pedido a ${order.storeName} está pendiente de confirmación.`
         });
     };
 
@@ -109,7 +145,16 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
     const updatePrototypeStore = (updates: Partial<Store>) => {
        setStores(prevStores => {
+            const originalStore = prevStores.find(s => s.id === updates.id);
             const updatedStores = prevStores.map(s => s.id === updates.id ? { ...s, ...updates} : s)
+            
+            if (originalStore && updates.status && originalStore.status !== updates.status && updates.status === 'Aprobado') {
+                addNotification({
+                    title: "¡Tu tienda ha sido aprobada!",
+                    description: `¡Felicidades! La tienda "${originalStore.name}" ya está visible en la plataforma.`
+                });
+            }
+
             updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
             return updatedStores;
         });
@@ -118,6 +163,12 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     const updatePrototypeDelivery = (updates: Partial<DeliveryPersonnel>) => {
         setPrototypeDelivery(prev => {
             const updatedDelivery = { ...prev, ...updates };
+            if (prev.status !== updatedDelivery.status && updatedDelivery.status === 'Activo') {
+                 addNotification({
+                    title: "¡Tu cuenta ha sido aprobada!",
+                    description: "Ya puedes empezar a aceptar entregas. ¡Bienvenido al equipo!"
+                });
+            }
             updateSessionStorage(PROTOTYPE_DELIVERY_KEY, updatedDelivery);
             return updatedDelivery;
         });
@@ -231,6 +282,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         prototypeOrders: orders,
         prototypeStores: stores,
         prototypeDelivery,
+        prototypeNotifications: notifications,
         loading: loading || !isClient,
         updatePrototypeOrder,
         addPrototypeOrder,
@@ -262,5 +314,3 @@ export const usePrototypeData = () => {
     }
     return context;
 };
-
-    

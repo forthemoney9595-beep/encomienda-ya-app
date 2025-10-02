@@ -75,6 +75,13 @@ export interface Order {
     customerCoords?: { latitude: number; longitude: number };
 }
 
+export type Notification = {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+};
+
 
 export const prototypeUsers: Record<string, UserProfile> = {
     'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
@@ -157,11 +164,6 @@ export const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
 export const initialPrototypeOrders: Order[] = [];
 
 
-export const notifications = [
-  { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Sushi del Rey está en camino.', date: 'hace 5 min' },
-  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Paraíso de la Pizza ha sido confirmado.', date: 'hace 1 hora' },
-  { id: 'n3', title: 'Nueva tienda aprobada', description: '¡Paraíso de la Pizza ya está disponible!', date: 'hace 3 horas' },
+export const initialPrototypeNotifications: Notification[] = [
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
-
-    
