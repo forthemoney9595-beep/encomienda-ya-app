@@ -30,6 +30,7 @@ interface PrototypeDataContextType {
     getAvailableOrdersForDelivery: () => Order[];
     getOrdersByDeliveryPerson: (driverId: string) => Order[];
     getOrderById: (orderId: string) => Order | undefined;
+    getReviewsByDriverId: (driverId: string) => Order[];
 }
 
 const PrototypeDataContext = createContext<PrototypeDataContextType | undefined>(undefined);
@@ -290,6 +291,12 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     const getOrderById = useCallback((orderId: string) => {
         return orders.find(o => o.id === orderId);
     }, [orders]);
+    
+    const getReviewsByDriverId = useCallback((driverId: string) => {
+        return orders
+            .filter(o => o.deliveryPersonId === driverId && o.status === 'Entregado' && o.deliveryRating !== undefined)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [orders]);
 
 
     const value = {
@@ -312,7 +319,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         getOrdersByUser,
         getAvailableOrdersForDelivery,
         getOrdersByDeliveryPerson,
-        getOrderById
+        getOrderById,
+        getReviewsByDriverId,
     };
 
     return (
@@ -329,3 +337,4 @@ export const usePrototypeData = () => {
     }
     return context;
 };
+

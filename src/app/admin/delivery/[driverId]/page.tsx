@@ -1,12 +1,21 @@
 
-import { notFound } from 'next/navigation';
+'use client';
+
+import { notFound, useParams } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getDeliveryPersonById } from '@/lib/data-service';
-import { Car, Mail, Phone } from 'lucide-react';
+import { Car, Mail, Phone, Star } from 'lucide-react';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
+import { usePrototypeData } from '@/context/prototype-data-context';
+import { useEffect, useState } from 'react';
+import type { DeliveryPersonnel, Order } from '@/lib/placeholder-data';
+import { Skeleton } from '@/components/ui/skeleton';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 function getStatusVariant(status: string) {
     switch (status) {
@@ -18,11 +27,114 @@ function getStatusVariant(status: string) {
     }
 }
 
-export default async function DriverProfilePage({ params }: { params: { driverId: string } }) {
-    const driver = await getDeliveryPersonById(params.driverId);
+type Review = {
+    orderId: string;
+    rating: number;
+    review: string;
+    date: Date;
+    customerName: string;
+};
+
+function DriverReviews({ reviews }: { reviews: Review[] }) {
+    if (reviews.length === 0) {
+        return (
+            <div className="text-center text-muted-foreground py-10">
+                <p>Este repartidor aún no ha recibido ninguna reseña.</p>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="space-y-4">
+            {reviews.map(review => (
+                <Card key={review.orderId}>
+                    <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="font-semibold">{review.customerName}</p>
+                                <p className="text-sm text-muted-foreground">{format(review.date, "d 'de' MMMM, yyyy", { locale: es })}</p>
+                            </div>
+                             <div className="flex items-center gap-1">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <Star key={star} className={cn('h-4 w-4', review.rating >= star ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30')} />
+                                ))}
+                            </div>
+                        </div>
+                        {review.review && (
+                             <blockquote className="mt-3 border-l-2 pl-4 italic text-muted-foreground">
+                                "{review.review}"
+                            </blockquote>
+                        )}
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+    );
+}
+
+
+export default function DriverProfilePage() {
+    const params = useParams();
+    const driverId = params.driverId as string;
+    
+    const { getReviewsByDriverId, prototypeDelivery, loading: prototypeLoading } = usePrototypeData();
+    const [driver, setDriver] = useState<DeliveryPersonnel | null>(null);
+    const [reviews, setReviews] = useState<Review[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchData() {
+            if (prototypeLoading) return;
+            setLoading(true);
+
+            let driverData: DeliveryPersonnel | null = null;
+
+            if (driverId === prototypeDelivery.id) {
+                 driverData = prototypeDelivery;
+            } else {
+                 const realDriver = await getDeliveryPersonById(driverId);
+                 if(realDriver) driverData = realDriver;
+            }
+
+            if (!driverData) {
+                notFound();
+                return;
+            }
+            
+            setDriver(driverData);
+            const fetchedReviews = getReviewsByDriverId(driverId);
+            setReviews(fetchedReviews.map(order => ({
+                orderId: order.id,
+                rating: order.deliveryRating!,
+                review: order.deliveryReview || '',
+                date: order.createdAt,
+                customerName: order.customerName,
+            })));
+
+            setLoading(false);
+        }
+        fetchData();
+    }, [driverId, prototypeDelivery, getReviewsByDriverId, prototypeLoading]);
+
+
+    if (loading || prototypeLoading) {
+        return (
+            <div className="container mx-auto">
+                <PageHeader title={<Skeleton className="h-8 w-48" />} description={<Skeleton className="h-5 w-64" />} />
+                <div className="grid gap-8 md:grid-cols-3">
+                    <div className="md:col-span-1">
+                        <Skeleton className="h-64 w-full" />
+                    </div>
+                     <div className="md:col-span-2">
+                        <Skeleton className="h-80 w-full" />
+                    </div>
+                </div>
+            </div>
+        )
+    }
 
     if (!driver) {
-        notFound();
+        return notFound();
     }
 
     return (
@@ -63,9 +175,7 @@ export default async function DriverProfilePage({ params }: { params: { driverId
                             <CardTitle>Historial de Reseñas</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-center text-muted-foreground py-10">
-                                <p>La funcionalidad de reseñas de conductores no está implementada.</p>
-                            </div>
+                            <DriverReviews reviews={reviews} />
                         </CardContent>
                     </Card>
                 </div>
