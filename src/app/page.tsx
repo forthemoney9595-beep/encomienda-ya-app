@@ -14,35 +14,29 @@ import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 export default function Home() {
   const { loading: authLoading } = useAuth();
   const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
-  const [stores, setStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // Directly use and filter the stores from the context.
+  // This ensures the component re-renders when the context updates.
+  const approvedStores = prototypeStores.filter(
+    store => store.status === 'Aprobado'
+  );
 
-  useEffect(() => {
-    if (!prototypeLoading) {
-      // Get approved stores from the context, which is now the single source of truth
-      const approvedPrototypeStores = prototypeStores.filter(
-        store => store.status === 'Aprobado'
-      );
-      setStores(approvedPrototypeStores);
-      setLoading(false);
-    }
-  }, [prototypeStores, prototypeLoading]);
-
+  const isLoading = authLoading || prototypeLoading;
 
   return (
     <div className="container mx-auto">
       <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
       
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {loading || authLoading ? (
+        {isLoading ? (
           <>
             <StoreCardSkeleton />
             <StoreCardSkeleton />
             <StoreCardSkeleton />
             <StoreCardSkeleton />
           </>
-        ) : stores.length > 0 ? (
-          stores.filter(Boolean).map((store) => (
+        ) : approvedStores.length > 0 ? (
+          approvedStores.filter(Boolean).map((store) => (
             <Link href={`/stores/${store.id}`} key={store.id} className="group">
               <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
                 <div className="relative h-48 w-full">

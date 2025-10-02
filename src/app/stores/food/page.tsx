@@ -14,26 +14,22 @@ import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 export default function FoodStoresPage() {
   const { loading: authLoading } = useAuth();
   const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
-  const [foodStores, setFoodStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!prototypeLoading) {
-      const foodCategories = ['italiana', 'comida-rapida', 'japonesa', 'mexicana', 'saludable', 'dulces'];
-      const filteredStores = prototypeStores.filter(store => 
-        store.status === 'Aprobado' && foodCategories.includes(store.category.toLowerCase())
-      );
-      setFoodStores(filteredStores);
-      setLoading(false);
-    }
-  }, [prototypeStores, prototypeLoading]);
+  
+  const foodCategories = ['italiana', 'comida-rapida', 'japonesa', 'mexicana', 'saludable', 'dulces'];
+  
+  // Directly use and filter the stores from the context.
+  const foodStores = prototypeStores.filter(store => 
+    store.status === 'Aprobado' && foodCategories.includes(store.category.toLowerCase())
+  );
+  
+  const isLoading = authLoading || prototypeLoading;
 
   return (
     <div className="container mx-auto">
       <PageHeader title="Tiendas de Comida" description="Pide de los mejores restaurantes." />
       
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {loading || authLoading ? (
+        {isLoading ? (
           <>
             <StoreCardSkeleton />
             <StoreCardSkeleton />
