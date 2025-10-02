@@ -343,5 +343,3 @@ export default function OrderTrackingPage() {
     </div>
   );
 }
-
-    

@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { subDays, format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { DollarSign, Package, ShoppingCart } from 'lucide-react';
+import { Package, ShoppingCart, Banknote } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 
 export default function StoreAnalyticsPage() {
@@ -82,7 +82,7 @@ export default function StoreAnalyticsPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <Banknote className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
@@ -120,6 +120,7 @@ export default function StoreAnalyticsPage() {
                        <ChartContainer config={{
                            Ventas: {
                                label: "Ventas",
+                               color: "hsl(var(--chart-1))",
                            }
                        }}>
                          <BarChart data={salesData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
@@ -133,7 +134,7 @@ export default function StoreAnalyticsPage() {
                                     formatter={(value) => `$${Number(value).toFixed(2)}`}
                                 />} 
                             />
-                            <Bar dataKey="Ventas" fill="hsl(var(--primary))" radius={4} />
+                            <Bar dataKey="Ventas" fill="var(--color-Ventas)" radius={4} />
                         </BarChart>
                        </ChartContainer>
                     </CardContent>
@@ -142,4 +143,3 @@ export default function StoreAnalyticsPage() {
         </div>
     );
 }
-

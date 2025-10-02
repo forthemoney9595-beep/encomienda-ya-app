@@ -161,7 +161,7 @@ export function MainNav() {
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                    <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store')}>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store') && !pathname.startsWith('/admin/my-store/analytics')}>
                       <Link href="/admin/my-store">
                         <Edit />
                         <span>Editar Tienda</span>
@@ -224,7 +224,7 @@ export function MainNav() {
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild isActive={pathname === '/admin/delivery'}>
+                  <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/delivery')}>
                     <Link href="/admin/delivery">
                       <Truck />
                       <span>Reparto</span>
@@ -232,7 +232,7 @@ export function MainNav() {
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
                  <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild isActive={pathname === '/admin/my-store'}>
+                  <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store')}>
                     <Link href="/admin/my-store">
                       <Store />
                       <span>Mi Tienda</span>

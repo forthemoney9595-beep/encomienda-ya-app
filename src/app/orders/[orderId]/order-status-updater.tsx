@@ -81,8 +81,6 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   }
 
 
-  const possibleNextStatuses = statusTransitions[order.status] || [];
-
   const handleBuyerPayment = async () => {
     setIsUpdating(true);
     // Simulating payment processing
@@ -119,7 +117,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                 <AlertDescription>La tienda ha confirmado la disponibilidad. Realiza el pago para continuar.</AlertDescription>
                 <Button onClick={handleBuyerPayment} disabled={isUpdating} className="w-full">
                     {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-                    Pagar Ahora (${order.total.toFixed(2)})
+                    Pagar Ahora ($${order.total.toFixed(2)})
                 </Button>
             </CardFooter>
         </Card>
