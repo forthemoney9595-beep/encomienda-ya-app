@@ -26,6 +26,7 @@ import { Progress } from '@/components/ui/progress';
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   address: z.string().min(5, "La dirección debe tener al menos 5 caracteres."),
+  horario: z.string().min(5, "El horario debe tener al menos 5 caracteres."),
   imageUrl: z.string().url("Debe ser una URL válida.").optional().or(z.literal('')),
 });
 
@@ -50,7 +51,7 @@ export default function MyStorePage() {
 
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
-        defaultValues: { name: "", address: "", imageUrl: "" },
+        defaultValues: { name: "", address: "", horario: "", imageUrl: "" },
     });
     
     const imageUrlValue = form.watch('imageUrl');
@@ -84,6 +85,7 @@ export default function MyStorePage() {
                 form.reset({
                     name: storeData.name,
                     address: storeData.address,
+                    horario: storeData.horario,
                     imageUrl: storeData.imageUrl,
                 });
                 setPreviewImage(storeData.imageUrl);
@@ -133,9 +135,9 @@ export default function MyStorePage() {
         setIsSubmitting(true);
         try {
             if (isPrototypeMode) {
-                updatePrototypeStore({ id: user.storeId, name: values.name, address: values.address, imageUrl: values.imageUrl });
+                updatePrototypeStore({ ...values, id: user.storeId });
             } else {
-                await updateStoreData(user.storeId, { name: values.name, address: values.address, imageUrl: values.imageUrl });
+                await updateStoreData(user.storeId, { ...values });
             }
             toast({ title: '¡Tienda Actualizada!', description: 'La información de tu tienda ha sido guardada.' });
             router.push(`/stores/${user.storeId}`);
@@ -192,6 +194,17 @@ export default function MyStorePage() {
                                     <FormItem>
                                         <FormLabel>Dirección</FormLabel>
                                         <FormControl><Input {...field} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="horario"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Horario</FormLabel>
+                                        <FormControl><Input placeholder="Ej: Lun-Vie: 9am-10pm" {...field} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}

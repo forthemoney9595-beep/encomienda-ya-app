@@ -7,6 +7,7 @@ export type Store = {
   name: string;
   category: string;
   address: string;
+  horario: string;
   imageUrl: string;
   imageHint: string;
   status: 'Aprobado' | 'Pendiente' | 'Rechazado';
@@ -46,7 +47,7 @@ export interface UserProfile {
 
 // Redefining Order types here to break circular dependency with order-service.
 // This file should be pure data and type definitions with no code imports.
-export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
+export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
 
 export interface CartItem extends Product {
   quantity: number;
@@ -105,6 +106,7 @@ export const initialPrototypeStores: Store[] = [
         name: 'Paraíso de la Pizza',
         category: 'comida-rapida',
         address: 'Calle Falsa 123, Ciudad Prototipo',
+        horario: 'Lun-Dom: 11:00 AM - 10:00 PM',
         imageUrl: getPlaceholderImage('store-pizza', 600, 400),
         imageHint: 'pizza restaurant',
         status: 'Aprobado',
@@ -117,6 +119,7 @@ export const initialPrototypeStores: Store[] = [
         name: 'Sushi del Rey',
         category: 'japonesa',
         address: 'Avenida Siempre Viva 742, Ciudad Prototipo',
+        horario: 'Mar-Dom: 12:00 PM - 9:00 PM',
         imageUrl: getPlaceholderImage('store-sushi', 600, 400),
         imageHint: 'sushi bar',
         status: 'Aprobado',

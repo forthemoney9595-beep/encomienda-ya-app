@@ -15,7 +15,7 @@ export interface CartItem {
     quantity: number;
 }
 
-export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
+export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
 
 export interface Order {
     id: string;

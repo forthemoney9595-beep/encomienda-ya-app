@@ -13,7 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { Button } from '@/components/ui/button';
-import { Edit } from 'lucide-react';
+import { Edit, Clock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 function StoreDetailSkeleton() {
     return (
@@ -156,12 +157,21 @@ export default function StoreDetailPage() {
                         />
                     </div>
                     <div>
-                        <h3 className="font-semibold">Dirección</h3>
-                        <p className="text-muted-foreground">{store.address}</p>
+                        <div className='flex justify-between items-center mb-1'>
+                            <h3 className="font-semibold">Estado</h3>
+                            {/* NOTE: This is static for now. For dynamic, you'd compare current time with store hours */}
+                             <Badge variant="secondary" className="text-green-600">Abierto</Badge>
+                        </div>
+                    </div>
+                     <div>
+                        <h3 className="font-semibold">Horario</h3>
+                        <p className="text-sm text-muted-foreground flex items-center gap-2">
+                           <Clock className="h-4 w-4" /> {store.horario}
+                        </p>
                     </div>
                     <div>
-                        <h3 className="font-semibold">Horario</h3>
-                        <p className="text-muted-foreground">Lun-Dom: 11:00 AM - 10:00 PM</p>
+                        <h3 className="font-semibold">Dirección</h3>
+                        <p className="text-muted-foreground">{store.address}</p>
                     </div>
                      <ContactStore storeId={store.id} />
                 </CardContent>
