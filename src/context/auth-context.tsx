@@ -66,21 +66,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }
     
-    const loginForPrototype = async (email: string, storeId?: string) => {
+    const loginForPrototype = async (email: string, newStoreId?: string) => {
         const protoUser = Object.values(prototypeUsers).find(u => u.email === email);
         if (protoUser) {
             sessionStorage.setItem(PROTOTYPE_SESSION_KEY, email);
             
-            // If a new store ID is provided, it's the source of truth.
-            // Otherwise, check session storage for a previously associated ID.
             const sessionStoreIdKey = `proto_store_id_${protoUser.uid}`;
-            let finalStoreId = storeId;
+            let finalStoreId: string | undefined = newStoreId;
 
             if (finalStoreId) {
-                // If a storeId is provided (e.g. on creation), save it.
+                // If a new storeId is provided (e.g. on creation), it's the source of truth and we save it.
                 sessionStorage.setItem(sessionStoreIdKey, finalStoreId);
             } else {
-                // On subsequent logins, try to retrieve it.
+                // On subsequent logins without a new ID, try to retrieve the existing one from the session.
                 finalStoreId = sessionStorage.getItem(sessionStoreIdKey) || undefined;
             }
 
@@ -91,7 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 role: protoUser.role,
                 storeId: finalStoreId,
             };
-            setUser(userProfile); // This is the crucial part: update the state reactively.
+            setUser(userProfile);
         }
     };
     

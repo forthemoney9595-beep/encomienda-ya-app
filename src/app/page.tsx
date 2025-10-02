@@ -26,22 +26,21 @@ export default function Home() {
       if (prototypeLoading) return;
       setLoading(true);
 
-      // Fetch all approved real stores from Firestore
-      const realStores = await getStoresFromDb(false, false);
+      // 1. Fetch all approved real stores from Firestore
+      const realStores = await getStoresFromDb(false);
       
-      // Create a Set of real store IDs for efficient lookup
+      // 2. Create a Set of real store IDs for efficient lookup
       const realStoreIds = new Set(realStores.map(s => s.id));
 
-      // Filter prototype stores to only include those not present in the real database
+      // 3. Filter prototype stores to only include those not present in the real database and are approved
       const uniquePrototypeStores = prototypeStores.filter(
-        protoStore => !realStoreIds.has(protoStore.id)
+        protoStore => !realStoreIds.has(protoStore.id) && protoStore.status === 'Aprobado'
       );
 
-      // Combine real stores and unique prototype stores
+      // 4. Combine real stores and unique prototype stores
       const allStores = [...realStores, ...uniquePrototypeStores];
       
-      // Filter the final combined list for 'Aprobado' status
-      setStores(allStores.filter(s => s.status === 'Aprobado'));
+      setStores(allStores);
       setLoading(false);
     }
     

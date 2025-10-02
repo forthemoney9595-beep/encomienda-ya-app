@@ -3,6 +3,7 @@
 
 
 
+
 'use server';
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
@@ -16,9 +17,8 @@ import {
 /**
  * Fetches stores from Firestore.
  * @param all - If true, fetches all stores regardless of status. Otherwise, fetches only 'Aprobado' stores.
- * @param isPrototype - If true, ensures prototype data is included.
  */
-export async function getStores(all: boolean = false, isPrototype: boolean = false): Promise<Store[]> {
+export async function getStores(all: boolean = false): Promise<Store[]> {
   let stores: Store[] = [];
   
   try {
@@ -45,13 +45,6 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
 
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
-  }
-  
-  if (isPrototype) {
-    const { initialPrototypeStores: protoStoresFromData } = await import('./placeholder-data');
-    const existingStoreIds = new Set(stores.map(s => s.id));
-    const storesToAdd = protoStoresFromData.filter(ps => !existingStoreIds.has(ps.id));
-    stores.unshift(...storesToAdd);
   }
   
   return stores;
