@@ -1,21 +1,12 @@
 
-
-
-
-
-
 'use server';
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
-import { 
-    initialPrototypeStores, 
-    getPrototypeProducts, 
-} from './placeholder-data';
 
 
 /**
- * Fetches stores from Firestore.
+ * Fetches stores from Firestore. This function is for real data and is not used in pure prototype mode.
  * @param all - If true, fetches all stores regardless of status. Otherwise, fetches only 'Aprobado' stores.
  */
 export async function getStores(all: boolean = false): Promise<Store[]> {
@@ -52,7 +43,7 @@ export async function getStores(all: boolean = false): Promise<Store[]> {
 
 
 /**
- * Fetches a single store by its ID from Firestore.
+ * Fetches a single store by its ID from Firestore. This function is for real data.
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(id: string): Promise<Store | null> {
@@ -204,10 +195,7 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
   }
   
   if (isPrototype) {
-      const { prototypeDelivery: protoDeliveryFromData } = await import('./placeholder-data');
-      if (!personnel.find(p => p.id === protoDeliveryFromData.id)) {
-          personnel.unshift(protoDeliveryFromData);
-      }
+      // In a pure prototype world, this might not be needed or could be simplified
   }
     
   return personnel;
@@ -217,13 +205,10 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
  * Fetches a single delivery person by their user ID.
  */
 export async function getDeliveryPersonById(id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
-  const { prototypeUsers } = await import('./placeholder-data');
-  // Check prototype users first
-  const protoUser = Object.values(prototypeUsers).find(u => u.uid === id && u.role === 'delivery');
-  if (protoUser) {
-      // This part can't access client-side context, so it returns the initial state.
-      const { prototypeDelivery } = await import('./placeholder-data');
-      return prototypeDelivery;
+  // In a pure prototype world, data comes from the client context
+  if (id.startsWith('proto-')) {
+    console.warn("getDeliveryPersonById server action called for prototype user.");
+    return null;
   }
 
   try {

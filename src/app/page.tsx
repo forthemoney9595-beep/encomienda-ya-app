@@ -10,41 +10,22 @@ import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
-import { useRouter } from 'next/navigation';
-import { getStores as getStoresFromDb } from '@/lib/data-service';
-
 
 export default function Home() {
-  const { user, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
   const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
-    async function fetchAndMergeStores() {
-      if (prototypeLoading) return;
-      setLoading(true);
-
-      // 1. Fetch all approved real stores from Firestore
-      const realStores = await getStoresFromDb(false);
-      
-      // 2. Create a Set of real store IDs for efficient lookup
-      const realStoreIds = new Set(realStores.map(s => s.id));
-
-      // 3. Filter prototype stores to only include those not present in the real database and are approved
-      const uniquePrototypeStores = prototypeStores.filter(
-        protoStore => !realStoreIds.has(protoStore.id) && protoStore.status === 'Aprobado'
+    if (!prototypeLoading) {
+      // In a pure prototype mode, we only show approved prototype stores.
+      const approvedPrototypeStores = prototypeStores.filter(
+        store => store.status === 'Aprobado'
       );
-
-      // 4. Combine real stores and unique prototype stores
-      const allStores = [...realStores, ...uniquePrototypeStores];
-      
-      setStores(allStores);
+      setStores(approvedPrototypeStores);
       setLoading(false);
     }
-    
-    fetchAndMergeStores();
   }, [prototypeStores, prototypeLoading]);
 
 
@@ -87,7 +68,7 @@ export default function Home() {
         ) : (
           <div className="col-span-full text-center text-muted-foreground py-10">
             <p>No hay tiendas aprobadas disponibles en este momento.</p>
-            <p className="text-sm">Si eres dueño de una tienda, puedes crear una yendo a "Registrarse".</p>
+            <p className="text-sm">Si eres administrador, puedes aprobar tiendas en el panel de admin.</p>
           </div>
         )}
       </div>

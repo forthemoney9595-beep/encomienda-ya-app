@@ -5,7 +5,6 @@ import { notFound, useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getStoreById as getStoreFromDb, getProductsByStoreId as getProductsFromDb } from '@/lib/data-service';
 import { ProductList } from './product-list';
 import { ContactStore } from './contact-store';
 import { useEffect, useState } from 'react';
@@ -85,36 +84,19 @@ export default function StoreDetailPage() {
         if (!storeId || authLoading || prototypeLoading) return;
         
         setLoading(true);
-        try {
-            let storeData: Store | null | undefined = null;
-            
-            // First, check prototype data context
-            if (storeId.startsWith('proto-')) {
-                storeData = prototypeStores.find(s => s.id === storeId);
-            } 
-            
-            // If not found in prototype, fetch from DB
-            if (!storeData) {
-                storeData = await getStoreFromDb(storeId);
-                if (storeData) {
-                    storeData.products = await getProductsFromDb(storeId);
-                }
-            }
-            
-            if (!storeData) {
-                notFound();
-                return;
-            }
-            setStore(storeData);
-        } catch (error) {
-            console.error("Failed to fetch store data:", error);
-            // Handle error appropriately, maybe show a toast
-        } finally {
-            setLoading(false);
+        // In pure prototype mode, we only fetch from prototype context
+        const storeData = prototypeStores.find(s => s.id === storeId);
+        
+        if (!storeData) {
+            notFound();
+            return;
         }
+        
+        setStore(storeData);
+        setLoading(false);
     }
     fetchData();
-  }, [storeId, prototypeStores, prototypeLoading, authLoading]);
+  }, [storeId, prototypeStores, prototypeLoading, authLoading, user]);
 
 
   if (loading) {
