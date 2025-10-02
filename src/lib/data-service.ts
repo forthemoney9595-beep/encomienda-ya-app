@@ -1,4 +1,5 @@
 
+
 'use server';
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
@@ -25,6 +26,7 @@ export async function getStores(all: boolean = false): Promise<Store[]> {
         name: data.name || '',
         category: data.category || '',
         address: data.address || '',
+        horario: data.horario || '',
         imageUrl: data.imageUrl || 'https://picsum.photos/seed/placeholder/600/400',
         imageHint: data.imageHint || 'store',
         status: data.status || 'Pendiente',
@@ -57,6 +59,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
         name: data.name || '',
         category: data.category || '',
         address: data.address || '',
+        horario: data.horario || '',
         imageUrl: data.imageUrl || 'https://picsum.photos/seed/placeholder/600/400',
         imageHint: data.imageHint || 'store',
         status: data.status || 'Pendiente',
