@@ -19,7 +19,8 @@ const getBadgeVariant = (status: OrderStatus) => {
       case 'Entregado':
         return 'secondary';
       case 'En reparto':
-      case 'Pendiente de Pago':
+        return 'default';
+       case 'Pendiente de Pago':
         return 'default';
       case 'En preparación':
       case 'Pedido Realizado':

@@ -20,13 +20,14 @@ interface OrderStatusUpdaterProps {
 
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
   'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'],
-  'Pendiente de Pago': [], // El cliente paga, no el vendedor
-  'Pedido Realizado': ['En preparación', 'Cancelado'],
-  'En preparación': ['En reparto', 'Cancelado'],
-  'En reparto': ['Entregado'],
+  'Pendiente de Pago': [], // El cliente paga, el vendedor no puede cambiar este estado
+  'En preparación': ['En reparto', 'Cancelado'], // El vendedor lo pone listo para el repartidor
+  'En reparto': ['Entregado'], // El repartidor lo entrega
   'Entregado': [],
   'Cancelado': [],
   'Rechazado': [],
+  // 'Pedido Realizado' se elimina de la lógica de transición manual
+  'Pedido Realizado': [], 
 };
 
 export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
@@ -45,8 +46,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     setIsUpdating(true);
     try {
       if (order.id.startsWith('proto-')) {
-        const finalStatus = newStatus === 'Pendiente de Pago' ? 'Pedido Realizado' : newStatus;
-        updatePrototypeOrder(order.id, { status: finalStatus });
+        updatePrototypeOrder(order.id, { status: newStatus });
       } else {
         await updateOrderStatus(order.id, newStatus);
       }
@@ -75,10 +75,11 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
+        const newStatus = 'En preparación';
         if (order.id.startsWith('proto-')) {
-            updatePrototypeOrder(order.id, { status: 'En preparación' });
+            updatePrototypeOrder(order.id, { status: newStatus });
         } else {
-            await updateOrderStatus(order.id, 'En preparación');
+            await updateOrderStatus(order.id, newStatus);
         }
         toast({
             title: '¡Pago Realizado!',

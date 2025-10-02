@@ -71,17 +71,18 @@ function OrderPageSkeleton() {
 const statusSteps: Record<OrderStatus, { step: number; label: string; icon: React.ElementType; description: string; }> = {
   'Pendiente de Confirmación': { step: 0, label: 'Pendiente', icon: Clock, description: 'Esperando que la tienda confirme tu pedido.' },
   'Pendiente de Pago': { step: 1, label: 'Confirmado', icon: Wallet, description: '¡La tienda confirmó! Realiza el pago para continuar.' },
+  'En preparación': { step: 2, label: 'Preparando', icon: CookingPot, description: 'La tienda está preparando tu pedido.' },
+  'En reparto': { step: 3, label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
+  'Entregado': { step: 4, label: 'Entregado', icon: Home, description: '¡Tu pedido ha sido entregado! Disfrútalo.' },
+  'Cancelado': { step: -1, label: 'Cancelado', icon: Ban, description: 'Este pedido ha sido cancelado.' },
+  'Rechazado': { step: -1, label: 'Rechazado', icon: Ban, description: 'La tienda no pudo tomar tu pedido en este momento.' },
   'Pedido Realizado': { step: 2, label: 'Pagado', icon: Package, description: 'Tu pago ha sido recibido.' },
-  'En preparación': { step: 3, label: 'Preparando', icon: CookingPot, description: 'La tienda está preparando tu pedido.' },
-  'En reparto': { step: 4, label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
-  'Entregado': { step: 5, label: 'Entregado', icon: Home, description: '¡Tu pedido ha sido entregado! Disfrútalo.' },
-  'Cancelado': { step: 0, label: 'Cancelado', icon: Ban, description: 'Este pedido ha sido cancelado.' },
-  'Rechazado': { step: 0, label: 'Rechazado', icon: Ban, description: 'La tienda no pudo tomar tu pedido en este momento.' },
 };
 
 function OrderProgress({ status }: { status: Order['status'] }) {
     const currentStatusInfo = statusSteps[status] || { step: 0, label: 'Desconocido' };
-    const progressValue = (currentStatusInfo.step / 5) * 100;
+    const totalSteps = 4; // 0: Pendiente, 1: Confirmado, 2: Preparando, 3: En reparto, 4: Entregado
+    const progressValue = (currentStatusInfo.step / totalSteps) * 100;
     
     if (status === 'Cancelado' || status === 'Rechazado') {
         return (
@@ -93,7 +94,7 @@ function OrderProgress({ status }: { status: Order['status'] }) {
         )
     }
 
-    const steps = Object.values(statusSteps).filter(s => s.step > 0 && s.step <= 5).sort((a,b) => a.step - b.step);
+    const steps = Object.values(statusSteps).filter(s => s.step >= 0 && s.step <= totalSteps).sort((a,b) => a.step - b.step);
 
     return (
         <div className="space-y-8">

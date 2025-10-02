@@ -19,13 +19,14 @@ const getBadgeVariant = (status: OrderStatus) => {
       case 'Entregado':
         return 'secondary';
       case 'En reparto':
-      case 'Pendiente de Pago':
         return 'default';
+      case 'Pendiente de Pago':
+        return 'outline';
       case 'En preparación':
       case 'Pedido Realizado':
         return 'outline';
       case 'Pendiente de Confirmación':
-        return 'outline'; // Or some other color
+        return 'default'; // Make it stand out
       case 'Cancelado':
       case 'Rechazado':
         return 'destructive';
