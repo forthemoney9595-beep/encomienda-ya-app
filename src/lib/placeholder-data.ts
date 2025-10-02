@@ -98,32 +98,7 @@ const sushiProducts: Product[] = [
     { id: 'prod-s4', name: 'Té Verde', description: 'Caliente y reconfortante.', price: 2.00, category: 'Bebidas', imageUrl: getPlaceholderImage('te-verde', 200, 200), rating: 4.7, reviewCount: 150 },
 ];
 
-export const initialPrototypeStores: Store[] = [
-  {
-    id: 'proto-store-pizza',
-    name: 'Paraíso de la Pizza',
-    category: 'italiana',
-    address: 'Calle Falsa 123, Pizzalandia',
-    imageUrl: 'https://images.unsplash.com/photo-1566843972142-a7fcb70de55a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxwaXp6YSUyMHJlc3RhdXJhbnR8ZW58MHx8fHwxNzU5MjA1MjIzfDA&ixlib=rb-4.1.0&q=80&w=1080',
-    imageHint: 'pizza restaurant',
-    status: 'Aprobado',
-    ownerId: 'proto-store-owner',
-    productCategories: ['Pizzas', 'Bebidas', 'Postres'],
-    products: pizzaProducts,
-  },
-  {
-    id: 'proto-store-sushi',
-    name: 'Estación de Sushi',
-    category: 'japonesa',
-    address: 'Avenida Siempre Viva 742, Springfield',
-    imageUrl: 'https://images.unsplash.com/photo-1455279032140-49a4bf46f343?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxzdXNoaSUyMGJhcnxlbnwwfHx8fDE3NTkxNjc0NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080',
-    imageHint: 'sushi bar',
-    status: 'Aprobado',
-    ownerId: 'some-other-owner-id',
-    productCategories: ['Rollos', 'Nigiris', 'Entrantes', 'Bebidas'],
-    products: sushiProducts,
-  },
-];
+export const initialPrototypeStores: Store[] = [];
 
 export function getPrototypeProducts(storeId?: string): Product[] {
   if (!storeId) return [];
