@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -7,27 +8,31 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowRight, PackageSearch } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Order } from '@/lib/order-service';
+import type { Order, OrderStatus } from '@/lib/order-service';
 import { getOrdersByUser as getOrdersFromDb } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const getBadgeVariant = (status: string) => {
-  switch (status) {
-    case 'Entregado':
-      return 'secondary';
-    case 'En reparto':
-      return 'default';
-    case 'En preparación':
-    case 'Pedido Realizado':
-      return 'outline';
-    case 'Cancelado':
-      return 'destructive';
-    default:
-      return 'outline';
-  }
-};
+const getBadgeVariant = (status: OrderStatus) => {
+    switch (status) {
+      case 'Entregado':
+        return 'secondary';
+      case 'En reparto':
+      case 'Pendiente de Pago':
+        return 'default';
+      case 'En preparación':
+      case 'Pedido Realizado':
+        return 'outline';
+      case 'Pendiente de Confirmación':
+        return 'outline'; 
+      case 'Cancelado':
+      case 'Rechazado':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
 
 function OrderRowSkeleton() {
     return (
@@ -55,7 +60,7 @@ function OrderRowSkeleton() {
 
 export default function BuyerOrdersView() {
   const { user, loading: authLoading } = useAuth();
-  const { getOrdersByUser, loading: prototypeLoading } = usePrototypeData();
+  const { getOrdersByUser, loading: prototypeLoading, prototypeOrders } = usePrototypeData();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,7 +77,7 @@ export default function BuyerOrdersView() {
     const userOrders = getOrdersByUser(user.uid);
     setOrders(userOrders);
     setLoading(false);
-  }, [user, authLoading, prototypeLoading, getOrdersByUser]);
+  }, [user, authLoading, prototypeLoading, getOrdersByUser, prototypeOrders]);
 
 
   if (loading) {
@@ -102,7 +107,7 @@ export default function BuyerOrdersView() {
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
                   <div>
                     <CardTitle className="text-lg">{order.storeName}</CardTitle>
-                    <CardDescription>Pedido #{order.id}</CardDescription>
+                    <CardDescription>Pedido #{order.id.substring(0, 7)}...</CardDescription>
                   </div>
                   <Badge variant={getBadgeVariant(order.status)} className="w-fit">{order.status}</Badge>
                 </div>

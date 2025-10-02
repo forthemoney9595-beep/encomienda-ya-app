@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -7,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Order } from '@/lib/order-service';
+import type { Order, OrderStatus } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
@@ -15,16 +16,20 @@ import { getDocs, collection, query, where, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 
-const getBadgeVariant = (status: string) => {
+const getBadgeVariant = (status: OrderStatus) => {
     switch (status) {
       case 'Entregado':
         return 'secondary';
       case 'En reparto':
+      case 'Pendiente de Pago':
         return 'default';
       case 'En preparación':
       case 'Pedido Realizado':
         return 'outline';
+      case 'Pendiente de Confirmación':
+        return 'outline'; // Or some other color
       case 'Cancelado':
+      case 'Rechazado':
         return 'destructive';
       default:
         return 'outline';

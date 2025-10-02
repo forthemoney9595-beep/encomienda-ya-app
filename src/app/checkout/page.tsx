@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { CreditCard, Home, Loader2, Info } from 'lucide-react';
+import { Home, Loader2, Info } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
@@ -23,9 +23,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
   address: z.string().min(5, "La dirección es obligatoria."),
-  cardNumber: z.string().min(1, "El número de tarjeta es obligatorio."),
-  expiryDate: z.string().min(1, "La fecha de expiración es obligatoria."),
-  cvc: z.string().min(1, "El CVC es obligatorio."),
 });
 
 
@@ -47,9 +44,6 @@ export default function CheckoutPage() {
     defaultValues: {
       name: "",
       address: "",
-      cardNumber: "",
-      expiryDate: "",
-      cvc: "",
     },
   });
 
@@ -124,8 +118,8 @@ export default function CheckoutPage() {
       }
 
       toast({
-        title: "¡Pedido Realizado con Éxito!",
-        description: "Gracias por tu compra. Tu pedido está siendo procesado.",
+        title: "¡Pedido Solicitado!",
+        description: "Tu solicitud ha sido enviada a la tienda. Serás notificado cuando confirmen.",
       });
       clearCart();
       router.push(`/orders/${createdOrder.id}`);
@@ -148,7 +142,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="container mx-auto">
-      <PageHeader title="Finalizar Compra" description="Confirma tu pedido y realiza el pago." />
+      <PageHeader title="Solicitar Pedido" description="Confirma tu dirección y envía la solicitud a la tienda." />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2">
             <Form {...form}>
@@ -186,56 +180,8 @@ export default function CheckoutPage() {
                             />
                         </CardContent>
                     </Card>
-                     <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><CreditCard /> Detalles del Pago (Simulado)</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                             <FormField
-                                control={form.control}
-                                name="cardNumber"
-                                render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Número de Tarjeta</FormLabel>
-                                    <FormControl>
-                                    <Input placeholder="Cualquier número es válido" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                                )}
-                            />
-                            <div className="flex gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="expiryDate"
-                                    render={({ field }) => (
-                                    <FormItem className="w-1/2">
-                                        <FormLabel>Fecha de Expiración</FormLabel>
-                                        <FormControl>
-                                        <Input placeholder="Cualquier fecha" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="cvc"
-                                    render={({ field }) => (
-                                    <FormItem className="w-1/2">
-                                        <FormLabel>CVC</FormLabel>
-                                        <FormControl>
-                                        <Input placeholder="Cualquier código" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
                      <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                        {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando Pedido...</> : `Pagar $${(totalPrice + 5.00).toFixed(2)}`}
+                        {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Solicitando Pedido...</> : `Solicitar Pedido por $${(totalPrice + 5.00).toFixed(2)}`}
                     </Button>
                 </form>
             </Form>
@@ -273,9 +219,9 @@ export default function CheckoutPage() {
              <CardFooter>
                  <Alert>
                     <Info className="h-4 w-4" />
-                    <AlertTitle>¡Todo Listo!</AlertTitle>
+                    <AlertTitle>Paso Siguiente</AlertTitle>
                     <AlertDescription>
-                        La tienda ha confirmado la disponibilidad de tu pedido. Tiempo de entrega estimado: 25-40 min.
+                        Una vez que envíes tu solicitud, la tienda confirmará la disponibilidad de los productos.
                     </AlertDescription>
                 </Alert>
             </CardFooter>

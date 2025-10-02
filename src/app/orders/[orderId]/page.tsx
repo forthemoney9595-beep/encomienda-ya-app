@@ -1,10 +1,11 @@
+
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { type Order, getOrderById as getOrderFromDb } from '@/lib/order-service';
+import { type Order, getOrderById as getOrderFromDb, OrderStatus } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
@@ -15,8 +16,10 @@ import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, CookingPot, Bike, Home, Package } from 'lucide-react';
+import { CheckCircle, CookingPot, Bike, Home, Package, Clock, Wallet, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
 
 function OrderPageSkeleton() {
     return (
@@ -65,34 +68,38 @@ function OrderPageSkeleton() {
     )
 }
 
-const statusSteps = {
-  'Pedido Realizado': { step: 1, label: 'Realizado', icon: Package, description: 'Tu pedido ha sido recibido por la tienda.' },
-  'En preparación': { step: 2, label: 'Preparando', icon: CookingPot, description: 'La tienda está preparando tu pedido.' },
-  'En reparto': { step: 3, label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
-  'Entregado': { step: 4, label: 'Entregado', icon: Home, description: '¡Tu pedido ha sido entregado! Disfrútalo.' },
-  'Cancelado': { step: 0, label: 'Cancelado', icon: CheckCircle, description: 'Este pedido ha sido cancelado.' }
+const statusSteps: Record<OrderStatus, { step: number; label: string; icon: React.ElementType; description: string; }> = {
+  'Pendiente de Confirmación': { step: 0, label: 'Pendiente', icon: Clock, description: 'Esperando que la tienda confirme tu pedido.' },
+  'Pendiente de Pago': { step: 1, label: 'Confirmado', icon: Wallet, description: '¡La tienda confirmó! Realiza el pago para continuar.' },
+  'Pedido Realizado': { step: 2, label: 'Pagado', icon: Package, description: 'Tu pago ha sido recibido.' },
+  'En preparación': { step: 3, label: 'Preparando', icon: CookingPot, description: 'La tienda está preparando tu pedido.' },
+  'En reparto': { step: 4, label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
+  'Entregado': { step: 5, label: 'Entregado', icon: Home, description: '¡Tu pedido ha sido entregado! Disfrútalo.' },
+  'Cancelado': { step: 0, label: 'Cancelado', icon: Ban, description: 'Este pedido ha sido cancelado.' },
+  'Rechazado': { step: 0, label: 'Rechazado', icon: Ban, description: 'La tienda no pudo tomar tu pedido en este momento.' },
 };
 
 function OrderProgress({ status }: { status: Order['status'] }) {
     const currentStatusInfo = statusSteps[status] || { step: 0, label: 'Desconocido' };
-    const progressValue = currentStatusInfo.step * 25;
+    const progressValue = (currentStatusInfo.step / 5) * 100;
     
-    if (status === 'Cancelado') {
+    if (status === 'Cancelado' || status === 'Rechazado') {
         return (
              <div className="text-center">
-                <CheckCircle className="mx-auto h-12 w-12 text-destructive" />
-                <h3 className="mt-2 text-lg font-semibold">Pedido Cancelado</h3>
+                <Ban className="mx-auto h-12 w-12 text-destructive" />
+                <h3 className="mt-2 text-lg font-semibold">{status}</h3>
+                <p className="text-sm text-muted-foreground">{currentStatusInfo.description}</p>
              </div>
         )
     }
 
-    const steps = Object.values(statusSteps).filter(s => s.step > 0).sort((a,b) => a.step - b.step);
+    const steps = Object.values(statusSteps).filter(s => s.step > 0 && s.step <= 5).sort((a,b) => a.step - b.step);
 
     return (
         <div className="space-y-8">
             <div>
                 <Progress value={progressValue} className="h-2" />
-                <div className="mt-4 grid grid-cols-4 gap-4 text-center text-[11px] lg:text-xs">
+                <div className="mt-4 grid grid-cols-5 gap-2 text-center text-[10px] lg:text-xs">
                     {steps.map((stepInfo) => (
                         <div key={stepInfo.step} className={cn("flex flex-col items-center gap-1.5", currentStatusInfo.step >= stepInfo.step ? 'text-primary font-semibold' : 'text-muted-foreground')}>
                             <stepInfo.icon className="h-5 w-5" />
@@ -101,13 +108,16 @@ function OrderProgress({ status }: { status: Order['status'] }) {
                     ))}
                 </div>
             </div>
-            <div className="text-center bg-muted/50 p-4 rounded-lg">
-                <h3 className="font-semibold text-base">{currentStatusInfo.label}</h3>
-                <p className="text-sm text-muted-foreground">{currentStatusInfo.description}</p>
-                {status !== 'Entregado' && status !== 'Cancelado' && (
-                  <p className="mt-2 text-lg font-bold text-primary">Entrega estimada: 25-40 min</p>
-                )}
-            </div>
+             <Alert>
+                <currentStatusInfo.icon className="h-4 w-4" />
+                <AlertTitle>{currentStatusInfo.label}</AlertTitle>
+                <AlertDescription>
+                    {currentStatusInfo.description}
+                     {status === 'En preparación' && (
+                        <p className="mt-2 text-base font-bold text-primary">Entrega estimada: 25-40 min</p>
+                    )}
+                </AlertDescription>
+            </Alert>
         </div>
     )
 }
@@ -118,12 +128,11 @@ export default function OrderTrackingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { getOrderById: getPrototypeOrderById, loading: prototypeLoading } = usePrototypeData();
+  const { getOrderById: getPrototypeOrderById, loading: prototypeLoading, prototypeOrders } = usePrototypeData();
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Dynamically import the map component to avoid SSR issues
   const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { 
     ssr: false,
     loading: () => <Skeleton className="h-full w-full" />,
@@ -158,7 +167,6 @@ export default function OrderTrackingPage() {
           const isBuyer = user?.uid === orderData.userId;
           const isAssignedDriver = user?.uid === orderData.deliveryPersonId;
           const isAdmin = user?.role === 'admin';
-          // A delivery person can view an order if it's available for pickup
           const isAvailableForDelivery = user?.role === 'delivery' && orderData.status === 'En preparación' && !orderData.deliveryPersonId;
     
           if (!isOwner && !isBuyer && !isAssignedDriver && !isAdmin && !isAvailableForDelivery) {
@@ -186,7 +194,7 @@ export default function OrderTrackingPage() {
         fetchOrderData();
     }
 
-  }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading, toast]);
+  }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading, toast, prototypeOrders]);
 
 
   if (loading || authLoading || prototypeLoading || !order) {
@@ -198,7 +206,7 @@ export default function OrderTrackingPage() {
   return (
     <div className="container mx-auto">
       <PageHeader 
-        title={`Pedido #${order.id}`} 
+        title={`Pedido #${order.id.substring(0,7)}...`} 
         description={`Realizado el ${format(order.createdAt, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`} 
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

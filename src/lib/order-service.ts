@@ -15,7 +15,7 @@ export interface CartItem {
     quantity: number;
 }
 
-export type OrderStatus = 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado';
+export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
 
 export interface Order {
     id: string;
@@ -79,7 +79,7 @@ export async function createOrder(
         items: items.map(item => ({ ...item })), // Store a clean copy
         total,
         deliveryFee,
-        status: 'Pedido Realizado' as const,
+        status: 'Pendiente de Confirmación' as const,
         storeId,
         storeName,
         storeAddress,
