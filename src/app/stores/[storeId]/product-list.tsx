@@ -12,7 +12,7 @@ import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
@@ -42,12 +42,13 @@ export function ProductList({ products: initialProducts, productCategories: init
     const { addToCart, storeId: cartStoreId, clearCart } = useCart();
     const { toast } = useToast();
     const params = useParams();
+    const router = useRouter();
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
     const { addPrototypeProduct, updatePrototypeProduct, deletePrototypeProduct } = usePrototypeData();
     
     const isPrototypeMode = currentStoreId.startsWith('proto-');
-    const products = initialProducts;
+    const [products, setProducts] = useState<Product[]>(initialProducts);
     
     const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
@@ -59,9 +60,10 @@ export function ProductList({ products: initialProducts, productCategories: init
     const isOwner = user?.uid === ownerId;
 
     useEffect(() => {
-        const categories = Array.from(new Set(products.map(p => p.category)));
+        setProducts(initialProducts);
+        const categories = Array.from(new Set(initialProducts.map(p => p.category)));
         setProductCategories(categories.length > 0 ? categories : initialCategories);
-    }, [products, initialCategories]);
+    }, [initialProducts, initialCategories]);
     
     const filteredProducts = useMemo(() => {
         if (!searchQuery) return products;
@@ -78,46 +80,56 @@ export function ProductList({ products: initialProducts, productCategories: init
     const handleSaveProduct = async (productData: Product) => {
         const isEditing = products.some(p => p.id === productData.id);
         
-        if (isPrototypeMode) {
-            isEditing ? updatePrototypeProduct(currentStoreId, productData) : addPrototypeProduct(currentStoreId, productData);
-        } else {
-            try {
+        try {
+            if (isPrototypeMode) {
+                isEditing ? updatePrototypeProduct(currentStoreId, productData) : addPrototypeProduct(currentStoreId, productData);
+            } else {
                 if (isEditing) {
                     await updateProductInStore(currentStoreId, productData.id, productData);
                 } else {
                     await addProductToStore(currentStoreId, productData, productCategories);
                 }
-            } catch (error) {
-                toast({ title: "Error", description: "No se pudo guardar el artículo en la base de datos.", variant: 'destructive'});
-                return;
             }
+             
+            // Optimistically update UI
+            if (isEditing) {
+                setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
+            } else {
+                setProducts(prev => [...prev, productData]);
+            }
+
+            if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+                setProductCategories([...productCategories, productData.category]);
+            }
+            
+            toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
+            setManageItemDialogOpen(false);
+            setEditingProduct(null);
+            router.refresh(); // Refresh server component data
+        } catch (error) {
+             toast({ title: "Error", description: "No se pudo guardar el artículo.", variant: 'destructive'});
         }
-        
-        if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
-            setProductCategories([...productCategories, productData.category]);
-        }
-        
-        toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
-        setManageItemDialogOpen(false);
-        setEditingProduct(null);
     };
 
     const handleDeleteProduct = async (productId: string) => {
-        if (isPrototypeMode) {
-            deletePrototypeProduct(currentStoreId, productId);
-        } else {
-            try {
+        try {
+            if (isPrototypeMode) {
+                deletePrototypeProduct(currentStoreId, productId);
+            } else {
                 await deleteProductFromStore(currentStoreId, productId);
-            } catch(error) {
-                toast({ title: "Error", description: "No se pudo eliminar el artículo de la base de datos.", variant: 'destructive'});
-                return;
             }
+            
+            // Optimistic update
+            setProducts(prev => prev.filter(p => p.id !== productId));
+           
+            toast({
+                title: "Producto Eliminado",
+                description: "El producto ha sido eliminado.",
+            });
+             router.refresh();
+        } catch(error) {
+            toast({ title: "Error", description: "No se pudo eliminar el artículo.", variant: 'destructive'});
         }
-       
-        toast({
-            title: "Producto Eliminado",
-            description: "El producto ha sido eliminado.",
-        });
     };
 
     const handleOpenDialogForEdit = (product: Product) => {

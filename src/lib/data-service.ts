@@ -2,6 +2,7 @@
 
 
 
+
 'use server';
 import { db } from './firebase';
 import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
@@ -20,8 +21,6 @@ import {
 export async function getStores(all: boolean = false, isPrototype: boolean = false): Promise<Store[]> {
   let stores: Store[] = [];
   
-  // This part runs on the server, so it doesn't have access to client-side session storage.
-  // It fetches real data.
   try {
     const storesCollectionRef = collection(db, 'stores');
     const q = all ? query(storesCollectionRef) : query(storesCollectionRef, where("status", "==", "Aprobado"));
@@ -48,15 +47,10 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
     console.error("Error fetching stores from Firestore: ", error);
   }
   
-  // If the user is in prototype mode, the client will supplement this data
-  // with the store from the context. For other views, we add it here.
   if (isPrototype) {
     const { initialPrototypeStores: protoStoresFromData } = await import('./placeholder-data');
-    // Create a Set of existing store IDs for efficient lookup
     const existingStoreIds = new Set(stores.map(s => s.id));
-    // Filter out prototype stores that are already in the list
     const storesToAdd = protoStoresFromData.filter(ps => !existingStoreIds.has(ps.id));
-    // Add the unique prototype stores to the beginning of the list
     stores.unshift(...storesToAdd);
   }
   
@@ -69,8 +63,6 @@ export async function getStores(all: boolean = false, isPrototype: boolean = fal
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(id: string): Promise<Store | null> {
-  // Prototype data is now primarily handled by the client context.
-  // This function will focus on fetching from Firestore.
   try {
     const docRef = doc(db, "stores", id);
     const docSnap = await getDoc(docRef);
@@ -103,7 +95,6 @@ export async function getStoreById(id: string): Promise<Store | null> {
  * @param storeId The ID of the store whose products to fetch.
  */
 export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
-  // Prototype data is now primarily handled by the client context.
   try {
     const productsCollectionRef = collection(db, 'stores', storeId, 'products');
     const q = query(productsCollectionRef);
@@ -118,6 +109,8 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
         price: data.price || 0,
         category: data.category || '',
         imageUrl: data.imageUrl,
+        rating: data.rating || 0,
+        reviewCount: data.reviewCount || 0,
       };
     });
 
@@ -138,17 +131,12 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
 export async function addProductToStore(storeId: string, productData: Product, currentCategories: string[]): Promise<void> {
     try {
         const storeRef = doc(db, 'stores', storeId);
-        // Use the product ID from the client if available, otherwise Firestore generates one
-        const productRef = productData.id.startsWith('new-') 
-            ? doc(collection(storeRef, 'products')) 
-            : doc(storeRef, 'products', productData.id);
-
-        const dataToSave = { ...productData };
-        if (productData.id.startsWith('new-')) {
-          (dataToSave as any).id = productRef.id;
-        }
-
-        await setDoc(productRef, dataToSave);
+        // Firestore will auto-generate an ID if we use addDoc
+        const productsCollectionRef = collection(storeRef, 'products');
+        const newProductRef = await addDoc(productsCollectionRef, productData);
+        
+        // Update the product with its own ID for consistency
+        await updateDoc(newProductRef, { id: newProductRef.id });
 
         // Check if the category is new and update the store document
         if (!currentCategories.map((c: string) => c.toLowerCase()).includes(productData.category.toLowerCase())) {

@@ -87,9 +87,14 @@ export default function StoreDetailPage() {
         setLoading(true);
         try {
             let storeData: Store | null | undefined = null;
+            
+            // First, check prototype data context
             if (storeId.startsWith('proto-')) {
                 storeData = prototypeStores.find(s => s.id === storeId);
-            } else {
+            } 
+            
+            // If not found in prototype, fetch from DB
+            if (!storeData) {
                 storeData = await getStoreFromDb(storeId);
                 if (storeData) {
                     storeData.products = await getProductsFromDb(storeId);

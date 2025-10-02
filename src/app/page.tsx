@@ -11,6 +11,7 @@ import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { useRouter } from 'next/navigation';
+import { getStores as getStoresFromDb } from '@/lib/data-service';
 
 
 export default function Home() {
@@ -21,11 +22,32 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // In prototype mode, we just use the stores from the context
-    if (!prototypeLoading) {
-      setStores(prototypeStores.filter(s => s.status === 'Aprobado'));
+    async function fetchAndMergeStores() {
+      if (prototypeLoading) return;
+
+      setLoading(true);
+      // Fetch real stores from Firestore
+      const realStores = await getStoresFromDb(false, false);
+      
+      // Create a map of real stores for quick lookup
+      const realStoresMap = new Map(realStores.map(s => [s.id, s]));
+
+      // Merge with prototype stores, giving precedence to real data if IDs conflict
+      const allStores = [...prototypeStores];
+      realStores.forEach(realStore => {
+        const index = allStores.findIndex(s => s.id === realStore.id);
+        if (index !== -1) {
+          allStores[index] = realStore; // Replace prototype with real
+        } else {
+          allStores.push(realStore); // Add new real store
+        }
+      });
+      
+      setStores(allStores.filter(s => s.status === 'Aprobado'));
       setLoading(false);
     }
+    
+    fetchAndMergeStores();
   }, [prototypeStores, prototypeLoading]);
 
 
