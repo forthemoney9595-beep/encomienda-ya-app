@@ -12,8 +12,6 @@ import type { Order, OrderStatus } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { getDocs, collection, query, where, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 
 const getBadgeVariant = (status: OrderStatus) => {
@@ -41,31 +39,27 @@ export default function StoreOrdersView() {
     const { user, loading: authLoading } = useAuth();
     const { prototypeOrders, getOrdersByStore, loading: prototypeLoading } = usePrototypeData();
     const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user || authLoading || prototypeLoading) return;
-
-        const fetchOrders = async () => {
-            if (user.uid.startsWith('proto-')) {
-                setOrders(getOrdersByStore(user.storeId!));
-            } else {
-                const ordersRef = collection(db, 'orders');
-                const q = query(ordersRef, where('storeId', '==', user.storeId), orderBy('createdAt', 'desc'));
-                const querySnapshot = await getDocs(q);
-                const firestoreOrders = querySnapshot.docs.map(doc => ({...doc.data(), id: doc.id, createdAt: doc.data().createdAt.toDate()})) as Order[];
-                setOrders(firestoreOrders);
-            }
+        if (!user || authLoading || prototypeLoading) {
+            setLoading(true);
+            return;
         };
-        
-        fetchOrders();
 
+        if (user.storeId) {
+            const storeOrders = getOrdersByStore(user.storeId);
+            setOrders(storeOrders);
+        }
+        setLoading(false);
+        
     }, [user, authLoading, prototypeLoading, prototypeOrders, getOrdersByStore]);
 
     const handleRowClick = (orderId: string) => {
         router.push(`/orders/${orderId}`);
     };
 
-    if (authLoading || prototypeLoading) {
+    if (loading) {
         return (
             <Card>
                 <CardHeader>
