@@ -20,9 +20,9 @@ interface OrderStatusUpdaterProps {
 
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
   'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'],
-  'Pendiente de Pago': [], // El cliente paga, el vendedor no puede cambiar este estado
-  'En preparación': [], // El repartidor lo recoge, el vendedor no tiene más acciones aquí.
-  'En reparto': [], // Solo el repartidor puede marcarlo como entregado
+  'Pendiente de Pago': [],
+  'En preparación': [],
+  'En reparto': [],
   'Entregado': [],
   'Cancelado': [],
   'Rechazado': [],
@@ -40,21 +40,6 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const isStoreOwner = user?.storeId === order.storeId;
   const isBuyer = user?.uid === order.userId;
   const isDeliveryPerson = user?.role === 'delivery';
-
-  // Specific logic for delivery person
-  if (isDeliveryPerson && order.status === 'En reparto' && order.deliveryPersonId === user?.uid) {
-     return (
-       <CardFooter>
-            <Button onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdating} className="w-full">
-                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Marcar como Entregado
-            </Button>
-       </CardFooter>
-     );
-  }
-
-
-  const possibleNextStatuses = statusTransitions[order.status] || [];
 
   const handleUpdateStatus = async (newStatus: OrderStatus) => {
     setIsUpdating(true);
@@ -82,6 +67,21 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
         setSelectedStatus('');
     }
   };
+
+  // Specific logic for delivery person
+  if (isDeliveryPerson && order.status === 'En reparto' && order.deliveryPersonId === user?.uid) {
+     return (
+       <CardFooter>
+            <Button onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdating} className="w-full">
+                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Marcar como Entregado
+            </Button>
+       </CardFooter>
+     );
+  }
+
+
+  const possibleNextStatuses = statusTransitions[order.status] || [];
 
   const handleBuyerPayment = async () => {
     setIsUpdating(true);
