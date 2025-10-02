@@ -76,9 +76,9 @@ export interface Order {
 
 export const prototypeUsers: Record<string, UserProfile> = {
     'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
+    'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-pizza' },
     'repartidor@test.com': { uid: 'proto-delivery', name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
     'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
-    'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store' },
 };
 
 // --- STORES AND PRODUCTS ---
@@ -102,7 +102,7 @@ const sushiProducts: Product[] = [
 export const initialPrototypeStores: Store[] = [
     {
         id: 'proto-store-pizza',
-        name: 'DonalPizza',
+        name: 'Paraíso de la Pizza',
         category: 'comida-rapida',
         address: 'Calle Falsa 123, Ciudad Prototipo',
         imageUrl: getPlaceholderImage('store-pizza', 600, 400),
@@ -120,7 +120,7 @@ export const initialPrototypeStores: Store[] = [
         imageUrl: getPlaceholderImage('store-sushi', 600, 400),
         imageHint: 'sushi bar',
         status: 'Aprobado',
-        ownerId: 'proto-store-owner-2',
+        ownerId: 'proto-store-owner-2', // Belongs to a different, non-loggable owner for variety
         productCategories: ['Rollos', 'Nigiris', 'Entrantes', 'Bebidas'],
         products: sushiProducts
     }
@@ -155,7 +155,7 @@ export const initialPrototypeOrders: Order[] = [];
 
 export const notifications = [
   { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Sushi del Rey está en camino.', date: 'hace 5 min' },
-  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de DonalPizza ha sido confirmado.', date: 'hace 1 hora' },
-  { id: 'n3', title: 'Nueva tienda aprobada', description: '¡DonalPizza ya está disponible!', date: 'hace 3 horas' },
+  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Paraíso de la Pizza ha sido confirmado.', date: 'hace 1 hora' },
+  { id: 'n3', title: 'Nueva tienda aprobada', description: '¡Paraíso de la Pizza ya está disponible!', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];

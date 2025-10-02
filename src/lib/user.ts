@@ -82,7 +82,7 @@ export async function createStoreForUser(ownerId: string, storeData: { name: str
             id: newStoreRef.id,
             ...storeData,
             ownerId: ownerId,
-            status: 'Aprobado', // Auto-approve for faster prototype cycle
+            status: 'Pendiente', // All new stores require approval
             createdAt: serverTimestamp(),
             productCategories: storeData.category ? [storeData.category] : [],
             imageUrl: `https://picsum.photos/seed/${storeData.name.replace(/\s/g, '')}/600/400`,

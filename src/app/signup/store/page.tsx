@@ -47,7 +47,8 @@ export default function SignupStorePage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // Real Firebase Logic for any other email
+    // This form now only handles REAL store creation for any email.
+    // The prototype stores are pre-defined and loggable via the login page.
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
@@ -65,8 +66,8 @@ export default function SignupStorePage() {
       });
 
       toast({
-        title: "¡Tienda Registrada y Aprobada!",
-        description: "Tu tienda está activa y es visible para todos. Serás redirigido.",
+        title: "¡Solicitud de Tienda Enviada!",
+        description: "Tu tienda ha sido registrada y está pendiente de aprobación por un administrador.",
       });
       router.push('/');
     } catch (error: any) {
