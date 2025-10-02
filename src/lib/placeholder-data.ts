@@ -47,7 +47,7 @@ export interface UserProfile {
 
 // Redefining Order types here to break circular dependency with order-service.
 // This file should be pure data and type definitions with no code imports.
-export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
+export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
 
 export interface CartItem extends Product {
   quantity: number;
@@ -151,7 +151,7 @@ export const prototypeDelivery: DeliveryPersonnel = {
     id: protoDeliveryUser!.uid,
     name: protoDeliveryUser!.name,
     email: protoDeliveryUser!.email,
-    status: 'Pendiente',
+    status: 'Activo',
     vehicle: 'motocicleta',
     zone: 'Centro'
 };
