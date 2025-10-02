@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -17,7 +18,6 @@ import { useRouter } from 'next/navigation';
 import { createUserProfile, createStoreForUser } from '@/lib/user';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { prototypeUsers } from '@/lib/placeholder-data';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 const formSchema = z.object({
@@ -47,35 +47,6 @@ export default function SignupStorePage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    
-    // Check if it's the dedicated prototype store owner email
-    if (values.email === prototypeUsers['tienda@test.com'].email) {
-      // Create a new store for the prototype user
-      const newStoreId = `proto-store-${Date.now()}`;
-      const newStore = {
-        id: newStoreId,
-        name: values.storeName,
-        category: values.category,
-        address: values.address,
-        status: 'Pendiente' as const, // All new prototype stores need approval
-        ownerId: prototypeUsers['tienda@test.com'].uid,
-        imageUrl: getPlaceholderImage(values.storeName),
-        imageHint: values.category.toLowerCase(),
-        products: [],
-        productCategories: [values.category]
-      };
-      
-      addPrototypeStore(newStore);
-      await loginForPrototype(values.email, newStoreId);
-
-      toast({
-        title: "¡Tienda de Prototipo Registrada!",
-        description: "Tu tienda está pendiente de aprobación por el administrador.",
-      });
-      router.push('/');
-      return;
-    }
-
     // Real Firebase Logic for any other email
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);

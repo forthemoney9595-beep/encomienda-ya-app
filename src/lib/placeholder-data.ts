@@ -1,4 +1,5 @@
 
+
 import { getPlaceholderImage } from "./placeholder-images";
 
 export type Store = {
@@ -98,7 +99,32 @@ const sushiProducts: Product[] = [
     { id: 'prod-s4', name: 'Té Verde', description: 'Caliente y reconfortante.', price: 2.00, category: 'Bebidas', imageUrl: getPlaceholderImage('te-verde', 200, 200), rating: 4.7, reviewCount: 150 },
 ];
 
-export const initialPrototypeStores: Store[] = [];
+export const initialPrototypeStores: Store[] = [
+    {
+        id: 'proto-store-pizza',
+        name: 'DonalPizza',
+        category: 'comida-rapida',
+        address: 'Calle Falsa 123, Ciudad Prototipo',
+        imageUrl: getPlaceholderImage('store-pizza', 600, 400),
+        imageHint: 'pizza restaurant',
+        status: 'Aprobado',
+        ownerId: prototypeUsers['tienda@test.com'].uid,
+        productCategories: ['Pizzas', 'Bebidas', 'Postres'],
+        products: pizzaProducts
+    },
+    {
+        id: 'proto-store-sushi',
+        name: 'Sushi del Rey',
+        category: 'japonesa',
+        address: 'Avenida Siempre Viva 742, Ciudad Prototipo',
+        imageUrl: getPlaceholderImage('store-sushi', 600, 400),
+        imageHint: 'sushi bar',
+        status: 'Aprobado',
+        ownerId: 'proto-store-owner-2',
+        productCategories: ['Rollos', 'Nigiris', 'Entrantes', 'Bebidas'],
+        products: sushiProducts
+    }
+];
 
 export function getPrototypeProducts(storeId?: string): Product[] {
   if (!storeId) return [];
@@ -128,8 +154,8 @@ export const initialPrototypeOrders: Order[] = [];
 
 
 export const notifications = [
-  { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Estación de Sushi está en camino.', date: 'hace 5 min' },
-  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de Paraíso de la Pizza ha sido confirmado.', date: 'hace 1 hora' },
-  { id: 'n3', title: 'Nueva tienda aprobada', description: '¡Paraíso de la Pizza ya está disponible!', date: 'hace 3 horas' },
+  { id: 'n1', title: '¡Pedido en camino!', description: 'Tu pedido de Sushi del Rey está en camino.', date: 'hace 5 min' },
+  { id: 'n2', title: 'Confirmación de pedido', description: 'Tu pedido de DonalPizza ha sido confirmado.', date: 'hace 1 hora' },
+  { id: 'n3', title: 'Nueva tienda aprobada', description: '¡DonalPizza ya está disponible!', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
