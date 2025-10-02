@@ -13,6 +13,7 @@ export interface CartItem {
     category: string;
     imageUrl?: string;
     quantity: number;
+    userRating?: number; // New field to track if user has rated this item in this order
 }
 
 export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
@@ -230,3 +231,5 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
         return null;
     }
 }
+
+    

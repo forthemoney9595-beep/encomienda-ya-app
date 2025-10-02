@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Product } from '@/lib/placeholder-data';
@@ -5,6 +6,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 
 export interface CartItem extends Product {
     quantity: number;
+    userRating?: number; // New field to track if user has rated this item in this order
 }
 
 interface CartContextType {
@@ -137,3 +139,5 @@ export const useCart = () => {
     }
     return context;
 };
+
+    

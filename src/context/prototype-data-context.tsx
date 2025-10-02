@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -18,6 +17,7 @@ interface PrototypeDataContextType {
     updatePrototypeProduct: (storeId: string, product: Product) => void;
     addPrototypeProduct: (storeId: string, product: Product) => void;
     deletePrototypeProduct: (storeId: string, productId: string) => void;
+    addReviewToProduct: (storeId: string, productId: string, rating: number, reviewText: string) => void;
     updatePrototypeStore: (updates: Partial<Store>) => void;
     updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => void;
     getOrdersByStore: (storeId: string) => Order[];
@@ -171,6 +171,32 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             return newStores;
         });
     }
+
+    const addReviewToProduct = (storeId: string, productId: string, rating: number, reviewText: string) => {
+        setStores(prevStores => {
+            const newStores = prevStores.map(store => {
+                if (store.id === storeId) {
+                    const newProducts = store.products.map(product => {
+                        if (product.id === productId) {
+                            const newReviewCount = product.reviewCount + 1;
+                            const newTotalRating = (product.rating * product.reviewCount) + rating;
+                            const newAverageRating = newTotalRating / newReviewCount;
+                            return {
+                                ...product,
+                                rating: newAverageRating,
+                                reviewCount: newReviewCount,
+                            };
+                        }
+                        return product;
+                    });
+                    return { ...store, products: newProducts };
+                }
+                return store;
+            });
+            updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
+            return newStores;
+        });
+    };
     
     const getOrdersByStore = useCallback((storeId: string) => {
         return orders
@@ -212,6 +238,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         addPrototypeProduct,
         updatePrototypeProduct,
         deletePrototypeProduct,
+        addReviewToProduct,
         updatePrototypeStore,
         updatePrototypeDelivery,
         getOrdersByStore,
@@ -235,3 +262,5 @@ export const usePrototypeData = () => {
     }
     return context;
 };
+
+    

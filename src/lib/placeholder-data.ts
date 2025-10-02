@@ -51,6 +51,7 @@ export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | '
 
 export interface CartItem extends Product {
   quantity: number;
+  userRating?: number; // New field to track if user has rated this item in this order
 }
 export interface Order {
     id: string;
@@ -162,3 +163,5 @@ export const notifications = [
   { id: 'n3', title: 'Nueva tienda aprobada', description: '¡Paraíso de la Pizza ya está disponible!', date: 'hace 3 horas' },
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
+
+    

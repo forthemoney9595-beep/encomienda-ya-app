@@ -16,9 +16,12 @@ import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, CookingPot, Bike, Home, Package, Clock, Wallet, Ban } from 'lucide-react';
+import { CheckCircle, CookingPot, Bike, Home, Package, Clock, Wallet, Ban, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import type { CartItem } from '@/context/cart-context';
+import { LeaveReviewDialog } from './leave-review-dialog';
+import { Button } from '@/components/ui/button';
 
 
 function OrderPageSkeleton() {
@@ -129,10 +132,11 @@ export default function OrderTrackingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { getOrderById: getPrototypeOrderById, loading: prototypeLoading, prototypeOrders } = usePrototypeData();
+  const { getOrderById: getPrototypeOrderById, loading: prototypeLoading, prototypeOrders, addReviewToProduct } = usePrototypeData();
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reviewingItem, setReviewingItem] = useState<CartItem | null>(null);
 
   const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { 
     ssr: false,
@@ -196,6 +200,26 @@ export default function OrderTrackingPage() {
     }
 
   }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading, toast, prototypeOrders]);
+  
+    const handleReviewSubmit = (rating: number, review: string) => {
+        if (!reviewingItem || !order) return;
+        addReviewToProduct(order.storeId, reviewingItem.id, rating, review);
+        
+        // Update order state to mark item as reviewed
+        setOrder(prevOrder => {
+            if (!prevOrder) return null;
+            const updatedItems = prevOrder.items.map(item => 
+                item.id === reviewingItem.id ? { ...item, userRating: rating } : item
+            );
+            return { ...prevOrder, items: updatedItems };
+        });
+
+        toast({
+            title: "¡Reseña Enviada!",
+            description: `Gracias por tu opinión sobre ${reviewingItem.name}.`
+        });
+        setReviewingItem(null);
+    };
 
 
   if (loading || authLoading || prototypeLoading || !order) {
@@ -203,6 +227,7 @@ export default function OrderTrackingPage() {
   }
   
   const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + order.deliveryFee;
+  const isBuyer = user?.uid === order.userId;
 
   return (
     <div className="container mx-auto">
@@ -230,7 +255,22 @@ export default function OrderTrackingPage() {
                                 <p className="font-semibold">{item.name}</p>
                                 <p className="text-sm text-muted-foreground">Cantidad: {item.quantity}</p>
                             </div>
-                            <p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                            <div className="text-right flex items-center gap-4">
+                               {isBuyer && order.status === 'Entregado' && (
+                                   item.userRating ? (
+                                        <div className="flex items-center gap-1 text-sm text-amber-500">
+                                            <span>Tu nota:</span>
+                                            <Star className="h-4 w-4 fill-current" />
+                                            <span className="font-bold">{item.userRating}</span>
+                                        </div>
+                                   ) : (
+                                        <Button variant="outline" size="sm" onClick={() => setReviewingItem(item)}>
+                                            <Star className="mr-2 h-4 w-4" /> Valorar
+                                        </Button>
+                                   )
+                                )}
+                                <p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                            </div>
                         </div>
                     ))}
                     <Separator/>
@@ -292,6 +332,16 @@ export default function OrderTrackingPage() {
             </Card>
         </div>
       </div>
+       {reviewingItem && (
+        <LeaveReviewDialog
+          isOpen={!!reviewingItem}
+          setIsOpen={(isOpen) => !isOpen && setReviewingItem(null)}
+          productName={reviewingItem.name}
+          onSubmit={handleReviewSubmit}
+        />
+      )}
     </div>
   );
 }
+
+    
