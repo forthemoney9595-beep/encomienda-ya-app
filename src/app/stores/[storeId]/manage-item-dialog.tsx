@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -145,6 +146,9 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           price: values.price,
           category: values.category,
           imageUrl: values.imageUrl || getPlaceholderImage(values.name.replace(/\s/g, '')),
+          // Add default rating for new products, preserve for existing
+          rating: isEditing ? product.rating : 0,
+          reviewCount: isEditing ? product.reviewCount : 0,
         };
 
         onSave(productData);

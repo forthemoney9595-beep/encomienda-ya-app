@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -6,7 +7,7 @@ import type { Product } from '@/lib/placeholder-data';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Edit, Trash2, PlusCircle, Search } from 'lucide-react';
+import { ShoppingCart, Edit, Trash2, PlusCircle, Search, Star } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -17,11 +18,24 @@ import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 interface ProductListProps {
     products: Product[];
     productCategories: string[];
     ownerId: string;
+}
+
+function ProductRating({ rating, reviewCount }: { rating: number, reviewCount: number }) {
+  if (reviewCount === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+      <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+      <span className="font-bold text-amber-500">{rating.toFixed(1)}</span>
+      <span>({reviewCount})</span>
+    </div>
+  )
 }
 
 export function ProductList({ products: initialProducts, productCategories: initialCategories, ownerId }: ProductListProps) {
@@ -195,7 +209,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                         <div className="space-y-4">
                             {categoryProducts.map((product) => (
                                 <Card key={product.id}>
-                                    <CardContent className="flex items-center gap-4 p-4">
+                                    <CardContent className="flex items-start gap-4 p-4">
                                         <div className="relative h-20 w-20 flex-shrink-0">
                                             <Image 
                                                 src={product.imageUrl || ''}
@@ -207,11 +221,12 @@ export function ProductList({ products: initialProducts, productCategories: init
                                         </div>
                                         <div className="flex-1">
                                             <h3 className="font-semibold">{product.name}</h3>
-                                            <p className="text-sm text-muted-foreground">{product.description}</p>
-                                            <p className="font-semibold">${product.price.toFixed(2)}</p>
+                                            <ProductRating rating={product.rating} reviewCount={product.reviewCount} />
+                                            <p className="text-sm text-muted-foreground mt-2">{product.description}</p>
+                                            <p className="font-semibold mt-1">${product.price.toFixed(2)}</p>
                                         </div>
                                         {isOwner ? (
-                                            <div className="flex gap-2">
+                                            <div className="flex flex-col sm:flex-row gap-2">
                                                 <Button variant="outline" size="sm" onClick={() => handleOpenDialogForEdit(product)}>
                                                     <Edit className="mr-2 h-4 w-4" />
                                                     Editar
@@ -240,7 +255,7 @@ export function ProductList({ products: initialProducts, productCategories: init
                                                 </AlertDialog>
                                             </div>
                                         ) : (
-                                            <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)}>
+                                            <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)} className="self-center">
                                                 <ShoppingCart className="mr-2 h-4 w-4" />
                                                 Añadir
                                             </Button>

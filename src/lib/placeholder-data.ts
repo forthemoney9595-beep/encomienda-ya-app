@@ -22,6 +22,8 @@ export type Product = {
   price: number;
   category: string;
   imageUrl?: string;
+  rating: number;
+  reviewCount: number;
 }
 
 export type DeliveryPersonnel = {
@@ -82,22 +84,21 @@ export const prototypeUsers: Record<string, UserProfile> = {
 // --- STORES AND PRODUCTS ---
 
 const pizzaProducts: Product[] = [
-    { id: 'prod-p1', name: 'Pizza Margarita', description: 'Clásica pizza con tomate, mozzarella y albahaca fresca.', price: 12.99, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-margarita', 200, 200) },
-    { id: 'prod-p2', name: 'Pizza Pepperoni', description: 'Cubierta con abundante pepperoni y queso mozzarella.', price: 14.99, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-pepperoni', 200, 200) },
-    { id: 'prod-p3', name: 'Pizza Hawaiana', description: 'Polémica pero deliciosa, con jamón y piña.', price: 15.50, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-hawaiian', 200, 200) },
-    { id: 'prod-p4', name: 'Refresco de Cola', description: 'Lata de 330ml, el acompañante perfecto.', price: 2.50, category: 'Bebidas', imageUrl: getPlaceholderImage('coca-cola', 200, 200) },
-    { id: 'prod-p5', name: 'Agua Mineral', description: 'Botella de 500ml.', price: 1.50, category: 'Bebidas', imageUrl: getPlaceholderImage('agua-mineral', 200, 200) },
-    { id: 'prod-p6', name: 'Tiramisú', description: 'Postre italiano clásico con café y cacao.', price: 6.99, category: 'Postres', imageUrl: getPlaceholderImage('tiramisu', 200, 200) },
+    { id: 'prod-p1', name: 'Pizza Margarita', description: 'Clásica pizza con tomate, mozzarella y albahaca fresca.', price: 12.99, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-margarita', 200, 200), rating: 4.5, reviewCount: 120 },
+    { id: 'prod-p2', name: 'Pizza Pepperoni', description: 'Cubierta con abundante pepperoni y queso mozzarella.', price: 14.99, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-pepperoni', 200, 200), rating: 4.8, reviewCount: 250 },
+    { id: 'prod-p3', name: 'Pizza Hawaiana', description: 'Polémica pero deliciosa, con jamón y piña.', price: 15.50, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-hawaiian', 200, 200), rating: 4.2, reviewCount: 85 },
+    { id: 'prod-p4', name: 'Refresco de Cola', description: 'Lata de 330ml, el acompañante perfecto.', price: 2.50, category: 'Bebidas', imageUrl: getPlaceholderImage('coca-cola', 200, 200), rating: 4.9, reviewCount: 500 },
+    { id: 'prod-p5', name: 'Agua Mineral', description: 'Botella de 500ml.', price: 1.50, category: 'Bebidas', imageUrl: getPlaceholderImage('agua-mineral', 200, 200), rating: 4.7, reviewCount: 300 },
+    { id: 'prod-p6', name: 'Tiramisú', description: 'Postre italiano clásico con café y cacao.', price: 6.99, category: 'Postres', imageUrl: getPlaceholderImage('tiramisu', 200, 200), rating: 4.9, reviewCount: 180 },
 ];
 
 const sushiProducts: Product[] = [
-    { id: 'prod-s1', name: 'Rollo California', description: 'Cangrejo, aguacate y pepino.', price: 8.99, category: 'Rollos', imageUrl: getPlaceholderImage('rollo-california', 200, 200) },
-    { id: 'prod-s2', name: 'Nigiri de Salmón', description: 'Dos piezas de salmón fresco sobre arroz.', price: 5.99, category: 'Nigiris', imageUrl: getPlaceholderImage('nigiri-salmon', 200, 200) },
-    { id: 'prod-s3', name: 'Sopa de Miso', description: 'Tradicional sopa japonesa con tofu y algas.', price: 3.50, category: 'Entrantes', imageUrl: getPlaceholderImage('sopa-miso', 200, 200) },
-    { id: 'prod-s4', name: 'Té Verde', description: 'Caliente y reconfortante.', price: 2.00, category: 'Bebidas', imageUrl: getPlaceholderImage('te-verde', 200, 200) },
+    { id: 'prod-s1', name: 'Rollo California', description: 'Cangrejo, aguacate y pepino.', price: 8.99, category: 'Rollos', imageUrl: getPlaceholderImage('rollo-california', 200, 200), rating: 4.6, reviewCount: 95 },
+    { id: 'prod-s2', name: 'Nigiri de Salmón', description: 'Dos piezas de salmón fresco sobre arroz.', price: 5.99, category: 'Nigiris', imageUrl: getPlaceholderImage('nigiri-salmon', 200, 200), rating: 4.8, reviewCount: 110 },
+    { id: 'prod-s3', name: 'Sopa de Miso', description: 'Tradicional sopa japonesa con tofu y algas.', price: 3.50, category: 'Entrantes', imageUrl: getPlaceholderImage('sopa-miso', 200, 200), rating: 4.4, reviewCount: 70 },
+    { id: 'prod-s4', name: 'Té Verde', description: 'Caliente y reconfortante.', price: 2.00, category: 'Bebidas', imageUrl: getPlaceholderImage('te-verde', 200, 200), rating: 4.7, reviewCount: 150 },
 ];
 
-// The initial stores are now an empty array to allow for manual creation.
 export const initialPrototypeStores: Store[] = [
   {
     id: 'proto-store-pizza',
