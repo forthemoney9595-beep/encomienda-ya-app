@@ -1,5 +1,7 @@
 
 
+import { getPlaceholderImage } from "./placeholder-images";
+
 export type Store = {
   id: string;
   name: string;
@@ -79,8 +81,49 @@ export const prototypeUsers: Record<string, UserProfile> = {
 
 // --- STORES AND PRODUCTS ---
 
+const pizzaProducts: Product[] = [
+    { id: 'prod-p1', name: 'Pizza Margarita', description: 'Clásica pizza con tomate, mozzarella y albahaca fresca.', price: 12.99, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-margarita', 200, 200) },
+    { id: 'prod-p2', name: 'Pizza Pepperoni', description: 'Cubierta con abundante pepperoni y queso mozzarella.', price: 14.99, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-pepperoni', 200, 200) },
+    { id: 'prod-p3', name: 'Pizza Hawaiana', description: 'Polémica pero deliciosa, con jamón y piña.', price: 15.50, category: 'Pizzas', imageUrl: getPlaceholderImage('pizza-hawaiian', 200, 200) },
+    { id: 'prod-p4', name: 'Refresco de Cola', description: 'Lata de 330ml, el acompañante perfecto.', price: 2.50, category: 'Bebidas', imageUrl: getPlaceholderImage('coca-cola', 200, 200) },
+    { id: 'prod-p5', name: 'Agua Mineral', description: 'Botella de 500ml.', price: 1.50, category: 'Bebidas', imageUrl: getPlaceholderImage('agua-mineral', 200, 200) },
+    { id: 'prod-p6', name: 'Tiramisú', description: 'Postre italiano clásico con café y cacao.', price: 6.99, category: 'Postres', imageUrl: getPlaceholderImage('tiramisu', 200, 200) },
+];
+
+const sushiProducts: Product[] = [
+    { id: 'prod-s1', name: 'Rollo California', description: 'Cangrejo, aguacate y pepino.', price: 8.99, category: 'Rollos', imageUrl: getPlaceholderImage('rollo-california', 200, 200) },
+    { id: 'prod-s2', name: 'Nigiri de Salmón', description: 'Dos piezas de salmón fresco sobre arroz.', price: 5.99, category: 'Nigiris', imageUrl: getPlaceholderImage('nigiri-salmon', 200, 200) },
+    { id: 'prod-s3', name: 'Sopa de Miso', description: 'Tradicional sopa japonesa con tofu y algas.', price: 3.50, category: 'Entrantes', imageUrl: getPlaceholderImage('sopa-miso', 200, 200) },
+    { id: 'prod-s4', name: 'Té Verde', description: 'Caliente y reconfortante.', price: 2.00, category: 'Bebidas', imageUrl: getPlaceholderImage('te-verde', 200, 200) },
+];
+
 // The initial stores are now an empty array to allow for manual creation.
-export const initialPrototypeStores: Store[] = [];
+export const initialPrototypeStores: Store[] = [
+  {
+    id: 'proto-store-pizza',
+    name: 'Paraíso de la Pizza',
+    category: 'italiana',
+    address: 'Calle Falsa 123, Pizzalandia',
+    imageUrl: 'https://images.unsplash.com/photo-1566843972142-a7fcb70de55a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxwaXp6YSUyMHJlc3RhdXJhbnR8ZW58MHx8fHwxNzU5MjA1MjIzfDA&ixlib=rb-4.1.0&q=80&w=1080',
+    imageHint: 'pizza restaurant',
+    status: 'Aprobado',
+    ownerId: 'proto-store-owner',
+    productCategories: ['Pizzas', 'Bebidas', 'Postres'],
+    products: pizzaProducts,
+  },
+  {
+    id: 'proto-store-sushi',
+    name: 'Estación de Sushi',
+    category: 'japonesa',
+    address: 'Avenida Siempre Viva 742, Springfield',
+    imageUrl: 'https://images.unsplash.com/photo-1455279032140-49a4bf46f343?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxzdXNoaSUyMGJhcnxlbnwwfHx8fDE3NTkxNjc0NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080',
+    imageHint: 'sushi bar',
+    status: 'Aprobado',
+    ownerId: 'some-other-owner-id',
+    productCategories: ['Rollos', 'Nigiris', 'Entrantes', 'Bebidas'],
+    products: sushiProducts,
+  },
+];
 
 export function getPrototypeProducts(storeId?: string): Product[] {
   if (!storeId) return [];
