@@ -58,10 +58,16 @@ export default function MyStorePage() {
     useEffect(() => {
         if (authLoading || prototypeLoading) return;
 
-        if (!user || user.role !== 'store' || !user.storeId) {
-            toast({ variant: 'destructive', title: 'Acceso Denegado', description: 'No tienes una tienda asignada.' });
+        if (!user || user.role !== 'store') {
+            toast({ variant: 'destructive', title: 'Acceso Denegado', description: 'No tienes permisos para ver esta página.' });
             router.push('/');
             return;
+        }
+
+        if (!user.storeId) {
+             toast({ variant: 'destructive', title: 'Acceso Denegado', description: 'No tienes una tienda asignada.' });
+             router.push('/');
+             return;
         }
 
         async function fetchStore() {

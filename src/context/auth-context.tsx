@@ -72,10 +72,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             sessionStorage.setItem(PROTOTYPE_SESSION_KEY, email);
             
             const sessionStoreIdKey = `proto_store_id_${protoUser.uid}`;
-            let finalStoreId: string | undefined = newStoreId;
+            let finalStoreId: string | undefined = newStoreId || protoUser.storeId;
 
             if (finalStoreId) {
-                // If a new storeId is provided (e.g. on creation), it's the source of truth and we save it.
+                // If a new storeId is provided (e.g. on creation) or exists on the base user, it's the source of truth and we save it.
                 sessionStorage.setItem(sessionStoreIdKey, finalStoreId);
             } else {
                 // On subsequent logins without a new ID, try to retrieve the existing one from the session.
