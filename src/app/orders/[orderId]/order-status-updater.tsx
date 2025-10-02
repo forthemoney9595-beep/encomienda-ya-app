@@ -21,12 +21,11 @@ interface OrderStatusUpdaterProps {
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
   'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'],
   'Pendiente de Pago': [], // El cliente paga, el vendedor no puede cambiar este estado
-  'En preparación': ['En reparto', 'Cancelado'], // El vendedor lo pone listo para el repartidor
+  'En preparación': [], // El vendedor prepara, el repartidor lo recoge. No hay acción manual aquí para el vendedor.
   'En reparto': ['Entregado'], // El repartidor lo entrega
   'Entregado': [],
   'Cancelado': [],
   'Rechazado': [],
-  // 'Pedido Realizado' se elimina de la lógica de transición manual
   'Pedido Realizado': [], 
 };
 
@@ -40,6 +39,21 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
 
   const isStoreOwner = user?.storeId === order.storeId;
   const isBuyer = user?.uid === order.userId;
+  const isDeliveryPerson = user?.role === 'delivery';
+
+  // Specific logic for delivery person
+  if (isDeliveryPerson && order.status === 'En reparto' && order.deliveryPersonId === user?.uid) {
+     return (
+       <CardFooter>
+            <Button onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdating} className="w-full">
+                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Marcar como Entregado
+            </Button>
+       </CardFooter>
+     );
+  }
+
+
   const possibleNextStatuses = statusTransitions[order.status] || [];
 
   const handleUpdateStatus = async (newStatus: OrderStatus) => {
@@ -157,3 +171,5 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
 
   return null; // Return null if not the right user or no actions are possible
 }
+
+    
