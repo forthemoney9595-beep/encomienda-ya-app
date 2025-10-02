@@ -20,9 +20,9 @@ interface OrderStatusUpdaterProps {
 
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
   'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'],
-  'Pendiente de Pago': [],
-  'En preparación': [],
-  'En reparto': [],
+  'Pendiente de Pago': [], // Action is for buyer, not a status change by store/delivery
+  'En preparación': [], // Action is for delivery person to accept, not store to change
+  'En reparto': [], // Action is for delivery person to complete, not store to change
   'Entregado': [],
   'Cancelado': [],
   'Rechazado': [],
