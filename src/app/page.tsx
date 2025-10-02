@@ -19,7 +19,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!prototypeLoading) {
-      // In a pure prototype mode, we only show approved prototype stores.
+      // Get approved stores from the context, which is now the single source of truth
       const approvedPrototypeStores = prototypeStores.filter(
         store => store.status === 'Aprobado'
       );

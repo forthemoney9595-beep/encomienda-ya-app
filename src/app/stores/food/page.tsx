@@ -43,7 +43,7 @@ export default function FoodStoresPage() {
         ) : foodStores.length > 0 ? (
           foodStores.map((store) => (
             <Link href={`/stores/${store.id}`} key={store.id} className="group">
-              <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
+              <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover-shadow-xl hover:-translate-y-1">
                 <div className="relative h-48 w-full">
                   <Image
                     src={store.imageUrl}
