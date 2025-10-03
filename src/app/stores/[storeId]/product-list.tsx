@@ -6,13 +6,14 @@ import type { Product } from '@/lib/placeholder-data';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Edit, Trash2, PlusCircle, Search, Star } from 'lucide-react';
+import { ShoppingCart, Edit, Trash2, PlusCircle, Search, Star, Heart } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
+import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -43,6 +44,7 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
     const params = useParams();
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
+    const { favoriteProducts, toggleFavoriteProduct } = usePrototypeData();
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -97,6 +99,23 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
             setPendingProduct(product);
             setOpenCartAlert(true);
         }
+    };
+    
+    const handleFavoriteToggle = (product: Product) => {
+        if (!user) {
+            toast({
+                variant: 'destructive',
+                title: 'Inicia Sesión para Guardar',
+                description: 'Debes iniciar sesión para guardar favoritos.',
+            });
+            return;
+        }
+        toggleFavoriteProduct(product.id);
+        const isFavorite = favoriteProducts.includes(product.id);
+        toast({
+            title: isFavorite ? 'Eliminado de Favoritos' : 'Añadido a Favoritos',
+            description: `${product.name} ha sido ${isFavorite ? 'eliminado de' : 'añadido a'} tus favoritos.`,
+        });
     };
 
     const confirmAndAddToCart = () => {
@@ -159,7 +178,9 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
                         <TabsContent key={category} value={category}>
                           {categoryProducts.length > 0 ? (
                             <div className="space-y-4">
-                                {categoryProducts.map((product) => (
+                                {categoryProducts.map((product) => {
+                                    const isFavorite = favoriteProducts.includes(product.id);
+                                    return (
                                     <Card key={product.id}>
                                         <CardContent className="flex items-start gap-4 p-4">
                                             <div className="relative h-20 w-20 flex-shrink-0">
@@ -207,14 +228,20 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
                                                     </AlertDialog>
                                                 </div>
                                             ) : (
-                                                <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)} className="self-center">
-                                                    <ShoppingCart className="mr-2 h-4 w-4" />
-                                                    Añadir
-                                                </Button>
+                                                <div className="flex flex-col gap-2 items-center self-center">
+                                                    <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)} className="w-full">
+                                                        <ShoppingCart className="mr-2 h-4 w-4" />
+                                                        Añadir
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleFavoriteToggle(product)} className={cn("w-full text-muted-foreground", isFavorite && "text-red-500")}>
+                                                        <Heart className={cn("h-4 w-4", isFavorite && "fill-current")}/>
+                                                        <span className="ml-2">{isFavorite ? 'Favorito' : 'Guardar'}</span>
+                                                    </Button>
+                                                </div>
                                             )}
                                         </CardContent>
                                     </Card>
-                                ))}
+                                )})}
                             </div>
                            ) : !searchQuery && (
                              <div className="text-center text-muted-foreground py-10">
