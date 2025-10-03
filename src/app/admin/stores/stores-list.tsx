@@ -1,142 +1,230 @@
-
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import Image from 'next/image';
-import type { Store } from '@/lib/placeholder-data';
-import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useRouter } from 'next/navigation';
+import * as React from 'react';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import {
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
+} from '@/components/ui/sidebar';
+import {
+  Store,
+  ClipboardList,
+  Shield,
+  Truck,
+  LayoutGrid,
+  Utensils,
+  Shirt,
+  ShoppingBag,
+  ChevronDown,
+  Home,
+  Package,
+  Edit,
+  BarChart3,
+  Contact,
+  Tag,
+} from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useAuth } from '@/context/auth-context';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
-interface StoresListProps {
-  stores: Store[];
-  onStatusUpdate: (storeId: string, status: 'Aprobado' | 'Rechazado') => void;
-  onEdit: (store: Store) => void;
-  onDelete: (storeId: string) => void;
-}
 
-export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresListProps) {
-  const { toast } = useToast();
-  const [isUpdating, setIsUpdating] = useState<string | null>(null);
+export function MainNav() {
+  const pathname = usePathname();
+  const { user, isAdmin, loading } = useAuth();
+  
+  const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
+  const [isStoresOpen, setIsStoresOpen] = React.useState(
+    pathname.startsWith('/stores') || pathname === '/'
+  );
 
-  const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
-    setIsUpdating(storeId);
-    await onStatusUpdate(storeId, status);
-    setIsUpdating(null);
-  };
+  const isStoreOwner = user?.role === 'store';
+  const isDelivery = user?.role === 'delivery';
+  
+  const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname.includes(`/stores/${user.storeId}`);
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'Aprobado':
-        return 'secondary';
-      case 'Pendiente':
-        return 'default';
-      case 'Rechazado':
-        return 'destructive';
-      default:
-        return 'outline';
-    }
-  };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Todas las Tiendas</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="hidden w-[100px] sm:table-cell">
-                <span className="sr-only">Imagen</span>
-              </TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Categoría</TableHead>
-              <TableHead className="hidden md:table-cell">Dirección</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>
-                <span className="sr-only">Acciones</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {stores.filter(Boolean).map((store) => (
-              <TableRow key={store.id}>
-                <TableCell className="hidden sm:table-cell">
-                  <Image
-                    alt={store.name}
-                    className="aspect-square rounded-md object-cover"
-                    height="64"
-                    src={store.imageUrl}
-                    width="64"
-                    data-ai-hint={store.imageHint}
-                  />
-                </TableCell>
-                <TableCell className="font-medium">{store.name}</TableCell>
-                <TableCell>{store.category}</TableCell>
-                <TableCell className="hidden md:table-cell">{store.address}</TableCell>
-                <TableCell>
-                  <Badge variant={getStatusVariant(store.status)}>{store.status}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <AlertDialog>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" disabled={isUpdating === store.id}>
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {store.status === 'Pendiente' && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleStatusUpdate(store.id, 'Aprobado')}>
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Aprobar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => handleStatusUpdate(store.id, 'Rechazado')}>
-                              <XCircle className="mr-2 h-4 w-4" />
-                              Rechazar
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        <DropdownMenuItem onClick={() => onEdit(store)}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Editar
-                        </DropdownMenuItem>
-                         <AlertDialogTrigger asChild>
-                           <DropdownMenuItem className="text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                           </DropdownMenuItem>
-                         </AlertDialogTrigger>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>¿Estás seguro que quieres eliminar {store.name}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Esta acción no se puede deshacer. Se eliminará permanentemente la tienda y todos sus productos.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => onDelete(store.id)}>Sí, eliminar</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Principal">
+          <Link href="/"><Home /><span>Principal</span></Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+
+      {/* Buyer & Guest specific menu */}
+      {!loading && user?.role === 'buyer' && (
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
+            <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      )}
+      
+      {!loading && !isStoreOwner && !isDelivery && (
+        <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
+          <SidebarMenuItem>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton>
+                <Store />
+                <span>Explorar Tiendas</span>
+                <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isStoresOpen && "rotate-180")} />
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+          </SidebarMenuItem>
+          <CollapsibleContent>
+            <SidebarMenuSub>
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton asChild isActive={pathname === '/stores/food'}>
+                  <Link href="/stores/food">
+                    <Utensils />
+                    <span>Comida</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton asChild isActive={pathname === '/stores/clothing'}>
+                  <Link href="/stores/clothing">
+                    <Shirt />
+                    <span>Ropa</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton asChild isActive={pathname === '/stores/other'}>
+                  <Link href="/stores/other">
+                    <ShoppingBag />
+                    <span>Otros</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            </SidebarMenuSub>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
+      {/* Store Owner specific menu */}
+      {!loading && isStoreOwner && (
+        <>
+          <Separator className="my-2" />
+          <Collapsible open={true} asChild>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                 <SidebarMenuButton>
+                    <Store />
+                    <span>Mi Tienda</span>
+                    <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform rotate-180" />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders')}>
+                      <Link href="/orders">
+                        <ClipboardList />
+                        <span>Pedidos</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  {user.storeId && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
+                        <Link href={`/stores/${user.storeId}`}>
+                          <Package />
+                          <span>Productos</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  )}
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/categories')}>
+                      <Link href="/my-store/categories">
+                        <Tag />
+                        <span>Categorías</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/analytics')}>
+                      <Link href="/my-store/analytics">
+                        <BarChart3 />
+                        <span>Analíticas</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/my-store'}>
+                      <Link href="/my-store">
+                        <Edit />
+                        <span>Editar Tienda</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </SidebarMenuItem>
+          </Collapsible>
+        </>
+      )}
+
+      {/* Delivery person specific menu */}
+      {!loading && isDelivery && (
+        <>
+         <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/orders'} tooltip="Entregas">
+              <Link href="/orders"><Truck /><span>Entregas</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/delivery/stats')} tooltip="Mis Estadísticas">
+              <Link href="/delivery/stats"><BarChart3 /><span>Mis Estadísticas</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </>
+      )}
+
+      {/* Admin Menu */}
+      {!loading && isAdmin && (
+        <>
+          <Separator className="my-2" />
+          <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton>
+                  <Shield />
+                  <span>Admin</span>
+                   <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isAdminOpen && "rotate-180")} />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                <SidebarMenuSubButton asChild isActive={pathname === '/admin'}>
+                    <Link href="/admin">
+                      <LayoutGrid />
+                      <span>Panel</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/delivery')}>
+                    <Link href="/admin/delivery">
+                      <Truck />
+                      <span>Reparto</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      )}
+    </SidebarMenu>
   );
 }
