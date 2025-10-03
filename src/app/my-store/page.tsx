@@ -16,7 +16,6 @@ import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Loader2, UploadCloud, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getStoreById, updateStoreData } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
@@ -34,7 +33,7 @@ type FormData = z.infer<typeof formSchema>;
 
 export default function MyStorePage() {
     const { user, loading: authLoading } = useAuth();
-    const { prototypeStores, updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
+    const { getStoreById: getPrototypeStoreById, updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
     const router = useRouter();
     const { toast } = useToast();
     
@@ -75,9 +74,10 @@ export default function MyStorePage() {
             setLoading(true);
             let storeData: Store | null | undefined = null;
             if (isPrototypeMode) {
-                storeData = prototypeStores.find(s => s.id === user?.storeId);
+                storeData = getPrototypeStoreById(user.storeId!);
             } else {
-                storeData = await getStoreById(user.storeId!);
+                // In real mode, you'd fetch from your DB
+                // storeData = await getStoreFromDB(user.storeId!);
             }
 
             if (storeData) {
@@ -97,7 +97,7 @@ export default function MyStorePage() {
         }
 
         fetchStore();
-    }, [user, authLoading, prototypeLoading, router, toast, form, isPrototypeMode, prototypeStores]);
+    }, [user, authLoading, prototypeLoading, router, toast, form, isPrototypeMode, getPrototypeStoreById]);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -130,14 +130,19 @@ export default function MyStorePage() {
     };
 
     async function onSubmit(values: FormData) {
-        if (!user?.storeId) return;
+        if (!user?.storeId || !store) return;
         
         setIsSubmitting(true);
         try {
             if (isPrototypeMode) {
-                updatePrototypeStore({ ...values, id: user.storeId });
+                // We only update fields from this form, preserving the rest of the store data
+                const updatedStoreData = {
+                    ...store,
+                    ...values
+                };
+                updatePrototypeStore(updatedStoreData);
             } else {
-                await updateStoreData(user.storeId, { ...values });
+                // await updateStoreDataInDB(user.storeId, { ...values });
             }
             toast({ title: '¡Tienda Actualizada!', description: 'La información de tu tienda ha sido guardada.' });
             router.push(`/stores/${user.storeId}`);

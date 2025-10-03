@@ -28,6 +28,7 @@ import {
   Edit,
   BarChart3,
   Contact,
+  Tag,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
@@ -148,6 +149,14 @@ export function MainNav() {
                     </SidebarMenuSubItem>
                   )}
                    <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/categories')}>
+                      <Link href="/my-store/categories">
+                        <Tag />
+                        <span>Categorías</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/analytics')}>
                       <Link href="/my-store/analytics">
                         <BarChart3 />
@@ -156,7 +165,7 @@ export function MainNav() {
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                    <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store') && !pathname.startsWith('/my-store/analytics')}>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/my-store'}>
                       <Link href="/my-store">
                         <Edit />
                         <span>Editar Tienda</span>

@@ -17,13 +17,14 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
 import { Progress } from "@/components/ui/progress";
-import { useParams } from "next/navigation";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
-  category: z.string().min(1, "Por favor, introduce una categoría."),
+  category: z.string({ required_error: "Debes seleccionar una categoría."}),
   imageUrl: z.string().url("Debe ser una URL válida.").optional().or(z.literal('')),
 });
 
@@ -43,10 +44,10 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   
   const isEditing = product !== null;
   const { toast } = useToast();
-  const params = useParams();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -190,10 +191,24 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <FormControl>
-                       <Input placeholder="Ej. Pizzas, Bebidas, Postres" {...field} disabled={isProcessing} />
-                    </FormControl>
-                     <FormMessage />
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isProcessing}>
+                       <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona una categoría" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {productCategories.length > 0 ? (
+                            productCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)
+                          ) : (
+                             <div className="p-4 text-sm text-center text-muted-foreground">
+                                <p>No hay categorías definidas.</p>
+                                <Button variant="link" className="p-0 h-auto" onClick={() => { setIsOpen(false); router.push('/my-store/categories'); }}>Añadir una</Button>
+                            </div>
+                          )}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -255,7 +270,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               </FormItem>
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isProcessing || isUploading}>
+              <Button type="submit" disabled={isProcessing || isUploading || productCategories.length === 0}>
                 {isProcessing ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
