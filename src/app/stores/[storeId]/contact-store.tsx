@@ -23,7 +23,7 @@ export function ContactStore({ storeId }: { storeId: string }) {
 
     setLoading(true);
     try {
-      const chatId = await getOrCreateChat(user.uid, storeId);
+      const chatId = await getOrCreateChat({ uid: user.uid, name: user.name }, storeId);
       router.push(`/chat/${chatId}`);
     } catch (error) {
       console.error('Error creating or getting chat:', error);

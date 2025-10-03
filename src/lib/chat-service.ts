@@ -1,17 +1,16 @@
-
 'use client';
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
-import { getUserProfile } from './user'; // Importar función para obtener perfil
+import type { UserProfile } from './user';
 
 /**
  * Gets or creates a chat room between a user and a store owner.
- * @param userId - The ID of the user.
+ * @param currentUser - The profile of the user initiating the chat.
  * @param storeId - The ID of the store.
  * @returns The ID of the chat room.
  */
-export async function getOrCreateChat(userId: string, storeId: string): Promise<string> {
+export async function getOrCreateChat(currentUser: { uid: string, name: string }, storeId: string): Promise<string> {
     const chatsRef = collection(db, 'chats');
 
     // First, get the store owner's ID
@@ -26,10 +25,16 @@ export async function getOrCreateChat(userId: string, storeId: string): Promise<
         throw new Error("Store owner not found");
     }
 
+    if (currentUser.uid === ownerId) {
+        throw new Error("Cannot create a chat with yourself.");
+    }
+    
     // Query for a chat containing both the user and the store owner ID.
+    // Firestore requires the array elements to be in sorted order for this type of query.
+    const sortedParticipants = [currentUser.uid, ownerId].sort();
     const q = query(
         chatsRef,
-        where('participants', '==', [userId, ownerId].sort())
+        where('participants', '==', sortedParticipants)
     );
 
     const querySnapshot = await getDocs(q);
@@ -39,21 +44,16 @@ export async function getOrCreateChat(userId: string, storeId: string): Promise<
         return querySnapshot.docs[0].id;
     } else {
         // If no chat exists, create a new one.
-        const userProfile = await getUserProfile(userId);
-        if (!userProfile) {
-            throw new Error("User profile not found");
-        }
-        
         const newChatRef = await addDoc(chatsRef, {
-            participants: [userId, ownerId].sort(), // Store sorted participants for consistent querying
+            participants: sortedParticipants,
             participantInfo: {
-                [userId]: {
-                    name: userProfile.name || 'Comprador',
+                [currentUser.uid]: {
+                    name: currentUser.name || 'Comprador',
                     role: 'buyer',
-                    imageUrl: getPlaceholderImage(userId, 64, 64) // Assuming buyers have placeholder images
+                    imageUrl: getPlaceholderImage(currentUser.uid, 64, 64)
                 },
                 [ownerId]: {
-                    name: storeData.name, // The public store name
+                    name: storeData.name,
                     role: 'store',
                     imageUrl: storeData.imageUrl,
                 }
