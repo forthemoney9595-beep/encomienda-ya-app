@@ -1,3 +1,4 @@
+
 'use client';
 
 import { getOrCreateChat } from '@/lib/chat-service';
@@ -7,10 +8,12 @@ import { MessageCircle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-
+import { usePrototypeData } from '@/context/prototype-data-context';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 export function ContactStore({ storeId }: { storeId: string }) {
   const { user, loading: authLoading } = useAuth();
+  const { getStoreById, loading: prototypeLoading } = usePrototypeData();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -23,21 +26,40 @@ export function ContactStore({ storeId }: { storeId: string }) {
 
     setLoading(true);
     try {
-      const chatId = await getOrCreateChat({ uid: user.uid, name: user.name }, storeId);
+      const store = getStoreById(storeId);
+      if (!store || !store.ownerId) {
+        throw new Error("Información de la tienda o del propietario no encontrada.");
+      }
+      
+      const currentUserInfo = {
+        uid: user.uid,
+        name: user.name,
+        role: user.role,
+        imageUrl: getPlaceholderImage(user.uid, 64, 64)
+      };
+
+      const storeInfo = {
+        id: store.id,
+        name: store.name,
+        ownerId: store.ownerId,
+        imageUrl: store.imageUrl
+      };
+
+      const chatId = await getOrCreateChat(currentUserInfo, storeInfo);
       router.push(`/chat/${chatId}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating or getting chat:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'No se pudo iniciar el chat. Inténtalo de nuevo.',
+        description: error.message || 'No se pudo iniciar el chat. Inténtalo de nuevo.',
       });
     } finally {
       setLoading(false);
     }
   };
 
-  if (authLoading || (user && user.storeId === storeId)) {
+  if (authLoading || prototypeLoading || (user && user.storeId === storeId)) {
     return null;
   }
   

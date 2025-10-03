@@ -1,79 +1,72 @@
+
 'use client';
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import type { Store } from './placeholder-data';
+
+
+type UserInfo = {
+    uid: string;
+    name: string;
+    role: 'buyer' | 'store' | 'delivery' | 'admin';
+    imageUrl: string;
+}
+
+type StoreInfo = {
+    id: string;
+    name: string;
+    ownerId: string;
+    imageUrl: string;
+}
 
 /**
  * Gets or creates a chat room between a user and a store owner.
- * @param currentUser - The profile of the user initiating the chat.
- * @param storeId - The ID of the store.
+ * This is now a pure function that receives all necessary data.
+ * @param currentUserInfo - The profile of the user initiating the chat.
+ * @param storeInfo - The profile of the store being contacted.
  * @returns The ID of the chat room.
  */
-export async function getOrCreateChat(currentUser: { uid: string, name: string }, storeId: string): Promise<string> {
+export async function getOrCreateChat(currentUserInfo: UserInfo, storeInfo: StoreInfo): Promise<string> {
+    if (!storeInfo.ownerId) {
+        throw new Error("La tienda no tiene un propietario asignado. No se puede crear el chat.");
+    }
+    if (currentUserInfo.uid === storeInfo.ownerId) {
+        throw new Error("No puedes crear un chat contigo mismo.");
+    }
+
     const chatsRef = collection(db, 'chats');
-
-    const storeDocRef = doc(db, 'stores', storeId);
-    const storeDoc = await getDoc(storeDocRef);
-    if (!storeDoc.exists()) {
-        const { prototypeStores } = usePrototypeData.getState();
-        const protoStore = prototypeStores.find(s => s.id === storeId);
-        if(!protoStore) throw new Error("Store not found");
-
-        const ownerId = protoStore.ownerId;
-        if (!ownerId) throw new Error("Store owner not found. Cannot create chat.");
-        if (currentUser.uid === ownerId) throw new Error("Cannot create a chat with yourself.");
-
-        const sortedParticipants = [currentUser.uid, ownerId].sort();
-        const q = query(chatsRef, where('participants', '==', sortedParticipants));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) return querySnapshot.docs[0].id;
-
-        const newChatRef = await addDoc(chatsRef, {
-            participants: sortedParticipants,
-            participantInfo: {
-                [currentUser.uid]: { name: currentUser.name, role: 'buyer', imageUrl: getPlaceholderImage(currentUser.uid, 64, 64) },
-                [ownerId]: { name: protoStore.name, role: 'store', imageUrl: protoStore.imageUrl }
-            },
-            createdAt: serverTimestamp(),
-            lastMessage: null,
-            lastMessageTimestamp: null,
-        });
-        return newChatRef.id;
-    }
+    const sortedParticipants = [currentUserInfo.uid, storeInfo.ownerId].sort();
     
-    const storeData = storeDoc.data();
-    const ownerId = storeData.ownerId;
-
-    if (!ownerId) {
-        throw new Error("Store owner not found. Cannot create chat.");
-    }
-
-    if (currentUser.uid === ownerId) {
-        throw new Error("Cannot create a chat with yourself.");
-    }
-    
-    const sortedParticipants = [currentUser.uid, ownerId].sort();
+    // Check if a chat already exists
     const q = query(chatsRef, where('participants', '==', sortedParticipants));
-
     const querySnapshot = await getDocs(q);
 
     if (!querySnapshot.empty) {
         return querySnapshot.docs[0].id;
-    } else {
-        const newChatRef = await addDoc(chatsRef, {
-            participants: sortedParticipants,
-            participantInfo: {
-                [currentUser.uid]: { name: currentUser.name, role: 'buyer', imageUrl: getPlaceholderImage(currentUser.uid, 64, 64) },
-                [ownerId]: { name: storeData.name, role: 'store', imageUrl: storeData.imageUrl }
-            },
-            createdAt: serverTimestamp(),
-            lastMessage: null,
-            lastMessageTimestamp: null,
-        });
-        return newChatRef.id;
     }
+
+    // Create a new chat if it doesn't exist
+    const newChatRef = await addDoc(chatsRef, {
+        participants: sortedParticipants,
+        participantInfo: {
+            [currentUserInfo.uid]: { 
+                name: currentUserInfo.name, 
+                role: 'buyer', 
+                imageUrl: currentUserInfo.imageUrl 
+            },
+            [storeInfo.ownerId]: { 
+                name: storeInfo.name, 
+                role: 'store', 
+                imageUrl: storeInfo.imageUrl 
+            }
+        },
+        createdAt: serverTimestamp(),
+        lastMessage: null,
+        lastMessageTimestamp: null,
+    });
+    
+    return newChatRef.id;
 }
 
 
