@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useAuth } from '@/context/auth-context';
@@ -6,13 +5,16 @@ import { usePrototypeData } from '@/context/prototype-data-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { subDays, format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Package, ShoppingCart, Banknote } from 'lucide-react';
+import { Package, ShoppingCart, Banknote, Crown, User, TrendingUp } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 export default function StoreAnalyticsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -57,6 +59,43 @@ export default function StoreAnalyticsPage() {
         });
     }, [storeOrders]);
 
+    const topProducts = useMemo(() => {
+        const productSales = new Map<string, { name: string, quantity: number, revenue: number, imageUrl?: string }>();
+        storeOrders.forEach(order => {
+            order.items.forEach(item => {
+                const existing = productSales.get(item.id);
+                const revenue = item.price * item.quantity;
+                if (existing) {
+                    existing.quantity += item.quantity;
+                    existing.revenue += revenue;
+                } else {
+                    productSales.set(item.id, { name: item.name, quantity: item.quantity, revenue, imageUrl: item.imageUrl });
+                }
+            });
+        });
+        return Array.from(productSales.values())
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 3);
+    }, [storeOrders]);
+
+    const topCustomers = useMemo(() => {
+        const customerData = new Map<string, { name: string, orders: number, total: number }>();
+        storeOrders.forEach(order => {
+            const customerId = order.userId;
+            const customerName = order.customerName || 'Cliente Anónimo';
+            const existing = customerData.get(customerId);
+            if (existing) {
+                existing.orders += 1;
+                existing.total += order.total;
+            } else {
+                customerData.set(customerId, { name: customerName, orders: 1, total: order.total });
+            }
+        });
+        return Array.from(customerData.values())
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 3);
+    }, [storeOrders]);
+
 
     if (authLoading || prototypeLoading || !user) {
         return (
@@ -68,7 +107,13 @@ export default function StoreAnalyticsPage() {
                         <Skeleton className="h-28" />
                         <Skeleton className="h-28" />
                     </div>
-                    <Skeleton className="h-80" />
+                    <div className="grid gap-4 mt-8 lg:grid-cols-2">
+                        <Skeleton className="h-96" />
+                        <div className="space-y-4">
+                            <Skeleton className="h-48" />
+                            <Skeleton className="h-48" />
+                        </div>
+                    </div>
                 </div>
             </div>
         )
@@ -111,34 +156,92 @@ export default function StoreAnalyticsPage() {
                 </Card>
             </div>
 
-            <div className="mt-8">
-                <Card>
+             <div className="grid gap-6 mt-6 md:grid-cols-5">
+                <Card className="md:col-span-3">
                     <CardHeader>
                         <CardTitle>Ventas de los Últimos 7 Días</CardTitle>
                     </CardHeader>
-                    <CardContent className="h-80">
-                       <ChartContainer config={{
-                           Ventas: {
-                               label: "Ventas",
-                               color: "hsl(var(--chart-1))",
-                           }
-                       }}>
-                         <BarChart data={salesData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
+                    <CardContent className="pl-2">
+                       <ChartContainer config={{ Ventas: { label: "Ventas", color: "hsl(var(--chart-1))" }}} className="h-[350px] w-full">
+                         <RechartsBarChart data={salesData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid vertical={false} />
                             <XAxis dataKey="date" tickLine={false} tickMargin={10} axisLine={false} />
                             <YAxis tickLine={false} axisLine={false} tickMargin={10} tickFormatter={(value) => `$${value}`} />
-                            <ChartTooltip
-                                cursor={false} 
-                                content={<ChartTooltipContent 
-                                    indicator="dot"
-                                    formatter={(value) => `$${Number(value).toFixed(2)}`}
-                                />} 
-                            />
+                            <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => `$${Number(value).toFixed(2)}`} />} />
                             <Bar dataKey="Ventas" fill="var(--color-Ventas)" radius={4} />
-                        </BarChart>
+                        </RechartsBarChart>
                        </ChartContainer>
                     </CardContent>
                 </Card>
+                <div className="md:col-span-2 space-y-6">
+                    <Card>
+                        <CardHeader>
+                           <CardTitle className="flex items-center gap-2"><TrendingUp /> Productos Más Vendidos</CardTitle>
+                           <CardDescription>por ingresos generados.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                           {topProducts.length > 0 ? (
+                             <Table>
+                               <TableHeader>
+                                 <TableRow>
+                                   <TableHead>Producto</TableHead>
+                                   <TableHead className="text-right">Ingresos</TableHead>
+                                 </TableRow>
+                               </TableHeader>
+                               <TableBody>
+                                 {topProducts.map((product, index) => (
+                                   <TableRow key={index}>
+                                     <TableCell className="flex items-center gap-2">
+                                       <Avatar className="h-8 w-8">
+                                         <AvatarImage src={product.imageUrl} alt={product.name}/>
+                                         <AvatarFallback>{product.name.charAt(0)}</AvatarFallback>
+                                       </Avatar>
+                                       <span className="font-medium">{product.name}</span>
+                                     </TableCell>
+                                     <TableCell className="text-right font-bold">${product.revenue.toFixed(2)}</TableCell>
+                                   </TableRow>
+                                 ))}
+                               </TableBody>
+                             </Table>
+                           ) : <p className="text-sm text-muted-foreground text-center py-4">No hay datos de productos.</p>}
+                        </CardContent>
+                    </Card>
+                     <Card>
+                        <CardHeader>
+                           <CardTitle className="flex items-center gap-2"><Crown /> Clientes Frecuentes</CardTitle>
+                           <CardDescription>por total gastado.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {topCustomers.length > 0 ? (
+                             <Table>
+                               <TableHeader>
+                                 <TableRow>
+                                   <TableHead>Cliente</TableHead>
+                                   <TableHead className="text-right">Total Gastado</TableHead>
+                                 </TableRow>
+                               </TableHeader>
+                               <TableBody>
+                                 {topCustomers.map((customer, index) => (
+                                   <TableRow key={index}>
+                                     <TableCell className="flex items-center gap-2">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarImage src={getPlaceholderImage(customer.name, 40, 40)} alt={customer.name} />
+                                            <AvatarFallback>{customer.name.charAt(0)}</AvatarFallback>
+                                        </Avatar>
+                                       <div>
+                                            <p className="font-medium">{customer.name}</p>
+                                            <p className="text-xs text-muted-foreground">{customer.orders} pedido(s)</p>
+                                        </div>
+                                     </TableCell>
+                                     <TableCell className="text-right font-bold">${customer.total.toFixed(2)}</TableCell>
+                                   </TableRow>
+                                 ))}
+                               </TableBody>
+                             </Table>
+                           ) : <p className="text-sm text-muted-foreground text-center py-4">No hay datos de clientes.</p>}
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </div>
     );
