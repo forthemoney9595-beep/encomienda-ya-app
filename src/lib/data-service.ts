@@ -20,10 +20,12 @@ export async function getStores(all: boolean = false): Promise<Store[]> {
     
     const querySnapshot = await getDocs(q);
     
-    stores = querySnapshot.docs.map(doc => {
-      const data = doc.data();
+    const storePromises = querySnapshot.docs.map(async (docSnapshot) => {
+      const data = docSnapshot.data();
+      // Fetch products for each store
+      const products = await getProductsByStoreId(docSnapshot.id);
       return {
-        id: doc.id,
+        id: docSnapshot.id,
         name: data.name || '',
         category: data.category || '',
         address: data.address || '',
@@ -33,9 +35,11 @@ export async function getStores(all: boolean = false): Promise<Store[]> {
         status: data.status || 'Pendiente',
         ownerId: data.ownerId || '',
         productCategories: data.productCategories || [data.category] || [],
-        products: [], // Products are fetched separately
+        products: products,
       };
     });
+
+    stores = await Promise.all(storePromises);
 
   } catch (error) {
     console.error("Error fetching stores from Firestore: ", error);
@@ -56,6 +60,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const data = docSnap.data();
+      const products = await getProductsByStoreId(id);
       return { 
         id: docSnap.id,
         name: data.name || '',
@@ -67,7 +72,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
         status: data.status || 'Pendiente',
         ownerId: data.ownerId || '',
         productCategories: data.productCategories || [data.category] || [],
-        products: [], // Products are fetched separately
+        products: products,
       } as Store;
     } else {
       console.log(`No store found with id: ${id}`);

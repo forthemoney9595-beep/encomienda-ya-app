@@ -14,6 +14,7 @@ import { usePrototypeData } from '@/context/prototype-data-context';
 import { Button } from '@/components/ui/button';
 import { Edit, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { getStoreById } from '@/lib/data-service';
 
 function StoreDetailSkeleton() {
     return (
@@ -72,20 +73,26 @@ export default function StoreDetailPage() {
   const router = useRouter();
   const storeId = params.storeId as string;
   const { user, loading: authLoading } = useAuth();
-  const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
+  const { getStoreById: getPrototypeStoreById, loading: prototypeLoading } = usePrototypeData();
   
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
   const isOwner = user?.storeId === storeId;
+  const isPrototype = user?.uid.startsWith('proto-');
 
   useEffect(() => {
     async function fetchData() {
         if (!storeId || authLoading || prototypeLoading) return;
         
         setLoading(true);
-        // In pure prototype mode, we only fetch from prototype context
-        const storeData = prototypeStores.find(s => s.id === storeId);
+        let storeData: Store | null | undefined;
+        
+        if (isPrototype) {
+            storeData = getPrototypeStoreById(storeId);
+        } else {
+            storeData = await getStoreById(storeId);
+        }
         
         if (!storeData) {
             notFound();
@@ -96,7 +103,7 @@ export default function StoreDetailPage() {
         setLoading(false);
     }
     fetchData();
-  }, [storeId, prototypeStores, prototypeLoading, authLoading, user]);
+  }, [storeId, prototypeLoading, authLoading, user, isPrototype, getPrototypeStoreById]);
 
 
   if (loading) {

@@ -27,6 +27,7 @@ import {
   Package,
   Edit,
   BarChart3,
+  Contact,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
@@ -59,7 +60,7 @@ export function MainNav() {
       </SidebarMenuItem>
 
       {/* Buyer & Guest specific menu */}
-      {!loading && isBuyer && (
+      {!loading && (isBuyer || user) && (
         <>
           {user && (
             

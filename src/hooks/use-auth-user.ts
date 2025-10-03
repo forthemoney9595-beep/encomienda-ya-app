@@ -4,6 +4,9 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { useAuthInstance } from '@/firebase/provider';
+import { prototypeUsers } from '@/lib/placeholder-data';
+import type { UserProfile } from '@/lib/user';
+
 
 export interface AuthUserHookResult {
     user: FirebaseUser | null;

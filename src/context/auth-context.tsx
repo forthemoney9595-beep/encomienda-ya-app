@@ -2,12 +2,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getAuth, onAuthStateChanged, User, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, User, signInWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
 import { prototypeUsers } from '@/lib/placeholder-data';
 import type { UserProfile as AppUserProfile } from '@/lib/user';
-import { useAuthInstance, useFirestore } from '@/firebase';
+import { useAuthInstance } from '@/firebase';
 
 interface AuthContextType {
     user: AppUserProfile | null;
@@ -20,6 +20,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const PROTOTYPE_USER_KEY = 'prototypeUserEmail';
+const PROTOTYPE_PROFILE_KEY = 'prototypeUserProfile';
+
 
 async function fetchUserStoreId(uid: string): Promise<string | undefined> {
     const { firestore } = getFirebase();
@@ -51,6 +53,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 // If there's a real Firebase user, fetch their profile from Firestore
                 const userDocRef = doc(getFirebase().firestore, 'users', firebaseUser.uid);
                 const userDoc = await getDoc(userDocRef);
+                
+                const prototypeProfileEmail = sessionStorage.getItem(PROTOTYPE_PROFILE_KEY);
+
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     const profileToSet: AppUserProfile = {
@@ -63,18 +68,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                          profileToSet.storeId = await fetchUserStoreId(firebaseUser.uid);
                     }
                     setUser(profileToSet);
-                } else {
-                    // This can happen if user is created but profile is not yet, e.g. during signup
+                } else if (prototypeProfileEmail && prototypeUsers[prototypeProfileEmail]) {
+                    // This handles the case where we are in prototype mode with an anonymous user
+                    const protoUser = prototypeUsers[prototypeProfileEmail];
+                    setUser({
+                        ...protoUser,
+                        uid: firebaseUser.uid, // Use the REAL anonymous UID
+                    });
+                }
+                else {
                     setUser(null);
                 }
             } else {
-                // If no Firebase user, check for a prototype user in session storage
-                const prototypeEmail = sessionStorage.getItem(PROTOTYPE_USER_KEY);
-                if (prototypeEmail && prototypeUsers[prototypeEmail]) {
-                    setUser(prototypeUsers[prototypeEmail]);
-                } else {
-                    setUser(null);
-                }
+                setUser(null);
             }
             setLoading(false);
         });
@@ -82,16 +88,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => unsubscribe();
     }, [isClient, auth]);
 
-    const loginForPrototype = (email: string) => {
+    const loginForPrototype = async (email: string) => {
         if (prototypeUsers[email]) {
-            sessionStorage.setItem(PROTOTYPE_USER_KEY, email);
-            setUser(prototypeUsers[email]);
+            try {
+                await signInAnonymously(auth);
+                // The onAuthStateChanged listener will handle setting the user,
+                // after which we can store the desired prototype profile
+                sessionStorage.setItem(PROTOTYPE_PROFILE_KEY, email);
+
+            } catch (error) {
+                console.error("Anonymous sign-in for prototype failed:", error);
+            }
         }
     };
 
     const logoutForPrototype = async () => {
         await auth.signOut();
-        sessionStorage.removeItem(PROTOTYPE_USER_KEY);
+        sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
         setUser(null);
     };
 

@@ -5,6 +5,8 @@
 import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 import { getFirebase } from '@/lib/firebase';
 import { getPlaceholderImage } from './placeholder-images';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { errorEmitter } from '@/firebase/error-emitter';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -60,7 +62,16 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
   }
 
   // Use a non-blocking write with contextual error handling
-  await setDoc(userDocRef, profileData)
+  setDoc(userDocRef, profileData).catch(error => {
+    errorEmitter.emit(
+      'permission-error',
+      new FirestorePermissionError({
+        path: userDocRef.path,
+        operation: 'write',
+        requestResourceData: profileData,
+      })
+    )
+  });
 }
 
 /**

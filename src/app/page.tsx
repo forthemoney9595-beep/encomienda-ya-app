@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,26 +12,45 @@ import { usePrototypeData } from '@/context/prototype-data-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
+import { getStores } from '@/lib/data-service';
 
 export default function Home() {
-  const { loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
   const [searchQuery, setSearchQuery] = useState('');
-  
-  const approvedStores = prototypeStores.filter(
-    store => store.status === 'Aprobado'
-  );
+  const [stores, setStores] = useState<Store[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const isPrototype = user?.uid.startsWith('proto-');
+
+  useEffect(() => {
+    async function fetchStores() {
+      setLoading(true);
+      if (isPrototype) {
+        setStores(prototypeStores.filter(store => store.status === 'Aprobado'));
+      } else {
+        const fetchedStores = await getStores();
+        setStores(fetchedStores);
+      }
+      setLoading(false);
+    }
+    
+    if (!prototypeLoading) {
+        fetchStores();
+    }
+  }, [isPrototype, prototypeStores, prototypeLoading]);
+
 
   const filteredStores = useMemo(() => {
     if (!searchQuery) {
-      return approvedStores;
+      return stores;
     }
-    return approvedStores.filter(store =>
+    return stores.filter(store =>
       store.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [approvedStores, searchQuery]);
+  }, [stores, searchQuery]);
 
-  const isLoading = authLoading || prototypeLoading;
+  const isLoading = authLoading || loading;
 
   return (
     <div className="container mx-auto">

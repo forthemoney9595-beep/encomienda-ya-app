@@ -18,6 +18,7 @@ import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 
 interface ProductListProps {
     products: Product[];
@@ -56,6 +57,7 @@ export function ProductList({ products: initialProducts, productCategories: init
     const [searchQuery, setSearchQuery] = useState('');
 
     const isOwner = user?.uid === ownerId;
+    const isPrototype = user?.uid.startsWith('proto-');
 
     useEffect(() => {
         setProducts(initialProducts);
@@ -79,10 +81,18 @@ export function ProductList({ products: initialProducts, productCategories: init
         const isEditing = products.some(p => p.id === productData.id);
         
         try {
-            if (isEditing) {
-                updatePrototypeProduct(currentStoreId, productData);
+            if (isPrototype) {
+                 if (isEditing) {
+                    updatePrototypeProduct(currentStoreId, productData);
+                } else {
+                    addPrototypeProduct(currentStoreId, productData);
+                }
             } else {
-                addPrototypeProduct(currentStoreId, productData);
+                if (isEditing) {
+                    await updateProductInStore(currentStoreId, productData.id, productData);
+                } else {
+                    await addProductToStore(currentStoreId, productData, productCategories);
+                }
             }
              
             if (isEditing) {
@@ -106,7 +116,11 @@ export function ProductList({ products: initialProducts, productCategories: init
 
     const handleDeleteProduct = async (productId: string) => {
         try {
-            deletePrototypeProduct(currentStoreId, productId);
+            if (isPrototype) {
+                deletePrototypeProduct(currentStoreId, productId);
+            } else {
+                await deleteProductFromStore(currentStoreId, productId);
+            }
             
             setProducts(prev => prev.filter(p => p.id !== productId));
            
