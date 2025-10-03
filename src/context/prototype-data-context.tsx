@@ -4,7 +4,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
-import { initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery, initialPrototypeNotifications } from '@/lib/placeholder-data';
+import { initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery, initialPrototypeNotifications, initialPrototypeOrders } from '@/lib/placeholder-data';
 import type { Store, Product, DeliveryPersonnel, Notification } from '@/lib/placeholder-data';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -59,10 +59,13 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         if (isClient) {
             try {
                 const storedOrders = sessionStorage.getItem(PROTOTYPE_ORDERS_KEY);
-                const loadedOrders = storedOrders 
-                    ? JSON.parse(storedOrders, (key, value) => key === 'createdAt' ? new Date(value) : value)
-                    : [];
-                 setOrders(loadedOrders);
+                const loadedOrders = storedOrders
+                    ? JSON.parse(storedOrders, (key, value) => (key === 'createdAt' || key === 'date') && value ? new Date(value) : value)
+                    : initialPrototypeOrders;
+                setOrders(loadedOrders);
+                if (!storedOrders) {
+                    sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+                }
 
                 const storedStores = sessionStorage.getItem(PROTOTYPE_STORES_KEY);
                 setStores(storedStores ? JSON.parse(storedStores) : initialPrototypeStores);
@@ -75,8 +78,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
             } catch (error) {
                 console.error("Failed to load prototype data from session storage, resetting.", error);
-                sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify([]));
-                setOrders([]);
+                sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+                setOrders(initialPrototypeOrders);
                 sessionStorage.setItem(PROTOTYPE_STORES_KEY, JSON.stringify(initialPrototypeStores));
                 setStores(initialPrototypeStores);
                 sessionStorage.setItem(PROTOTYPE_DELIVERY_KEY, JSON.stringify(initialPrototypeDelivery));
@@ -343,3 +346,6 @@ export const usePrototypeData = () => {
     }
     return context;
 };
+
+
+    
