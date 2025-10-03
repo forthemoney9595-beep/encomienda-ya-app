@@ -54,9 +54,9 @@ export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: Manage
 
   const handleSubmit = (values: FormData) => {
     const driverData: DeliveryPersonnel = {
-      id: isEditing ? driver.id : `proto-delivery-${Date.now()}`,
+      id: isEditing && driver ? driver.id : `proto-delivery-${Date.now()}`,
       ...values,
-      zone: isEditing ? driver.zone : 'Centro',
+      zone: isEditing && driver ? driver.zone : 'Centro',
     };
     onSave(driverData);
   };
