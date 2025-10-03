@@ -1,10 +1,10 @@
 
+
 'use client';
 
-import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc, type Firestore } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirebase } from '@/lib/firebase';
 import { getPlaceholderImage } from './placeholder-images';
-import { FirestorePermissionError } from '@/firebase/errors';
-import { errorEmitter } from '@/firebase/error-emitter';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -24,9 +24,10 @@ export interface UserProfile extends UserProfileData {
  * @param uid The user's ID.
  * @returns The user profile object or null if not found.
  */
-export async function getUserProfile(db: Firestore, uid: string): Promise<UserProfile | null> {
+export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+    const { firestore } = getFirebase();
     try {
-        const userDocRef = doc(db, 'users', uid);
+        const userDocRef = doc(firestore, 'users', uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
             return { uid, ...userDoc.data() } as UserProfile;
@@ -44,8 +45,9 @@ export async function getUserProfile(db: Firestore, uid: string): Promise<UserPr
  * @param uid El ID de usuario de Firebase Authentication.
  * @param data Los datos del perfil del usuario a guardar.
  */
-export async function createUserProfile(db: Firestore, uid: string, data: UserProfileData) {
-  const userDocRef = doc(db, 'users', uid);
+export async function createUserProfile(uid: string, data: UserProfileData) {
+  const { firestore } = getFirebase();
+  const userDocRef = doc(firestore, 'users', uid);
     
   const profileData: any = {
     uid, 
@@ -58,17 +60,7 @@ export async function createUserProfile(db: Firestore, uid: string, data: UserPr
   }
 
   // Use a non-blocking write with contextual error handling
-  setDoc(userDocRef, profileData).catch(serverError => {
-      const permissionError = new FirestorePermissionError({
-          path: userDocRef.path,
-          operation: 'write',
-          requestResourceData: profileData,
-      });
-      // Emit the error globally
-      errorEmitter.emit('permission-error', permissionError);
-      // We don't re-throw here, the listener will handle it.
-      console.error("Error creating user profile, handled by emitter:", serverError);
-  });
+  await setDoc(userDocRef, profileData)
 }
 
 /**
@@ -76,9 +68,10 @@ export async function createUserProfile(db: Firestore, uid: string, data: UserPr
  * @param ownerId The UID of the user who owns the store.
  * @param storeData Data for the new store.
  */
-export async function createStoreForUser(db: Firestore, ownerId: string, storeData: { name: string, category: string, address: string }) {
+export async function createStoreForUser(ownerId: string, storeData: { name: string, category: string, address: string }) {
+    const { firestore } = getFirebase();
     try {
-        const storeCollectionRef = collection(db, 'stores');
+        const storeCollectionRef = collection(firestore, 'stores');
         const newStoreRef = doc(storeCollectionRef); // Create a new doc reference with an auto-generated ID
 
         // Then, set the store document
@@ -94,7 +87,7 @@ export async function createStoreForUser(db: Firestore, ownerId: string, storeDa
         });
         
         // Update the user's profile with the new storeId first
-        const userDocRef = doc(db, 'users', ownerId);
+        const userDocRef = doc(firestore, 'users', ownerId);
         await updateDoc(userDocRef, { storeId: newStoreRef.id });
 
 

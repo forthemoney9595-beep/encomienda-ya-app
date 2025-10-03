@@ -1,29 +1,29 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { doc, getDoc, collection, query, where, getDocs, type Firestore } from 'firebase/firestore';
-import { useFirestore, useAuthInstance } from '@/firebase';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { getAuth, onAuthStateChanged, User, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { getFirebase } from '@/lib/firebase';
 import { prototypeUsers } from '@/lib/placeholder-data';
 import type { UserProfile as AppUserProfile } from '@/lib/user';
-import { useAuthUser } from '@/hooks/use-auth-user';
-import { User as FirebaseUser, signInAnonymously } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
+import { useAuthInstance, useFirestore } from '@/firebase';
 
 interface AuthContextType {
     user: AppUserProfile | null;
     loading: boolean;
     isAdmin: boolean;
-    loginForPrototype: (email: string) => Promise<void>; 
+    loginForPrototype: (email: string) => void;
     logoutForPrototype: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const PROTOTYPE_PROFILE_KEY = 'prototypeUserProfile';
+const PROTOTYPE_USER_KEY = 'prototypeUserEmail';
 
-async function fetchUserStoreId(db: Firestore, uid: string): Promise<string | undefined> {
-    const storesRef = collection(db, 'stores');
+async function fetchUserStoreId(uid: string): Promise<string | undefined> {
+    const { firestore } = getFirebase();
+    const storesRef = collection(firestore, 'stores');
     const q = query(storesRef, where('ownerId', '==', uid));
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
@@ -33,93 +33,71 @@ async function fetchUserStoreId(db: Firestore, uid: string): Promise<string | un
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const { user: firebaseUser, isUserLoading: isAuthUserLoading } = useAuthUser();
-    const [appUser, setAppUser] = useState<AppUserProfile | null>(null);
+    const [user, setUser] = useState<AppUserProfile | null>(null);
     const [loading, setLoading] = useState(true);
-    const db = useFirestore();
+    const [isClient, setIsClient] = useState(false);
     const auth = useAuthInstance();
-    const router = useRouter();
 
-    const fetchAppUserProfile = useCallback(async (fbUser: FirebaseUser): Promise<AppUserProfile | null> => {
-        const prototypeProfileEmail = sessionStorage.getItem(PROTOTYPE_PROFILE_KEY);
-        
-        if (prototypeProfileEmail && fbUser.isAnonymous) {
-            const protoUser = Object.values(prototypeUsers).find(u => u.email === prototypeProfileEmail);
-            if (protoUser) {
-                // Return the prototype profile but keep the real anonymous UID
-                return { ...protoUser, uid: fbUser.uid };
-            }
-        }
-        
-        const userDocRef = doc(db, 'users', fbUser.uid);
-        const userDoc = await getDoc(userDocRef);
-
-        if (userDoc.exists()) {
-            const userData = userDoc.data();
-            const profileToSet: AppUserProfile = {
-                uid: fbUser.uid,
-                email: fbUser.email!,
-                ...userData
-            } as AppUserProfile;
-            
-            if (profileToSet.role === 'store' && !profileToSet.storeId) {
-                 profileToSet.storeId = await fetchUserStoreId(db, fbUser.uid);
-            }
-            return profileToSet;
-        }
-        return null;
-    }, [db]);
-    
     useEffect(() => {
-        const manageUser = async () => {
-            if (isAuthUserLoading) {
-                setLoading(true);
-                return;
-            }
+        setIsClient(true);
+    }, []);
 
+    useEffect(() => {
+        if (!isClient) return;
+
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
+            setLoading(true);
             if (firebaseUser) {
-                const profile = await fetchAppUserProfile(firebaseUser);
-                setAppUser(profile);
+                // If there's a real Firebase user, fetch their profile from Firestore
+                const userDocRef = doc(getFirebase().firestore, 'users', firebaseUser.uid);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    const profileToSet: AppUserProfile = {
+                        uid: firebaseUser.uid,
+                        email: firebaseUser.email!,
+                        ...userData
+                    } as AppUserProfile;
+                    
+                    if (profileToSet.role === 'store' && !profileToSet.storeId) {
+                         profileToSet.storeId = await fetchUserStoreId(firebaseUser.uid);
+                    }
+                    setUser(profileToSet);
+                } else {
+                    // This can happen if user is created but profile is not yet, e.g. during signup
+                    setUser(null);
+                }
             } else {
-                setAppUser(null);
-                 if (sessionStorage.getItem(PROTOTYPE_PROFILE_KEY)) {
-                    sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
+                // If no Firebase user, check for a prototype user in session storage
+                const prototypeEmail = sessionStorage.getItem(PROTOTYPE_USER_KEY);
+                if (prototypeEmail && prototypeUsers[prototypeEmail]) {
+                    setUser(prototypeUsers[prototypeEmail]);
+                } else {
+                    setUser(null);
                 }
             }
             setLoading(false);
-        };
-        
-        manageUser();
-    }, [firebaseUser, isAuthUserLoading, fetchAppUserProfile]);
+        });
 
-    const loginForPrototype = useCallback(async (email: string) => {
-        setLoading(true);
-        try {
-            await signInAnonymously(auth);
-            sessionStorage.setItem(PROTOTYPE_PROFILE_KEY, email);
-            router.push('/');
-        } catch (error) {
-            console.error("Error signing in anonymously for prototype mode:", error);
-        } finally {
-            setLoading(false);
+        return () => unsubscribe();
+    }, [isClient, auth]);
+
+    const loginForPrototype = (email: string) => {
+        if (prototypeUsers[email]) {
+            sessionStorage.setItem(PROTOTYPE_USER_KEY, email);
+            setUser(prototypeUsers[email]);
         }
-    }, [auth, router]);
-
-    const logoutForPrototype = useCallback(async () => {
-        sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
-        await auth.signOut();
-        router.push('/login');
-    }, [auth, router]);
-
-    const isAdmin = appUser?.role === 'admin';
-
-    const value = { 
-        user: appUser, 
-        loading,
-        isAdmin, 
-        loginForPrototype, 
-        logoutForPrototype,
     };
+
+    const logoutForPrototype = async () => {
+        await auth.signOut();
+        sessionStorage.removeItem(PROTOTYPE_USER_KEY);
+        setUser(null);
+    };
+
+    const isAdmin = user?.role === 'admin';
+
+    const value = { user, loading: !isClient || loading, isAdmin, loginForPrototype, logoutForPrototype };
     
     return (
         <AuthContext.Provider value={value}>

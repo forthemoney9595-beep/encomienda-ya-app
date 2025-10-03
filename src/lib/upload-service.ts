@@ -1,6 +1,6 @@
 
 'use client';
-import { type FirebaseApp } from 'firebase/app';
+import { getFirebase } from '@/lib/firebase';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from 'firebase/storage';
 
 /**
@@ -10,7 +10,6 @@ import { getStorage, ref, uploadBytesResumable, getDownloadURL, type UploadTaskS
  * @returns A promise that resolves with the public download URL of the uploaded image.
  */
 export async function uploadImage(
-    firebaseApp: FirebaseApp,
     file: File,
     onProgress: (progress: number) => void
 ): Promise<string> {
@@ -23,7 +22,8 @@ export async function uploadImage(
     if (file.size > 5 * 1024 * 1024) {
         throw new Error('La imagen no puede superar los 5MB.');
     }
-    const storage = getStorage(firebaseApp);
+    const { app } = getFirebase();
+    const storage = getStorage(app);
 
     const storageRef = ref(storage, `product-images/${Date.now()}-${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);

@@ -5,19 +5,17 @@ import { useState, useEffect } from 'react';
 import PageHeader from '@/components/page-header';
 import { getDeliveryPersonnel, updateDeliveryPersonnelStatus } from '@/lib/data-service';
 import { DeliveryPersonnelList } from './delivery-personnel-list';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import type { DeliveryPersonnel } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { prototypeUsers } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 
 
 export default function AdminDeliveryPage() {
   const { user, loading: authLoading } = useAuth();
-  const db = useFirestore();
   const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -25,9 +23,8 @@ export default function AdminDeliveryPage() {
   const isPrototypeAdmin = user?.uid.startsWith('proto-');
 
   const fetchPersonnel = async () => {
-    if (!db) return;
     setLoading(true);
-    const fetchedPersonnel = await getDeliveryPersonnel(db, false);
+    const fetchedPersonnel = await getDeliveryPersonnel(isPrototypeAdmin);
     
     if (isPrototypeAdmin) {
       const protoDeliveryExists = fetchedPersonnel.some(p => p.id === prototypeDelivery.id);
@@ -43,20 +40,19 @@ export default function AdminDeliveryPage() {
   };
   
   useEffect(() => {
-    if (!authLoading && db) {
+    if (!authLoading) {
       fetchPersonnel();
     }
-  }, [user, authLoading, prototypeDelivery, db]);
+  }, [user, authLoading, prototypeDelivery]);
 
 
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
-    if (!db) return;
     try {
         if (personnelId === prototypeDelivery.id) {
             const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
             updatePrototypeDelivery({ status: newStatus });
         } else {
-            await updateDeliveryPersonnelStatus(db, personnelId, status);
+            await updateDeliveryPersonnelStatus(personnelId, status);
             await fetchPersonnel(); // Refetch for real users
         }
         

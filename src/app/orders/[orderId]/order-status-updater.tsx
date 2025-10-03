@@ -2,7 +2,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useFirestore, useUser } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import type { Order, OrderStatus } from '@/lib/order-service';
 import { updateOrderStatus } from '@/lib/order-service';
 import { CardFooter, CardDescription, Card } from '@/components/ui/card';
@@ -13,7 +13,6 @@ import { useState } from 'react';
 import { Loader2, CreditCard } from 'lucide-react';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useAuth } from '@/context/auth-context';
 
 interface OrderStatusUpdaterProps {
   order: Order;
@@ -32,7 +31,6 @@ const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
 
 export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { user: appUser, loading: authLoading } = useAuth();
-  const db = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
@@ -51,7 +49,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
       if (order.id.startsWith('proto-')) {
         updatePrototypeOrder(order.id, { status: newStatus });
       } else {
-        await updateOrderStatus(db, order.id, newStatus);
+        await updateOrderStatus(order.id, newStatus);
       }
 
       toast({
@@ -95,7 +93,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
         if (order.id.startsWith('proto-')) {
             updatePrototypeOrder(order.id, { status: newStatus });
         } else {
-            await updateOrderStatus(db, order.id, newStatus);
+            await updateOrderStatus(order.id, newStatus);
         }
         toast({
             title: '¡Pago Realizado!',

@@ -31,3 +31,14 @@ export * from './non-blocking-updates';
 export * from './non-blocking-login';
 export * from './errors';
 export * from './error-emitter';
+
+// This is the legacy getFirebase function, kept for compatibility with older components
+// New components should use the individual hooks like useFirestore() and useAuthInstance()
+export function getFirebase() {
+    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    return {
+      auth: getAuth(app),
+      firestore: getFirestore(app),
+      app: app
+    };
+}

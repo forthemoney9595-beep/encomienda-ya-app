@@ -12,7 +12,6 @@ import { OrderStatusUpdater } from './order-status-updater';
 import { useEffect, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore } from '@/firebase';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +23,6 @@ import type { CartItem } from '@/context/cart-context';
 import { LeaveReviewDialog } from './leave-review-dialog';
 import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 
 function OrderPageSkeleton() {
@@ -135,7 +133,6 @@ export default function OrderTrackingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const db = useFirestore();
   const { getOrderById: getPrototypeOrderById, loading: prototypeLoading, prototypeOrders, addReviewToProduct, addDeliveryReviewToOrder } = usePrototypeData();
   
   const [order, setOrder] = useState<Order | null>(null);
@@ -149,7 +146,7 @@ export default function OrderTrackingPage() {
 
   useEffect(() => {
     async function fetchOrderData() {
-        if (!orderId || authLoading || prototypeLoading || !db) return;
+        if (!orderId || authLoading || prototypeLoading) return;
         
         setLoading(true);
         let orderData: Order | null | undefined = null;
@@ -158,7 +155,7 @@ export default function OrderTrackingPage() {
             if (orderId.startsWith('proto-')) {
                 orderData = getPrototypeOrderById(orderId);
             } else {
-                orderData = await getOrderFromDb(db, orderId);
+                orderData = await getOrderFromDb(orderId);
             }
           
           if (!orderData) {
@@ -203,7 +200,7 @@ export default function OrderTrackingPage() {
         fetchOrderData();
     }
 
-  }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading, toast, prototypeOrders, db]);
+  }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading, toast, prototypeOrders]);
   
     const handleReviewSubmit = (rating: number, review: string) => {
         if (!reviewingItem || !order) return;

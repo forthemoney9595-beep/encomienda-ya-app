@@ -15,7 +15,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Home, Loader2, Info } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
-import { useFirestore } from '@/firebase';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
 import { usePrototypeData } from '@/context/prototype-data-context';
@@ -30,7 +29,6 @@ const formSchema = z.object({
 export default function CheckoutPage() {
   const { cart, totalPrice, totalItems, clearCart, storeId } = useCart();
   const { user, loading: authLoading } = useAuth();
-  const db = useFirestore();
   const { addPrototypeOrder, prototypeStores } = usePrototypeData();
   const { toast } = useToast();
   const router = useRouter();
@@ -102,7 +100,7 @@ export default function CheckoutPage() {
         // In a real app, you might fetch store details if not already available
       }
 
-      const createdOrder = await createOrder(db, {
+      const createdOrder = await createOrder({
         userId: user.uid,
         customerName: user.name,
         items: cart,

@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MapPin, Store, PackageSearch, Loader2, CheckCircle } from 'lucide-react';
 import type { Order } from '@/lib/order-service';
-import { useFirestore } from '@/firebase';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { assignOrderToDeliveryPerson, updateOrderStatus } from '@/lib/order-service';
@@ -15,11 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { useRouter } from 'next/navigation';
 
 export default function DeliveryOrdersView() {
   const { user, loading: authLoading } = useAuth();
-  const db = useFirestore();
   const { prototypeOrders, loading: prototypeLoading, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson, updatePrototypeOrder } = usePrototypeData();
   const { toast } = useToast();
   
@@ -53,7 +50,7 @@ export default function DeliveryOrdersView() {
               deliveryPersonName: user.name,
             });
       } else {
-         await assignOrderToDeliveryPerson(db, orderId, user.uid, user.name);
+         await assignOrderToDeliveryPerson(orderId, user.uid, user.name);
       }
       toast({
         title: '¡Pedido Aceptado!',
@@ -77,7 +74,7 @@ export default function DeliveryOrdersView() {
         if(orderId.startsWith('proto-')) {
             updatePrototypeOrder(orderId, { status: 'Entregado' });
         } else {
-            await updateOrderStatus(db, orderId, 'Entregado');
+            await updateOrderStatus(orderId, 'Entregado');
         }
       toast({
         title: '¡Entrega Completada!',

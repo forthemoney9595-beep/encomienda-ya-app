@@ -5,7 +5,6 @@ import { CartProvider } from '@/context/cart-context';
 import { AuthProvider } from '@/context/auth-context';
 import { AppContent } from './app-content';
 import { PrototypeDataProvider } from '@/context/prototype-data-context';
-import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
   title: 'EncomiendaYA',
@@ -29,17 +28,15 @@ export default function RootLayout({
      crossOrigin=""/>
       </head>
       <body className="font-body antialiased">
-        <FirebaseClientProvider>
-          <AuthProvider>
-            <CartProvider>
-              <PrototypeDataProvider>
-                <AppContent>
-                  {children}
-                </AppContent>
-              </PrototypeDataProvider>
-            </CartProvider>
-          </AuthProvider>
-        </FirebaseClientProvider>
+        <AuthProvider>
+          <CartProvider>
+            <PrototypeDataProvider>
+              <AppContent>
+                {children}
+              </AppContent>
+            </PrototypeDataProvider>
+          </CartProvider>
+        </AuthProvider>
         <Toaster />
       </body>
     </html>

@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
-import { useAuth, useFirebaseApp, useFirestore } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
@@ -37,8 +37,6 @@ export default function MyStorePage() {
     const { prototypeStores, updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
     const router = useRouter();
     const { toast } = useToast();
-    const db = useFirestore();
-    const firebaseApp = useFirebaseApp();
     
     const [store, setStore] = useState<Store | null>(null);
     const [loading, setLoading] = useState(true);
@@ -79,7 +77,7 @@ export default function MyStorePage() {
             if (isPrototypeMode) {
                 storeData = prototypeStores.find(s => s.id === user?.storeId);
             } else {
-                storeData = await getStoreById(db, user.storeId!);
+                storeData = await getStoreById(user.storeId!);
             }
 
             if (storeData) {
@@ -99,7 +97,7 @@ export default function MyStorePage() {
         }
 
         fetchStore();
-    }, [user, authLoading, prototypeLoading, router, toast, form, isPrototypeMode, prototypeStores, db]);
+    }, [user, authLoading, prototypeLoading, router, toast, form, isPrototypeMode, prototypeStores]);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -118,7 +116,7 @@ export default function MyStorePage() {
                 }, 1500);
             } else {
                  try {
-                    const downloadURL = await uploadImage(firebaseApp, file, setUploadProgress);
+                    const downloadURL = await uploadImage(file, setUploadProgress);
                     form.setValue('imageUrl', downloadURL, { shouldValidate: true });
                     toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
                 } catch (error: any) {
@@ -139,7 +137,7 @@ export default function MyStorePage() {
             if (isPrototypeMode) {
                 updatePrototypeStore({ ...values, id: user.storeId });
             } else {
-                await updateStoreData(db, user.storeId, { ...values });
+                await updateStoreData(user.storeId, { ...values });
             }
             toast({ title: '¡Tienda Actualizada!', description: 'La información de tu tienda ha sido guardada.' });
             router.push(`/stores/${user.storeId}`);

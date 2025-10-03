@@ -4,7 +4,7 @@
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Store, Truck, ClipboardList } from 'lucide-react';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,7 +16,6 @@ import { getAvailableOrdersForDelivery } from '@/lib/order-service';
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading } = useAuth();
-  const db = useFirestore();
   const router = useRouter();
   const [totalStores, setTotalStores] = useState(0);
   const [totalDrivers, setTotalDrivers] = useState(0);
@@ -33,7 +32,7 @@ export default function AdminDashboard() {
   }, [loading, isAdmin, router]);
 
   useEffect(() => {
-    if (isAdmin && !prototypeLoading && db) {
+    if (isAdmin && !prototypeLoading) {
       const fetchData = async () => {
         setDashboardLoading(true);
         
@@ -42,13 +41,13 @@ export default function AdminDashboard() {
         if (isPrototype) {
             availableOrderCount = getPrototypeAvailableOrders().length;
         } else {
-            const fetchedAvailableOrders = await getAvailableOrdersForDelivery(db);
+            const fetchedAvailableOrders = await getAvailableOrdersForDelivery();
             availableOrderCount = fetchedAvailableOrders.length;
         }
         
         const [fetchedStores, fetchedDrivers] = await Promise.all([
-          getStores(db, true),
-          getDeliveryPersonnel(db, isPrototype),
+          getStores(true),
+          getDeliveryPersonnel(isPrototype),
         ]);
         
         setTotalStores(fetchedStores.length);
@@ -58,7 +57,7 @@ export default function AdminDashboard() {
       }
       fetchData();
     }
-  }, [user, isAdmin, loading, router, prototypeLoading, getPrototypeAvailableOrders, isPrototype, db]);
+  }, [user, isAdmin, loading, router, prototypeLoading, getPrototypeAvailableOrders, isPrototype]);
   
   if (loading || dashboardLoading || !isAdmin) {
     return (

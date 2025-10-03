@@ -5,7 +5,7 @@
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { getUserProfile } from '@/lib/user';
 import { ProfileForm } from './profile-form';
 import { useEffect, useState } from 'react';
@@ -13,7 +13,6 @@ import type { UserProfile } from '@/lib/user';
 
 export default function ProfilePage() {
     const { user: authUser, loading: authLoading } = useAuth();
-    const db = useFirestore();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -26,13 +25,13 @@ export default function ProfilePage() {
             }
 
             setLoading(true);
-            const userProfile = await getUserProfile(db, authUser.uid);
+            const userProfile = await getUserProfile(authUser.uid);
             setProfile(userProfile);
             setLoading(false);
         }
 
         fetchProfile();
-    }, [authUser, authLoading, db]);
+    }, [authUser, authLoading]);
 
     if (loading || authLoading) {
         return (
