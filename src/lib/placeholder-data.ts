@@ -1,6 +1,7 @@
 
 
 import { getPlaceholderImage } from "./placeholder-images";
+import { subDays } from 'date-fns';
 
 export type Store = {
   id: string;
@@ -164,7 +165,98 @@ export const prototypeDelivery: DeliveryPersonnel = {
 export const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
 
 // Seed data for prototype orders is now empty.
-export const initialPrototypeOrders: Order[] = [];
+export const initialPrototypeOrders: Order[] = [
+  {
+    id: 'proto-order-1',
+    userId: 'proto-buyer',
+    customerName: 'Comprador Proto',
+    storeId: 'proto-store-pizza',
+    storeName: 'Paraíso de la Pizza',
+    storeAddress: 'Calle Falsa 123, Ciudad Prototipo',
+    shippingAddress: { name: 'Comprador Proto', address: 'Calle del Usuario 456' },
+    items: [ { ...pizzaProducts[1], quantity: 1 }, { ...pizzaProducts[3], quantity: 2 } ],
+    deliveryFee: 5.00,
+    total: 14.99 + (2.50 * 2) + 5.00,
+    status: 'Entregado',
+    createdAt: subDays(new Date(), 1),
+    deliveryPersonId: 'proto-delivery',
+    deliveryPersonName: 'Repartidor Proto',
+    deliveryRating: 5,
+    deliveryReview: '¡Muy rápido y amable!',
+    storeCoords: { latitude: 40.7128, longitude: -74.0060 },
+    customerCoords: { latitude: 40.730, longitude: -73.999 },
+  },
+  {
+    id: 'proto-order-2',
+    userId: 'proto-buyer',
+    customerName: 'Comprador Proto',
+    storeId: 'proto-store-sushi',
+    storeName: 'Sushi del Rey',
+    storeAddress: 'Avenida Siempre Viva 742, Ciudad Prototipo',
+    shippingAddress: { name: 'Comprador Proto', address: 'Calle del Usuario 456' },
+    items: [ { ...sushiProducts[0], quantity: 2 }, { ...sushiProducts[2], quantity: 1 } ],
+    deliveryFee: 6.50,
+    total: (8.99 * 2) + 3.50 + 6.50,
+    status: 'En reparto',
+    createdAt: subDays(new Date(), 0),
+    deliveryPersonId: 'proto-delivery',
+    deliveryPersonName: 'Repartidor Proto',
+    storeCoords: { latitude: 34.0522, longitude: -118.2437 },
+    customerCoords: { latitude: 34.0622, longitude: -118.2537 },
+  },
+    {
+    id: 'proto-order-3',
+    userId: 'another-user-id',
+    customerName: 'Juan Pérez',
+    storeId: 'proto-store-pizza',
+    storeName: 'Paraíso de la Pizza',
+    storeAddress: 'Calle Falsa 123, Ciudad Prototipo',
+    shippingAddress: { name: 'Juan Pérez', address: 'Avenida Ficticia 789' },
+    items: [ { ...pizzaProducts[0], quantity: 1 } ],
+    deliveryFee: 4.50,
+    total: 12.99 + 4.50,
+    status: 'En preparación',
+    createdAt: subDays(new Date(), 0),
+    storeCoords: { latitude: 40.7128, longitude: -74.0060 },
+    customerCoords: { latitude: 40.719, longitude: -74.002 },
+  },
+   {
+    id: 'proto-order-4',
+    userId: 'proto-buyer',
+    customerName: 'Comprador Proto',
+    storeId: 'proto-store-pizza',
+    storeName: 'Paraíso de la Pizza',
+    storeAddress: 'Calle Falsa 123, Ciudad Prototipo',
+    shippingAddress: { name: 'Comprador Proto', address: 'Calle del Usuario 456' },
+    items: [ { ...pizzaProducts[5], quantity: 1 } ],
+    deliveryFee: 3.00,
+    total: 6.99 + 3.00,
+    status: 'Pendiente de Confirmación',
+    createdAt: subDays(new Date(), 2),
+    storeCoords: { latitude: 40.7128, longitude: -74.0060 },
+    customerCoords: { latitude: 40.730, longitude: -73.999 },
+  },
+  {
+    id: 'proto-order-5',
+    userId: 'another-user-id',
+    customerName: 'Ana García',
+    storeId: 'proto-store-sushi',
+    storeName: 'Sushi del Rey',
+    storeAddress: 'Avenida Siempre Viva 742, Ciudad Prototipo',
+    shippingAddress: { name: 'Ana García', address: 'Boulevard Imaginario 101' },
+    items: [ { ...sushiProducts[1], quantity: 4 } ],
+    deliveryFee: 7.00,
+    total: (5.99 * 4) + 7.00,
+    status: 'Entregado',
+    createdAt: subDays(new Date(), 5),
+    deliveryPersonId: 'proto-delivery',
+    deliveryPersonName: 'Repartidor Proto',
+    deliveryRating: 4,
+    deliveryReview: 'Todo bien, pero tardó un poco más de lo esperado.',
+    storeCoords: { latitude: 34.0522, longitude: -118.2437 },
+    customerCoords: { latitude: 34.0422, longitude: -118.2337 },
+  }
+];
 
 
 export const initialPrototypeNotifications: Notification[] = [

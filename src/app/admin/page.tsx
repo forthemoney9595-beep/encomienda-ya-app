@@ -84,9 +84,10 @@ export default function AdminDashboard() {
 
   const orderStatusData = useMemo(() => {
     const statusCounts = prototypeOrders.reduce((acc, order) => {
-        acc[order.status] = (acc[order.status] || 0) + 1;
+        const status = order.status || 'Desconocido';
+        acc[status] = (acc[status] || 0) + 1;
         return acc;
-    }, {} as Record<OrderStatus, number>);
+    }, {} as Record<string, number>);
 
     return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
   }, [prototypeOrders]);
