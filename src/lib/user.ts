@@ -1,3 +1,4 @@
+'use client';
 
 import { db } from './firebase';
 import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';

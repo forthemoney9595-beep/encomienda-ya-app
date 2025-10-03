@@ -2,7 +2,6 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
-import type { UserProfile } from './user';
 
 /**
  * Gets or creates a chat room between a user and a store owner.
@@ -22,7 +21,7 @@ export async function getOrCreateChat(currentUser: { uid: string, name: string }
     const ownerId = storeData.ownerId;
 
     if (!ownerId) {
-        throw new Error("Store owner not found");
+        throw new Error("Store owner not found. Cannot create chat.");
     }
 
     if (currentUser.uid === ownerId) {
