@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 export function ContactStore({ storeId }: { storeId: string }) {
   const { user, loading: authLoading } = useAuth();
@@ -20,32 +19,18 @@ export function ContactStore({ storeId }: { storeId: string }) {
 
   const handleContact = async () => {
     if (!user) {
-      router.push('/login');
+      router.push('/login?redirect=/stores/' + storeId);
       return;
     }
 
     setLoading(true);
     try {
       const store = getStoreById(storeId);
-      if (!store || !store.ownerId) {
-        throw new Error("Información de la tienda o del propietario no encontrada.");
+      if (!store) {
+        throw new Error("Información de la tienda no encontrada.");
       }
       
-      const currentUserInfo = {
-        uid: user.uid,
-        name: user.name,
-        role: user.role,
-        imageUrl: getPlaceholderImage(user.uid, 64, 64)
-      };
-
-      const storeInfo = {
-        id: store.id,
-        name: store.name,
-        ownerId: store.ownerId,
-        imageUrl: store.imageUrl
-      };
-
-      const chatId = await getOrCreateChat(currentUserInfo, storeInfo);
+      const chatId = await getOrCreateChat(user, store);
       router.push(`/chat/${chatId}`);
     } catch (error: any) {
       console.error('Error creating or getting chat:', error);
@@ -59,7 +44,9 @@ export function ContactStore({ storeId }: { storeId: string }) {
     }
   };
 
-  if (authLoading || prototypeLoading || (user && user.storeId === storeId)) {
+  const isStoreOwner = user?.role === 'store' && user?.storeId === storeId;
+
+  if (authLoading || prototypeLoading || isStoreOwner) {
     return null;
   }
   

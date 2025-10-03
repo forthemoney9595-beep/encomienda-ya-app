@@ -4,41 +4,27 @@ import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
 import type { Store } from './placeholder-data';
-
-
-type UserInfo = {
-    uid: string;
-    name: string;
-    role: 'buyer' | 'store' | 'delivery' | 'admin';
-    imageUrl: string;
-}
-
-type StoreInfo = {
-    id: string;
-    name: string;
-    ownerId: string;
-    imageUrl: string;
-}
+import type { UserProfile } from './user';
 
 /**
  * Gets or creates a chat room between a user and a store owner.
- * This is now a pure function that receives all necessary data.
- * @param currentUserInfo - The profile of the user initiating the chat.
- * @param storeInfo - The profile of the store being contacted.
+ * This is a pure function that receives all necessary data.
+ * @param currentUser - The profile of the user initiating the chat.
+ * @param store - The store being contacted.
  * @returns The ID of the chat room.
  */
-export async function getOrCreateChat(currentUserInfo: UserInfo, storeInfo: StoreInfo): Promise<string> {
-    if (!storeInfo.ownerId) {
+export async function getOrCreateChat(currentUser: UserProfile, store: Store): Promise<string> {
+    const storeOwnerId = store.ownerId;
+    if (!storeOwnerId) {
         throw new Error("La tienda no tiene un propietario asignado. No se puede crear el chat.");
     }
-    if (currentUserInfo.uid === storeInfo.ownerId) {
+    if (currentUser.uid === storeOwnerId) {
         throw new Error("No puedes crear un chat contigo mismo.");
     }
 
     const chatsRef = collection(db, 'chats');
-    const sortedParticipants = [currentUserInfo.uid, storeInfo.ownerId].sort();
+    const sortedParticipants = [currentUser.uid, storeOwnerId].sort();
     
-    // Check if a chat already exists
     const q = query(chatsRef, where('participants', '==', sortedParticipants));
     const querySnapshot = await getDocs(q);
 
@@ -46,19 +32,18 @@ export async function getOrCreateChat(currentUserInfo: UserInfo, storeInfo: Stor
         return querySnapshot.docs[0].id;
     }
 
-    // Create a new chat if it doesn't exist
     const newChatRef = await addDoc(chatsRef, {
         participants: sortedParticipants,
         participantInfo: {
-            [currentUserInfo.uid]: { 
-                name: currentUserInfo.name, 
-                role: 'buyer', 
-                imageUrl: currentUserInfo.imageUrl 
+            [currentUser.uid]: { 
+                name: currentUser.name, 
+                role: currentUser.role, 
+                imageUrl: getPlaceholderImage(currentUser.uid, 64, 64) 
             },
-            [storeInfo.ownerId]: { 
-                name: storeInfo.name, 
+            [storeOwnerId]: { 
+                name: store.name, // The chat is with the store itself
                 role: 'store', 
-                imageUrl: storeInfo.imageUrl 
+                imageUrl: store.imageUrl 
             }
         },
         createdAt: serverTimestamp(),
@@ -68,7 +53,6 @@ export async function getOrCreateChat(currentUserInfo: UserInfo, storeInfo: Stor
     
     return newChatRef.id;
 }
-
 
 export type ChatParticipant = {
     id: string;
@@ -159,75 +143,6 @@ export async function sendMessage(chatId: string, senderId: string, text: string
   });
 
   await batch.commit();
-}
-
-
-/**
- * Subscribes to new messages in a chat.
- * @param chatId The ID of the chat.
- * @param onNewMessages Callback function to be called with new messages.
- * @returns An unsubscribe function.
- */
-export function onNewMessage(chatId: string, onNewMessages: (messages: Message[], chatDetails: ChatDetails) => void): Unsubscribe {
-  const messagesRef = collection(db, 'chats', chatId, 'messages');
-  const q = query(messagesRef, orderBy('createdAt', 'asc'));
-
-  // First, get chat details once
-  getDoc(doc(db, 'chats', chatId)).then(chatDoc => {
-    if (!chatDoc.exists()) {
-        console.error("Chat does not exist!");
-        return;
-    }
-    const chatData = chatDoc.data();
-    const currentUserId = chatData.participants.find((p:string) => p !== 'placeholder'); // This needs current user ID logic. We'll fix this.
-
-    // Subscribe to messages
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const messages = querySnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                text: data.text,
-                senderId: data.senderId,
-                // Firestore timestamps can be null on the client before they are set by the server.
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            };
-        });
-
-        // We'll figure out the other participant dynamically in the hook/component
-        const chatDetails = {
-            id: chatDoc.id,
-            participants: chatData.participants,
-            participantInfo: chatData.participantInfo
-        }
-
-        // We need to pass both messages and details. For now, let's just pass messages.
-        // We will pass chatDetails later.
-        onNewMessages(messages, chatDetails as any);
-    });
-
-    return unsubscribe;
-  });
-
-
-  // The outer function needs to return the unsubscribe function.
-  // The structure above is a bit tricky, let's simplify for the hook to manage.
-  // The hook will get chat details, then call this.
-
-  return onSnapshot(q, (querySnapshot) => {
-    const messages = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            text: data.text,
-            senderId: data.senderId,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-        };
-    });
-    // This is incomplete, the callback needs chatDetails too.
-    // The hook will solve this. For now, let's just pass an empty object.
-    // onNewMessages(messages, {} as ChatDetails);
-  });
 }
 
 export async function getChatDetails(chatId: string, currentUserId: string): Promise<ChatDetails | null> {
