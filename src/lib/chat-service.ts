@@ -1,13 +1,13 @@
 
 'use client';
 import { db } from './firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp, setDoc } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
 import type { Store } from './placeholder-data';
 import type { UserProfile } from './user';
 
 /**
- * Gets or creates a chat room between a user and a store owner.
+ * Gets or creates a chat room between a user and a store owner using a deterministic ID.
  * This is a pure function that receives all necessary data.
  * @param currentUser - The profile of the user initiating the chat.
  * @param store - The store being contacted.
@@ -22,36 +22,34 @@ export async function getOrCreateChat(currentUser: UserProfile, store: Store): P
         throw new Error("No puedes crear un chat contigo mismo.");
     }
 
-    const chatsRef = collection(db, 'chats');
-    const sortedParticipants = [currentUser.uid, storeOwnerId].sort();
-    
-    const q = query(chatsRef, where('participants', '==', sortedParticipants));
-    const querySnapshot = await getDocs(q);
+    const participants = [currentUser.uid, storeOwnerId].sort();
+    const chatId = participants.join('_'); // Deterministic ID
 
-    if (!querySnapshot.empty) {
-        return querySnapshot.docs[0].id;
-    }
+    const chatRef = doc(db, 'chats', chatId);
 
-    const newChatRef = await addDoc(chatsRef, {
-        participants: sortedParticipants,
+    // Use setDoc with merge: true. This will create the doc if it doesn't exist,
+    // or do nothing if it does exist (as we are providing the same participant data).
+    await setDoc(chatRef, {
+        participants: participants,
         participantInfo: {
-            [currentUser.uid]: { 
-                name: currentUser.name, 
-                role: currentUser.role, 
-                imageUrl: getPlaceholderImage(currentUser.uid, 64, 64) 
+            [currentUser.uid]: {
+                name: currentUser.name,
+                role: currentUser.role,
+                imageUrl: getPlaceholderImage(currentUser.uid, 64, 64)
             },
-            [storeOwnerId]: { 
+            [storeOwnerId]: {
                 name: store.name, // The chat is with the store itself
-                role: 'store', 
-                imageUrl: store.imageUrl 
+                role: 'store',
+                imageUrl: store.imageUrl
             }
         },
-        createdAt: serverTimestamp(),
-        lastMessage: null,
-        lastMessageTimestamp: null,
-    });
-    
-    return newChatRef.id;
+        // Only set createdAt on initial creation - merge won't add it again.
+        // A better approach is to manage this server-side with rules, but for client-side this is a common pattern.
+        // Let's rely on merge behavior and not add createdAt here to avoid overwriting.
+        // It's better to update lastMessageTimestamp to indicate activity.
+    }, { merge: true });
+
+    return chatId;
 }
 
 export type ChatParticipant = {
@@ -81,7 +79,7 @@ export type ChatPreview = {
 export async function getUserChats(userId: string): Promise<ChatPreview[]> {
     const chatsRef = collection(db, 'chats');
     const q = query(
-        chatsRef, 
+        chatsRef,
         where('participants', 'array-contains', userId),
         orderBy('lastMessageTimestamp', 'desc')
     );
@@ -92,7 +90,7 @@ export async function getUserChats(userId: string): Promise<ChatPreview[]> {
         const data = doc.data();
         const otherParticipantId = data.participants.find((p: string) => p !== userId);
         const otherParticipantInfo = data.participantInfo[otherParticipantId];
-        
+
         return {
             id: doc.id,
             otherParticipant: {
@@ -125,7 +123,7 @@ export interface Message {
 export async function sendMessage(chatId: string, senderId: string, text: string): Promise<void> {
   const chatRef = doc(db, 'chats', chatId);
   const messagesRef = collection(chatRef, 'messages');
-  
+
   const batch = writeBatch(db);
 
   // Add the new message
@@ -154,7 +152,7 @@ export async function getChatDetails(chatId: string, currentUserId: string): Pro
 
     const data = chatDoc.data();
     const otherParticipantId = data.participants.find((p: string) => p !== currentUserId);
-    
+
     if (!otherParticipantId) {
         console.error("Could not find other participant in chat.");
         return null;
