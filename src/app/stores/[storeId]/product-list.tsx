@@ -26,15 +26,15 @@ interface ProductListProps {
     onDeleteProduct: (productId: string) => void;
 }
 
-function ProductRating({ rating, reviewCount }: { rating: number, reviewCount: number }) {
+function ProductRating({ rating, reviewCount, onClick }: { rating: number, reviewCount: number, onClick: () => void }) {
   if (reviewCount === 0) return null;
 
   return (
-    <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+    <Button variant="ghost" size="sm" className="flex items-center gap-1 text-sm text-muted-foreground mt-1 -ml-3" onClick={onClick}>
       <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
       <span className="font-bold text-amber-500">{rating.toFixed(1)}</span>
-      <span>({reviewCount})</span>
-    </div>
+      <span>({reviewCount} reseñas)</span>
+    </Button>
   )
 }
 
@@ -51,6 +51,7 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
     const [openCartAlert, setOpenCartAlert] = useState(false);
     const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [viewingReviewsFor, setViewingReviewsFor] = useState<Product | null>(null);
 
     const isOwner = user?.uid === ownerId;
 
@@ -143,6 +144,8 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
                 }}
                 productCategories={productCategories}
             />
+            {/* TODO: Add ProductReviewsDialog here, controlled by viewingReviewsFor state */}
+
             <div className="flex flex-col sm:flex-row gap-4 mb-4">
                 <div className="relative w-full sm:flex-1">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -194,7 +197,11 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
                                             </div>
                                             <div className="flex-1">
                                                 <h3 className="font-semibold">{product.name}</h3>
-                                                <ProductRating rating={product.rating} reviewCount={product.reviewCount} />
+                                                <ProductRating 
+                                                    rating={product.rating} 
+                                                    reviewCount={product.reviewCount} 
+                                                    onClick={() => setViewingReviewsFor(product)}
+                                                />
                                                 <p className="text-sm text-muted-foreground mt-2">{product.description}</p>
                                                 <p className="font-semibold mt-1">${product.price.toFixed(2)}</p>
                                             </div>
@@ -280,3 +287,5 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
         </>
     )
 }
+
+    
