@@ -1,61 +1,71 @@
+
+'use client';
 import { db } from './firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, onSnapshot, Unsubscribe, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
 
 /**
- * Gets or creates a chat room between a user and a store.
+ * Gets or creates a chat room between a user and a store owner.
  * @param userId - The ID of the user.
  * @param storeId - The ID of the store.
  * @returns The ID of the chat room.
  */
 export async function getOrCreateChat(userId: string, storeId: string): Promise<string> {
-  const chatsRef = collection(db, 'chats');
+    const chatsRef = collection(db, 'chats');
 
-  // Query for a chat containing both the user and the store ID.
-  const q = query(chatsRef, 
-    where('participants', 'array-contains', userId),
-  );
-
-  const querySnapshot = await getDocs(q);
-
-  // Since we can't do array-contains for multiple values, we filter the results.
-  const existingChat = querySnapshot.docs.find(doc => doc.data().participants.includes(storeId));
-
-  if (existingChat) {
-    // If a chat already exists, return its ID.
-    return existingChat.id;
-  } else {
-    // If no chat exists, create a new one.
-    
-    // Get store and user details to store in the chat document for easier access.
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    const storeDoc = await getDoc(doc(db, 'stores', storeId)); // The store's public profile doc
-    const storeOwnerId = storeDoc.exists() ? storeDoc.data().ownerId : null;
-
-    if (!userDoc.exists() || !storeDoc.exists() || !storeOwnerId) {
-        throw new Error("User or Store not found");
+    // First, get the store owner's ID
+    const storeDoc = await getDoc(doc(db, 'stores', storeId));
+    if (!storeDoc.exists()) {
+        throw new Error("Store not found");
+    }
+    const ownerId = storeDoc.data().ownerId;
+    if (!ownerId) {
+        throw new Error("Store owner not found");
     }
 
-    const newChatRef = await addDoc(chatsRef, {
-      participants: [userId, storeOwnerId], // Chat is between buyer and store owner
-      participantInfo: {
-        [userId]: {
-            name: userDoc.data().name,
-            role: userDoc.data().role,
-        },
-        [storeOwnerId]: {
-            name: storeDoc.data().name, // The public store name
-            role: 'store', // Hardcoded for clarity
-            imageUrl: storeDoc.data().imageUrl,
+    // Query for a chat containing both the user and the store owner ID.
+    const q = query(
+        chatsRef,
+        where('participants', 'array-contains', userId)
+    );
+
+    const querySnapshot = await getDocs(q);
+
+    // Filter the results to find the chat that also includes the store owner.
+    const existingChat = querySnapshot.docs.find(d => d.data().participants.includes(ownerId));
+
+    if (existingChat) {
+        // If a chat already exists, return its ID.
+        return existingChat.id;
+    } else {
+        // If no chat exists, create a new one.
+        const userDoc = await getDoc(doc(db, 'users', userId));
+
+        if (!userDoc.exists()) {
+            throw new Error("User not found");
         }
-      },
-      createdAt: serverTimestamp(),
-      lastMessage: null,
-      lastMessageTimestamp: null,
-    });
-    return newChatRef.id;
-  }
+
+        const newChatRef = await addDoc(chatsRef, {
+            participants: [userId, ownerId], // Chat is between buyer and store owner
+            participantInfo: {
+                [userId]: {
+                    name: userDoc.data()?.name || 'Comprador Anónimo',
+                    role: userDoc.data()?.role || 'buyer',
+                },
+                [ownerId]: {
+                    name: storeDoc.data().name, // The public store name
+                    role: 'store', // Hardcoded for clarity
+                    imageUrl: storeDoc.data().imageUrl,
+                }
+            },
+            createdAt: serverTimestamp(),
+            lastMessage: null,
+            lastMessageTimestamp: null,
+        });
+        return newChatRef.id;
+    }
 }
+
 
 export type ChatParticipant = {
     id: string;
