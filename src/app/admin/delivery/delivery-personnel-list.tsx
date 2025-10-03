@@ -77,7 +77,7 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                           <span className="font-medium">{driver.name}</span>
                         </Link>
                       </TableCell>
-                    <TableCell>{driver.vehicle}</TableCell>
+                    <TableCell className="capitalize">{driver.vehicle}</TableCell>
                     <TableCell className="hidden md:table-cell">{driver.email}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
