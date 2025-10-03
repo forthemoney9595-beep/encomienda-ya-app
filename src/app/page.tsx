@@ -11,10 +11,13 @@ import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import { Search, Heart } from 'lucide-react';
 import { getStores } from '@/lib/data-service';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Rating } from '@/components/ui/rating';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 const ALL_CATEGORIES = 'all';
 
@@ -39,7 +42,8 @@ const calculateStoreRating = (products: Product[]): number => {
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
-  const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
+  const { prototypeStores, loading: prototypeLoading, favoriteStores, toggleFavoriteStore } = usePrototypeData();
+  const { toast } = useToast();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
@@ -89,6 +93,25 @@ export default function Home() {
 
   const isLoading = authLoading || loading;
 
+  const handleFavoriteToggle = (e: React.MouseEvent, storeId: string, storeName: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!user) {
+      toast({
+        variant: 'destructive',
+        title: 'Inicia Sesión',
+        description: 'Debes iniciar sesión para guardar favoritos.',
+      });
+      return;
+    }
+    toggleFavoriteStore(storeId);
+    const isFavorite = favoriteStores.includes(storeId);
+    toast({
+      title: isFavorite ? 'Eliminado de Favoritos' : 'Añadido a Favoritos',
+      description: `${storeName} ha sido ${isFavorite ? 'eliminado de' : 'añadido a'} tus favoritos.`,
+    });
+  };
+
   return (
     <div className="container mx-auto">
       <PageHeader title="¡Bienvenido a EncomiendaYA!" description="Encuentra tus tiendas favoritas y haz tu pedido en línea." />
@@ -137,7 +160,9 @@ export default function Home() {
             <StoreCardSkeleton />
           </>
         ) : filteredStores.length > 0 ? (
-          filteredStores.map((store) => (
+          filteredStores.map((store) => {
+            const isFavorite = favoriteStores.includes(store.id);
+            return (
             <Link href={`/stores/${store.id}`} key={store.id} className="group">
               <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
                 <div className="relative h-48 w-full">
@@ -149,6 +174,18 @@ export default function Home() {
                     className="transition-transform duration-300 group-hover:scale-105"
                     data-ai-hint={store.imageHint}
                   />
+                  <Button
+                    size="icon"
+                    className={cn(
+                        "absolute top-2 right-2 h-8 w-8 rounded-full bg-black/30 text-white backdrop-blur-sm transition-all hover:bg-black/50",
+                        "opacity-0 group-hover:opacity-100",
+                        isFavorite && "opacity-100"
+                    )}
+                    onClick={(e) => handleFavoriteToggle(e, store.id, store.name)}
+                    aria-label={isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+                  >
+                    <Heart className={cn("h-4 w-4", isFavorite && "fill-red-500 text-red-500")} />
+                  </Button>
                 </div>
                 <CardHeader>
                   <div className="flex justify-between items-start">
@@ -169,7 +206,7 @@ export default function Home() {
                 </CardContent>
               </Card>
             </Link>
-          ))
+          )})
         ) : (
           <div className="col-span-full text-center text-muted-foreground py-10">
             {stores.length > 0 ? (
