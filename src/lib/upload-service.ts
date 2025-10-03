@@ -1,7 +1,7 @@
 
 'use client';
-import { storage } from './firebase';
-import { ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from 'firebase/storage';
+import { useFirebaseApp } from '@/firebase';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from 'firebase/storage';
 
 /**
  * Uploads an image file to Firebase Storage.
@@ -22,6 +22,8 @@ export async function uploadImage(
     if (file.size > 5 * 1024 * 1024) {
         throw new Error('La imagen no puede superar los 5MB.');
     }
+    const firebaseApp = useFirebaseApp();
+    const storage = getStorage(firebaseApp);
 
     const storageRef = ref(storage, `product-images/${Date.now()}-${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);

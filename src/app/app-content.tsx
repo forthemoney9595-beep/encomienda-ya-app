@@ -13,7 +13,7 @@ import { Notifications } from '@/components/notifications';
 import { Cart } from '@/components/cart';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { User, LogOut, Shield, Loader2, ChevronsUpDown } from 'lucide-react';
-import { auth } from '@/lib/firebase';
+import { useAuthInstance } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
@@ -22,6 +22,7 @@ export function AppContent({ children }: { children: React.ReactNode }) {
     const { user, loading, isAdmin, logoutForPrototype } = useAuth();
     const router = useRouter();
     const [isClient, setIsClient] = useState(false);
+    const auth = useAuthInstance();
 
     useEffect(() => {
         setIsClient(true);

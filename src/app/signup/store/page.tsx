@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
-import { auth } from '@/lib/firebase';
+import { useAuthInstance } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { createUserProfile, createStoreForUser } from '@/lib/user';
@@ -34,6 +34,7 @@ export default function SignupStorePage() {
   const router = useRouter();
   const { loginForPrototype } = useAuth();
   const { addPrototypeStore } = usePrototypeData();
+  const auth = useAuthInstance();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

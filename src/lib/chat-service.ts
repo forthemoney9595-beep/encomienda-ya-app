@@ -1,6 +1,6 @@
 
 'use client';
-import { db } from './firebase';
+import { useFirestore } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp, setDoc } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
 import type { Store } from './placeholder-data';
@@ -23,7 +23,7 @@ export interface ChatParticipantProfile {
  * @param participant2 - The profile of the second participant.
  * @returns The ID of the chat room.
  */
-export async function getOrCreateChat(participant1: ChatParticipantProfile, participant2: ChatParticipantProfile): Promise<string> {
+export async function getOrCreateChat(db: ReturnType<typeof useFirestore>, participant1: ChatParticipantProfile, participant2: ChatParticipantProfile): Promise<string> {
     if (!participant1.uid || !participant2.uid) {
         throw new Error("Ambos participantes deben tener un UID válido.");
     }
@@ -84,6 +84,7 @@ export type ChatPreview = {
  * @returns A list of chat previews.
  */
 export async function getUserChats(userId: string): Promise<ChatPreview[]> {
+    const db = useFirestore();
     const chatsRef = collection(db, 'chats');
     const q = query(
         chatsRef,
@@ -128,6 +129,7 @@ export interface Message {
  * @param text The message text.
  */
 export async function sendMessage(chatId: string, senderId: string, text: string): Promise<void> {
+  const db = useFirestore();
   const chatRef = doc(db, 'chats', chatId);
   const messagesRef = collection(chatRef, 'messages');
 
@@ -151,6 +153,7 @@ export async function sendMessage(chatId: string, senderId: string, text: string
 }
 
 export async function getChatDetails(chatId: string, currentUserId: string): Promise<ChatDetails | null> {
+    const db = useFirestore();
     const chatDoc = await getDoc(doc(db, 'chats', chatId));
     if (!chatDoc.exists()) {
         console.error("Chat does not exist!");

@@ -1,11 +1,12 @@
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { auth } from '@/lib/firebase';
+import { useAuthInstance } from '@/firebase';
 import { getUserProfile } from '@/lib/user';
 import { ProfileForm } from './profile-form';
 
 export default async function ProfilePage() {
+    const auth = useAuthInstance();
     const firebaseUser = auth.currentUser;
 
     // In a real app, you might use a server-side session management solution.

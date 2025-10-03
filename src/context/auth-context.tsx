@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { useAuthInstance, useFirestore } from '@/firebase';
 import { prototypeUsers } from '@/lib/placeholder-data';
 import type { UserProfile as AppUserProfile } from '@/lib/user';
 
@@ -23,6 +23,8 @@ const PROTOTYPE_SESSION_KEY = 'prototypeUserEmail';
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<AppUserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const auth = useAuthInstance();
+    const db = useFirestore();
 
     const fetchUserProfile = useCallback(async (firebaseUser: FirebaseUser): Promise<AppUserProfile | null> => {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -47,7 +49,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return profileToSet;
         }
         return null;
-    }, []);
+    }, [db]);
 
     const loginForPrototype = useCallback(async (email: string) => {
         const protoUser = Object.values(prototypeUsers).find(u => u.email === email);
@@ -98,7 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
         
         return () => unsubscribe();
-    }, [fetchUserProfile, loginForPrototype]);
+    }, [fetchUserProfile, loginForPrototype, auth]);
 
     const isAdmin = user?.role === 'admin';
 

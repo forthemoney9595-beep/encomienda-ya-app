@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { db } from '@/lib/firebase';
+import { useFirestore } from '@/firebase';
 import { onSnapshot, collection, query, orderBy, Timestamp } from 'firebase/firestore';
 import { sendMessage as sendMessageService, getChatDetails, type Message, type ChatDetails } from '@/lib/chat-service';
 
@@ -13,6 +13,7 @@ export function useChat(chatId: string) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [chatDetails, setChatDetails] = useState<ChatDetails | null>(null);
     const [loading, setLoading] = useState(true);
+    const db = useFirestore();
 
     useEffect(() => {
         if (!user || !chatId) return;
@@ -60,7 +61,7 @@ export function useChat(chatId: string) {
             unsubscribePromise.then(unsubscribe => unsubscribe && unsubscribe());
         };
 
-    }, [chatId, user]);
+    }, [chatId, user, db]);
 
     const sendMessage = useCallback(async (text: string) => {
         if (!user || !chatId) return;

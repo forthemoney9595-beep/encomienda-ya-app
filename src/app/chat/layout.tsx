@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getUserChats } from '@/lib/chat-service';
-import { auth } from '@/lib/firebase'; // Assuming you export auth
+import { useAuthInstance } from '@/firebase';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,7 @@ import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 async function ChatList() {
+    const auth = useAuthInstance();
     const currentUser = auth.currentUser;
     if (!currentUser) {
         // This should be handled by middleware or page-level checks as well,

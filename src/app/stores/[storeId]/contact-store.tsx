@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
+import { useFirestore } from '@/firebase';
 
 export function ContactStore({ storeId }: { storeId: string }) {
   const { user, loading: authLoading } = useAuth();
@@ -17,6 +18,7 @@ export function ContactStore({ storeId }: { storeId: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const db = useFirestore();
 
   const handleContact = async () => {
     if (!user) {
@@ -45,13 +47,13 @@ export function ContactStore({ storeId }: { storeId: string }) {
       };
 
       const storeOwnerProfile: ChatParticipantProfile = {
-          uid: store.ownerId,
+          uid: store.ownerId, // CRITICAL FIX: Use ownerId as the UID
           name: store.name, // Chat with the store name, not the owner's personal name
           role: 'store',
           imageUrl: store.imageUrl,
       };
 
-      const chatId = await getOrCreateChat(buyerProfile, storeOwnerProfile);
+      const chatId = await getOrCreateChat(db, buyerProfile, storeOwnerProfile);
       router.push(`/chat/${chatId}`);
 
     } catch (error: any) {
