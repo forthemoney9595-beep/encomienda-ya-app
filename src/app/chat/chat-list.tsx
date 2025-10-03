@@ -7,7 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth, useFirestore } from '@/firebase';
+import { useFirestore } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { getUserChats, type ChatPreview } from '@/lib/chat-service';
 
 function ChatListSkeleton() {
