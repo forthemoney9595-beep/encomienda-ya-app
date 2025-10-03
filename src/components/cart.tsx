@@ -3,7 +3,7 @@
 
 import { ShoppingCart, Trash2, Plus, Minus } from "lucide-react";
 import { Button } from "./ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "./ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from "./ui/sheet";
 import { useCart } from "@/context/cart-context";
 import { Badge } from "./ui/badge";
 import Image from "next/image";
@@ -77,9 +77,11 @@ export function Cart() {
                   <span>Total</span>
                   <span>${totalPrice.toFixed(2)}</span>
                 </div>
-                <Button className="w-full" asChild>
-                  <Link href="/checkout">Proceder al Pago</Link>
-                </Button>
+                <SheetClose asChild>
+                  <Button className="w-full" asChild>
+                    <Link href="/checkout">Proceder al Pago</Link>
+                  </Button>
+                </SheetClose>
               </div>
             </SheetFooter>
           </>
