@@ -6,7 +6,6 @@ import Image from 'next/image';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProductList } from './product-list';
-import { ContactStore } from './contact-store';
 import { useEffect, useState } from 'react';
 import type { Store, Product } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -173,7 +172,6 @@ export default function StoreDetailPage() {
                         <h3 className="font-semibold">Dirección</h3>
                         <p className="text-muted-foreground">{store.address}</p>
                     </div>
-                     <ContactStore storeId={store.id} />
                 </CardContent>
             </Card>
         </div>

@@ -22,7 +22,6 @@ import {
   Utensils,
   Shirt,
   ShoppingBag,
-  MessageCircle,
   ChevronDown,
   Home,
   Package,
@@ -63,18 +62,13 @@ export function MainNav() {
       {!loading && isBuyer && (
         <>
           {user && (
-            <>
+            
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
                   <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
-                    <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </>
+            
           )}
 
           <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
@@ -122,11 +116,6 @@ export function MainNav() {
       {/* Store Owner specific menu */}
       {!loading && isStoreOwner && (
         <>
-           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
-                <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
           <Separator className="my-2" />
           <Collapsible open={true} asChild>
             <SidebarMenuItem>
@@ -186,11 +175,6 @@ export function MainNav() {
          <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Entregas">
               <Link href="/orders"><Truck /><span>Entregas</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
-                <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </>
