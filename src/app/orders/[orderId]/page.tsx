@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -13,7 +12,8 @@ import { OrderStatusUpdater } from './order-status-updater';
 import { useEffect, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth, useFirestore } from '@/firebase';
+import { useFirestore } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';

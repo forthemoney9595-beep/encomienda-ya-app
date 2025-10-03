@@ -1,3 +1,4 @@
+
 'use client';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
@@ -36,7 +37,10 @@ export default function OrdersPage() {
         return <StoreOrdersView />;
       case 'delivery':
         return <DeliveryOrdersView />;
-      default: // 'buyer'
+      case 'buyer':
+        return <BuyerOrdersView />;
+      default:
+        // Default to buyer view if role is something else, but still logged in
         return <BuyerOrdersView />;
     }
   };
@@ -47,6 +51,8 @@ export default function OrdersPage() {
         return { title: "Gestión de Pedidos", description: "Gestiona los pedidos de tu tienda." };
       case 'delivery':
         return { title: "Panel de Repartidor", description: "Gestiona los pedidos disponibles y tus entregas activas." };
+      case 'buyer':
+        return { title: "Mis Pedidos", description: "Ve tus pedidos recientes y en curso." };
       default:
         return { title: "Mis Pedidos", description: "Ve tus pedidos recientes y en curso." };
     }

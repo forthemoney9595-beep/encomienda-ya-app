@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -5,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SendHorizonal, Loader2 } from "lucide-react";
-import { useAuth } from "@/context/auth-context";
+import { useUser } from "@/firebase";
 import { useChat } from "@/hooks/use-chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef } from "react";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
+import { useAuth } from "@/context/auth-context";
 
 function ChatSkeleton() {
   return (
@@ -31,7 +33,8 @@ function ChatSkeleton() {
 }
 
 export default function ChatRoomPage({ params }: { params: { chatId: string } }) {
-    const { user, loading: authLoading } = useAuth();
+    const { user: appUser, loading: appUserLoading } = useAuth();
+    const { user: firebaseUser, isUserLoading: authLoading } = useUser();
     const { messages, chatDetails, sendMessage, loading: chatLoading } = useChat(params.chatId);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -43,7 +46,7 @@ export default function ChatRoomPage({ params }: { params: { chatId: string } })
     }, [messages]);
 
 
-    if (authLoading || chatLoading) {
+    if (authLoading || chatLoading || appUserLoading) {
       return (
         <div className="flex h-full flex-col">
             <header className="flex items-center gap-4 border-b p-4">
@@ -65,7 +68,7 @@ export default function ChatRoomPage({ params }: { params: { chatId: string } })
       )
     }
 
-    if (!user) return null; // Or a message to log in
+    if (!firebaseUser || !appUser) return null; // Or a message to log in
 
     const chatPartner = chatDetails?.otherParticipant;
 
@@ -99,20 +102,20 @@ export default function ChatRoomPage({ params }: { params: { chatId: string } })
                             </div>
                         )}
                         {messages.map(message => (
-                            <div key={message.id} className={`flex items-end gap-2 ${message.senderId === user.uid ? 'justify-end' : ''}`}>
-                                {message.senderId !== user.uid && (
+                            <div key={message.id} className={`flex items-end gap-2 ${message.senderId === firebaseUser.uid ? 'justify-end' : ''}`}>
+                                {message.senderId !== firebaseUser.uid && (
                                      <Avatar className="h-8 w-8 border">
                                         <AvatarImage src={chatPartner?.imageUrl} />
                                         <AvatarFallback>{chatPartner?.name?.charAt(0)}</AvatarFallback>
                                     </Avatar>
                                 )}
-                                <div className={`max-w-xs rounded-lg p-3 text-sm ${message.senderId === user.uid ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                                <div className={`max-w-xs rounded-lg p-3 text-sm ${message.senderId === firebaseUser.uid ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                                     <p>{message.text}</p>
                                 </div>
-                                {message.senderId === user.uid && (
+                                {message.senderId === firebaseUser.uid && (
                                      <Avatar className="h-8 w-8 border">
-                                        <AvatarImage src={getPlaceholderImage(user.name, 40, 40)} />
-                                        <AvatarFallback>{user.name?.charAt(0).toUpperCase()}</AvatarFallback>
+                                        <AvatarImage src={getPlaceholderImage(appUser.name, 40, 40)} />
+                                        <AvatarFallback>{appUser.name?.charAt(0).toUpperCase()}</AvatarFallback>
                                     </Avatar>
                                 )}
                             </div>

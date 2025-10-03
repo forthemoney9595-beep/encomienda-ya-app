@@ -2,11 +2,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { onAuthStateChanged, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs, type Firestore } from 'firebase/firestore';
-import { useAuthInstance, useFirestore } from '@/firebase';
+import { useFirestore } from '@/firebase';
 import { prototypeUsers } from '@/lib/placeholder-data';
 import type { UserProfile as AppUserProfile } from '@/lib/user';
+import { useAuthUser, type AuthUserHookResult } from '@/hooks/use-auth-user';
+import { User as FirebaseUser } from 'firebase/auth';
 
 interface AuthContextType {
     user: AppUserProfile | null;
@@ -30,98 +31,78 @@ async function fetchUserStoreId(db: Firestore, uid: string): Promise<string | un
     return undefined;
 }
 
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<AppUserProfile | null>(null);
+    const { user: firebaseUser, isUserLoading: isAuthUserLoading } = useAuthUser();
+    const [appUser, setAppUser] = useState<AppUserProfile | null>(null);
     const [loading, setLoading] = useState(true);
-    const auth = useAuthInstance();
     const db = useFirestore();
 
-    const fetchUserProfile = useCallback(async (firebaseUser: FirebaseUser, prototypeProfileEmail?: string | null): Promise<AppUserProfile | null> => {
-        // If in prototype mode, load the selected prototype profile.
+    const fetchAppUserProfile = useCallback(async (fbUser: FirebaseUser, prototypeProfileEmail?: string | null): Promise<AppUserProfile | null> => {
         if (prototypeProfileEmail) {
             const protoUser = Object.values(prototypeUsers).find(u => u.email === prototypeProfileEmail);
             if (protoUser) {
-                return {
-                    ...protoUser,
-                    // IMPORTANT: The UID from the *actual* anonymous Firebase user is used.
-                    // But for prototype data matching, we often use the static prototype UID.
-                    // Let's keep the prototype UID for consistency with data, but know the real auth UID is different.
-                    uid: protoUser.uid, // Keep the static prototype UID for data lookups
-                    // storeId will be loaded from context
-                };
+                return { ...protoUser, uid: protoUser.uid };
             }
         }
         
-        // Real user logic
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDocRef = doc(db, 'users', fbUser.uid);
         const userDoc = await getDoc(userDocRef);
 
         if (userDoc.exists()) {
             const userData = userDoc.data();
             const profileToSet: AppUserProfile = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email!,
+                uid: fbUser.uid,
+                email: fbUser.email!,
                 ...userData
             } as AppUserProfile;
             
             if (profileToSet.role === 'store' && !profileToSet.storeId) {
-                 profileToSet.storeId = await fetchUserStoreId(db, firebaseUser.uid);
+                 profileToSet.storeId = await fetchUserStoreId(db, fbUser.uid);
             }
             return profileToSet;
         }
         return null;
     }, [db]);
+    
+    useEffect(() => {
+        const manageUser = async () => {
+            if (isAuthUserLoading) {
+                setLoading(true);
+                return;
+            }
+
+            if (firebaseUser) {
+                const prototypeProfileEmail = sessionStorage.getItem(PROTOTYPE_PROFILE_KEY);
+                const profile = await fetchAppUserProfile(firebaseUser, prototypeProfileEmail);
+                setAppUser(profile);
+            } else {
+                setAppUser(null);
+                sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
+            }
+            setLoading(false);
+        };
+        
+        manageUser();
+    }, [firebaseUser, isAuthUserLoading, fetchAppUserProfile]);
 
     const loginForPrototype = useCallback(async (email: string) => {
-        try {
-            await signInAnonymously(auth);
-            // After anonymous sign-in, onAuthStateChanged will fire.
-            // We store the *chosen profile* to be picked up by the auth state change handler.
-            sessionStorage.setItem(PROTOTYPE_PROFILE_KEY, email);
-        } catch (error) {
-            console.error("Error signing in anonymously for prototype:", error);
-        }
-    }, [auth]);
+        sessionStorage.setItem(PROTOTYPE_PROFILE_KEY, email);
+        // This will trigger a reload or context change that useAuthUser will pick up
+        // after a new anonymous user is (or isn't) created.
+        // For simplicity, we can just reload to re-trigger the auth flow.
+        window.location.reload();
+    }, []);
 
     const logoutForPrototype = useCallback(async () => {
         sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
-        if (auth.currentUser) {
-            await auth.signOut();
-        }
-        setUser(null);
-    }, [auth]);
+        // Let useAuthUser handle the actual signout
+        window.location.href = '/login';
+    }, []);
 
-    useEffect(() => {
-        setLoading(true);
-        
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-                const prototypeProfileEmail = sessionStorage.getItem(PROTOTYPE_PROFILE_KEY);
-                const profile = await fetchUserProfile(firebaseUser, prototypeProfileEmail);
-
-                if (profile?.role === 'store' && profile.storeId) {
-                    const sessionStoreIdKey = `proto_store_id_${profile.uid}`;
-                    sessionStorage.setItem(sessionStoreIdKey, profile.storeId);
-                }
-
-                setUser(profile);
-
-            } else {
-                // Not logged into Firebase, so no user.
-                setUser(null);
-                 sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
-            }
-            setLoading(false);
-        });
-        
-        return () => unsubscribe();
-    }, [auth, fetchUserProfile]);
-
-    const isAdmin = user?.role === 'admin';
+    const isAdmin = appUser?.role === 'admin';
 
     const value = { 
-        user, 
+        user: appUser, 
         loading,
         isAdmin, 
         loginForPrototype, 

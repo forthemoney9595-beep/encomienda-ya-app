@@ -2,13 +2,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth, useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { onSnapshot, collection, query, orderBy, Timestamp } from 'firebase/firestore';
 import { sendMessage as sendMessageService, getChatDetails, type Message, type ChatDetails } from '@/lib/chat-service';
 
 
 export function useChat(chatId: string) {
-    const { user, loading: authLoading } = useAuth();
+    const { user, isUserLoading: authLoading } = useUser();
     const [messages, setMessages] = useState<Message[]>([]);
     const [chatDetails, setChatDetails] = useState<ChatDetails | null>(null);
     const [loading, setLoading] = useState(true);

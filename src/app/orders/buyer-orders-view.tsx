@@ -9,7 +9,7 @@ import { ArrowRight, PackageSearch } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Order, OrderStatus } from '@/lib/order-service';
-import { useAuth } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { Skeleton } from '@/components/ui/skeleton';
 

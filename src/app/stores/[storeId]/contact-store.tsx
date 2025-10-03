@@ -11,9 +11,11 @@ import { useToast } from '@/hooks/use-toast';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { useFirestore } from '@/firebase';
+import { useUser } from '@/hooks/use-auth-user';
 
 export function ContactStore({ storeId }: { storeId: string }) {
-  const { user, loading: authLoading } = useAuth();
+  const { user: appUser, loading: appUserLoading } = useAuth();
+  const { user: firebaseUser, isUserLoading: authLoading } = useUser();
   const { getStoreById, loading: prototypeLoading } = usePrototypeData();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -21,7 +23,7 @@ export function ContactStore({ storeId }: { storeId: string }) {
   const db = useFirestore();
 
   const handleContact = async () => {
-    if (!user) {
+    if (!firebaseUser || !appUser) {
       toast({
         variant: 'destructive',
         title: 'Acción Requerida',
@@ -38,17 +40,16 @@ export function ContactStore({ storeId }: { storeId: string }) {
         throw new Error("Información del propietario de la tienda no encontrada. No se puede iniciar el chat.");
       }
       
-      // Construct the two participant profiles with all required data.
       const buyerProfile: ChatParticipantProfile = {
-          uid: user.uid,
-          name: user.name,
-          role: user.role,
-          imageUrl: getPlaceholderImage(user.uid, 64, 64),
+          uid: firebaseUser.uid,
+          name: appUser.name,
+          role: 'buyer',
+          imageUrl: getPlaceholderImage(firebaseUser.uid, 64, 64),
       };
 
       const storeOwnerProfile: ChatParticipantProfile = {
-          uid: store.ownerId, // CRITICAL FIX: Use ownerId as the UID
-          name: store.name, // Chat with the store name, not the owner's personal name
+          uid: store.ownerId,
+          name: store.name,
           role: 'store',
           imageUrl: store.imageUrl,
       };
@@ -68,9 +69,9 @@ export function ContactStore({ storeId }: { storeId: string }) {
     }
   };
 
-  const isStoreOwner = user?.role === 'store' && user?.storeId === storeId;
+  const isStoreOwner = appUser?.role === 'store' && appUser?.storeId === storeId;
 
-  if (authLoading || prototypeLoading || isStoreOwner) {
+  if (authLoading || prototypeLoading || appUserLoading || isStoreOwner) {
     return null;
   }
   

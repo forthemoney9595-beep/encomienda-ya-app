@@ -1,9 +1,8 @@
 
-
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAuth, useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import type { Order, OrderStatus } from '@/lib/order-service';
 import { updateOrderStatus } from '@/lib/order-service';
 import { CardFooter, CardDescription, Card } from '@/components/ui/card';
@@ -14,6 +13,7 @@ import { useState } from 'react';
 import { Loader2, CreditCard } from 'lucide-react';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useAuth } from '@/context/auth-context';
 
 interface OrderStatusUpdaterProps {
   order: Order;
@@ -31,7 +31,7 @@ const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
 };
 
 export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
-  const { user, loading: authLoading } = useAuth();
+  const { user: appUser, loading: authLoading } = useAuth();
   const db = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
@@ -39,9 +39,9 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const { updatePrototypeOrder } = usePrototypeData();
 
-  const isStoreOwner = user?.storeId === order.storeId;
-  const isBuyer = user?.uid === order.userId;
-  const isDeliveryPerson = user?.role === 'delivery';
+  const isStoreOwner = appUser?.storeId === order.storeId;
+  const isBuyer = appUser?.uid === order.userId;
+  const isDeliveryPerson = appUser?.role === 'delivery';
 
   const possibleNextStatuses = statusTransitions[order.status] || [];
 
@@ -73,7 +73,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   };
 
   // Specific logic for delivery person
-  if (isDeliveryPerson && order.status === 'En reparto' && order.deliveryPersonId === user?.uid) {
+  if (isDeliveryPerson && order.status === 'En reparto' && order.deliveryPersonId === appUser?.uid) {
      return (
        <CardFooter>
             <Button onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdating} className="w-full">

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -42,11 +43,6 @@ export default function LoginPage() {
     // Check if it's a prototype user
     if (Object.keys(prototypeUsers).includes(values.email)) {
         await loginForPrototype(values.email);
-        toast({
-          title: "¡Inicio de Sesión Simulado!",
-          description: `Modo de prototipo activado para ${values.email}.`,
-        });
-        router.push('/');
     } else {
       // Try real Firebase login
       try {
