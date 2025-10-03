@@ -3,21 +3,37 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Store, Truck, ClipboardList, Package, Users, BarChart, FileText } from 'lucide-react';
+import { Store, Truck, ClipboardList, Users, DollarSign, PackageCheck } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import type { Store as StoreType, DeliveryPersonnel } from '@/lib/placeholder-data';
-import { getAvailableOrdersForDelivery } from '@/lib/order-service';
-import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { subDays, format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+import type { OrderStatus } from '@/lib/order-service';
+
+
+const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+
+const getStatusVariant = (status: OrderStatus) => {
+    switch (status) {
+      case 'Entregado': return 'secondary';
+      case 'En reparto': return 'default';
+      case 'Pendiente de Pago': return 'default';
+      case 'En preparación':
+      case 'Pedido Realizado': return 'outline';
+      case 'Pendiente de Confirmación': return 'outline';
+      case 'Cancelado':
+      case 'Rechazado': return 'destructive';
+      default: return 'outline';
+    }
+  };
 
 
 export default function AdminDashboard() {
@@ -26,25 +42,27 @@ export default function AdminDashboard() {
   
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
-  const { getAvailableOrdersForDelivery: getPrototypeAvailableOrders, loading: prototypeLoading, prototypeStores, prototypeOrders, prototypeDelivery } = usePrototypeData();
+  const { prototypeLoading, prototypeStores, prototypeOrders, prototypeDelivery } = usePrototypeData();
   const isPrototype = user?.uid.startsWith('proto-') ?? false;
 
   const stats = useMemo(() => {
-    if (prototypeLoading) return { totalStores: 0, totalDrivers: 0, pendingOrders: 0 };
+    if (prototypeLoading) return { totalStores: 0, totalDrivers: 0, totalRevenue: 0, totalUsers: 0, completedOrders: 0 };
     
-    let availableOrderCount = 0;
-    if (isPrototype) {
-        availableOrderCount = getPrototypeAvailableOrders().length;
-    } 
-    // In a real app, you would fetch real data here
+    const completed = prototypeOrders.filter(o => o.status === 'Entregado');
+    const totalRevenue = completed.reduce((sum, order) => sum + order.total, 0);
+
+    // In a real app, you would fetch all users from the DB
+    const totalUsers = Object.keys(prototypeUsers).length + prototypeStores.length - 1; // Exclude duplicate store owner
     
     return {
       totalStores: prototypeStores.length,
       totalDrivers: prototypeStores.filter(s => s.status === 'Aprobado').length > 0 ? 1 : 0, // Only one proto driver
-      pendingOrders: availableOrderCount
+      totalRevenue,
+      totalUsers,
+      completedOrders: completed.length
     }
 
-  }, [prototypeLoading, isPrototype, getPrototypeAvailableOrders, prototypeStores]);
+  }, [prototypeLoading, isPrototype, prototypeStores, prototypeOrders]);
 
   const salesData = useMemo(() => {
     const last7Days = Array.from({ length: 7 }, (_, i) => startOfDay(subDays(new Date(), i))).reverse();
@@ -63,9 +81,18 @@ export default function AdminDashboard() {
     });
   }, [prototypeOrders]);
 
-  const pendingStores = useMemo(() => {
-    return prototypeStores.filter(s => s.status === 'Pendiente').slice(0, 5); // Take latest 5
-  }, [prototypeStores]);
+  const orderStatusData = useMemo(() => {
+    const statusCounts = prototypeOrders.reduce((acc, order) => {
+        acc[order.status] = (acc[order.status] || 0) + 1;
+        return acc;
+    }, {} as Record<OrderStatus, number>);
+
+    return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+  }, [prototypeOrders]);
+
+  const recentOrders = useMemo(() => {
+    return [...prototypeOrders].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+  }, [prototypeOrders]);
 
 
   useEffect(() => {
@@ -100,35 +127,35 @@ export default function AdminDashboard() {
   return (
     <div className="container mx-auto">
       <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tiendas Totales</CardTitle>
-            <Store className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalStores}</div>
-            <p className="text-xs text-muted-foreground">tiendas gestionadas</p>
+            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">de pedidos completados</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Conductores Activos</CardTitle>
-            <Truck className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Usuarios Registrados</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalDrivers}</div>
-            <p className="text-xs text-muted-foreground">personal de reparto activo</p>
+            <div className="text-2xl font-bold">{stats.totalUsers}</div>
+            <p className="text-xs text-muted-foreground">compradores, tiendas y repartidores</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pedidos Pendientes</CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Pedidos Completados</CardTitle>
+            <PackageCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingOrders}</div>
-            <p className="text-xs text-muted-foreground">pedidos por completar</p>
+            <div className="text-2xl font-bold">{stats.completedOrders}</div>
+            <p className="text-xs text-muted-foreground">pedidos entregados con éxito</p>
           </CardContent>
         </Card>
       </div>
@@ -142,25 +169,9 @@ export default function AdminDashboard() {
              <ChartContainer config={{ Ventas: { label: "Ventas", color: "hsl(var(--chart-1))" }}} className="h-[300px] w-full">
                 <RechartsBarChart accessibilityLayer data={salesData}>
                   <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tickLine={false}
-                    tickMargin={10}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={10}
-                    tickFormatter={(value) => `$${value}`}
-                  />
-                   <ChartTooltip
-                        cursor={false} 
-                        content={<ChartTooltipContent 
-                            indicator="dot"
-                            formatter={(value) => `$${Number(value).toFixed(2)}`}
-                        />} 
-                    />
+                  <XAxis dataKey="date" tickLine={false} tickMargin={10} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} tickMargin={10} tickFormatter={(value) => `$${value}`} />
+                   <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => `$${Number(value).toFixed(2)}`} />} />
                   <Bar dataKey="Ventas" fill="var(--color-Ventas)" radius={4} />
                 </RechartsBarChart>
             </ChartContainer>
@@ -168,43 +179,70 @@ export default function AdminDashboard() {
         </Card>
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Actividad Reciente</CardTitle>
-            <CardDescription>
-              Nuevas tiendas pendientes de aprobación.
-            </CardDescription>
+            <CardTitle>Distribución de Pedidos</CardTitle>
+             <CardDescription>Estado actual de todos los pedidos.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Tienda</TableHead>
-                        <TableHead>Categoría</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                {pendingStores.length > 0 ? (
-                    pendingStores.map((store) => (
-                    <TableRow key={store.id}>
-                        <TableCell>
-                            <Link href="/admin/stores" className="font-medium hover:underline">{store.name}</Link>
-                        </TableCell>
-                        <TableCell>
-                            <Badge variant="outline">{store.category}</Badge>
-                        </TableCell>
-                    </TableRow>
-                    ))
-                ) : (
-                    <TableRow>
-                        <TableCell colSpan={2} className="h-24 text-center">
-                            No hay nuevas tiendas pendientes.
-                        </TableCell>
-                    </TableRow>
-                )}
-                </TableBody>
-            </Table>
+            <ChartContainer config={{}} className="h-[300px] w-full">
+              <RechartsPieChart>
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                  <Pie data={orderStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} fill="hsl(var(--chart-1))" label={(entry) => `${entry.name} (${entry.value})`}>
+                      {orderStatusData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                  </Pie>
+                  <Legend />
+              </RechartsPieChart>
+            </ChartContainer>
           </CardContent>
+        </Card>
+      </div>
+      <div className="mt-6">
+        <Card>
+            <CardHeader>
+                <CardTitle>Últimos Pedidos</CardTitle>
+                <CardDescription>Los 5 pedidos más recientes en la plataforma.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                 <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Pedido</TableHead>
+                            <TableHead>Cliente</TableHead>
+                            <TableHead>Tienda</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {recentOrders.length > 0 ? (
+                        recentOrders.map((order) => (
+                        <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
+                            <TableCell className="font-medium">
+                                <Link href={`/orders/${order.id}`} className="hover:underline">#{order.id.substring(0, 7)}</Link>
+                            </TableCell>
+                             <TableCell>{order.customerName}</TableCell>
+                             <TableCell>{order.storeName}</TableCell>
+                            <TableCell>
+                               <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-bold">${order.total.toFixed(2)}</TableCell>
+                        </TableRow>
+                        ))
+                    ) : (
+                        <TableRow>
+                            <TableCell colSpan={5} className="h-24 text-center">
+                                No hay pedidos recientes.
+                            </TableCell>
+                        </TableRow>
+                    )}
+                    </TableBody>
+                </Table>
+            </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+
+    

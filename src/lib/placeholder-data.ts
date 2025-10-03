@@ -47,7 +47,8 @@ export interface UserProfile {
 
 // Redefining Order types here to break circular dependency with order-service.
 // This file should be pure data and type definitions with no code imports.
-export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'Pedido Realizado' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
+export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
+
 
 export interface CartItem extends Product {
   quantity: number;
@@ -169,3 +170,5 @@ export const initialPrototypeOrders: Order[] = [];
 export const initialPrototypeNotifications: Notification[] = [
   { id: 'n4', title: '¡Bienvenido!', description: 'Gracias por unirte a EncomiendaYA.', date: 'hace 1 día' },
 ];
+
+    
