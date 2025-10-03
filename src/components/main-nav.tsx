@@ -17,7 +17,6 @@ import {
   ClipboardList,
   Shield,
   Truck,
-  MessageSquareQuote,
   LayoutGrid,
   Utensils,
   Shirt,
@@ -227,14 +226,6 @@ export function MainNav() {
                     <Link href="/admin/delivery">
                       <Truck />
                       <span>Reparto</span>
-                    </Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild isActive={pathname === '/admin/driver-reviews'}>
-                    <Link href="/admin/driver-reviews">
-                      <MessageSquareQuote />
-                      <span>Reseñas</span>
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
