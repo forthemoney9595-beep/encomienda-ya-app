@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -20,6 +21,10 @@ export function useChat(chatId: string) {
             setLoading(true);
             try {
                 const details = await getChatDetails(chatId, user.uid);
+                // Fallback if details are incomplete to prevent crash
+                if (details && !details.otherParticipant.name) {
+                    details.otherParticipant.name = "Usuario Desconocido";
+                }
                 setChatDetails(details);
 
                 const messagesRef = collection(db, 'chats', chatId, 'messages');
@@ -36,11 +41,12 @@ export function useChat(chatId: string) {
                         };
                     });
                     setMessages(fetchedMessages);
+                    setLoading(false); // Set loading to false once messages are loaded
                 }, (error) => {
                     console.error("Error al suscribirse a los mensajes:", error);
+                    setLoading(false);
                 });
                 
-                setLoading(false);
                 return () => unsubscribe();
             } catch (error) {
                 console.error("Error fetching chat details:", error);

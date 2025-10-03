@@ -3,6 +3,7 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
+import { getUserProfile } from './user'; // Importar función para obtener perfil
 
 /**
  * Gets or creates a chat room between a user and a store owner.
@@ -18,7 +19,9 @@ export async function getOrCreateChat(userId: string, storeId: string): Promise<
     if (!storeDoc.exists()) {
         throw new Error("Store not found");
     }
-    const ownerId = storeDoc.data().ownerId;
+    const storeData = storeDoc.data();
+    const ownerId = storeData.ownerId;
+
     if (!ownerId) {
         throw new Error("Store owner not found");
     }
@@ -26,36 +29,33 @@ export async function getOrCreateChat(userId: string, storeId: string): Promise<
     // Query for a chat containing both the user and the store owner ID.
     const q = query(
         chatsRef,
-        where('participants', 'array-contains', userId)
+        where('participants', '==', [userId, ownerId].sort())
     );
 
     const querySnapshot = await getDocs(q);
 
-    // Filter the results to find the chat that also includes the store owner.
-    const existingChat = querySnapshot.docs.find(d => d.data().participants.includes(ownerId));
-
-    if (existingChat) {
+    if (!querySnapshot.empty) {
         // If a chat already exists, return its ID.
-        return existingChat.id;
+        return querySnapshot.docs[0].id;
     } else {
         // If no chat exists, create a new one.
-        const userDoc = await getDoc(doc(db, 'users', userId));
-
-        if (!userDoc.exists()) {
-            throw new Error("User not found");
+        const userProfile = await getUserProfile(userId);
+        if (!userProfile) {
+            throw new Error("User profile not found");
         }
-
+        
         const newChatRef = await addDoc(chatsRef, {
-            participants: [userId, ownerId], // Chat is between buyer and store owner
+            participants: [userId, ownerId].sort(), // Store sorted participants for consistent querying
             participantInfo: {
                 [userId]: {
-                    name: userDoc.data()?.name || 'Comprador Anónimo',
-                    role: userDoc.data()?.role || 'buyer',
+                    name: userProfile.name || 'Comprador',
+                    role: 'buyer',
+                    imageUrl: getPlaceholderImage(userId, 64, 64) // Assuming buyers have placeholder images
                 },
                 [ownerId]: {
-                    name: storeDoc.data().name, // The public store name
-                    role: 'store', // Hardcoded for clarity
-                    imageUrl: storeDoc.data().imageUrl,
+                    name: storeData.name, // The public store name
+                    role: 'store',
+                    imageUrl: storeData.imageUrl,
                 }
             },
             createdAt: serverTimestamp(),
