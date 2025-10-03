@@ -3,6 +3,8 @@
 
 import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc, type Firestore } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { errorEmitter } from '@/firebase/error-emitter';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -43,26 +45,30 @@ export async function getUserProfile(db: Firestore, uid: string): Promise<UserPr
  * @param data Los datos del perfil del usuario a guardar.
  */
 export async function createUserProfile(db: Firestore, uid: string, data: UserProfileData) {
-  try {
-    const userDocRef = doc(db, 'users', uid);
+  const userDocRef = doc(db, 'users', uid);
     
-    const profileData: any = {
-      uid, 
-      ...data,
-      createdAt: serverTimestamp(),
-    };
+  const profileData: any = {
+    uid, 
+    ...data,
+    createdAt: serverTimestamp(),
+  };
 
-    if (data.role === 'delivery') {
-        profileData.status = 'pending';
-    }
-
-    await setDoc(userDocRef, profileData);
-    
-    console.log(`Perfil de usuario creado/actualizado para UID: ${uid}`);
-  } catch (error) {
-    console.error("Error al crear el perfil de usuario en Firestore: ", error);
-    throw new Error("No se pudo crear el perfil de usuario.");
+  if (data.role === 'delivery') {
+      profileData.status = 'pending';
   }
+
+  // Use a non-blocking write with contextual error handling
+  setDoc(userDocRef, profileData).catch(serverError => {
+      const permissionError = new FirestorePermissionError({
+          path: userDocRef.path,
+          operation: 'write',
+          requestResourceData: profileData,
+      });
+      // Emit the error globally
+      errorEmitter.emit('permission-error', permissionError);
+      // We don't re-throw here, the listener will handle it.
+      console.error("Error creating user profile, handled by emitter:", serverError);
+  });
 }
 
 /**
