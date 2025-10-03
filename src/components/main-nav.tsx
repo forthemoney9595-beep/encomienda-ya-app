@@ -122,6 +122,11 @@ export function MainNav() {
       {/* Store Owner specific menu */}
       {!loading && isStoreOwner && (
         <>
+           <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/chat')} tooltip="Chat">
+                <Link href="/chat"><MessageCircle /><span>Chat</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <Separator className="my-2" />
           <Collapsible open={true} asChild>
             <SidebarMenuItem>
