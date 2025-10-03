@@ -16,7 +16,6 @@ import type { Product } from "@/lib/placeholder-data";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
-import { uploadImage } from "@/lib/upload-service";
 import { Progress } from "@/components/ui/progress";
 import { useParams } from "next/navigation";
 
@@ -48,7 +47,6 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
   const isEditing = product !== null;
   const { toast } = useToast();
   const params = useParams();
-  const isPrototypeMode = (params.storeId as string)?.startsWith('proto-');
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -96,42 +94,25 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       setIsUploading(true);
       setUploadProgress(0);
       
-      if (isPrototypeMode) {
-        const interval = setInterval(() => {
-          setUploadProgress(prev => {
-            if (prev >= 95) {
-              clearInterval(interval);
-              return 100;
-            }
-            return prev + 10;
-          });
-        }, 150);
+      const interval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 95) {
+            clearInterval(interval);
+            return 100;
+          }
+          return prev + 10;
+        });
+      }, 150);
 
-        setTimeout(() => {
-          clearInterval(interval);
-          setUploadProgress(100);
-          const randomSeed = file.name + Date.now();
-          const placeholderUrl = getPlaceholderImage(randomSeed, 200, 200);
-          form.setValue('imageUrl', placeholderUrl, { shouldValidate: true });
-          toast({ title: '¡Imagen Subida! (Simulado)', description: 'La imagen de marcador de posición se ha establecido.' });
-          setIsUploading(false);
-        }, 2000);
-      } else {
-        try {
-          const downloadURL = await uploadImage(file, setUploadProgress);
-          form.setValue('imageUrl', downloadURL, { shouldValidate: true });
-          toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
-        } catch (error: any) {
-          toast({
-            variant: 'destructive',
-            title: 'Error de Subida',
-            description: error.message || 'No se pudo subir la imagen.',
-          });
-          setPreviewImage(isEditing ? product?.imageUrl || null : null);
-        } finally {
-          setIsUploading(false);
-        }
-      }
+      setTimeout(() => {
+        clearInterval(interval);
+        setUploadProgress(100);
+        const randomSeed = file.name + Date.now();
+        const placeholderUrl = getPlaceholderImage(randomSeed, 200, 200);
+        form.setValue('imageUrl', placeholderUrl, { shouldValidate: true });
+        toast({ title: '¡Imagen Subida! (Simulado)', description: 'La imagen de marcador de posición se ha establecido.' });
+        setIsUploading(false);
+      }, 2000);
     }
   };
 
@@ -140,13 +121,12 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 
     try {
         const productData: Product = {
-          id: isEditing ? product.id : `new-${Date.now()}-${Math.random()}`,
+          id: isEditing ? product.id : `prod-${Date.now()}`,
           name: values.name,
           description: values.description,
           price: values.price,
           category: values.category,
           imageUrl: values.imageUrl || getPlaceholderImage(values.name.replace(/\s/g, '')),
-          // Add default rating for new products, preserve for existing
           rating: isEditing ? product.rating : 0,
           reviewCount: isEditing ? product.reviewCount : 0,
         };

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,7 +16,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
-import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
@@ -46,7 +46,6 @@ export function ProductList({ products: initialProducts, productCategories: init
     const { user } = useAuth();
     const { addPrototypeProduct, updatePrototypeProduct, deletePrototypeProduct } = usePrototypeData();
     
-    const isPrototypeMode = currentStoreId.startsWith('proto-');
     const [products, setProducts] = useState<Product[]>(initialProducts);
     
     const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
@@ -80,17 +79,12 @@ export function ProductList({ products: initialProducts, productCategories: init
         const isEditing = products.some(p => p.id === productData.id);
         
         try {
-            if (isPrototypeMode) {
-                isEditing ? updatePrototypeProduct(currentStoreId, productData) : addPrototypeProduct(currentStoreId, productData);
+            if (isEditing) {
+                updatePrototypeProduct(currentStoreId, productData);
             } else {
-                if (isEditing) {
-                    await updateProductInStore(currentStoreId, productData.id, productData);
-                } else {
-                    await addProductToStore(currentStoreId, productData, productCategories);
-                }
+                addPrototypeProduct(currentStoreId, productData);
             }
              
-            // Optimistically update UI
             if (isEditing) {
                 setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
             } else {
@@ -104,7 +98,7 @@ export function ProductList({ products: initialProducts, productCategories: init
             toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
             setManageItemDialogOpen(false);
             setEditingProduct(null);
-            router.refresh(); // Refresh server component data
+            
         } catch (error) {
              toast({ title: "Error", description: "No se pudo guardar el artículo.", variant: 'destructive'});
         }
@@ -112,20 +106,15 @@ export function ProductList({ products: initialProducts, productCategories: init
 
     const handleDeleteProduct = async (productId: string) => {
         try {
-            if (isPrototypeMode) {
-                deletePrototypeProduct(currentStoreId, productId);
-            } else {
-                await deleteProductFromStore(currentStoreId, productId);
-            }
+            deletePrototypeProduct(currentStoreId, productId);
             
-            // Optimistic update
             setProducts(prev => prev.filter(p => p.id !== productId));
            
             toast({
                 title: "Producto Eliminado",
                 description: "El producto ha sido eliminado.",
             });
-             router.refresh();
+
         } catch(error) {
             toast({ title: "Error", description: "No se pudo eliminar el artículo.", variant: 'destructive'});
         }

@@ -18,8 +18,8 @@ interface PrototypeDataContextType {
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
     addPrototypeOrder: (order: Order) => void;
     addPrototypeStore: (store: Store) => void;
-    updatePrototypeProduct: (storeId: string, product: Product) => void;
     addPrototypeProduct: (storeId: string, product: Product) => void;
+    updatePrototypeProduct: (storeId: string, product: Product) => void;
     deletePrototypeProduct: (storeId: string, productId: string) => void;
     addReviewToProduct: (storeId: string, productId: string, rating: number, reviewText: string) => void;
     addDeliveryReviewToOrder: (orderId: string, rating: number, review: string) => void;
