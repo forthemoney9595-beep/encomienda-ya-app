@@ -55,12 +55,14 @@ export async function getOrCreateChat(db: Firestore, participant1: ChatParticipa
         lastMessageTimestamp: serverTimestamp(), // Update timestamp to show activity
     };
 
+    // Use a .catch() block to handle potential security rule violations
     setDoc(chatRef, chatData, { merge: true }).catch(error => {
         const contextualError = new FirestorePermissionError({
           path: chatRef.path,
           operation: 'write',
           requestResourceData: chatData,
         });
+        // Emit the detailed error for the development overlay to catch
         errorEmitter.emit('permission-error', contextualError);
     });
 
