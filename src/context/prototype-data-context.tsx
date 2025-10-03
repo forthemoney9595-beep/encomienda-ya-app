@@ -15,6 +15,8 @@ interface PrototypeDataContextType {
     prototypeDelivery: DeliveryPersonnel;
     prototypeNotifications: Notification[];
     prototypeUsers: Record<string, UserProfile>;
+    favoriteStores: string[];
+    favoriteProducts: string[];
     loading: boolean;
     updateUser: (updates: Partial<UserProfile>) => void;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
@@ -38,6 +40,8 @@ interface PrototypeDataContextType {
     getOrderById: (orderId: string) => Order | undefined;
     getStoreById: (storeId: string) => Store | undefined;
     getReviewsByDriverId: (driverId: string) => Order[];
+    toggleFavoriteStore: (storeId: string) => void;
+    toggleFavoriteProduct: (productId: string) => void;
 }
 
 const PrototypeDataContext = createContext<PrototypeDataContextType | undefined>(undefined);
@@ -47,6 +51,8 @@ const PROTOTYPE_STORES_KEY = 'prototypeStores';
 const PROTOTYPE_DELIVERY_KEY = 'prototypeDelivery';
 const PROTOTYPE_NOTIFICATIONS_KEY = 'prototypeNotifications';
 const PROTOTYPE_USERS_KEY = 'prototypeUsers';
+const FAVORITE_STORES_KEY = 'favoriteStores';
+const FAVORITE_PRODUCTS_KEY = 'favoriteProducts';
 
 
 export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => {
@@ -55,6 +61,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     const [prototypeDelivery, setPrototypeDelivery] = useState<DeliveryPersonnel>(initialPrototypeDelivery);
     const [notifications, setNotifications] = useState<Notification[]>(initialPrototypeNotifications);
     const [users, setUsers] = useState<Record<string, UserProfile>>(initialPrototypeUsers);
+    const [favoriteStores, setFavoriteStores] = useState<string[]>([]);
+    const [favoriteProducts, setFavoriteProducts] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
 
@@ -87,18 +95,22 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
                 const storedUsers = sessionStorage.getItem(PROTOTYPE_USERS_KEY);
                 setUsers(storedUsers ? JSON.parse(storedUsers) : initialPrototypeUsers);
 
+                const storedFavoriteStores = sessionStorage.getItem(FAVORITE_STORES_KEY);
+                setFavoriteStores(storedFavoriteStores ? JSON.parse(storedFavoriteStores) : []);
+
+                const storedFavoriteProducts = sessionStorage.getItem(FAVORITE_PRODUCTS_KEY);
+                setFavoriteProducts(storedFavoriteProducts ? JSON.parse(storedFavoriteProducts) : []);
+
             } catch (error) {
                 console.error("Failed to load prototype data from session storage, resetting.", error);
-                sessionStorage.setItem(PROTOTYPE_ORDERS_KEY, JSON.stringify(initialPrototypeOrders));
+                sessionStorage.clear(); // Clear all session storage on error
                 setOrders(initialPrototypeOrders);
-                sessionStorage.setItem(PROTOTYPE_STORES_KEY, JSON.stringify(initialPrototypeStores));
                 setStores(initialPrototypeStores);
-                sessionStorage.setItem(PROTOTYPE_DELIVERY_KEY, JSON.stringify(initialPrototypeDelivery));
                 setPrototypeDelivery(initialPrototypeDelivery);
-                sessionStorage.setItem(PROTOTYPE_NOTIFICATIONS_KEY, JSON.stringify(initialPrototypeNotifications));
                 setNotifications(initialPrototypeNotifications);
-                sessionStorage.setItem(PROTOTYPE_USERS_KEY, JSON.stringify(initialPrototypeUsers));
                 setUsers(initialPrototypeUsers);
+                setFavoriteStores([]);
+                setFavoriteProducts([]);
             } finally {
                 setLoading(false);
             }
@@ -329,6 +341,26 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             return updatedOrders;
         });
     };
+
+    const toggleFavoriteStore = (storeId: string) => {
+        setFavoriteStores(prev => {
+            const newFavorites = prev.includes(storeId)
+                ? prev.filter(id => id !== storeId)
+                : [...prev, storeId];
+            updateSessionStorage(FAVORITE_STORES_KEY, newFavorites);
+            return newFavorites;
+        });
+    };
+
+    const toggleFavoriteProduct = (productId: string) => {
+        setFavoriteProducts(prev => {
+            const newFavorites = prev.includes(productId)
+                ? prev.filter(id => id !== productId)
+                : [...prev, productId];
+            updateSessionStorage(FAVORITE_PRODUCTS_KEY, newFavorites);
+            return newFavorites;
+        });
+    };
     
     const getOrdersByStore = useCallback((storeId: string) => {
         return orders
@@ -375,6 +407,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         prototypeDelivery,
         prototypeNotifications: notifications,
         prototypeUsers: users,
+        favoriteStores,
+        favoriteProducts,
         loading: loading || !isClient,
         updateUser,
         updatePrototypeOrder,
@@ -398,6 +432,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         getOrderById,
         getStoreById,
         getReviewsByDriverId,
+        toggleFavoriteStore,
+        toggleFavoriteProduct,
     };
 
     return (
