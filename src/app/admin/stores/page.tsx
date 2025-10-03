@@ -15,18 +15,11 @@ import { ManageStoreDialog } from './manage-store-dialog';
 
 export default function AdminStoresPage() {
   const { user, loading: authLoading } = useAuth();
-  const [stores, setStores] = useState<Store[]>([]);
   const { prototypeStores, updatePrototypeStore, loading: prototypeLoading, addPrototypeStore, deletePrototypeStore } = usePrototypeData();
   const { toast } = useToast();
 
   const [isManageDialogOpen, setManageDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
-
-  useEffect(() => {
-    if (!prototypeLoading) {
-      setStores(prototypeStores);
-    }
-  }, [prototypeStores, prototypeLoading]);
 
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
     try {
@@ -96,7 +89,7 @@ export default function AdminStoresPage() {
         </div>
       ) : (
         <StoresList 
-          stores={stores} 
+          stores={prototypeStores} 
           onStatusUpdate={handleStatusUpdate}
           onEdit={openDialogForEdit}
           onDelete={handleDeleteStore}

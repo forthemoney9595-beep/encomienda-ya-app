@@ -57,12 +57,12 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
 
   const handleSubmit = (values: FormData) => {
     const storeData: Store = {
-      id: isEditing ? store.id : `proto-store-${Date.now()}`,
-      ownerId: isEditing ? store.ownerId : `proto-owner-${Date.now()}`,
-      products: isEditing ? store.products : [],
-      productCategories: isEditing ? store.productCategories : [values.category],
-      imageUrl: isEditing ? store.imageUrl : getPlaceholderImage(values.name, 600, 400),
-      imageHint: isEditing ? store.imageHint : values.category,
+      id: isEditing && store ? store.id : `proto-store-${Date.now()}`,
+      ownerId: isEditing && store ? store.ownerId : `proto-owner-${Date.now()}`,
+      products: isEditing && store ? store.products : [],
+      productCategories: isEditing && store ? store.productCategories : [values.category],
+      imageUrl: isEditing && store ? store.imageUrl : getPlaceholderImage(values.name, 600, 400),
+      imageHint: isEditing && store ? store.imageHint : values.category,
       ...values,
     };
     onSave(storeData);
