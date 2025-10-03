@@ -148,16 +148,16 @@ export function MainNav() {
                     </SidebarMenuSubItem>
                   )}
                    <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store/analytics')}>
-                      <Link href="/admin/my-store/analytics">
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/analytics')}>
+                      <Link href="/my-store/analytics">
                         <BarChart3 />
                         <span>Analíticas</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                    <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/my-store') && !pathname.startsWith('/admin/my-store/analytics')}>
-                      <Link href="/admin/my-store">
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store') && !pathname.startsWith('/my-store/analytics')}>
+                      <Link href="/my-store">
                         <Edit />
                         <span>Editar Tienda</span>
                       </Link>

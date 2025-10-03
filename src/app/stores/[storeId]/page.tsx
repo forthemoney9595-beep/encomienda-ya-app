@@ -128,7 +128,7 @@ export default function StoreDetailPage() {
     <div className="container mx-auto">
         <PageHeader title={store.name} description={store.category}>
             {isOwner && (
-                <Button onClick={() => router.push(`/admin/my-store`)}>
+                <Button onClick={() => router.push(`/my-store`)}>
                     <Edit className="mr-2 h-4 w-4" />
                     Editar Tienda
                 </Button>
