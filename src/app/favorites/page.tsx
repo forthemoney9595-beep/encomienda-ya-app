@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Rating } from '@/components/ui/rating';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Helper to calculate a store's average rating
 const calculateStoreRating = (products: Product[]): number => {
