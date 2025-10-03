@@ -19,7 +19,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle, CookingPot, Bike, Home, Package, Clock, Wallet, Ban, Star, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent, AlertDescription as AlertDescriptionComponent, AlertTitle } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent } from '@/components/ui/alert-dialog';
 import type { CartItem } from '@/context/cart-context';
 import { useCart } from '@/context/cart-context';
 import { LeaveReviewDialog } from './leave-review-dialog';
@@ -118,12 +119,12 @@ function OrderProgress({ status }: { status: Order['status'] }) {
              <Alert>
                 <currentStatusInfo.icon className="h-4 w-4" />
                 <AlertTitle>{currentStatusInfo.label}</AlertTitle>
-                <AlertDescriptionComponent>
+                <AlertDescription>
                     {currentStatusInfo.description}
                      {status === 'En preparación' && (
                         <p className="mt-2 text-base font-bold text-primary">Entrega estimada: 25-40 min</p>
                     )}
-                </AlertDescriptionComponent>
+                </AlertDescription>
             </Alert>
         </div>
     )
@@ -277,9 +278,9 @@ export default function OrderTrackingPage() {
           <AlertDialogContent>
               <AlertDialogHeader>
               <AlertDialogTitleComponent>¿Vaciar carrito actual?</AlertDialogTitleComponent>
-              <AlertDialogDescription>
+              <AlertDialogDescriptionComponent>
                   Tu carrito contiene productos de otra tienda. Para repetir este pedido, tu carrito actual será vaciado. ¿Deseas continuar?
-              </AlertDialogDescription>
+              </AlertDialogDescriptionComponent>
               </AlertDialogHeader>
               <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
