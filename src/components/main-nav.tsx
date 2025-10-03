@@ -28,6 +28,7 @@ import {
   BarChart3,
   Contact,
   Tag,
+  Heart,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
@@ -60,11 +61,18 @@ export function MainNav() {
 
       {/* Buyer & Guest specific menu */}
       {!loading && user?.role === 'buyer' && (
-        <SidebarMenuItem>
-          <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
-            <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        <>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
+              <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/favorites')} tooltip="Mis Favoritos">
+              <Link href="/favorites"><Heart /><span>Mis Favoritos</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </>
       )}
       
       {!loading && !isStoreOwner && !isDelivery && (
