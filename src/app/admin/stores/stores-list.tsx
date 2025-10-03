@@ -7,7 +7,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreVertical, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { updateStoreStatus } from '@/lib/data-service';
 import type { Store } from '@/lib/placeholder-data';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';

@@ -1,7 +1,6 @@
 'use client';
 
-import { useFirestore } from '@/firebase';
-import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc, type Firestore } from 'firebase/firestore';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -21,8 +20,7 @@ export interface UserProfile extends UserProfileData {
  * @param uid The user's ID.
  * @returns The user profile object or null if not found.
  */
-export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-    const db = useFirestore();
+export async function getUserProfile(db: Firestore, uid: string): Promise<UserProfile | null> {
     try {
         const userDocRef = doc(db, 'users', uid);
         const userDoc = await getDoc(userDocRef);
@@ -42,8 +40,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
  * @param uid El ID de usuario de Firebase Authentication.
  * @param data Los datos del perfil del usuario a guardar.
  */
-export async function createUserProfile(uid: string, data: UserProfileData) {
-  const db = useFirestore();
+export async function createUserProfile(db: Firestore, uid: string, data: UserProfileData) {
   try {
     const userDocRef = doc(db, 'users', uid);
     
@@ -71,8 +68,7 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
  * @param ownerId The UID of the user who owns the store.
  * @param storeData Data for the new store.
  */
-export async function createStoreForUser(ownerId: string, storeData: { name: string, category: string, address: string }) {
-    const db = useFirestore();
+export async function createStoreForUser(db: Firestore, ownerId: string, storeData: { name: string, category: string, address: string }) {
     try {
         const storeCollectionRef = collection(db, 'stores');
         const newStoreRef = doc(storeCollectionRef); // Create a new doc reference with an auto-generated ID

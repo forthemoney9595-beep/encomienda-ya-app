@@ -1,8 +1,7 @@
 
 
 'use server';
-import { useFirestore } from '@/firebase';
-import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, doc, getDoc, where, updateDoc, addDoc, serverTimestamp, Timestamp, arrayUnion, deleteDoc, setDoc, type Firestore } from 'firebase/firestore';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 
 
@@ -10,9 +9,8 @@ import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
  * Fetches stores from Firestore. This function is for real data and is not used in pure prototype mode.
  * @param all - If true, fetches all stores regardless of status. Otherwise, fetches only 'Aprobado' stores.
  */
-export async function getStores(all: boolean = false): Promise<Store[]> {
+export async function getStores(db: Firestore, all: boolean = false): Promise<Store[]> {
   let stores: Store[] = [];
-  const db = useFirestore();
   
   try {
     const storesCollectionRef = collection(db, 'stores');
@@ -49,8 +47,7 @@ export async function getStores(all: boolean = false): Promise<Store[]> {
  * Fetches a single store by its ID from Firestore. This function is for real data.
  * @param id The ID of the store to fetch.
  */
-export async function getStoreById(id: string): Promise<Store | null> {
-  const db = useFirestore();
+export async function getStoreById(db: Firestore, id: string): Promise<Store | null> {
   try {
     const docRef = doc(db, "stores", id);
     const docSnap = await getDoc(docRef);
@@ -83,8 +80,7 @@ export async function getStoreById(id: string): Promise<Store | null> {
  * Fetches all products for a given store ID from its 'products' subcollection in Firestore.
  * @param storeId The ID of the store whose products to fetch.
  */
-export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
-  const db = useFirestore();
+export async function getProductsByStoreId(db: Firestore, storeId: string): Promise<Product[]> {
   try {
     const productsCollectionRef = collection(db, 'stores', storeId, 'products');
     const q = query(productsCollectionRef);
@@ -118,8 +114,7 @@ export async function getProductsByStoreId(storeId: string): Promise<Product[]> 
  * @param productData The data for the new product.
  * @param currentCategories The current list of categories for the store.
  */
-export async function addProductToStore(storeId: string, productData: Product, currentCategories: string[]): Promise<void> {
-    const db = useFirestore();
+export async function addProductToStore(db: Firestore, storeId: string, productData: Product, currentCategories: string[]): Promise<void> {
     try {
         const storeRef = doc(db, 'stores', storeId);
         // Firestore will auto-generate an ID if we use addDoc
@@ -140,8 +135,7 @@ export async function addProductToStore(storeId: string, productData: Product, c
     }
 }
 
-export async function updateProductInStore(storeId: string, productId: string, productData: Partial<Product>) {
-    const db = useFirestore();
+export async function updateProductInStore(db: Firestore, storeId: string, productId: string, productData: Partial<Product>) {
     try {
         const storeRef = doc(db, 'stores', storeId);
         const productRef = doc(db, 'stores', storeId, 'products', productId);
@@ -160,8 +154,7 @@ export async function updateProductInStore(storeId: string, productId: string, p
     }
 }
 
-export async function deleteProductFromStore(storeId: string, productId: string) {
-    const db = useFirestore();
+export async function deleteProductFromStore(db: Firestore, storeId: string, productId: string) {
     try {
         const productRef = doc(db, 'stores', storeId, 'products', productId);
         await deleteDoc(productRef);
@@ -175,9 +168,8 @@ export async function deleteProductFromStore(storeId: string, productId: string)
 /**
  * Fetches all delivery personnel from the 'users' collection in Firestore.
  */
-export async function getDeliveryPersonnel(isPrototype: boolean = false): Promise<DeliveryPersonnel[]> {
+export async function getDeliveryPersonnel(db: Firestore, isPrototype: boolean = false): Promise<DeliveryPersonnel[]> {
   let personnel: DeliveryPersonnel[] = [];
-  const db = useFirestore();
   try {
     const usersCollectionRef = collection(db, 'users');
     const q = query(usersCollectionRef, where('role', '==', 'delivery'));
@@ -209,8 +201,7 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
 /**
  * Fetches a single delivery person by their user ID.
  */
-export async function getDeliveryPersonById(id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
-  const db = useFirestore();
+export async function getDeliveryPersonById(db: Firestore, id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
   // In a pure prototype world, data comes from the client context
   if (id.startsWith('proto-')) {
     console.warn("getDeliveryPersonById server action called for prototype user.");
@@ -250,8 +241,7 @@ export async function getDeliveryPersonById(id: string): Promise<(DeliveryPerson
  * @param storeId The ID of the store to update.
  * @param status The new status ('Aprobado' or 'Rechazado').
  */
-export async function updateStoreStatus(storeId: string, status: 'Aprobado' | 'Rechazado'): Promise<void> {
-  const db = useFirestore();
+export async function updateStoreStatus(db: Firestore, storeId: string, status: 'Aprobado' | 'Rechazado'): Promise<void> {
   try {
     const storeRef = doc(db, 'stores', storeId);
     await updateDoc(storeRef, { status });
@@ -266,8 +256,7 @@ export async function updateStoreStatus(storeId: string, status: 'Aprobado' | 'R
  * @param storeId The ID of the store to update.
  * @param storeData The data to update.
  */
-export async function updateStoreData(storeId: string, storeData: Partial<Store>): Promise<void> {
-    const db = useFirestore();
+export async function updateStoreData(db: Firestore, storeId: string, storeData: Partial<Store>): Promise<void> {
     if (storeId.startsWith('proto-')) {
         console.warn('updateStoreData server action called for a prototype store. This should be handled on the client.');
         return;
@@ -287,8 +276,7 @@ export async function updateStoreData(storeId: string, storeData: Partial<Store>
  * @param personnelId The ID of the delivery person to update.
  * @param status The new status ('approved' or 'rejected').
  */
-export async function updateDeliveryPersonnelStatus(personnelId: string, status: 'approved' | 'rejected'): Promise<void> {
-  const db = useFirestore();
+export async function updateDeliveryPersonnelStatus(db: Firestore, personnelId: string, status: 'approved' | 'rejected'): Promise<void> {
   try {
     const userRef = doc(db, 'users', personnelId);
     await updateDoc(userRef, { status });

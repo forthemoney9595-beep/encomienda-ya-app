@@ -1,7 +1,6 @@
 
 'use client';
-import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp, setDoc, type Firestore } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
 import type { Store } from './placeholder-data';
 import type { UserProfile } from './user';
@@ -23,7 +22,7 @@ export interface ChatParticipantProfile {
  * @param participant2 - The profile of the second participant.
  * @returns The ID of the chat room.
  */
-export async function getOrCreateChat(db: ReturnType<typeof useFirestore>, participant1: ChatParticipantProfile, participant2: ChatParticipantProfile): Promise<string> {
+export async function getOrCreateChat(db: Firestore, participant1: ChatParticipantProfile, participant2: ChatParticipantProfile): Promise<string> {
     if (!participant1.uid || !participant2.uid) {
         throw new Error("Ambos participantes deben tener un UID válido.");
     }
@@ -83,8 +82,7 @@ export type ChatPreview = {
  * @param userId The ID of the user.
  * @returns A list of chat previews.
  */
-export async function getUserChats(userId: string): Promise<ChatPreview[]> {
-    const db = useFirestore();
+export async function getUserChats(db: Firestore, userId: string): Promise<ChatPreview[]> {
     const chatsRef = collection(db, 'chats');
     const q = query(
         chatsRef,
@@ -128,8 +126,7 @@ export interface Message {
  * @param senderId The ID of the message sender.
  * @param text The message text.
  */
-export async function sendMessage(chatId: string, senderId: string, text: string): Promise<void> {
-  const db = useFirestore();
+export async function sendMessage(db: Firestore, chatId: string, senderId: string, text: string): Promise<void> {
   const chatRef = doc(db, 'chats', chatId);
   const messagesRef = collection(chatRef, 'messages');
 
@@ -152,8 +149,7 @@ export async function sendMessage(chatId: string, senderId: string, text: string
   await batch.commit();
 }
 
-export async function getChatDetails(chatId: string, currentUserId: string): Promise<ChatDetails | null> {
-    const db = useFirestore();
+export async function getChatDetails(db: Firestore, chatId: string, currentUserId: string): Promise<ChatDetails | null> {
     const chatDoc = await getDoc(doc(db, 'chats', chatId));
     if (!chatDoc.exists()) {
         console.error("Chat does not exist!");

@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import PageHeader from '@/components/page-header';
 import { getDeliveryPersonnel, updateDeliveryPersonnelStatus } from '@/lib/data-service';
 import { DeliveryPersonnelList } from './delivery-personnel-list';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useFirestore } from '@/firebase';
 import type { DeliveryPersonnel } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +17,7 @@ import { PlusCircle } from 'lucide-react';
 
 export default function AdminDeliveryPage() {
   const { user, loading: authLoading } = useAuth();
+  const db = useFirestore();
   const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -25,7 +26,7 @@ export default function AdminDeliveryPage() {
 
   const fetchPersonnel = async () => {
     setLoading(true);
-    const fetchedPersonnel = await getDeliveryPersonnel(false);
+    const fetchedPersonnel = await getDeliveryPersonnel(db, false);
     
     if (isPrototypeAdmin) {
       const protoDeliveryExists = fetchedPersonnel.some(p => p.id === prototypeDelivery.id);
@@ -53,7 +54,7 @@ export default function AdminDeliveryPage() {
             const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
             updatePrototypeDelivery({ status: newStatus });
         } else {
-            await updateDeliveryPersonnelStatus(personnelId, status);
+            await updateDeliveryPersonnelStatus(db, personnelId, status);
             await fetchPersonnel(); // Refetch for real users
         }
         

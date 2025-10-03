@@ -1,26 +1,40 @@
+
+
+'use client';
+
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuthInstance } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { getUserProfile } from '@/lib/user';
 import { ProfileForm } from './profile-form';
+import { useEffect, useState } from 'react';
+import type { UserProfile } from '@/lib/user';
 
-export default async function ProfilePage() {
-    const auth = useAuthInstance();
-    const firebaseUser = auth.currentUser;
+export default function ProfilePage() {
+    const { user: authUser, loading: authLoading } = useAuth();
+    const db = useFirestore();
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    // In a real app, you might use a server-side session management solution.
-    // For this prototype, we'll rely on the auth state which might not be available
-    // on the very first server render after login. Client-side auth provider handles this.
-    // This server-side fetch is an optimistic enhancement.
-    let user = null;
-    if (firebaseUser) {
-        user = await getUserProfile(firebaseUser.uid);
-    }
+    useEffect(() => {
+        async function fetchProfile() {
+            if (authLoading) return;
+            if (!authUser) {
+                setLoading(false);
+                return;
+            }
 
-    if (!user) {
-        // This will be shown briefly while the client-side auth context loads
-        // and either provides the user or redirects to /login.
+            setLoading(true);
+            const userProfile = await getUserProfile(db, authUser.uid);
+            setProfile(userProfile);
+            setLoading(false);
+        }
+
+        fetchProfile();
+    }, [authUser, authLoading, db]);
+
+    if (loading || authLoading) {
         return (
             <div className="container mx-auto">
                 <PageHeader title="Mi Perfil" description="Gestiona la información de tu cuenta." />
@@ -50,10 +64,18 @@ export default async function ProfilePage() {
         )
     }
 
+    if (!profile) {
+        return (
+             <div className="container mx-auto">
+                <PageHeader title="Mi Perfil" description="No se pudo cargar el perfil." />
+            </div>
+        )
+    }
+
     return (
         <div className="container mx-auto">
             <PageHeader title="Mi Perfil" description="Gestiona la información de tu cuenta." />
-            <ProfileForm user={user} />
+            <ProfileForm user={profile} />
         </div>
     );
 }

@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useFirestore } from '@/firebase';
 import { getUserChats, type ChatPreview } from '@/lib/chat-service';
 
 function ChatListSkeleton() {
@@ -31,6 +31,7 @@ function ChatListSkeleton() {
 
 export default function ChatList() {
     const { user, loading: authLoading } = useAuth();
+    const db = useFirestore();
     const [chats, setChats] = useState<ChatPreview[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -43,13 +44,13 @@ export default function ChatList() {
 
         async function fetchChats() {
             setLoading(true);
-            const userChats = await getUserChats(user!.uid);
+            const userChats = await getUserChats(db, user!.uid);
             setChats(userChats);
             setLoading(false);
         }
 
         fetchChats();
-    }, [user, authLoading]);
+    }, [user, authLoading, db]);
 
     if (loading || authLoading) {
         return <ChatListSkeleton />;

@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { useFirestore } from '@/firebase';
 
 function getStatusVariant(status: string) {
     switch (status) {
@@ -76,6 +77,7 @@ function DriverReviews({ reviews }: { reviews: Review[] }) {
 export default function DriverProfilePage() {
     const params = useParams();
     const driverId = params.driverId as string;
+    const db = useFirestore();
     
     const { getReviewsByDriverId, prototypeDelivery, loading: prototypeLoading } = usePrototypeData();
     const [driver, setDriver] = useState<DeliveryPersonnel | null>(null);
@@ -92,7 +94,7 @@ export default function DriverProfilePage() {
             if (driverId === prototypeDelivery.id) {
                  driverData = prototypeDelivery;
             } else {
-                 const realDriver = await getDeliveryPersonById(driverId);
+                 const realDriver = await getDeliveryPersonById(db, driverId);
                  if(realDriver) driverData = realDriver;
             }
 
@@ -114,7 +116,7 @@ export default function DriverProfilePage() {
             setLoading(false);
         }
         fetchData();
-    }, [driverId, prototypeDelivery, getReviewsByDriverId, prototypeLoading]);
+    }, [driverId, prototypeDelivery, getReviewsByDriverId, prototypeLoading, db]);
 
 
     if (loading || prototypeLoading) {

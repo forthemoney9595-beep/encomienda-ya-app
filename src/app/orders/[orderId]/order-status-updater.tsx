@@ -3,7 +3,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useFirestore } from '@/firebase';
 import type { Order, OrderStatus } from '@/lib/order-service';
 import { updateOrderStatus } from '@/lib/order-service';
 import { CardFooter, CardDescription, Card } from '@/components/ui/card';
@@ -32,6 +32,7 @@ const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
 
 export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { user, loading: authLoading } = useAuth();
+  const db = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
@@ -50,7 +51,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
       if (order.id.startsWith('proto-')) {
         updatePrototypeOrder(order.id, { status: newStatus });
       } else {
-        await updateOrderStatus(order.id, newStatus);
+        await updateOrderStatus(db, order.id, newStatus);
       }
 
       toast({
@@ -94,7 +95,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
         if (order.id.startsWith('proto-')) {
             updatePrototypeOrder(order.id, { status: newStatus });
         } else {
-            await updateOrderStatus(order.id, newStatus);
+            await updateOrderStatus(db, order.id, newStatus);
         }
         toast({
             title: '¡Pago Realizado!',

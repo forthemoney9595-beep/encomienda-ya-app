@@ -1,8 +1,7 @@
 
 
 'use server';
-import { useFirestore } from '@/firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc, type Firestore } from 'firebase/firestore';
 import { usePrototypeData } from '@/context/prototype-data-context';
 
 // A CartItem is a Product with a quantity.
@@ -60,10 +59,10 @@ interface CreateOrderInput {
  * @returns The created order object.
  */
 export async function createOrder(
+   db: Firestore,
    input: CreateOrderInput
 ): Promise<Order> {
     const { userId, customerName, items, shippingInfo, storeId, storeName, storeAddress } = input;
-    const db = useFirestore();
 
     if (items.length === 0) {
         throw new Error("No se puede crear un pedido sin artículos.");
@@ -121,8 +120,7 @@ export async function createOrder(
 }
 
 
-export async function getOrdersByUser(userId: string): Promise<Order[]> {
-    const db = useFirestore();
+export async function getOrdersByUser(db: Firestore, userId: string): Promise<Order[]> {
     if (userId.startsWith('proto-')) {
         console.warn('getOrdersByUser (server) called for prototype user. Data should be fetched from context on client.');
         return [];
@@ -149,8 +147,7 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
  * @param orderId The ID of the order to update.
  * @param status The new status for the order.
  */
-export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
-  const db = useFirestore();
+export async function updateOrderStatus(db: Firestore, orderId: string, status: OrderStatus): Promise<void> {
   if (orderId.startsWith('proto-')) {
     console.warn('updateOrderStatus server action called for a prototype order. This should be handled on the client.');
     return;
@@ -171,8 +168,7 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
  * @param driverId The ID of the delivery person.
  * @param driverName The name of the delivery person.
  */
-export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
-    const db = useFirestore();
+export async function assignOrderToDeliveryPerson(db: Firestore, orderId: string, driverId: string, driverName: string): Promise<void> {
     if (orderId.startsWith('proto-')) {
         console.warn('assignOrderToDeliveryPerson server action called for a prototype order. This should be handled on the client.');
         return;
@@ -198,8 +194,7 @@ export async function assignOrderToDeliveryPerson(orderId: string, driverId: str
 }
 
 // This function is now only for real data, prototype data is handled by the context
-export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
-  const db = useFirestore();
+export async function getAvailableOrdersForDelivery(db: Firestore): Promise<Order[]> {
   const ordersRef = collection(db, 'orders');
   const q = query(
     ordersRef,
@@ -217,8 +212,7 @@ export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
 }
 
 
-export async function getOrderById(orderId: string): Promise<Order | null> {
-    const db = useFirestore();
+export async function getOrderById(db: Firestore, orderId: string): Promise<Order | null> {
     if (orderId.startsWith('proto-')) {
         console.warn('getOrderById server action called for a prototype order. This should be handled on the client.');
         return null;

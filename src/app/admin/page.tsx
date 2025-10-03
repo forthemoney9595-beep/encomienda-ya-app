@@ -1,9 +1,10 @@
+
 'use client';
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Store, Truck, ClipboardList } from 'lucide-react';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,6 +15,7 @@ import type { Store as StoreType, DeliveryPersonnel } from '@/lib/placeholder-da
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading } = useAuth();
+  const db = useFirestore();
   const router = useRouter();
   const [totalStores, setTotalStores] = useState(0);
   const [totalDrivers, setTotalDrivers] = useState(0);
@@ -41,8 +43,8 @@ export default function AdminDashboard() {
         // For all users (including prototype admin), we fetch real data first
         // and then supplement with prototype data if needed.
         const [fetchedStores, fetchedDrivers, fetchedAvailableOrders] = await Promise.all([
-          getStores(true, isPrototype),
-          getDeliveryPersonnel(isPrototype),
+          getStores(db, true),
+          getDeliveryPersonnel(db, isPrototype),
           getAvailableOrdersForDelivery(),
         ]);
         
@@ -57,7 +59,7 @@ export default function AdminDashboard() {
       }
       fetchData();
     }
-  }, [user, isAdmin, loading, router, prototypeLoading, getAvailableOrdersForDelivery, isPrototype]);
+  }, [user, isAdmin, loading, router, prototypeLoading, getAvailableOrdersForDelivery, isPrototype, db]);
   
   if (loading || dashboardLoading || !isAdmin) {
     return (

@@ -2,8 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/context/auth-context';
-import { useFirestore } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { onSnapshot, collection, query, orderBy, Timestamp } from 'firebase/firestore';
 import { sendMessage as sendMessageService, getChatDetails, type Message, type ChatDetails } from '@/lib/chat-service';
 
@@ -21,7 +20,7 @@ export function useChat(chatId: string) {
         const fetchDetailsAndSubscribe = async () => {
             setLoading(true);
             try {
-                const details = await getChatDetails(chatId, user.uid);
+                const details = await getChatDetails(db, chatId, user.uid);
                 // Fallback if details are incomplete to prevent crash
                 if (details && !details.otherParticipant.name) {
                     details.otherParticipant.name = "Usuario Desconocido";
@@ -67,12 +66,12 @@ export function useChat(chatId: string) {
         if (!user || !chatId) return;
 
         try {
-            await sendMessageService(chatId, user.uid, text);
+            await sendMessageService(db, chatId, user.uid, text);
         } catch (error) {
             console.error("Error al enviar el mensaje:", error);
             // Optionally: show a toast notification
         }
-    }, [chatId, user]);
+    }, [chatId, user, db]);
 
     return {
         messages,

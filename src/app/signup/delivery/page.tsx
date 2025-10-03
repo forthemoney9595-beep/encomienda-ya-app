@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
-import { useAuthInstance } from '@/firebase';
+import { useAuthInstance, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { createUserProfile } from '@/lib/user';
@@ -29,6 +29,7 @@ export default function SignupDeliveryPage() {
   const { toast } = useToast();
   const router = useRouter();
   const auth = useAuthInstance();
+  const db = useFirestore();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -42,7 +43,7 @@ export default function SignupDeliveryPage() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       
-      await createUserProfile(userCredential.user.uid, {
+      await createUserProfile(db, userCredential.user.uid, {
         name: values.name,
         email: values.email,
         role: 'delivery',

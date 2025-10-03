@@ -3,10 +3,11 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, type Firestore } from 'firebase/firestore';
 import { useAuthInstance, useFirestore } from '@/firebase';
 import { prototypeUsers } from '@/lib/placeholder-data';
 import type { UserProfile as AppUserProfile } from '@/lib/user';
+import { getStores } from '@/lib/data-service';
 
 interface AuthContextType {
     user: AppUserProfile | null;
@@ -19,6 +20,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const PROTOTYPE_SESSION_KEY = 'prototypeUserEmail';
+
+async function fetchUserStoreId(db: Firestore, uid: string): Promise<string | undefined> {
+    const storesRef = collection(db, 'stores');
+    const q = query(storesRef, where('ownerId', '==', uid));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+        return querySnapshot.docs[0].id;
+    }
+    return undefined;
+}
+
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<AppUserProfile | null>(null);
@@ -39,12 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             } as AppUserProfile;
             
             if (profileToSet.role === 'store' && !profileToSet.storeId) {
-                const storesRef = collection(db, 'stores');
-                const q = query(storesRef, where('ownerId', '==', firebaseUser.uid));
-                const querySnapshot = await getDocs(q);
-                if (!querySnapshot.empty) {
-                    profileToSet.storeId = querySnapshot.docs[0].id;
-                }
+                 profileToSet.storeId = await fetchUserStoreId(db, firebaseUser.uid);
             }
             return profileToSet;
         }
