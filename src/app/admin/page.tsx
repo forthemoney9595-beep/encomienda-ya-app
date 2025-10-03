@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
+import { prototypeUsers } from '@/lib/placeholder-data';
 import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { subDays, format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
