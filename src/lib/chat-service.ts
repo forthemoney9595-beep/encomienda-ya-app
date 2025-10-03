@@ -4,6 +4,9 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc
 import { getPlaceholderImage } from './placeholder-images';
 import type { Store } from './placeholder-data';
 import type { UserProfile } from './user';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+
 
 /**
  * Represents a simplified user profile for chat purposes.
@@ -35,9 +38,7 @@ export async function getOrCreateChat(db: Firestore, participant1: ChatParticipa
 
     const chatRef = doc(db, 'chats', chatId);
 
-    // This operation will create the document if it doesn't exist,
-    // or update the participant info if it does. It's idempotent and safe.
-    await setDoc(chatRef, {
+    const chatData = {
         participants: participants,
         participantInfo: {
             [participant1.uid]: {
@@ -52,7 +53,16 @@ export async function getOrCreateChat(db: Firestore, participant1: ChatParticipa
             }
         },
         lastMessageTimestamp: serverTimestamp(), // Update timestamp to show activity
-    }, { merge: true });
+    };
+
+    setDoc(chatRef, chatData, { merge: true }).catch(error => {
+        const contextualError = new FirestorePermissionError({
+          path: chatRef.path,
+          operation: 'write',
+          requestResourceData: chatData,
+        });
+        errorEmitter.emit('permission-error', contextualError);
+    });
 
     return chatId;
 }
