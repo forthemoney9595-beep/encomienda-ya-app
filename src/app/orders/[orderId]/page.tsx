@@ -149,7 +149,7 @@ export default function OrderTrackingPage() {
 
   useEffect(() => {
     async function fetchOrderData() {
-        if (!orderId || authLoading || prototypeLoading) return;
+        if (!orderId || authLoading || prototypeLoading || !db) return;
         
         setLoading(true);
         let orderData: Order | null | undefined = null;

@@ -22,9 +22,10 @@ export default function AdminDeliveryPage() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { prototypeDelivery, updatePrototypeDelivery, loading: prototypeLoading } = usePrototypeData();
-  const isPrototypeAdmin = user?.uid === prototypeUsers['admin@test.com'].uid;
+  const isPrototypeAdmin = user?.uid.startsWith('proto-');
 
   const fetchPersonnel = async () => {
+    if (!db) return;
     setLoading(true);
     const fetchedPersonnel = await getDeliveryPersonnel(db, false);
     
@@ -42,13 +43,14 @@ export default function AdminDeliveryPage() {
   };
   
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && db) {
       fetchPersonnel();
     }
-  }, [user, authLoading, prototypeDelivery]);
+  }, [user, authLoading, prototypeDelivery, db]);
 
 
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
+    if (!db) return;
     try {
         if (personnelId === prototypeDelivery.id) {
             const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';

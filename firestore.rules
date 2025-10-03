@@ -1,168 +1,194 @@
 /**
- * @fileoverview Firestore Security Rules for the EncomiendaYA application.
+ * @file Firestore Security Rules for EncomiendaYA Application
  *
- * Core Philosophy:
- * This ruleset enforces a strict user-ownership model for customer data,
- * store-ownership for store data, and admin-only access for admin data.
- * It uses denormalization to ensure efficient and secure data access.
+ * @core_philosophy This ruleset enforces a strict ownership model for customer data,
+ * while allowing broader access to store, item, and delivery personnel information.
+ * Admin privileges are granted based on presence in the /admins collection. Denormalization
+ * is used extensively to simplify and secure access control, avoiding costly `get()` calls.
  *
- * Data Structure:
- * - /admins/{adminId}: Stores admin accounts. Admin status is granted by document existence.
- * - /stores/{storeId}: Stores store accounts.
- * - /stores/{storeId}/items/{itemId}: Stores items belonging to a store.
- * - /delivery_personnel/{personnelId}: Stores delivery personnel accounts.
- * - /customers/{customerId}: Stores customer accounts.
- * - /customers/{customerId}/orders/{orderId}: Stores orders placed by a customer.
- * - /customers/{customerId}/orders/{orderId}/reviews/{reviewId}: Stores reviews for orders.
+ * @data_structure The Firestore database is structured with top-level collections for
+ * admins, stores, delivery personnel, and customers. Customer-owned data (orders, reviews)
+ * are nested under the /customers/{customerId} path. Items are nested under /stores/{storeId}.
  *
- * Key Security Decisions:
- * - Customers can only access their own orders and reviews.
- * - Stores can only manage their own items.
- * - Admins have full access to admin accounts.
- * - Listing of customer, store, delivery personnel, or admin accounts is disallowed.
+ * @key_security_decisions
+ *   - Listing of stores, items, and delivery personnel is publicly allowed.
+ *   - Customer data (profiles, orders, reviews) is strictly controlled by ownership.
+ *   - Admin privileges are determined by the presence of a document in the /admins collection.
+ *   - No validation of the exact schema of the data.
  *
- * Denormalization for Authorization:
- * - Items: Includes `storeId` to authorize store-level access.
- * - Reviews: Includes `customerId`, `orderId`, and `deliveryPersonnelId` for access control.
+ * @denormalization_for_authorization
+ *   - Each Item includes a `storeId` field, enabling item-level security rules to efficiently
+ *     verify the parent store without additional reads.
+ *   - Each Review includes `customerId`, `orderId`, and `deliveryPersonnelId` fields,
+ *     allowing direct verification of relationships without complex queries.
+ *
+ * @structural_segregation
+ *   - Admin accounts are stored in a separate collection (/admins), making it easy to
+ *     manage and verify admin privileges.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Grants admins full access to admin accounts.
+     * @description Checks if the request is authenticated.
+     * @return {bool} True if the request is authenticated, false otherwise.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the request is made by the owner of the resource.
+     * @param {string} userId - The user ID to compare against the request's auth UID.
+     * @return {bool} True if the request is made by the owner, false otherwise.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+     /**
+      * @description Checks if the request is made by the owner of the resource, ensuring the resource exists.
+      * @param {string} userId - The user ID to compare against the request's auth UID.
+      * @return {bool} True if the request is made by the existing owner, false otherwise.
+      */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Checks if the user is an admin by verifying the existence of their document in the /admins collection.
+     * @return {bool} True if the user is an admin, false otherwise.
+     */
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    /**
+     * @description Rules for the /admins/{adminId} collection.
      * @path /admins/{adminId}
-     * @allow (create) User with matching {adminId} can create their account.
-     * @allow (get, list) Only admins can read other admin accounts.
-     * @allow (update, delete) Only admins can modify other admin accounts.
-     * @deny (create) Non-admins cannot create admin accounts.
-     * @deny (get, list) Non-admins cannot read admin accounts.
-     * @deny (update, delete) Non-admins cannot modify admin accounts.
-     * @principle Enforces admin-only access for managing admin accounts.
+     * @allow (create) User with matching UID can create their admin document.
+     * @deny (create) User tries to create an admin document with a mismatched UID.
+     * @allow (get) Any authenticated user can get an admin document.
+     * @deny (list) No one can list the admins collection.
+     * @allow (update) Only the admin themselves can update their document.
+     * @allow (delete) Only the admin themselves can delete their document.
+     * @principle Enforces document ownership and admin role management.
      */
     match /admins/{adminId} {
-      function isAdmin() {
-        return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      }
-      allow get: if isAdmin();
+      allow get: if isSignedIn();
       allow list: if false;
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isOwner(adminId);
+      allow update: if isExistingOwner(adminId);
+      allow delete: if isExistingOwner(adminId);
     }
 
     /**
-     * @description Grants read access to stores, but restricts write access.
+     * @description Rules for the /stores/{storeId} collection.
      * @path /stores/{storeId}
-     * @allow (get, list) Anyone can read store information.
-     * @deny (create, update, delete) Only admins can create, update, or delete store accounts.
-     * @principle Enforces public read access but restricts write access to authorized personnel.
+     * @allow (get) Any user can read store information.
+     * @allow (list) Any user can list stores.
+     * @allow (create) Only an admin can create a store.
+     * @allow (update) Only an admin can update a store.
+     * @allow (delete) Only an admin can delete a store.
+     * @principle Allows public read access but restricts write access to admins.
      */
     match /stores/{storeId} {
-      function isAdmin() {
-        return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      }
       allow get, list: if true;
       allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
     }
 
     /**
-     * @description Grants stores ownership of their items.
+     * @description Rules for the /stores/{storeId}/items/{itemId} collection.
      * @path /stores/{storeId}/items/{itemId}
-     * @allow (get, list) Anyone can read item information.
-     * @allow (create) Stores can create new items under their store.
-     * @allow (update, delete) Stores can modify their own items.
-     * @deny (create) Stores cannot create items under other stores.
-     * @deny (update, delete) Stores cannot modify items belonging to other stores.
-     * @principle Enforces store-ownership for item management.
+     * @allow (get) Any user can read item information.
+     * @allow (list) Any user can list items.
+     * @allow (create) Only an admin can create an item.
+     * @allow (update) Only an admin can update an item.
+     * @allow (delete) Only an admin can delete an item.
+     * @principle Allows public read access but restricts write access to admins.
      */
     match /stores/{storeId}/items/{itemId} {
-      function isAdmin() {
-        return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      }
       allow get, list: if true;
       allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
     }
 
     /**
-     * @description Grants read access to delivery personnel, but restricts write access.
+     * @description Rules for the /delivery_personnel/{personnelId} collection.
      * @path /delivery_personnel/{personnelId}
-     * @allow (get, list) Anyone can read delivery personnel information.
-     * @deny (create, update, delete) Only admins can create, update, or delete delivery personnel accounts.
-     * @principle Enforces public read access but restricts write access to authorized personnel.
+     * @allow (get) Any user can read delivery personnel information.
+     * @allow (list) Any user can list delivery personnel.
+     * @allow (create) Only an admin can create a delivery personnel.
+     * @allow (update) Only an admin can update a delivery personnel.
+     * @allow (delete) Only an admin can delete a delivery personnel.
+     * @principle Allows public read access but restricts write access to admins.
      */
     match /delivery_personnel/{personnelId} {
-       function isAdmin() {
-        return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      }
       allow get, list: if true;
       allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
     }
 
     /**
-     * @description Grants customers ownership of their accounts.
+     * @description Rules for the /customers/{customerId} collection.
      * @path /customers/{customerId}
-     * @allow (create) User with matching {customerId} can create their account.
-     * @allow (get) Customers can read their own account information.
-     * @deny (get) Customers cannot read other customer accounts.
-     * @deny (list) Listing customers is not allowed.
-     * @deny (update, delete) Customers cannot update or delete their accounts.
-     * @principle Enforces customer-ownership for account management.
+     * @allow (create) User with matching UID can create their customer document.
+     * @deny (create) User tries to create a customer document with a mismatched UID.
+     * @allow (get) Only the customer themselves can get their document.
+     * @allow (list) No one can list the customers collection.
+     * @allow (update) Only the customer themselves can update their document.
+     * @allow (delete) Only the customer themselves can delete their document.
+     * @principle Enforces document ownership for writes, preventing unauthorized modifications.
      */
     match /customers/{customerId} {
-        function isAdmin() {
-        return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      }
-      allow get: if isAdmin();
+      allow get: if isOwner(customerId);
       allow list: if false;
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isOwner(customerId);
+      allow update: if isExistingOwner(customerId);
+      allow delete: if isExistingOwner(customerId);
     }
 
     /**
-     * @description Grants customers ownership of their orders.
+     * @description Rules for the /customers/{customerId}/orders/{orderId} collection.
      * @path /customers/{customerId}/orders/{orderId}
-     * @allow (get, list) Customers can read their own order information.
-     * @allow (create) Customers can create orders under their account.
-     * @deny (create) Customers cannot create orders under other customer accounts.
-     * @deny (get, list) Customers cannot read other customer orders.
-     * @deny (update, delete) Customers cannot modify or delete their orders.
-     * @principle Enforces customer-ownership for order management.
+     * @allow (create) Only the customer themselves can create an order.
+     * @deny (create) User tries to create an order for another customer.
+     * @allow (get) Only the customer themselves can get their order.
+     * @allow (list) Only the customer themselves can list their orders.
+     * @allow (update) Only the customer themselves can update their order.
+     * @allow (delete) Only the customer themselves can delete their order.
+     * @principle Enforces document ownership for orders, preventing unauthorized modifications.
      */
     match /customers/{customerId}/orders/{orderId} {
-       function isAdmin() {
-        return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      }
-      allow get, list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow get: if isOwner(customerId);
+      allow list: if isOwner(customerId);
+      allow create: if isOwner(customerId);
+      allow update: if isExistingOwner(customerId);
+      allow delete: if isExistingOwner(customerId);
     }
 
     /**
-     * @description Grants customers ownership of their reviews.
+     * @description Rules for the /customers/{customerId}/orders/{orderId}/reviews/{reviewId} collection.
      * @path /customers/{customerId}/orders/{orderId}/reviews/{reviewId}
-     * @allow (get, list) Anyone can read the reviews.
-     * @allow (create) Customers can create reviews for their orders.
-     * @deny (create) Customers cannot create reviews under other customer accounts.
-     * @deny (update, delete) Customers cannot modify or delete their reviews.
-     * @principle Enforces customer-ownership for review creation.
+     * @allow (create) Only the customer themselves can create a review for their order.
+     * @deny (create) User tries to create a review for another customer's order.
+     * @allow (get) Only the customer themselves can get their review.
+     * @allow (list) Only the customer themselves can list their reviews.
+     * @allow (update) Only the customer themselves can update their review.
+     * @allow (delete) Only the customer themselves can delete their review.
+     * @principle Enforces document ownership for reviews, preventing unauthorized modifications.
      */
     match /customers/{customerId}/orders/{orderId}/reviews/{reviewId} {
-      function isAdmin() {
-        return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      }
-      allow get, list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow get: if isOwner(customerId);
+      allow list: if isOwner(customerId);
+      allow create: if isOwner(customerId);
+      allow update: if isExistingOwner(customerId);
+      allow delete: if isExistingOwner(customerId);
     }
   }
 }

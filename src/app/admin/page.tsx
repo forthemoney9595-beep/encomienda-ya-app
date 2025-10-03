@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getStores, getDeliveryPersonnel } from '@/lib/data-service';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import type { Store as StoreType, DeliveryPersonnel } from '@/lib/placeholder-data';
+import { getAvailableOrdersForDelivery } from '@/lib/order-service';
 
 
 export default function AdminDashboard() {
@@ -22,7 +23,7 @@ export default function AdminDashboard() {
   const [pendingOrders, setPendingOrders] = useState(0);
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
-  const { getAvailableOrdersForDelivery, loading: prototypeLoading } = usePrototypeData();
+  const { getAvailableOrdersForDelivery: getPrototypeAvailableOrders, loading: prototypeLoading } = usePrototypeData();
   const isPrototype = user?.uid.startsWith('proto-') ?? false;
 
   useEffect(() => {
@@ -32,34 +33,32 @@ export default function AdminDashboard() {
   }, [loading, isAdmin, router]);
 
   useEffect(() => {
-    if (isAdmin && !prototypeLoading) {
+    if (isAdmin && !prototypeLoading && db) {
       const fetchData = async () => {
         setDashboardLoading(true);
         
-        let stores: StoreType[] = [];
-        let drivers: DeliveryPersonnel[] = [];
         let availableOrderCount = 0;
 
-        // For all users (including prototype admin), we fetch real data first
-        // and then supplement with prototype data if needed.
-        const [fetchedStores, fetchedDrivers, fetchedAvailableOrders] = await Promise.all([
+        if (isPrototype) {
+            availableOrderCount = getPrototypeAvailableOrders().length;
+        } else {
+            const fetchedAvailableOrders = await getAvailableOrdersForDelivery(db);
+            availableOrderCount = fetchedAvailableOrders.length;
+        }
+        
+        const [fetchedStores, fetchedDrivers] = await Promise.all([
           getStores(db, true),
           getDeliveryPersonnel(db, isPrototype),
-          getAvailableOrdersForDelivery(),
         ]);
         
-        stores = fetchedStores;
-        drivers = fetchedDrivers;
-        availableOrderCount = fetchedAvailableOrders.length;
-
-        setTotalStores(stores.length);
-        setTotalDrivers(drivers.length);
+        setTotalStores(fetchedStores.length);
+        setTotalDrivers(fetchedDrivers.length);
         setPendingOrders(availableOrderCount);
         setDashboardLoading(false);
       }
       fetchData();
     }
-  }, [user, isAdmin, loading, router, prototypeLoading, getAvailableOrdersForDelivery, isPrototype, db]);
+  }, [user, isAdmin, loading, router, prototypeLoading, getPrototypeAvailableOrders, isPrototype, db]);
   
   if (loading || dashboardLoading || !isAdmin) {
     return (

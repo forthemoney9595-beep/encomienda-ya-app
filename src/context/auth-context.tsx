@@ -3,11 +3,12 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { doc, getDoc, collection, query, where, getDocs, type Firestore } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useAuthInstance } from '@/firebase';
 import { prototypeUsers } from '@/lib/placeholder-data';
 import type { UserProfile as AppUserProfile } from '@/lib/user';
-import { useAuthUser, type AuthUserHookResult } from '@/hooks/use-auth-user';
-import { User as FirebaseUser } from 'firebase/auth';
+import { useAuthUser } from '@/hooks/use-auth-user';
+import { User as FirebaseUser, signInAnonymously } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
     user: AppUserProfile | null;
@@ -36,12 +37,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [appUser, setAppUser] = useState<AppUserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const db = useFirestore();
+    const auth = useAuthInstance();
+    const router = useRouter();
 
-    const fetchAppUserProfile = useCallback(async (fbUser: FirebaseUser, prototypeProfileEmail?: string | null): Promise<AppUserProfile | null> => {
-        if (prototypeProfileEmail) {
+    const fetchAppUserProfile = useCallback(async (fbUser: FirebaseUser): Promise<AppUserProfile | null> => {
+        const prototypeProfileEmail = sessionStorage.getItem(PROTOTYPE_PROFILE_KEY);
+        
+        if (prototypeProfileEmail && fbUser.isAnonymous) {
             const protoUser = Object.values(prototypeUsers).find(u => u.email === prototypeProfileEmail);
             if (protoUser) {
-                return { ...protoUser, uid: protoUser.uid };
+                // Return the prototype profile but keep the real anonymous UID
+                return { ...protoUser, uid: fbUser.uid };
             }
         }
         
@@ -72,12 +78,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
 
             if (firebaseUser) {
-                const prototypeProfileEmail = sessionStorage.getItem(PROTOTYPE_PROFILE_KEY);
-                const profile = await fetchAppUserProfile(firebaseUser, prototypeProfileEmail);
+                const profile = await fetchAppUserProfile(firebaseUser);
                 setAppUser(profile);
             } else {
                 setAppUser(null);
-                sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
+                 if (sessionStorage.getItem(PROTOTYPE_PROFILE_KEY)) {
+                    sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
+                }
             }
             setLoading(false);
         };
@@ -86,18 +93,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [firebaseUser, isAuthUserLoading, fetchAppUserProfile]);
 
     const loginForPrototype = useCallback(async (email: string) => {
-        sessionStorage.setItem(PROTOTYPE_PROFILE_KEY, email);
-        // This will trigger a reload or context change that useAuthUser will pick up
-        // after a new anonymous user is (or isn't) created.
-        // For simplicity, we can just reload to re-trigger the auth flow.
-        window.location.reload();
-    }, []);
+        setLoading(true);
+        try {
+            await signInAnonymously(auth);
+            sessionStorage.setItem(PROTOTYPE_PROFILE_KEY, email);
+            router.push('/');
+        } catch (error) {
+            console.error("Error signing in anonymously for prototype mode:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [auth, router]);
 
     const logoutForPrototype = useCallback(async () => {
         sessionStorage.removeItem(PROTOTYPE_PROFILE_KEY);
-        // Let useAuthUser handle the actual signout
-        window.location.href = '/login';
-    }, []);
+        await auth.signOut();
+        router.push('/login');
+    }, [auth, router]);
 
     const isAdmin = appUser?.role === 'admin';
 
@@ -111,7 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     return (
         <AuthContext.Provider value={value}>
-            {!loading && children}
+            {children}
         </AuthContext.Provider>
     );
 };

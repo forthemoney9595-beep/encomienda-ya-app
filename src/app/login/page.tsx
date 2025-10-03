@@ -40,9 +40,14 @@ export default function LoginPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    form.clearErrors();
     // Check if it's a prototype user
     if (Object.keys(prototypeUsers).includes(values.email)) {
         await loginForPrototype(values.email);
+        toast({
+          title: "Iniciando como Prototipo",
+          description: `Has iniciado sesión como ${prototypeUsers[values.email].name}.`,
+        });
     } else {
       // Try real Firebase login
       try {
@@ -121,7 +126,7 @@ export default function LoginPage() {
         <Card className="w-full max-w-lg">
             <CardHeader>
                 <CardTitle>Cuentas de Prueba (Modo Prototipo)</CardTitle>
-                <CardDescription>Usa estas cuentas para explorar los diferentes roles. El inicio de sesión es simulado. La contraseña para todas es <Badge variant="secondary" className="font-mono">password</Badge>.</CardDescription>
+                <CardDescription>Usa estas cuentas para explorar los diferentes roles. El inicio de sesión es simulado (usando autenticación anónima). La contraseña para todas es <Badge variant="secondary" className="font-mono">password</Badge>.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>

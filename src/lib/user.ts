@@ -1,6 +1,8 @@
+
 'use client';
 
 import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc, type Firestore } from 'firebase/firestore';
+import { getPlaceholderImage } from './placeholder-images';
 
 // Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
 type UserProfileData = {
@@ -81,7 +83,7 @@ export async function createStoreForUser(db: Firestore, ownerId: string, storeDa
             status: 'Pendiente', // All new stores require approval
             createdAt: serverTimestamp(),
             productCategories: storeData.category ? [storeData.category] : [],
-            imageUrl: `https://picsum.photos/seed/${storeData.name.replace(/\s/g, '')}/600/400`,
+            imageUrl: getPlaceholderImage(storeData.name.replace(/\s/g, ''), 600, 400),
             imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
         });
         
