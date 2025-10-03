@@ -74,10 +74,6 @@ export async function createStoreForUser(ownerId: string, storeData: { name: str
         const storeCollectionRef = collection(db, 'stores');
         const newStoreRef = doc(storeCollectionRef); // Create a new doc reference with an auto-generated ID
 
-        // Update the user's profile with the new storeId first
-        const userDocRef = doc(db, 'users', ownerId);
-        await updateDoc(userDocRef, { storeId: newStoreRef.id });
-
         // Then, set the store document
         await setDoc(newStoreRef, {
             id: newStoreRef.id,
@@ -89,6 +85,10 @@ export async function createStoreForUser(ownerId: string, storeData: { name: str
             imageUrl: `https://picsum.photos/seed/${storeData.name.replace(/\s/g, '')}/600/400`,
             imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
         });
+        
+        // Update the user's profile with the new storeId first
+        const userDocRef = doc(db, 'users', ownerId);
+        await updateDoc(userDocRef, { storeId: newStoreRef.id });
 
 
         return { id: newStoreRef.id, ...storeData };

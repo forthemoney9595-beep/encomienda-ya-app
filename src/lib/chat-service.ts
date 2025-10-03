@@ -2,6 +2,7 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc, orderBy, writeBatch, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { getPlaceholderImage } from './placeholder-images';
+import { usePrototypeData } from '@/context/prototype-data-context';
 
 /**
  * Gets or creates a chat room between a user and a store owner.
@@ -12,11 +13,36 @@ import { getPlaceholderImage } from './placeholder-images';
 export async function getOrCreateChat(currentUser: { uid: string, name: string }, storeId: string): Promise<string> {
     const chatsRef = collection(db, 'chats');
 
-    // First, get the store owner's ID
-    const storeDoc = await getDoc(doc(db, 'stores', storeId));
+    const storeDocRef = doc(db, 'stores', storeId);
+    const storeDoc = await getDoc(storeDocRef);
     if (!storeDoc.exists()) {
-        throw new Error("Store not found");
+        const { prototypeStores } = usePrototypeData.getState();
+        const protoStore = prototypeStores.find(s => s.id === storeId);
+        if(!protoStore) throw new Error("Store not found");
+
+        const ownerId = protoStore.ownerId;
+        if (!ownerId) throw new Error("Store owner not found. Cannot create chat.");
+        if (currentUser.uid === ownerId) throw new Error("Cannot create a chat with yourself.");
+
+        const sortedParticipants = [currentUser.uid, ownerId].sort();
+        const q = query(chatsRef, where('participants', '==', sortedParticipants));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) return querySnapshot.docs[0].id;
+
+        const newChatRef = await addDoc(chatsRef, {
+            participants: sortedParticipants,
+            participantInfo: {
+                [currentUser.uid]: { name: currentUser.name, role: 'buyer', imageUrl: getPlaceholderImage(currentUser.uid, 64, 64) },
+                [ownerId]: { name: protoStore.name, role: 'store', imageUrl: protoStore.imageUrl }
+            },
+            createdAt: serverTimestamp(),
+            lastMessage: null,
+            lastMessageTimestamp: null,
+        });
+        return newChatRef.id;
     }
+    
     const storeData = storeDoc.data();
     const ownerId = storeData.ownerId;
 
@@ -28,34 +54,19 @@ export async function getOrCreateChat(currentUser: { uid: string, name: string }
         throw new Error("Cannot create a chat with yourself.");
     }
     
-    // Query for a chat containing both the user and the store owner ID.
-    // Firestore requires the array elements to be in sorted order for this type of query.
     const sortedParticipants = [currentUser.uid, ownerId].sort();
-    const q = query(
-        chatsRef,
-        where('participants', '==', sortedParticipants)
-    );
+    const q = query(chatsRef, where('participants', '==', sortedParticipants));
 
     const querySnapshot = await getDocs(q);
 
     if (!querySnapshot.empty) {
-        // If a chat already exists, return its ID.
         return querySnapshot.docs[0].id;
     } else {
-        // If no chat exists, create a new one.
         const newChatRef = await addDoc(chatsRef, {
             participants: sortedParticipants,
             participantInfo: {
-                [currentUser.uid]: {
-                    name: currentUser.name || 'Comprador',
-                    role: 'buyer',
-                    imageUrl: getPlaceholderImage(currentUser.uid, 64, 64)
-                },
-                [ownerId]: {
-                    name: storeData.name,
-                    role: 'store',
-                    imageUrl: storeData.imageUrl,
-                }
+                [currentUser.uid]: { name: currentUser.name, role: 'buyer', imageUrl: getPlaceholderImage(currentUser.uid, 64, 64) },
+                [ownerId]: { name: storeData.name, role: 'store', imageUrl: storeData.imageUrl }
             },
             createdAt: serverTimestamp(),
             lastMessage: null,

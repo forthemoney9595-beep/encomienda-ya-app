@@ -120,10 +120,9 @@ export async function addProductToStore(storeId: string, productData: Product, c
         const storeRef = doc(db, 'stores', storeId);
         // Firestore will auto-generate an ID if we use addDoc
         const productsCollectionRef = collection(storeRef, 'products');
-        const newProductRef = await addDoc(productsCollectionRef, productData);
+        const newProductRef = doc(productsCollectionRef);
         
-        // Update the product with its own ID for consistency
-        await updateDoc(newProductRef, { id: newProductRef.id });
+        await setDoc(newProductRef, { ...productData, id: newProductRef.id });
 
         // Check if the category is new and update the store document
         if (!currentCategories.map((c: string) => c.toLowerCase()).includes(productData.category.toLowerCase())) {
@@ -195,10 +194,6 @@ export async function getDeliveryPersonnel(isPrototype: boolean = false): Promis
     });
   } catch (error) {
     console.error("Error fetching delivery personnel from Firestore: ", error);
-  }
-  
-  if (isPrototype) {
-      // In a pure prototype world, this might not be needed or could be simplified
   }
     
   return personnel;

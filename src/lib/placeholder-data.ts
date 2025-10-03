@@ -120,7 +120,7 @@ export const initialPrototypeStores: Store[] = [
         imageUrl: getPlaceholderImage('store-pizza', 600, 400),
         imageHint: 'pizza restaurant',
         status: 'Aprobado',
-        ownerId: prototypeUsers['tienda@test.com'].uid,
+        ownerId: 'proto-store-owner',
         productCategories: ['Pizzas', 'Bebidas', 'Postres'],
         products: pizzaProducts
     },
