@@ -191,7 +191,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isProcessing}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={isProcessing || productCategories.length === 0}>
                        <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecciona una categoría" />
