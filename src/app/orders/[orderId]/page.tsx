@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -16,10 +17,11 @@ import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, CookingPot, Bike, Home, Package, Clock, Wallet, Ban, Star } from 'lucide-react';
+import { CheckCircle, CookingPot, Bike, Home, Package, Clock, Wallet, Ban, Star, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDescription as AlertDescriptionComponent } from '@/components/ui/alert-dialog';
 import type { CartItem } from '@/context/cart-context';
+import { useCart } from '@/context/cart-context';
 import { LeaveReviewDialog } from './leave-review-dialog';
 import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
@@ -116,12 +118,12 @@ function OrderProgress({ status }: { status: Order['status'] }) {
              <Alert>
                 <currentStatusInfo.icon className="h-4 w-4" />
                 <AlertTitle>{currentStatusInfo.label}</AlertTitle>
-                <AlertDescription>
+                <AlertDescriptionComponent>
                     {currentStatusInfo.description}
                      {status === 'En preparación' && (
                         <p className="mt-2 text-base font-bold text-primary">Entrega estimada: 25-40 min</p>
                     )}
-                </AlertDescription>
+                </AlertDescriptionComponent>
             </Alert>
         </div>
     )
@@ -134,10 +136,13 @@ export default function OrderTrackingPage() {
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const { getOrderById: getPrototypeOrderById, loading: prototypeLoading, prototypeOrders, addReviewToProduct, addDeliveryReviewToOrder } = usePrototypeData();
+  const { clearCart, addToCart, storeId: cartStoreId } = useCart();
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [reviewingItem, setReviewingItem] = useState<CartItem | null>(null);
+  const [isReorderAlertOpen, setReorderAlertOpen] = useState(false);
+
 
   const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { 
     ssr: false,
@@ -231,6 +236,33 @@ export default function OrderTrackingPage() {
         });
     };
 
+    const executeReorder = () => {
+        if (!order) return;
+        clearCart();
+        order.items.forEach(item => {
+            // We need to pass the base product, not the cart item with quantity
+            const { quantity, ...product } = item;
+            for (let i = 0; i < quantity; i++) {
+                addToCart(product, order.storeId);
+            }
+        });
+        toast({
+            title: "¡Pedido repetido!",
+            description: "Los artículos de este pedido han sido añadidos a tu carrito."
+        });
+        router.push('/checkout');
+    };
+
+    const handleReorderClick = () => {
+        if (!order) return;
+
+        if (cartStoreId && cartStoreId !== order.storeId) {
+            setReorderAlertOpen(true);
+        } else {
+            executeReorder();
+        }
+    }
+
 
   if (loading || authLoading || prototypeLoading || !order) {
     return <OrderPageSkeleton />;
@@ -241,10 +273,32 @@ export default function OrderTrackingPage() {
 
   return (
     <div className="container mx-auto">
+      <AlertDialog open={isReorderAlertOpen} onOpenChange={setReorderAlertOpen}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+              <AlertDialogTitle>¿Vaciar carrito actual?</AlertDialogTitle>
+              <AlertDialogDescription>
+                  Tu carrito contiene productos de otra tienda. Para repetir este pedido, tu carrito actual será vaciado. ¿Deseas continuar?
+              </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={executeReorder}>Sí, vaciar y repetir</AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+
       <PageHeader 
         title={`Pedido #${order.id.substring(0,7)}...`} 
-        description={`Realizado el ${format(order.createdAt, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`} 
-      />
+        description={`Realizado el ${format(order.createdAt, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`}
+      >
+        {isBuyer && order.status === 'Entregado' && (
+            <Button onClick={handleReorderClick}>
+                <Repeat className="mr-2 h-4 w-4" />
+                Volver a Pedir
+            </Button>
+        )}
+      </PageHeader>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
             <Card>
@@ -379,3 +433,5 @@ export default function OrderTrackingPage() {
     </div>
   );
 }
+
+    
