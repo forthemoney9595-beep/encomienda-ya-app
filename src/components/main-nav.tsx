@@ -46,7 +46,7 @@ export function MainNav() {
 
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
-  const isBuyer = user?.role === 'buyer' || !user;
+  const isBuyer = user?.role === 'buyer';
   
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname.includes(`/stores/${user.storeId}`);
 
@@ -60,16 +60,14 @@ export function MainNav() {
       </SidebarMenuItem>
 
       {/* Buyer & Guest specific menu */}
-      {!loading && (isBuyer || user) && (
+      {!loading && !isStoreOwner && !isDelivery && (
         <>
           {user && (
-            
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
                   <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            
           )}
 
           <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
@@ -182,8 +180,13 @@ export function MainNav() {
       {!loading && isDelivery && (
         <>
          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Entregas">
+            <SidebarMenuButton asChild isActive={pathname === '/orders'} tooltip="Entregas">
               <Link href="/orders"><Truck /><span>Entregas</span></Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/delivery/stats')} tooltip="Mis Estadísticas">
+              <Link href="/delivery/stats"><BarChart3 /><span>Mis Estadísticas</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </>
