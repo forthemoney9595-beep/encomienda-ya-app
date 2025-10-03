@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { prototypeUsers } from '@/lib/placeholder-data';
 import type { UserProfile as AppUserProfile } from '@/lib/user';
+import { usePrototypeData } from './prototype-data-context';
 
 interface AuthContextType {
     user: AppUserProfile | null;
@@ -20,17 +21,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<AppUserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
+    
+    // This is a bit of a hack to get the prototype users from the data context
+    // In a real app, this would be a single source of truth from a DB.
+    const prototypeData = usePrototypeData();
+
 
     useEffect(() => {
         setIsClient(true);
     }, []);
 
     useEffect(() => {
-        if (isClient) {
+        if (isClient && !prototypeData.loading) {
             try {
                 const savedUserEmail = sessionStorage.getItem(PROTOTYPE_USER_KEY);
-                if (savedUserEmail && prototypeUsers[savedUserEmail]) {
-                    setUser(prototypeUsers[savedUserEmail]);
+                if (savedUserEmail && prototypeData.prototypeUsers[savedUserEmail]) {
+                    setUser(prototypeData.prototypeUsers[savedUserEmail]);
                 }
             } catch (error) {
                 console.error("Failed to parse user from sessionStorage", error);
@@ -39,11 +45,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setLoading(false);
             }
         }
-    }, [isClient]);
+    }, [isClient, prototypeData.loading, prototypeData.prototypeUsers]);
 
     const loginForPrototype = (email: string) => {
-        if (prototypeUsers[email]) {
-            const userToLogin = prototypeUsers[email];
+        if (prototypeData.prototypeUsers[email]) {
+            const userToLogin = prototypeData.prototypeUsers[email];
             setUser(userToLogin);
             sessionStorage.setItem(PROTOTYPE_USER_KEY, email);
         }
@@ -56,7 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const isAdmin = user?.role === 'admin';
 
-    const value = { user, loading: !isClient || loading, isAdmin, loginForPrototype, logoutForPrototype };
+    const value = { user, loading: !isClient || loading || prototypeData.loading, isAdmin, loginForPrototype, logoutForPrototype };
     
     return (
         <AuthContext.Provider value={value}>
@@ -72,3 +78,5 @@ export const useAuth = () => {
     }
     return context;
 };
+
+    

@@ -1,6 +1,6 @@
 'use client';
 
-import type { UserProfile } from './placeholder-data';
+import type { UserProfile, Address } from './placeholder-data';
 import { getPlaceholderImage } from './placeholder-images';
 
 /**
@@ -53,3 +53,12 @@ export async function createStoreForUser(ownerId: string, storeData: { name: str
     // The actual state update is handled by the context provider
     return newStore;
 }
+
+export async function updateUserProfile(uid: string, data: Partial<UserProfile>): Promise<UserProfile | null> {
+    console.warn("updateUserProfile is a placeholder in prototype mode. State is managed in context.");
+    // In a real app, this would update the user document in Firestore.
+    // For prototype, the context will handle the state update.
+    return null; 
+}
+
+    

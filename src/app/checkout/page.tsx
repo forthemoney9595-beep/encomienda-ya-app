@@ -19,10 +19,13 @@ import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { Address } from '@/lib/user';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
   address: z.string().min(5, "La dirección es obligatoria."),
+  addressId: z.string().optional(),
 });
 
 
@@ -44,17 +47,37 @@ export default function CheckoutPage() {
     defaultValues: {
       name: "",
       address: "",
+      addressId: "",
     },
   });
+  
+  const addressIdValue = form.watch('addressId');
 
   useEffect(() => {
     if (clientLoaded && user && !authLoading) {
         form.reset({
-            ...form.getValues(),
             name: user.name || "",
+            address: user.addresses && user.addresses.length > 0 
+                ? `${user.addresses[0].street}, ${user.addresses[0].city}, ${user.addresses[0].postalCode}`
+                : "",
+            addressId: user.addresses && user.addresses.length > 0 ? user.addresses[0].id : "new",
         });
     }
   }, [user, authLoading, form, clientLoaded]);
+  
+  useEffect(() => {
+    if(addressIdValue && user?.addresses) {
+        if(addressIdValue === 'new') {
+            form.setValue('address', '');
+        } else {
+            const selectedAddress = user.addresses.find(a => a.id === addressIdValue);
+            if(selectedAddress) {
+                 form.setValue('address', `${selectedAddress.street}, ${selectedAddress.city}, ${selectedAddress.postalCode}`);
+            }
+        }
+    }
+  }, [addressIdValue, user?.addresses, form]);
+
 
   useEffect(() => {
     if (clientLoaded && !authLoading && !user) {
@@ -139,6 +162,8 @@ export default function CheckoutPage() {
   if (!clientLoaded || authLoading || !user || totalItems === 0) {
      return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
   }
+  
+  const hasAddresses = user.addresses && user.addresses.length > 0;
 
   return (
     <div className="container mx-auto">
@@ -165,14 +190,46 @@ export default function CheckoutPage() {
                                 </FormItem>
                                 )}
                             />
+                            {hasAddresses && (
+                                <FormField
+                                control={form.control}
+                                name="addressId"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Dirección</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecciona una dirección guardada" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {user.addresses?.map(addr => (
+                                                    <SelectItem key={addr.id} value={addr.id}>
+                                                        {addr.label}: {addr.street}, {addr.city}
+                                                    </SelectItem>
+                                                ))}
+                                                <SelectItem value="new">Usar una dirección nueva</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                            )}
                             <FormField
                                 control={form.control}
                                 name="address"
                                 render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Dirección de Entrega</FormLabel>
+                                    {!hasAddresses && <FormLabel>Dirección de Entrega</FormLabel>}
                                     <FormControl>
-                                    <Input placeholder="Calle, número, ciudad" {...field} />
+                                        <Input 
+                                            placeholder="Calle, número, ciudad" 
+                                            {...field}
+                                            disabled={hasAddresses && form.getValues('addressId') !== 'new'}
+                                            className={(!hasAddresses || form.getValues('addressId') === 'new') ? '' : 'bg-muted/50'}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -231,3 +288,5 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
+    

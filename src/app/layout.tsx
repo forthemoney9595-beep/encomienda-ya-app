@@ -28,17 +28,19 @@ export default function RootLayout({
      crossOrigin=""/>
       </head>
       <body className="font-body antialiased">
-        <AuthProvider>
-          <CartProvider>
-            <PrototypeDataProvider>
-              <AppContent>
-                {children}
-              </AppContent>
-            </PrototypeDataProvider>
-          </CartProvider>
-        </AuthProvider>
+        <PrototypeDataProvider>
+          <AuthProvider>
+            <CartProvider>
+                <AppContent>
+                  {children}
+                </AppContent>
+            </CartProvider>
+          </AuthProvider>
+        </PrototypeDataProvider>
         <Toaster />
       </body>
     </html>
   );
 }
+
+    

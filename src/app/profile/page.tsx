@@ -10,30 +10,38 @@ import { getUserProfile } from '@/lib/user';
 import { ProfileForm } from './profile-form';
 import { useEffect, useState } from 'react';
 import type { UserProfile } from '@/lib/user';
+import { usePrototypeData } from '@/context/prototype-data-context';
+import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
     const { user: authUser, loading: authLoading } = useAuth();
+    const { updateUser, loading: prototypeLoading } = usePrototypeData();
+    const router = useRouter();
+
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        async function fetchProfile() {
-            if (authLoading) return;
-            if (!authUser) {
-                setLoading(false);
-                return;
-            }
-
-            setLoading(true);
-            const userProfile = await getUserProfile(authUser.uid);
-            setProfile(userProfile);
-            setLoading(false);
+        if (authLoading || prototypeLoading) return;
+        
+        if (!authUser) {
+            router.push('/login');
+            return;
         }
 
-        fetchProfile();
-    }, [authUser, authLoading]);
+        // In prototype mode, authUser from context is the source of truth
+        setProfile(authUser);
+        setLoading(false);
 
-    if (loading || authLoading) {
+    }, [authUser, authLoading, prototypeLoading, router]);
+
+    const handleProfileUpdate = (updatedProfileData: Partial<UserProfile>) => {
+        if (!profile) return;
+        // The updateUser function from the context will handle the state update and session storage.
+        updateUser(updatedProfileData);
+    };
+
+    if (loading || authLoading || prototypeLoading || !profile) {
         return (
             <div className="container mx-auto">
                 <PageHeader title="Mi Perfil" description="Gestiona la información de tu cuenta." />
@@ -63,18 +71,12 @@ export default function ProfilePage() {
         )
     }
 
-    if (!profile) {
-        return (
-             <div className="container mx-auto">
-                <PageHeader title="Mi Perfil" description="No se pudo cargar el perfil." />
-            </div>
-        )
-    }
-
     return (
         <div className="container mx-auto">
-            <PageHeader title="Mi Perfil" description="Gestiona la información de tu cuenta." />
-            <ProfileForm user={profile} />
+            <PageHeader title="Mi Perfil" description="Gestiona la información de tu cuenta y direcciones." />
+            <ProfileForm user={profile} onSave={handleProfileUpdate} />
         </div>
     );
 }
+
+    

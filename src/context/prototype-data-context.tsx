@@ -4,8 +4,8 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Order } from '@/lib/order-service';
-import { initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery, initialPrototypeNotifications, initialPrototypeOrders } from '@/lib/placeholder-data';
-import type { Store, Product, DeliveryPersonnel, Notification } from '@/lib/placeholder-data';
+import { initialPrototypeStores, prototypeDelivery as initialPrototypeDelivery, initialPrototypeNotifications, initialPrototypeOrders, prototypeUsers as initialPrototypeUsers } from '@/lib/placeholder-data';
+import type { Store, Product, DeliveryPersonnel, Notification, UserProfile, Address } from '@/lib/placeholder-data';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -14,7 +14,9 @@ interface PrototypeDataContextType {
     prototypeStores: Store[];
     prototypeDelivery: DeliveryPersonnel;
     prototypeNotifications: Notification[];
+    prototypeUsers: Record<string, UserProfile>;
     loading: boolean;
+    updateUser: (updates: Partial<UserProfile>) => void;
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
     addPrototypeOrder: (order: Order) => void;
     addPrototypeStore: (store: Store) => void;
@@ -41,6 +43,7 @@ const PROTOTYPE_ORDERS_KEY = 'prototypeOrders';
 const PROTOTYPE_STORES_KEY = 'prototypeStores';
 const PROTOTYPE_DELIVERY_KEY = 'prototypeDelivery';
 const PROTOTYPE_NOTIFICATIONS_KEY = 'prototypeNotifications';
+const PROTOTYPE_USERS_KEY = 'prototypeUsers';
 
 
 export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => {
@@ -48,6 +51,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     const [stores, setStores] = useState<Store[]>(initialPrototypeStores);
     const [prototypeDelivery, setPrototypeDelivery] = useState<DeliveryPersonnel>(initialPrototypeDelivery);
     const [notifications, setNotifications] = useState<Notification[]>(initialPrototypeNotifications);
+    const [users, setUsers] = useState<Record<string, UserProfile>>(initialPrototypeUsers);
     const [loading, setLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
 
@@ -76,6 +80,9 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
                 const storedNotifications = sessionStorage.getItem(PROTOTYPE_NOTIFICATIONS_KEY);
                 setNotifications(storedNotifications ? JSON.parse(storedNotifications) : initialPrototypeNotifications);
+                
+                const storedUsers = sessionStorage.getItem(PROTOTYPE_USERS_KEY);
+                setUsers(storedUsers ? JSON.parse(storedUsers) : initialPrototypeUsers);
 
             } catch (error) {
                 console.error("Failed to load prototype data from session storage, resetting.", error);
@@ -87,6 +94,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
                 setPrototypeDelivery(initialPrototypeDelivery);
                 sessionStorage.setItem(PROTOTYPE_NOTIFICATIONS_KEY, JSON.stringify(initialPrototypeNotifications));
                 setNotifications(initialPrototypeNotifications);
+                sessionStorage.setItem(PROTOTYPE_USERS_KEY, JSON.stringify(initialPrototypeUsers));
+                setUsers(initialPrototypeUsers);
             } finally {
                 setLoading(false);
             }
@@ -115,6 +124,22 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     const clearPrototypeNotifications = () => {
         setNotifications([]);
         updateSessionStorage(PROTOTYPE_NOTIFICATIONS_KEY, []);
+    };
+    
+    const updateUser = (updates: Partial<UserProfile>) => {
+        const currentUserEmail = sessionStorage.getItem('prototypeUserEmail');
+        if (!currentUserEmail) return;
+
+        setUsers(prevUsers => {
+            const userToUpdate = prevUsers[currentUserEmail];
+            if (!userToUpdate) return prevUsers;
+            
+            const updatedUser = { ...userToUpdate, ...updates };
+            const updatedUsers = { ...prevUsers, [currentUserEmail]: updatedUser };
+            
+            updateSessionStorage(PROTOTYPE_USERS_KEY, updatedUsers);
+            return updatedUsers;
+        });
     };
 
     const updatePrototypeOrder = (orderId: string, updates: Partial<Order>) => {
@@ -318,7 +343,9 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         prototypeStores: stores,
         prototypeDelivery,
         prototypeNotifications: notifications,
+        prototypeUsers: users,
         loading: loading || !isClient,
+        updateUser,
         updatePrototypeOrder,
         addPrototypeOrder,
         addPrototypeStore,
@@ -353,6 +380,5 @@ export const usePrototypeData = () => {
     }
     return context;
 };
-
 
     

@@ -37,12 +37,21 @@ export type DeliveryPersonnel = {
   email: string;
 };
 
+export type Address = {
+    id: string;
+    label: 'Casa' | 'Oficina' | 'Otro';
+    street: string;
+    city: string;
+    postalCode: string;
+}
+
 export interface UserProfile {
     uid: string;
     name: string;
     email: string;
     role: 'buyer' | 'store' | 'delivery' | 'admin';
     storeId?: string;
+    addresses?: Address[];
     [key: string]: any;
 }
 
@@ -91,7 +100,16 @@ export const prototypeUsers: Record<string, UserProfile> = {
     'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
     'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-pizza' },
     'repartidor@test.com': { uid: 'proto-delivery', name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
-    'comprador@test.com': { uid: 'proto-buyer', name: 'Comprador Proto', email: 'comprador@test.com', role: 'buyer' },
+    'comprador@test.com': { 
+        uid: 'proto-buyer', 
+        name: 'Comprador Proto', 
+        email: 'comprador@test.com', 
+        role: 'buyer',
+        addresses: [
+            { id: 'addr-1', label: 'Casa', street: 'Calle Falsa 123', city: 'Springfield', postalCode: '12345' },
+            { id: 'addr-2', label: 'Oficina', street: 'Avenida Siempreviva 742', city: 'Springfield', postalCode: '12346' },
+        ]
+    },
 };
 
 // --- STORES AND PRODUCTS ---
