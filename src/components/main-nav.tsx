@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
-import { Separator } from './ui/separator';
+import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
 
@@ -214,6 +214,14 @@ export function MainNav() {
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/stores')}>
+                    <Link href="/admin/stores">
+                      <Store />
+                      <span>Tiendas</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
                   <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/delivery')}>
                     <Link href="/admin/delivery">
                       <Truck />
@@ -229,3 +237,4 @@ export function MainNav() {
     </SidebarMenu>
   );
 }
+
