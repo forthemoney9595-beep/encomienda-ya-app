@@ -29,6 +29,7 @@ import {
   Contact,
   Tag,
   Heart,
+  LifeBuoy,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/context/auth-context';
@@ -196,6 +197,14 @@ export function MainNav() {
           </SidebarMenuItem>
         </>
       )}
+
+      <Separator className="my-2" />
+
+       <SidebarMenuItem>
+        <SidebarMenuButton asChild isActive={pathname.startsWith('/support')} tooltip="Soporte">
+          <Link href="/support"><LifeBuoy /><span>Soporte</span></Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
 
       {/* Admin Menu */}
       {!loading && isAdmin && (
