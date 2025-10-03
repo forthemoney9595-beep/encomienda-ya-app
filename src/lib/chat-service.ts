@@ -7,50 +7,57 @@ import type { Store } from './placeholder-data';
 import type { UserProfile } from './user';
 
 /**
- * Gets or creates a chat room between a user and a store owner using a deterministic ID.
- * This is a pure function that receives all necessary data.
- * @param currentUser - The profile of the user initiating the chat.
- * @param store - The store being contacted.
+ * Represents a simplified user profile for chat purposes.
+ */
+export interface ChatParticipantProfile {
+    uid: string;
+    name: string;
+    role: 'buyer' | 'store' | 'delivery' | 'admin';
+    imageUrl: string;
+}
+
+/**
+ * Creates a chat room between two participant profiles using a deterministic ID.
+ * This function is now a pure utility for writing to Firestore.
+ * @param participant1 - The profile of the first participant.
+ * @param participant2 - The profile of the second participant.
  * @returns The ID of the chat room.
  */
-export async function getOrCreateChat(currentUser: UserProfile, store: Store): Promise<string> {
-    const storeOwnerId = store.ownerId;
-    if (!storeOwnerId) {
-        throw new Error("La tienda no tiene un propietario asignado. No se puede crear el chat.");
+export async function getOrCreateChat(participant1: ChatParticipantProfile, participant2: ChatParticipantProfile): Promise<string> {
+    if (!participant1.uid || !participant2.uid) {
+        throw new Error("Ambos participantes deben tener un UID válido.");
     }
-    if (currentUser.uid === storeOwnerId) {
+    if (participant1.uid === participant2.uid) {
         throw new Error("No puedes crear un chat contigo mismo.");
     }
 
-    const participants = [currentUser.uid, storeOwnerId].sort();
-    const chatId = participants.join('_'); // Deterministic ID
+    const participants = [participant1.uid, participant2.uid].sort();
+    const chatId = participants.join('_');
 
     const chatRef = doc(db, 'chats', chatId);
 
-    // Use setDoc with merge: true. This will create the doc if it doesn't exist,
-    // or do nothing if it does exist (as we are providing the same participant data).
+    // This operation will create the document if it doesn't exist,
+    // or update the participant info if it does. It's idempotent and safe.
     await setDoc(chatRef, {
         participants: participants,
         participantInfo: {
-            [currentUser.uid]: {
-                name: currentUser.name,
-                role: currentUser.role,
-                imageUrl: getPlaceholderImage(currentUser.uid, 64, 64)
+            [participant1.uid]: {
+                name: participant1.name,
+                role: participant1.role,
+                imageUrl: participant1.imageUrl
             },
-            [storeOwnerId]: {
-                name: store.name, // The chat is with the store itself
-                role: 'store',
-                imageUrl: store.imageUrl
+            [participant2.uid]: {
+                name: participant2.name,
+                role: participant2.role,
+                imageUrl: participant2.imageUrl
             }
         },
-        // Only set createdAt on initial creation - merge won't add it again.
-        // A better approach is to manage this server-side with rules, but for client-side this is a common pattern.
-        // Let's rely on merge behavior and not add createdAt here to avoid overwriting.
-        // It's better to update lastMessageTimestamp to indicate activity.
+        lastMessageTimestamp: serverTimestamp(), // Update timestamp to show activity
     }, { merge: true });
 
     return chatId;
 }
+
 
 export type ChatParticipant = {
     id: string;
