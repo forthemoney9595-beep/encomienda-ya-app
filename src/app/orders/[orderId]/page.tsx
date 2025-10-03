@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle, CookingPot, Bike, Home, Package, Clock, Wallet, Ban, Star, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDescription as AlertDescriptionComponent } from '@/components/ui/alert-dialog';
+import { Alert, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent, AlertDescription as AlertDescriptionComponent, AlertTitle } from '@/components/ui/alert-dialog';
 import type { CartItem } from '@/context/cart-context';
 import { useCart } from '@/context/cart-context';
 import { LeaveReviewDialog } from './leave-review-dialog';
@@ -276,7 +276,7 @@ export default function OrderTrackingPage() {
       <AlertDialog open={isReorderAlertOpen} onOpenChange={setReorderAlertOpen}>
           <AlertDialogContent>
               <AlertDialogHeader>
-              <AlertDialogTitle>¿Vaciar carrito actual?</AlertDialogTitle>
+              <AlertDialogTitleComponent>¿Vaciar carrito actual?</AlertDialogTitleComponent>
               <AlertDialogDescription>
                   Tu carrito contiene productos de otra tienda. Para repetir este pedido, tu carrito actual será vaciado. ¿Deseas continuar?
               </AlertDialogDescription>
@@ -433,5 +433,3 @@ export default function OrderTrackingPage() {
     </div>
   );
 }
-
-    
