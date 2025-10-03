@@ -91,8 +91,8 @@ export default function AdminDashboard() {
     return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
   }, [prototypeOrders]);
 
-  const recentOrders = useMemo(() => {
-    return [...prototypeOrders].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+  const allOrders = useMemo(() => {
+    return [...prototypeOrders].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [prototypeOrders]);
 
 
@@ -201,8 +201,8 @@ export default function AdminDashboard() {
       <div className="mt-6">
         <Card>
             <CardHeader>
-                <CardTitle>Últimos Pedidos</CardTitle>
-                <CardDescription>Los 5 pedidos más recientes en la plataforma.</CardDescription>
+                <CardTitle>Historial de Pedidos</CardTitle>
+                <CardDescription>Todos los pedidos realizados en la plataforma.</CardDescription>
             </CardHeader>
             <CardContent>
                  <Table>
@@ -211,19 +211,21 @@ export default function AdminDashboard() {
                             <TableHead>Pedido</TableHead>
                             <TableHead>Cliente</TableHead>
                             <TableHead>Tienda</TableHead>
+                            <TableHead>Repartidor</TableHead>
                             <TableHead>Estado</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                    {recentOrders.length > 0 ? (
-                        recentOrders.map((order) => (
+                    {allOrders.length > 0 ? (
+                        allOrders.map((order) => (
                         <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
                             <TableCell className="font-medium">
                                 <Link href={`/orders/${order.id}`} className="hover:underline">#{order.id.substring(0, 7)}</Link>
                             </TableCell>
                              <TableCell>{order.customerName}</TableCell>
                              <TableCell>{order.storeName}</TableCell>
+                             <TableCell>{order.deliveryPersonName || 'N/A'}</TableCell>
                             <TableCell>
                                <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
                             </TableCell>
@@ -232,8 +234,8 @@ export default function AdminDashboard() {
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={5} className="h-24 text-center">
-                                No hay pedidos recientes.
+                            <TableCell colSpan={6} className="h-24 text-center">
+                                No hay pedidos en el historial.
                             </TableCell>
                         </TableRow>
                     )}
@@ -245,5 +247,7 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+    
 
     
