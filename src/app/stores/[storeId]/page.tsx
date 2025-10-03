@@ -14,7 +14,8 @@ import { usePrototypeData } from '@/context/prototype-data-context';
 import { Button } from '@/components/ui/button';
 import { Edit, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { getStoreById } from '@/lib/data-service';
+import { useToast } from '@/hooks/use-toast';
+import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 
 function StoreDetailSkeleton() {
     return (
@@ -73,7 +74,8 @@ export default function StoreDetailPage() {
   const router = useRouter();
   const storeId = params.storeId as string;
   const { user, loading: authLoading } = useAuth();
-  const { getStoreById: getPrototypeStoreById, loading: prototypeLoading } = usePrototypeData();
+  const { getStoreById, updatePrototypeProduct, addPrototypeProduct, deletePrototypeProduct, prototypeStores, loading: prototypeLoading } = usePrototypeData();
+  const { toast } = useToast();
   
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,29 +83,65 @@ export default function StoreDetailPage() {
   const isOwner = user?.storeId === storeId;
   const isPrototype = user?.uid.startsWith('proto-');
 
+  // Fetch and update store data whenever prototype data changes
   useEffect(() => {
-    async function fetchData() {
-        if (!storeId || authLoading || prototypeLoading) return;
-        
-        setLoading(true);
-        let storeData: Store | null | undefined;
-        
-        if (isPrototype) {
-            storeData = getPrototypeStoreById(storeId);
-        } else {
-            storeData = await getStoreById(storeId);
-        }
-        
-        if (!storeData) {
-            notFound();
-            return;
-        }
-        
-        setStore(storeData);
-        setLoading(false);
+    if (!storeId || authLoading || prototypeLoading) return;
+    
+    const storeData = getStoreById(storeId);
+    
+    if (!storeData) {
+      if (!loading) notFound(); // Prevent notFound flash on initial load
+      return;
     }
-    fetchData();
-  }, [storeId, prototypeLoading, authLoading, user, isPrototype, getPrototypeStoreById]);
+    
+    setStore(storeData);
+    setLoading(false);
+  }, [storeId, prototypeLoading, authLoading, user, getStoreById, prototypeStores, loading]);
+  
+  const handleSaveProduct = async (productData: Product) => {
+      const isEditing = store?.products.some(p => p.id === productData.id);
+      
+      try {
+          if (isPrototype) {
+               if (isEditing) {
+                  updatePrototypeProduct(storeId, productData);
+              } else {
+                  addPrototypeProduct(storeId, productData);
+              }
+          } else {
+              // Real DB logic would go here
+              if (isEditing) {
+                  await updateProductInStore(storeId, productData.id, productData);
+              } else {
+                  await addProductToStore(storeId, productData, store?.productCategories || []);
+              }
+          }
+           
+          toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
+          
+      } catch (error) {
+           toast({ title: "Error", description: "No se pudo guardar el artículo.", variant: 'destructive'});
+      }
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+      try {
+          if (isPrototype) {
+              deletePrototypeProduct(storeId, productId);
+          } else {
+              // Real DB logic
+              await deleteProductFromStore(storeId, productId);
+          }
+          
+          toast({
+              title: "Producto Eliminado",
+              description: "El producto ha sido eliminado.",
+          });
+
+      } catch(error) {
+          toast({ title: "Error", description: "No se pudo eliminar el artículo.", variant: 'destructive'});
+      }
+  };
 
 
   if (loading) {
@@ -121,7 +159,7 @@ export default function StoreDetailPage() {
 
 
   // Use the dynamically managed productCategories from the store document
-  const productCategories = store.productCategories && store.productCategories.length > 0 ? store.productCategories : [store.category];
+  const productCategories = store.productCategories && store.productCategories.length > 0 ? store.productCategories : [];
 
 
   return (
@@ -142,7 +180,13 @@ export default function StoreDetailPage() {
                     <CardTitle>Productos</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ProductList products={store.products} productCategories={productCategories} ownerId={store.ownerId} />
+                  <ProductList 
+                    products={store.products} 
+                    productCategories={productCategories} 
+                    ownerId={store.ownerId}
+                    onSaveProduct={handleSaveProduct}
+                    onDeleteProduct={handleDeleteProduct}
+                   />
                 </CardContent>
             </Card>
         </div>

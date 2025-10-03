@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,19 +10,19 @@ import { ShoppingCart, Edit, Trash2, PlusCircle, Search, Star } from 'lucide-rea
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useMemo } from 'react';
+import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 
 interface ProductListProps {
     products: Product[];
     productCategories: string[];
     ownerId: string;
+    onSaveProduct: (productData: Product) => void;
+    onDeleteProduct: (productId: string) => void;
 }
 
 function ProductRating({ rating, reviewCount }: { rating: number, reviewCount: number }) {
@@ -38,18 +37,13 @@ function ProductRating({ rating, reviewCount }: { rating: number, reviewCount: n
   )
 }
 
-export function ProductList({ products: initialProducts, productCategories: initialCategories, ownerId }: ProductListProps) {
+export function ProductList({ products, productCategories, ownerId, onSaveProduct, onDeleteProduct }: ProductListProps) {
     const { addToCart, storeId: cartStoreId, clearCart } = useCart();
     const { toast } = useToast();
     const params = useParams();
-    const router = useRouter();
     const currentStoreId = params.storeId as string;
     const { user } = useAuth();
-    const { addPrototypeProduct, updatePrototypeProduct, deletePrototypeProduct } = usePrototypeData();
     
-    const [products, setProducts] = useState<Product[]>(initialProducts);
-    
-    const [productCategories, setProductCategories] = useState<string[]>(initialCategories);
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [openCartAlert, setOpenCartAlert] = useState(false);
@@ -57,14 +51,7 @@ export function ProductList({ products: initialProducts, productCategories: init
     const [searchQuery, setSearchQuery] = useState('');
 
     const isOwner = user?.uid === ownerId;
-    const isPrototype = user?.uid.startsWith('proto-');
 
-    useEffect(() => {
-        setProducts(initialProducts);
-        const categories = Array.from(new Set(initialProducts.map(p => p.category)));
-        setProductCategories(categories.length > 0 ? categories : initialCategories);
-    }, [initialProducts, initialCategories]);
-    
     const filteredProducts = useMemo(() => {
         if (!searchQuery) return products;
         return products.filter(p => 
@@ -73,65 +60,12 @@ export function ProductList({ products: initialProducts, productCategories: init
         );
     }, [products, searchQuery]);
 
+    const activeCategories = useMemo(() => {
+      return Array.from(new Set(filteredProducts.map(p => p.category)));
+    }, [filteredProducts]);
+
     const findFirstCategoryWithProducts = () => {
-        return productCategories.find(category => filteredProducts.some(p => p.category.toLowerCase() === category.toLowerCase()));
-    };
-
-    const handleSaveProduct = async (productData: Product) => {
-        const isEditing = products.some(p => p.id === productData.id);
-        
-        try {
-            if (isPrototype) {
-                 if (isEditing) {
-                    updatePrototypeProduct(currentStoreId, productData);
-                } else {
-                    addPrototypeProduct(currentStoreId, productData);
-                }
-            } else {
-                if (isEditing) {
-                    await updateProductInStore(currentStoreId, productData.id, productData);
-                } else {
-                    await addProductToStore(currentStoreId, productData, productCategories);
-                }
-            }
-             
-            if (isEditing) {
-                setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
-            } else {
-                setProducts(prev => [...prev, productData]);
-            }
-
-            if (!productCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
-                setProductCategories([...productCategories, productData.category]);
-            }
-            
-            toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
-            setManageItemDialogOpen(false);
-            setEditingProduct(null);
-            
-        } catch (error) {
-             toast({ title: "Error", description: "No se pudo guardar el artículo.", variant: 'destructive'});
-        }
-    };
-
-    const handleDeleteProduct = async (productId: string) => {
-        try {
-            if (isPrototype) {
-                deletePrototypeProduct(currentStoreId, productId);
-            } else {
-                await deleteProductFromStore(currentStoreId, productId);
-            }
-            
-            setProducts(prev => prev.filter(p => p.id !== productId));
-           
-            toast({
-                title: "Producto Eliminado",
-                description: "El producto ha sido eliminado.",
-            });
-
-        } catch(error) {
-            toast({ title: "Error", description: "No se pudo eliminar el artículo.", variant: 'destructive'});
-        }
+        return productCategories.find(category => filteredProducts.some(p => p.category.toLowerCase() === category.toLowerCase())) || (activeCategories[0] || "");
     };
 
     const handleOpenDialogForEdit = (product: Product) => {
@@ -184,7 +118,10 @@ export function ProductList({ products: initialProducts, productCategories: init
                 isOpen={isManageItemDialogOpen}
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
-                onSave={handleSaveProduct}
+                onSave={(productData) => {
+                    onSaveProduct(productData);
+                    setManageItemDialogOpen(false);
+                }}
                 productCategories={productCategories}
             />
             <div className="flex flex-col sm:flex-row gap-4 mb-4">
@@ -206,88 +143,95 @@ export function ProductList({ products: initialProducts, productCategories: init
                 )}
             </div>
 
-            <Tabs defaultValue={findFirstCategoryWithProducts()} className="w-full">
+            <Tabs defaultValue={findFirstCategoryWithProducts()} key={findFirstCategoryWithProducts()} className="w-full">
                 <TabsList className="mb-4">
                     {productCategories.map(category => (
-                        filteredProducts.some(p => p.category.toLowerCase() === category.toLowerCase()) &&
+                       (activeCategories.length === 0 || activeCategories.map(c => c.toLowerCase()).includes(category.toLowerCase())) &&
                         <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
                     ))}
                 </TabsList>
 
                 {productCategories.map(category => {
                     const categoryProducts = filteredProducts.filter(p => p.category.toLowerCase() === category.toLowerCase());
-                    if (categoryProducts.length === 0) return null;
+                    if (categoryProducts.length === 0 && searchQuery) return null;
 
                     return (
                         <TabsContent key={category} value={category}>
-                        <div className="space-y-4">
-                            {categoryProducts.map((product) => (
-                                <Card key={product.id}>
-                                    <CardContent className="flex items-start gap-4 p-4">
-                                        <div className="relative h-20 w-20 flex-shrink-0">
-                                            <Image 
-                                                src={product.imageUrl || ''}
-                                                alt={product.name} 
-                                                fill
-                                                style={{ objectFit: 'cover' }}
-                                                className="rounded-md bg-muted" 
-                                            />
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-semibold">{product.name}</h3>
-                                            <ProductRating rating={product.rating} reviewCount={product.reviewCount} />
-                                            <p className="text-sm text-muted-foreground mt-2">{product.description}</p>
-                                            <p className="font-semibold mt-1">${product.price.toFixed(2)}</p>
-                                        </div>
-                                        {isOwner ? (
-                                            <div className="flex flex-col sm:flex-row gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => handleOpenDialogForEdit(product)}>
-                                                    <Edit className="mr-2 h-4 w-4" />
-                                                    Editar
-                                                </Button>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" size="sm">
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Eliminar
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Esta acción no se puede deshacer y eliminará permanentemente el producto.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDeleteProduct(product.id)}>
-                                                                Sí, eliminar
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
+                          {categoryProducts.length > 0 ? (
+                            <div className="space-y-4">
+                                {categoryProducts.map((product) => (
+                                    <Card key={product.id}>
+                                        <CardContent className="flex items-start gap-4 p-4">
+                                            <div className="relative h-20 w-20 flex-shrink-0">
+                                                <Image 
+                                                    src={product.imageUrl || ''}
+                                                    alt={product.name} 
+                                                    fill
+                                                    style={{ objectFit: 'cover' }}
+                                                    className="rounded-md bg-muted" 
+                                                />
                                             </div>
-                                        ) : (
-                                            <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)} className="self-center">
-                                                <ShoppingCart className="mr-2 h-4 w-4" />
-                                                Añadir
-                                            </Button>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
+                                            <div className="flex-1">
+                                                <h3 className="font-semibold">{product.name}</h3>
+                                                <ProductRating rating={product.rating} reviewCount={product.reviewCount} />
+                                                <p className="text-sm text-muted-foreground mt-2">{product.description}</p>
+                                                <p className="font-semibold mt-1">${product.price.toFixed(2)}</p>
+                                            </div>
+                                            {isOwner ? (
+                                                <div className="flex flex-col sm:flex-row gap-2">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenDialogForEdit(product)}>
+                                                        <Edit className="mr-2 h-4 w-4" />
+                                                        Editar
+                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="destructive" size="sm">
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                Eliminar
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta acción no se puede deshacer y eliminará permanentemente el producto.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => onDeleteProduct(product.id)}>
+                                                                    Sí, eliminar
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </div>
+                                            ) : (
+                                                <Button variant="outline" size="sm" onClick={() => handleAddToCart(product)} className="self-center">
+                                                    <ShoppingCart className="mr-2 h-4 w-4" />
+                                                    Añadir
+                                                </Button>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                           ) : !searchQuery && (
+                             <div className="text-center text-muted-foreground py-10">
+                                <p>No hay productos en esta categoría.</p>
+                                {isOwner && <p className="text-sm">¡Añade tu primer artículo a "{category}"!</p>}
+                            </div>
+                           )}
                         </TabsContent>
                     );
                 })}
                 {filteredProducts.length === 0 && products.length > 0 && (
-                    <div className="text-center text-muted-foreground py-10">
+                    <div className="text-center text-muted-foreground py-10 col-span-full">
                         <p>No se encontraron productos para "{searchQuery}".</p>
                     </div>
                 )}
-                {products.length === 0 && (
-                    <div className="text-center text-muted-foreground py-10">
+                 {products.length === 0 && (
+                    <div className="text-center text-muted-foreground py-10 col-span-full">
                         <p>{isOwner ? 'Esta tienda aún no tiene productos. ¡Añade tu primer artículo!' : 'Esta tienda aún no tiene productos.'}</p>
                     </div>
                 )}
