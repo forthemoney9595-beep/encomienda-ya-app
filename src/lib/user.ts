@@ -81,30 +81,39 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
  */
 export async function createStoreForUser(ownerId: string, storeData: { name: string, category: string, address: string }) {
     const { firestore } = getFirebase();
-    try {
-        const storeCollectionRef = collection(firestore, 'stores');
-        const newStoreRef = doc(storeCollectionRef); // Create a new doc reference with an auto-generated ID
+    const storeCollectionRef = collection(firestore, 'stores');
+    const newStoreRef = doc(storeCollectionRef); // Create a new doc reference with an auto-generated ID
 
-        // Then, set the store document
-        await setDoc(newStoreRef, {
-            id: newStoreRef.id,
-            ...storeData,
-            ownerId: ownerId,
-            status: 'Pendiente', // All new stores require approval
-            createdAt: serverTimestamp(),
-            productCategories: storeData.category ? [storeData.category] : [],
-            imageUrl: getPlaceholderImage(storeData.name.replace(/\s/g, ''), 600, 400),
-            imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
-        });
-        
-        // Update the user's profile with the new storeId first
-        const userDocRef = doc(firestore, 'users', ownerId);
-        await updateDoc(userDocRef, { storeId: newStoreRef.id });
+    const fullStoreData = {
+        id: newStoreRef.id,
+        ...storeData,
+        ownerId: ownerId,
+        status: 'Pendiente', // All new stores require approval
+        createdAt: serverTimestamp(),
+        productCategories: storeData.category ? [storeData.category] : [],
+        imageUrl: getPlaceholderImage(storeData.name.replace(/\s/g, ''), 600, 400),
+        imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
+    };
 
+    // Then, set the store document with error handling
+    setDoc(newStoreRef, fullStoreData).catch(error => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: newStoreRef.path,
+            operation: 'write',
+            requestResourceData: fullStoreData
+        }));
+    });
+    
+    // Update the user's profile with the new storeId with error handling
+    const userDocRef = doc(firestore, 'users', ownerId);
+    const userUpdateData = { storeId: newStoreRef.id };
+    updateDoc(userDocRef, userUpdateData).catch(error => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: userDocRef.path,
+            operation: 'update',
+            requestResourceData: userUpdateData
+        }));
+    });
 
-        return { id: newStoreRef.id, ...storeData };
-    } catch (error) {
-        console.error("Error creating store for user: ", error);
-        throw new Error("Could not create store.");
-    }
+    return { id: newStoreRef.id, ...storeData };
 }
