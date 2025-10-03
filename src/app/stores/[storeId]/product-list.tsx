@@ -17,6 +17,7 @@ import { usePrototypeData } from '@/context/prototype-data-context';
 import { ManageItemDialog } from './manage-item-dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { ProductReviewsDialog } from './product-reviews-dialog';
 
 interface ProductListProps {
     products: Product[];
@@ -144,7 +145,11 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
                 }}
                 productCategories={productCategories}
             />
-            {/* TODO: Add ProductReviewsDialog here, controlled by viewingReviewsFor state */}
+            <ProductReviewsDialog
+                isOpen={!!viewingReviewsFor}
+                setIsOpen={(isOpen) => !isOpen && setViewingReviewsFor(null)}
+                product={viewingReviewsFor}
+            />
 
             <div className="flex flex-col sm:flex-row gap-4 mb-4">
                 <div className="relative w-full sm:flex-1">
@@ -287,5 +292,3 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
         </>
     )
 }
-
-    
