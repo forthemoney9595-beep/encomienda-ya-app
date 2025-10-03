@@ -11,15 +11,18 @@ import type { Store } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useToast } from '@/hooks/use-toast';
+import { ManageStoreDialog } from './manage-store-dialog';
 
 export default function AdminStoresPage() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
-  const { prototypeStores, updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
+  const { prototypeStores, updatePrototypeStore, loading: prototypeLoading, addPrototypeStore, deletePrototypeStore } = usePrototypeData();
   const { toast } = useToast();
 
+  const [isManageDialogOpen, setManageDialogOpen] = useState(false);
+  const [editingStore, setEditingStore] = useState<Store | null>(null);
+
   useEffect(() => {
-    // In pure prototype mode, the only source of truth is the prototype context
     if (!prototypeLoading) {
       setStores(prototypeStores);
     }
@@ -27,7 +30,6 @@ export default function AdminStoresPage() {
 
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
     try {
-      // In prototype mode, all updates go through the context
       updatePrototypeStore({ id: storeId, status });
       
       toast({
@@ -43,10 +45,43 @@ export default function AdminStoresPage() {
     }
   };
 
+  const handleSaveStore = (storeData: Store) => {
+    addPrototypeStore(storeData);
+    toast({
+      title: editingStore ? 'Tienda Actualizada' : 'Tienda Añadida',
+      description: `La tienda ${storeData.name} ha sido guardada.`,
+    });
+    setManageDialogOpen(false);
+  };
+
+  const handleDeleteStore = (storeId: string) => {
+    deletePrototypeStore(storeId);
+    toast({
+      title: 'Tienda Eliminada',
+      variant: 'destructive',
+    });
+  };
+
+  const openDialogForCreate = () => {
+    setEditingStore(null);
+    setManageDialogOpen(true);
+  };
+
+  const openDialogForEdit = (store: Store) => {
+    setEditingStore(store);
+    setManageDialogOpen(true);
+  };
+
   return (
     <div className="container mx-auto">
+      <ManageStoreDialog
+        isOpen={isManageDialogOpen}
+        setIsOpen={setManageDialogOpen}
+        onSave={handleSaveStore}
+        store={editingStore}
+      />
       <PageHeader title="Gestión de Tiendas" description="Agrega, edita o elimina cuentas de tiendas.">
-        <Button onClick={() => alert('Próximamente: Añadir nueva tienda')}>
+        <Button onClick={openDialogForCreate}>
           <PlusCircle className="mr-2 h-4 w-4" />
           Agregar Nueva Tienda
         </Button>
@@ -60,7 +95,12 @@ export default function AdminStoresPage() {
             </div>
         </div>
       ) : (
-        <StoresList stores={stores} onStatusUpdate={handleStatusUpdate} />
+        <StoresList 
+          stores={stores} 
+          onStatusUpdate={handleStatusUpdate}
+          onEdit={openDialogForEdit}
+          onDelete={handleDeleteStore}
+        />
       )}
     </div>
   );

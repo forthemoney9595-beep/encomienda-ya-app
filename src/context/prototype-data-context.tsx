@@ -20,6 +20,7 @@ interface PrototypeDataContextType {
     updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
     addPrototypeOrder: (order: Order) => void;
     addPrototypeStore: (store: Store) => void;
+    deletePrototypeStore: (storeId: string) => void;
     addPrototypeProduct: (storeId: string, product: Product) => void;
     updatePrototypeProduct: (storeId: string, product: Product) => void;
     deletePrototypeProduct: (storeId: string, productId: string) => void;
@@ -27,6 +28,8 @@ interface PrototypeDataContextType {
     addDeliveryReviewToOrder: (orderId: string, rating: number, review: string) => void;
     updatePrototypeStore: (updates: Partial<Store>) => void;
     updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => void;
+    addPrototypeDelivery: (driver: DeliveryPersonnel) => void;
+    deletePrototypeDelivery: (driverId: string) => void;
     clearPrototypeNotifications: () => void;
     getOrdersByStore: (storeId: string) => Order[];
     getOrdersByUser: (userId: string) => Order[];
@@ -175,7 +178,21 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
 
     const addPrototypeStore = (store: Store) => {
         setStores(prevStores => {
-            const updatedStores = [...prevStores, store];
+            const existingIndex = prevStores.findIndex(s => s.id === store.id);
+            let updatedStores;
+            if (existingIndex > -1) {
+                updatedStores = prevStores.map((s, i) => i === existingIndex ? store : s);
+            } else {
+                updatedStores = [...prevStores, store];
+            }
+            updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
+            return updatedStores;
+        });
+    };
+
+    const deletePrototypeStore = (storeId: string) => {
+        setStores(prevStores => {
+            const updatedStores = prevStores.filter(s => s.id !== storeId);
             updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
             return updatedStores;
         });
@@ -197,6 +214,20 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             return updatedStores;
         });
     };
+
+    const addPrototypeDelivery = (driver: DeliveryPersonnel) => {
+      // In prototype, delivery drivers are not stored in a list, we just update the main one or add temporarily
+      // This logic needs to be more robust if we want multi-driver prototype
+      setPrototypeDelivery(driver);
+      updateSessionStorage(PROTOTYPE_DELIVERY_KEY, driver);
+    }
+    
+    const deletePrototypeDelivery = (driverId: string) => {
+        // This is a placeholder as we only have one main prototype driver
+        if (prototypeDelivery.id === driverId) {
+            console.warn("Cannot delete the main prototype driver.");
+        }
+    }
 
     const updatePrototypeDelivery = (updates: Partial<DeliveryPersonnel>) => {
         setPrototypeDelivery(prev => {
@@ -349,6 +380,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         updatePrototypeOrder,
         addPrototypeOrder,
         addPrototypeStore,
+        deletePrototypeStore,
         addPrototypeProduct,
         updatePrototypeProduct,
         deletePrototypeProduct,
@@ -356,6 +388,8 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         addDeliveryReviewToOrder,
         updatePrototypeStore,
         updatePrototypeDelivery,
+        addPrototypeDelivery,
+        deletePrototypeDelivery,
         clearPrototypeNotifications,
         getOrdersByStore,
         getOrdersByUser,
@@ -380,5 +414,3 @@ export const usePrototypeData = () => {
     }
     return context;
 };
-
-    

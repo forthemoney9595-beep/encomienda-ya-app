@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -10,20 +11,22 @@ import Image from 'next/image';
 import type { Store } from '@/lib/placeholder-data';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useRouter } from 'next/navigation';
 
 interface StoresListProps {
   stores: Store[];
   onStatusUpdate: (storeId: string, status: 'Aprobado' | 'Rechazado') => void;
+  onEdit: (store: Store) => void;
+  onDelete: (storeId: string) => void;
 }
 
-export function StoresList({ stores, onStatusUpdate }: StoresListProps) {
+export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresListProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
     setIsUpdating(storeId);
-    // The onStatusUpdate is passed from the parent and will handle both prototype and real data
     await onStatusUpdate(storeId, status);
     setIsUpdating(null);
   };
@@ -82,36 +85,52 @@ export function StoresList({ stores, onStatusUpdate }: StoresListProps) {
                   <Badge variant={getStatusVariant(store.status)}>{store.status}</Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" disabled={isUpdating === store.id}>
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {store.status === 'Pendiente' && (
-                        <>
-                          <DropdownMenuItem onClick={() => handleStatusUpdate(store.id, 'Aprobado')}>
-                            <CheckCircle className="mr-2 h-4 w-4" />
-                            Aprobar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={() => handleStatusUpdate(store.id, 'Rechazado')}>
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Rechazar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                        </>
-                      )}
-                      <DropdownMenuItem onClick={() => alert('Editar: Próximamente!')}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onClick={() => alert('Eliminar: Próximamente!')}>
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Eliminar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <AlertDialog>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" disabled={isUpdating === store.id}>
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {store.status === 'Pendiente' && (
+                          <>
+                            <DropdownMenuItem onClick={() => handleStatusUpdate(store.id, 'Aprobado')}>
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Aprobar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleStatusUpdate(store.id, 'Rechazado')}>
+                              <XCircle className="mr-2 h-4 w-4" />
+                              Rechazar
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        <DropdownMenuItem onClick={() => onEdit(store)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                         <AlertDialogTrigger asChild>
+                           <DropdownMenuItem className="text-destructive">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Eliminar
+                           </DropdownMenuItem>
+                         </AlertDialogTrigger>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Estás seguro que quieres eliminar {store.name}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta acción no se puede deshacer. Se eliminará permanentemente la tienda y todos sus productos.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => onDelete(store.id)}>Sí, eliminar</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </TableCell>
               </TableRow>
             ))}

@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
+import { ManageDriverDialog } from './manage-driver-dialog';
 
 
 export default function AdminDeliveryPage() {
@@ -19,8 +20,12 @@ export default function AdminDeliveryPage() {
   const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const { prototypeDelivery, updatePrototypeDelivery, loading: prototypeLoading } = usePrototypeData();
+  const { prototypeDelivery, updatePrototypeDelivery, loading: prototypeLoading, addPrototypeDelivery, deletePrototypeDelivery } = usePrototypeData();
   const isPrototypeAdmin = user?.uid.startsWith('proto-');
+  
+  const [isManageDialogOpen, setManageDialogOpen] = useState(false);
+  const [editingDriver, setEditingDriver] = useState<DeliveryPersonnel | null>(null);
+
 
   const fetchPersonnel = async () => {
     setLoading(true);
@@ -40,21 +45,16 @@ export default function AdminDeliveryPage() {
   };
   
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && !prototypeLoading) {
       fetchPersonnel();
     }
-  }, [user, authLoading, prototypeDelivery]);
+  }, [user, authLoading, prototypeLoading, prototypeDelivery]);
 
 
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
     try {
-        if (personnelId === prototypeDelivery.id) {
-            const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
-            updatePrototypeDelivery({ status: newStatus });
-        } else {
-            await updateDeliveryPersonnelStatus(personnelId, status);
-            await fetchPersonnel(); // Refetch for real users
-        }
+        const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
+        updatePrototypeDelivery({ id: personnelId, status: newStatus });
         
         toast({
             title: '¡Éxito!',
@@ -70,10 +70,43 @@ export default function AdminDeliveryPage() {
     }
   };
 
+  const handleSaveDriver = (driverData: DeliveryPersonnel) => {
+    addPrototypeDelivery(driverData);
+    toast({
+      title: editingDriver ? 'Repartidor Actualizado' : 'Repartidor Añadido',
+      description: `Los datos de ${driverData.name} han sido guardados.`,
+    });
+    setManageDialogOpen(false);
+  };
+
+  const handleDeleteDriver = (driverId: string) => {
+    deletePrototypeDelivery(driverId);
+    toast({
+      title: 'Repartidor Eliminado',
+      variant: 'destructive',
+    });
+  };
+
+  const openDialogForCreate = () => {
+    setEditingDriver(null);
+    setManageDialogOpen(true);
+  };
+
+  const openDialogForEdit = (driver: DeliveryPersonnel) => {
+    setEditingDriver(driver);
+    setManageDialogOpen(true);
+  };
+
   return (
     <div className="container mx-auto">
+      <ManageDriverDialog
+        isOpen={isManageDialogOpen}
+        setIsOpen={setManageDialogOpen}
+        onSave={handleSaveDriver}
+        driver={editingDriver}
+      />
       <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto.">
-         <Button onClick={() => alert('Próximamente: Añadir nuevo conductor')}>
+         <Button onClick={openDialogForCreate}>
            <PlusCircle className="mr-2 h-4 w-4" />
            Agregar Nuevo Conductor
          </Button>
@@ -87,7 +120,12 @@ export default function AdminDeliveryPage() {
             </div>
         </div>
       ) : (
-        <DeliveryPersonnelList personnel={personnel} onStatusUpdate={handleStatusUpdate} />
+        <DeliveryPersonnelList
+          personnel={personnel}
+          onStatusUpdate={handleStatusUpdate}
+          onEdit={openDialogForEdit}
+          onDelete={handleDeleteDriver}
+        />
       )}
     </div>
   );

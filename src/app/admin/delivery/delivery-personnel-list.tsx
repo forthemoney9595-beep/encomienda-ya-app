@@ -15,6 +15,8 @@ import { PersonnelActions } from './personnel-actions';
 interface DeliveryPersonnelListProps {
     personnel: DeliveryPersonnel[];
     onStatusUpdate: (personnelId: string, status: 'approved' | 'rejected') => void;
+    onEdit: (driver: DeliveryPersonnel) => void;
+    onDelete: (driverId: string) => void;
 }
 
 const getStatusVariant = (status: string) => {
@@ -31,7 +33,7 @@ const getStatusVariant = (status: string) => {
     }
 };
 
-export function DeliveryPersonnelList({ personnel, onStatusUpdate }: DeliveryPersonnelListProps) {
+export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDelete }: DeliveryPersonnelListProps) {
   
   if (!personnel) {
     return null;
@@ -81,7 +83,12 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate }: DeliveryPer
                       <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <PersonnelActions driver={driver} onStatusUpdate={onStatusUpdate} />
+                      <PersonnelActions 
+                        driver={driver} 
+                        onStatusUpdate={onStatusUpdate}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                      />
                     </TableCell>
                   </TableRow>
                 ))
