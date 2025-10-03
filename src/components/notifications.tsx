@@ -15,7 +15,7 @@ import { Badge } from './ui/badge';
 import { usePrototypeData } from '@/context/prototype-data-context';
 
 export function Notifications() {
-  const { prototypeNotifications } = usePrototypeData();
+  const { prototypeNotifications, clearPrototypeNotifications } = usePrototypeData();
 
   return (
     <DropdownMenu>
@@ -48,7 +48,7 @@ export function Notifications() {
           ))
         )}
          <DropdownMenuSeparator />
-         <DropdownMenuItem className='justify-center text-sm text-muted-foreground hover:cursor-pointer'>
+         <DropdownMenuItem onClick={clearPrototypeNotifications} className='justify-center text-sm text-muted-foreground hover:cursor-pointer'>
             Marcar todas como leídas
         </DropdownMenuItem>
       </DropdownMenuContent>

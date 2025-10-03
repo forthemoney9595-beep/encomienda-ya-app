@@ -25,6 +25,7 @@ interface PrototypeDataContextType {
     addDeliveryReviewToOrder: (orderId: string, rating: number, review: string) => void;
     updatePrototypeStore: (updates: Partial<Store>) => void;
     updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => void;
+    clearPrototypeNotifications: () => void;
     getOrdersByStore: (storeId: string) => Order[];
     getOrdersByUser: (userId: string) => Order[];
     getAvailableOrdersForDelivery: () => Order[];
@@ -110,6 +111,11 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
             return updatedNotifications;
         });
     }
+
+    const clearPrototypeNotifications = () => {
+        setNotifications([]);
+        updateSessionStorage(PROTOTYPE_NOTIFICATIONS_KEY, []);
+    };
 
     const updatePrototypeOrder = (orderId: string, updates: Partial<Order>) => {
         setOrders(prevOrders => {
@@ -323,6 +329,7 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         addDeliveryReviewToOrder,
         updatePrototypeStore,
         updatePrototypeDelivery,
+        clearPrototypeNotifications,
         getOrdersByStore,
         getOrdersByUser,
         getAvailableOrdersForDelivery,
