@@ -7,6 +7,7 @@ import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 
 /**
  * Fetches stores from Firestore. This function is for real data and is not used in pure prototype mode.
+ * @param db The Firestore instance.
  * @param all - If true, fetches all stores regardless of status. Otherwise, fetches only 'Aprobado' stores.
  */
 export async function getStores(db: Firestore, all: boolean = false): Promise<Store[]> {
@@ -45,6 +46,7 @@ export async function getStores(db: Firestore, all: boolean = false): Promise<St
 
 /**
  * Fetches a single store by its ID from Firestore. This function is for real data.
+ * @param db The Firestore instance.
  * @param id The ID of the store to fetch.
  */
 export async function getStoreById(db: Firestore, id: string): Promise<Store | null> {
@@ -78,6 +80,7 @@ export async function getStoreById(db: Firestore, id: string): Promise<Store | n
 
 /**
  * Fetches all products for a given store ID from its 'products' subcollection in Firestore.
+ * @param db The Firestore instance.
  * @param storeId The ID of the store whose products to fetch.
  */
 export async function getProductsByStoreId(db: Firestore, storeId: string): Promise<Product[]> {
@@ -110,6 +113,7 @@ export async function getProductsByStoreId(db: Firestore, storeId: string): Prom
 /**
  * Adds a new product to a store's 'products' subcollection.
  * If the product's category is new, it adds it to the store's `productCategories` array.
+ * @param db The Firestore instance.
  * @param storeId The ID of the store.
  * @param productData The data for the new product.
  * @param currentCategories The current list of categories for the store.
@@ -238,6 +242,7 @@ export async function getDeliveryPersonById(db: Firestore, id: string): Promise<
 
 /**
  * Updates the status of a store in Firestore.
+ * @param db The Firestore instance.
  * @param storeId The ID of the store to update.
  * @param status The new status ('Aprobado' or 'Rechazado').
  */
@@ -253,6 +258,7 @@ export async function updateStoreStatus(db: Firestore, storeId: string, status: 
 
 /**
  * Updates store data in Firestore.
+ * @param db The Firestore instance.
  * @param storeId The ID of the store to update.
  * @param storeData The data to update.
  */
@@ -273,6 +279,7 @@ export async function updateStoreData(db: Firestore, storeId: string, storeData:
 
 /**
  * Updates the status of a delivery person in Firestore.
+ * @param db The Firestore instance.
  * @param personnelId The ID of the delivery person to update.
  * @param status The new status ('approved' or 'rejected').
  */
