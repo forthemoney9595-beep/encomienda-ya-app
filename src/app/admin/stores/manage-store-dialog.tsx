@@ -48,7 +48,13 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
   useEffect(() => {
     if (isOpen) {
       if (store) {
-        form.reset(store);
+        form.reset({
+            name: store.name,
+            address: store.address,
+            horario: store.horario,
+            category: store.category,
+            status: store.status,
+        });
       } else {
         form.reset({ name: '', address: '', horario: '', category: 'comida-rapida', status: 'Pendiente' });
       }
