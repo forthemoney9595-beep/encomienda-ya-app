@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -12,13 +10,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
-import { useAuthInstance } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { createUserProfile, createStoreForUser } from '@/lib/user';
+import { createStoreForUser } from '@/lib/user';
 import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
-import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
@@ -34,7 +29,6 @@ export default function SignupStorePage() {
   const router = useRouter();
   const { loginForPrototype } = useAuth();
   const { addPrototypeStore } = usePrototypeData();
-  const auth = useAuthInstance();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,39 +42,21 @@ export default function SignupStorePage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // This form now only handles REAL store creation for any email.
-    // The prototype stores are pre-defined and loggable via the login page.
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      const user = userCredential.user;
+    // In prototype mode, we simulate the creation and redirect.
+    const newOwnerId = `proto-owner-${Date.now()}`;
+    const newStore = await createStoreForUser(newOwnerId, {
+        name: values.storeName,
+        category: values.category,
+        address: values.address,
+    });
+    
+    addPrototypeStore(newStore);
 
-      await createUserProfile(user.uid, {
-        name: values.ownerName,
-        email: values.email,
-        role: 'store',
-      });
-      
-      const newStore = await createStoreForUser(user.uid, {
-          name: values.storeName,
-          category: values.category,
-          address: values.address,
-      });
-
-      toast({
-        title: "¡Solicitud de Tienda Enviada!",
-        description: "Tu tienda ha sido registrada y está pendiente de aprobación por un administrador.",
-      });
-      router.push('/');
-    } catch (error: any) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title: "Error al Registrar la Tienda",
-        description: error.code === 'auth/email-already-in-use' 
-          ? "Este correo electrónico ya está en uso."
-          : "Ocurrió un error. Por favor, inténtalo de nuevo.",
-      });
-    }
+    toast({
+      title: "¡Solicitud de Tienda Enviada!",
+      description: "Tu tienda ha sido registrada y está pendiente de aprobación por un administrador.",
+    });
+    router.push('/');
   }
 
   return (

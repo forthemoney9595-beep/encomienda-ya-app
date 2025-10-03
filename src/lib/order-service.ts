@@ -1,9 +1,4 @@
-
-
 'use server';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
-import { getFirebase } from '@/lib/firebase';
-import { usePrototypeData } from '@/context/prototype-data-context';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem {
@@ -54,22 +49,18 @@ interface CreateOrderInput {
 }
 
 /**
- * Creates an order. If it's a prototype order, it generates the data object with coordinates.
- * If it's a real order, it saves it to Firestore.
+ * Creates an order. In prototype mode, it generates the data object with coordinates.
  * @param input The data for the new order.
  * @returns The created order object.
  */
 export async function createOrder(
    input: CreateOrderInput
 ): Promise<Order> {
-    const { firestore } = getFirebase();
     const { userId, customerName, items, shippingInfo, storeId, storeName, storeAddress } = input;
 
     if (items.length === 0) {
         throw new Error("No se puede crear un pedido sin artículos.");
     }
-    
-    const isPrototype = storeId.startsWith('proto-');
     
     // --- Geocoding and Fee Calculation Logic ---
     // In a real app, this would involve a geocoding API. Here we use static/random values.
@@ -95,148 +86,48 @@ export async function createOrder(
         deliveryPersonName: undefined,
     };
     
-    // --- Prototype Order Handling (Client-side via context) ---
-    if (isPrototype) {
-        return {
-            ...newOrderData,
-            id: `proto-order-${Date.now()}`,
-            createdAt: new Date(),
-        };
-    }
-
-    // --- Real Firestore Order Logic ---
-    const orderRef = await addDoc(collection(firestore, 'orders'), {
-        ...newOrderData,
-        createdAt: serverTimestamp(),
-    });
-    
-    const createdOrderDoc = await getDoc(orderRef);
-    const createdOrderData = createdOrderDoc.data();
-
+    // In pure prototype mode, we just return the object for the context to handle.
     return {
-      id: orderRef.id,
-      ...newOrderData,
-      createdAt: (createdOrderData!.createdAt as Timestamp)?.toDate() || new Date(),
+        ...newOrderData,
+        id: `proto-order-${Date.now()}`,
+        createdAt: new Date(),
     };
 }
 
 
 export async function getOrdersByUser(userId: string): Promise<Order[]> {
-    const { firestore } = getFirebase();
-    if (userId.startsWith('proto-')) {
-        console.warn('getOrdersByUser (server) called for prototype user. Data should be fetched from context on client.');
-        return [];
-    }
-    const ordersRef = collection(firestore, 'orders');
-    const q = query(ordersRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
-
-    const querySnapshot = await getDocs(q);
-    const orders: Order[] = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-        } as Order;
-    });
-
-    return orders;
+    console.warn('getOrdersByUser is a placeholder in prototype mode.');
+    return [];
 }
 
 /**
  * Updates the status of an order.
- * Prototype orders are handled entirely on the client via PrototypeDataContext.
  * @param orderId The ID of the order to update.
  * @param status The new status for the order.
  */
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
-  const { firestore } = getFirebase();
-  if (orderId.startsWith('proto-')) {
-    console.warn('updateOrderStatus server action called for a prototype order. This should be handled on the client.');
-    return;
-  }
-  try {
-    const orderRef = doc(firestore, 'orders', orderId);
-    await updateDoc(orderRef, { status });
-  } catch (error) {
-    console.error(`Error updating order status for ${orderId}:`, error);
-    throw error;
-  }
+  console.warn('updateOrderStatus is a placeholder in prototype mode.');
+  return;
 }
 
 /**
  * Assigns an order to a delivery person and updates its status.
- * Prototype logic is now handled on the client-side.
  * @param orderId The ID of the order to assign.
  * @param driverId The ID of the delivery person.
  * @param driverName The name of the delivery person.
  */
 export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
-    const { firestore } = getFirebase();
-    if (orderId.startsWith('proto-')) {
-        console.warn('assignOrderToDeliveryPerson server action called for a prototype order. This should be handled on the client.');
-        return;
-    }
-    
-  try {
-    const orderRef = doc(firestore, 'orders', orderId);
-    const orderSnap = await getDoc(orderRef);
-
-    if (!orderSnap.exists() || orderSnap.data().deliveryPersonId) {
-        throw new Error("El pedido ya no está disponible o ya ha sido asignado.");
-    }
-
-    await updateDoc(orderRef, {
-      status: 'En reparto',
-      deliveryPersonId: driverId,
-      deliveryPersonName: driverName,
-    });
-  } catch (error) {
-    console.error(`Error assigning order ${orderId} to driver ${driverId}:`, error);
-    throw error;
-  }
+    console.warn('assignOrderToDeliveryPerson is a placeholder in prototype mode.');
+    return;
 }
 
-// This function is now only for real data, prototype data is handled by the context
 export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
-  const { firestore } = getFirebase();
-  const ordersRef = collection(firestore, 'orders');
-  const q = query(
-    ordersRef,
-    where('status', '==', 'En preparación'),
-    where('deliveryPersonId', '==', null),
-    orderBy('createdAt', 'asc')
-  );
-
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    createdAt: (doc.data().createdAt as Timestamp).toDate(),
-  })) as Order[];
+  console.warn('getAvailableOrdersForDelivery is a placeholder in prototype mode.');
+  return [];
 }
 
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
-    const { firestore } = getFirebase();
-    if (orderId.startsWith('proto-')) {
-        console.warn('getOrderById server action called for a prototype order. This should be handled on the client.');
-        return null;
-    }
-
-    try {
-        const orderDoc = await getDoc(doc(firestore, 'orders', orderId));
-        if (orderDoc.exists()) {
-            const data = orderDoc.data();
-            return {
-                id: orderDoc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            } as Order;
-        }
-        return null;
-    } catch (error) {
-        console.error("Error fetching order by ID:", error);
-        return null;
-    }
+    console.warn('getOrderById is a placeholder in prototype mode.');
+    return null;
 }

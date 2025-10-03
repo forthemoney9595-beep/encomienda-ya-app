@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -13,8 +12,6 @@ import { Notifications } from '@/components/notifications';
 import { Cart } from '@/components/cart';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { User, LogOut, Shield, Loader2, ChevronsUpDown } from 'lucide-react';
-import { useAuthInstance } from '@/firebase';
-import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 
@@ -22,33 +19,14 @@ export function AppContent({ children }: { children: React.ReactNode }) {
     const { user, loading, isAdmin, logoutForPrototype } = useAuth();
     const router = useRouter();
     const [isClient, setIsClient] = useState(false);
-    const auth = useAuthInstance();
 
     useEffect(() => {
         setIsClient(true);
-        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-            if (event.reason && typeof event.reason.message === 'string' && event.reason.message.includes('MetaMask')) {
-                console.warn('Se detectó y se ignoró un error no crítico de MetaMask.', event.reason);
-                event.preventDefault();
-            }
-        };
-
-        window.addEventListener('unhandledrejection', handleUnhandledRejection);
-
-        return () => {
-            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-        };
     }, []);
 
     const handleSignOut = async () => {
-        try {
-            await signOut(auth);
-        } catch (error) {
-            console.error("Error signing out from Firebase:", error);
-        } finally {
-            logoutForPrototype();
-            router.push('/login');
-        }
+        logoutForPrototype();
+        router.push('/login');
     };
 
     return (

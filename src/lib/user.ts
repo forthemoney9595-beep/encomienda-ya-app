@@ -1,25 +1,7 @@
-
-
 'use client';
 
-import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
-import { getFirebase } from '@/lib/firebase';
+import type { UserProfile } from './placeholder-data';
 import { getPlaceholderImage } from './placeholder-images';
-import { FirestorePermissionError } from '@/firebase/errors';
-import { errorEmitter } from '@/firebase/error-emitter';
-
-// Define un tipo para los datos del perfil de usuario para mayor claridad y seguridad de tipos.
-type UserProfileData = {
-  name: string;
-  email: string;
-  role: 'buyer' | 'store' | 'delivery' | 'admin';
-  status?: 'pending' | 'approved' | 'rejected';
-  [key: string]: any; // Permite otras propiedades como storeName, vehicle, etc.
-};
-
-export interface UserProfile extends UserProfileData {
-    uid: string;
-}
 
 /**
  * Fetches a user profile from Firestore.
@@ -27,18 +9,10 @@ export interface UserProfile extends UserProfileData {
  * @returns The user profile object or null if not found.
  */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-    const { firestore } = getFirebase();
-    try {
-        const userDocRef = doc(firestore, 'users', uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-            return { uid, ...userDoc.data() } as UserProfile;
-        }
-        return null;
-    } catch (error) {
-        console.error("Error fetching user profile:", error);
-        return null;
-    }
+    // This is a placeholder for prototype mode. 
+    // In a real app, you would fetch this from Firestore.
+    console.warn("getUserProfile is a placeholder in prototype mode.");
+    return null;
 }
 
 
@@ -47,31 +21,11 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
  * @param uid El ID de usuario de Firebase Authentication.
  * @param data Los datos del perfil del usuario a guardar.
  */
-export async function createUserProfile(uid: string, data: UserProfileData) {
-  const { firestore } = getFirebase();
-  const userDocRef = doc(firestore, 'users', uid);
-    
-  const profileData: any = {
-    uid, 
-    ...data,
-    createdAt: serverTimestamp(),
-  };
-
-  if (data.role === 'delivery') {
-      profileData.status = 'pending';
-  }
-
-  // Use a non-blocking write with contextual error handling
-  setDoc(userDocRef, profileData).catch(error => {
-    errorEmitter.emit(
-      'permission-error',
-      new FirestorePermissionError({
-        path: userDocRef.path,
-        operation: 'write',
-        requestResourceData: profileData,
-      })
-    )
-  });
+export async function createUserProfile(uid: string, data: Partial<UserProfile>) {
+  // This is a placeholder for prototype mode. 
+  // In a real app, you would write this to Firestore.
+  console.warn("createUserProfile is a placeholder in prototype mode.");
+  return;
 }
 
 /**
@@ -80,40 +34,22 @@ export async function createUserProfile(uid: string, data: UserProfileData) {
  * @param storeData Data for the new store.
  */
 export async function createStoreForUser(ownerId: string, storeData: { name: string, category: string, address: string }) {
-    const { firestore } = getFirebase();
-    const storeCollectionRef = collection(firestore, 'stores');
-    const newStoreRef = doc(storeCollectionRef); // Create a new doc reference with an auto-generated ID
-
-    const fullStoreData = {
-        id: newStoreRef.id,
+    // This is a placeholder for prototype mode. 
+    // In a real app, you would write this to Firestore.
+    console.warn("createStoreForUser is a placeholder in prototype mode.");
+    const newStoreId = `proto-store-${Date.now()}`;
+    const newStore = {
+        id: newStoreId,
         ...storeData,
         ownerId: ownerId,
-        status: 'Pendiente', // All new stores require approval
-        createdAt: serverTimestamp(),
+        status: 'Pendiente' as const,
         productCategories: storeData.category ? [storeData.category] : [],
         imageUrl: getPlaceholderImage(storeData.name.replace(/\s/g, ''), 600, 400),
         imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
+        products: [],
+        horario: "9am - 5pm (simulado)"
     };
-
-    // Then, set the store document with error handling
-    setDoc(newStoreRef, fullStoreData).catch(error => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: newStoreRef.path,
-            operation: 'write',
-            requestResourceData: fullStoreData
-        }));
-    });
     
-    // Update the user's profile with the new storeId with error handling
-    const userDocRef = doc(firestore, 'users', ownerId);
-    const userUpdateData = { storeId: newStoreRef.id };
-    updateDoc(userDocRef, userUpdateData).catch(error => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: userDocRef.path,
-            operation: 'update',
-            requestResourceData: userUpdateData
-        }));
-    });
-
-    return { id: newStoreRef.id, ...storeData };
+    // The actual state update is handled by the context provider
+    return newStore;
 }

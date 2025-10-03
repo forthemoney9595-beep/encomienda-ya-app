@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -9,8 +8,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
-import { useAuthInstance } from '@/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -29,7 +26,6 @@ export default function LoginPage() {
   const { toast } = useToast();
   const router = useRouter();
   const { loginForPrototype } = useAuth();
-  const auth = useAuthInstance();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -50,22 +46,12 @@ export default function LoginPage() {
         });
         router.push('/');
     } else {
-      // Try real Firebase login
-      try {
-        await signInWithEmailAndPassword(auth, values.email, values.password);
-        toast({
-          title: "¡Inicio de Sesión Exitoso!",
-          description: "Bienvenido de nuevo.",
-        });
-        router.push('/');
-      } catch (error: any) {
-        console.error(error);
-        toast({
-          variant: "destructive",
-          title: "Error al Iniciar Sesión",
-          description: "El correo electrónico o la contraseña son incorrectos. Por favor, inténtalo de nuevo.",
-        });
-      }
+      // Handle non-prototype users if necessary, for now show error
+      toast({
+        variant: "destructive",
+        title: "Error al Iniciar Sesión",
+        description: "En modo prototipo, solo puedes usar las cuentas de prueba.",
+      });
     }
   }
 

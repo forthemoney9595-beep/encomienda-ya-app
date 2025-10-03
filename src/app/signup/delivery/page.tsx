@@ -9,11 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
-import { useAuthInstance } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { createUserProfile } from '@/lib/user';
-import { cn } from '@/lib/utils';
 import { Bike, Car, Motorcycle } from 'lucide-react';
 
 const formSchema = z.object({
@@ -28,7 +24,6 @@ const formSchema = z.object({
 export default function SignupDeliveryPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const auth = useAuthInstance();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -39,32 +34,12 @@ export default function SignupDeliveryPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      
-      await createUserProfile(userCredential.user.uid, {
-        name: values.name,
-        email: values.email,
-        role: 'delivery',
-        status: 'pending',
-        vehicle: values.vehicleType,
-      });
-
-      toast({
-        title: "¡Solicitud Enviada!",
-        description: "Tu cuenta de repartidor ha sido creada y está pendiente de aprobación.",
-      });
-      router.push('/');
-    } catch (error: any) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title: "Error al Crear la Cuenta",
-        description: error.code === 'auth/email-already-in-use' 
-          ? "Este correo electrónico ya está en uso."
-          : "Ocurrió un error. Por favor, inténtalo de nuevo.",
-      });
-    }
+    // In prototype mode, just show a success message and redirect
+    toast({
+      title: "¡Solicitud Enviada (Simulado)!",
+      description: "Tu cuenta de repartidor ha sido creada y está pendiente de aprobación. Puedes usar las cuentas de prueba para iniciar sesión.",
+    });
+    router.push('/login');
   }
 
   return (

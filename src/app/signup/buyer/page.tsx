@@ -9,10 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
-import { useAuthInstance } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { createUserProfile } from '@/lib/user';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -23,7 +20,6 @@ const formSchema = z.object({
 export default function SignupBuyerPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const auth = useAuthInstance();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -34,30 +30,12 @@ export default function SignupBuyerPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      
-      await createUserProfile(userCredential.user.uid, {
-        name: values.name,
-        email: values.email,
-        role: 'buyer',
-      });
-
-      toast({
-        title: "¡Cuenta Creada!",
-        description: "Tu cuenta de comprador ha sido creada exitosamente.",
-      });
-      router.push('/');
-    } catch (error: any) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title: "Error al Crear la Cuenta",
-        description: error.code === 'auth/email-already-in-use' 
-          ? "Este correo electrónico ya está en uso."
-          : "Ocurrió un error. Por favor, inténtalo de nuevo.",
-      });
-    }
+    // In prototype mode, just show a success message and redirect
+    toast({
+      title: "¡Cuenta Creada (Simulado)!",
+      description: "Tu cuenta de comprador ha sido creada. Ahora puedes iniciar sesión con las cuentas de prueba.",
+    });
+    router.push('/login');
   }
 
   return (
