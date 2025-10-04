@@ -28,7 +28,7 @@ interface PrototypeDataContextType {
     deletePrototypeProduct: (storeId: string, productId: string) => Promise<void>;
     addReviewToProduct: (storeId: string, productId: string, rating: number, reviewText: string) => Promise<void>;
     addDeliveryReviewToOrder: (orderId: string, rating: number, review: string) => Promise<void>;
-    updatePrototypeStore: (updates: Partial<Store>) => Promise<void>;
+    updatePrototypeStore: (storeData: Store) => Promise<void>;
     updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => Promise<void>;
     addPrototypeDelivery: (driver: DeliveryPersonnel) => Promise<void>;
     deletePrototypeDelivery: (driverId: string) => Promise<void>;
@@ -227,19 +227,24 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
         });
     };
 
-    const updatePrototypeStore = (updates: Partial<Store>) => {
+    const updatePrototypeStore = (storeData: Store) => {
        return new Promise<void>(async (resolve) => {
-            const originalStore = stores.find(s => s.id === updates.id);
-            const updatedStores = stores.map(s => s.id === updates.id ? { ...s, ...updates} : s)
+            const originalStore = stores.find(s => s.id === storeData.id);
             
-            if (originalStore && updates.status && originalStore.status !== updates.status && updates.status === 'Aprobado') {
-                await addNotification({
-                    title: "¡Tu tienda ha sido aprobada!",
-                    description: `¡Felicidades! La tienda "${originalStore.name}" ya está visible en la plataforma.`
-                });
-            }
-            setStores(updatedStores);
-            updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
+            setStores(prevStores => {
+                const updatedStores = prevStores.map(s => s.id === storeData.id ? storeData : s)
+                updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
+
+                if (originalStore && storeData.status && originalStore.status !== storeData.status && storeData.status === 'Aprobado') {
+                    addNotification({
+                        title: "¡Tu tienda ha sido aprobada!",
+                        description: `¡Felicidades! La tienda "${originalStore.name}" ya está visible en la plataforma.`
+                    });
+                }
+                
+                return updatedStores;
+            });
+            
             resolve();
         });
     };
