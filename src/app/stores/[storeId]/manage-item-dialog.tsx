@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -274,5 +275,3 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     </Dialog>
   );
 }
-
-    
