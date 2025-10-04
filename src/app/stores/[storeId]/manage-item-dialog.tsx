@@ -15,10 +15,10 @@ import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
-import { getPlaceholderImage } from "@/lib/placeholder-images";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
+import { uploadImage } from "@/lib/upload-service";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -95,25 +95,16 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       setIsUploading(true);
       setUploadProgress(0);
       
-      const interval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 95) {
-            clearInterval(interval);
-            return 100;
-          }
-          return prev + 10;
-        });
-      }, 150);
-
-      setTimeout(() => {
-        clearInterval(interval);
-        setUploadProgress(100);
-        const randomSeed = file.name + Date.now();
-        const placeholderUrl = getPlaceholderImage(randomSeed, 200, 200);
-        form.setValue('imageUrl', placeholderUrl, { shouldValidate: true });
-        toast({ title: '¡Imagen Subida! (Simulado)', description: 'La imagen de marcador de posición se ha establecido.' });
+      try {
+        const downloadURL = await uploadImage(file, setUploadProgress);
+        form.setValue('imageUrl', downloadURL, { shouldValidate: true });
+        toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
+      } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error de Subida', description: error.message || 'No se pudo subir la imagen.' });
+        setPreviewImage(product?.imageUrl || null);
+      } finally {
         setIsUploading(false);
-      }, 2000);
+      }
     }
   };
 
@@ -127,7 +118,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           description: values.description,
           price: values.price,
           category: values.category,
-          imageUrl: values.imageUrl || getPlaceholderImage(values.name.replace(/\s/g, '')),
+          imageUrl: values.imageUrl || '',
           rating: isEditing ? product.rating : 0,
           reviewCount: isEditing ? product.reviewCount : 0,
         };
@@ -246,11 +237,8 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                       <UploadCloud className="mr-2 h-4 w-4" />
                       {isUploading ? 'Subiendo...' : 'Seleccionar Archivo'}
                     </Button>
-                    {(isUploading || uploadProgress > 0) && (
-                      <div className="flex items-center gap-2">
-                        <Progress value={uploadProgress} className="w-full h-2" />
-                        <span className="text-xs">{Math.round(uploadProgress)}%</span>
-                      </div>
+                    {(isUploading) && (
+                      <Progress value={uploadProgress} className="w-full h-2" />
                     )}
                   </div>
                 </FormControl>

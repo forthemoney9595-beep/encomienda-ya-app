@@ -1,4 +1,3 @@
-
 'use client';
 import { getFirebase } from '@/firebase/index';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from 'firebase/storage';
@@ -25,7 +24,7 @@ export async function uploadImage(
     const { app } = getFirebase();
     const storage = getStorage(app);
 
-    const storageRef = ref(storage, `product-images/${Date.now()}-${file.name}`);
+    const storageRef = ref(storage, `images/${Date.now()}-${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     return new Promise((resolve, reject) => {

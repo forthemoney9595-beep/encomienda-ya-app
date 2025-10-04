@@ -18,7 +18,6 @@ import { Loader2, UploadCloud, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
-import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { uploadImage } from '@/lib/upload-service';
 import { Progress } from '@/components/ui/progress';
 
