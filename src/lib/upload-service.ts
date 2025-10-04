@@ -1,6 +1,6 @@
 
 'use client';
-import { getFirebase } from '@/lib/firebase';
+import { getFirebase } from '@/firebase/index';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from 'firebase/storage';
 
 /**

@@ -106,25 +106,15 @@ export default function MyStorePage() {
             setIsUploading(true);
             setUploadProgress(0);
 
-            if (isPrototypeMode) {
-                setTimeout(() => {
-                    const randomSeed = file.name + Date.now();
-                    const placeholderUrl = getPlaceholderImage(randomSeed, 600, 400);
-                    form.setValue('imageUrl', placeholderUrl, { shouldValidate: true });
-                    toast({ title: '¡Imagen Subida! (Simulado)', description: 'La imagen de marcador de posición se ha establecido.' });
-                    setIsUploading(false);
-                }, 1500);
-            } else {
-                 try {
-                    const downloadURL = await uploadImage(file, setUploadProgress);
-                    form.setValue('imageUrl', downloadURL, { shouldValidate: true });
-                    toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
-                } catch (error: any) {
-                    toast({ variant: 'destructive', title: 'Error de Subida', description: error.message || 'No se pudo subir la imagen.' });
-                    setPreviewImage(store?.imageUrl || null);
-                } finally {
-                    setIsUploading(false);
-                }
+            try {
+                const downloadURL = await uploadImage(file, setUploadProgress);
+                form.setValue('imageUrl', downloadURL, { shouldValidate: true });
+                toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
+            } catch (error: any) {
+                toast({ variant: 'destructive', title: 'Error de Subida', description: error.message || 'No se pudo subir la imagen.' });
+                setPreviewImage(store?.imageUrl || null);
+            } finally {
+                setIsUploading(false);
             }
         }
     };
@@ -223,7 +213,7 @@ export default function MyStorePage() {
                                         <UploadCloud className="mr-2 h-4 w-4" />
                                         {isUploading ? 'Subiendo...' : 'Cambiar Imagen'}
                                     </Button>
-                                    {(isUploading || uploadProgress > 0) && (
+                                    {(isUploading) && (
                                         <Progress value={uploadProgress} className="w-full h-2" />
                                     )}
                                 </div>
