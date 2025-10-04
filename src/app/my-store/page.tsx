@@ -39,15 +39,12 @@ export default function MyStorePage() {
     
     const [store, setStore] = useState<Store | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isSavingText, setIsSavingText] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     
-    const isPrototypeMode = user?.uid.startsWith('proto-') ?? false;
-
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
         defaultValues: { name: "", address: "", horario: "", imageUrl: "" },
@@ -98,55 +95,39 @@ export default function MyStorePage() {
         setPreviewImage(URL.createObjectURL(file));
     };
 
-    const handleImageUpload = async () => {
-        if (!selectedFile || !store) {
-            toast({ variant: "destructive", title: "No hay imagen", description: "Por favor, selecciona una imagen primero." });
-            return;
-        }
+    async function onSubmit(values: FormData) {
+        if (!store || !user?.storeId) return;
         
-        setIsUploading(true);
+        setIsSubmitting(true);
         try {
-            const storageRef = ref(storage, `store-images/${user!.uid}/${Date.now()}-${selectedFile.name}`);
-            const uploadResult = await uploadBytes(storageRef, selectedFile);
-            const downloadURL = await getDownloadURL(uploadResult.ref);
+            let finalImageUrl = values.imageUrl || store.imageUrl;
 
-            await updatePrototypeStore({ ...store, imageUrl: downloadURL });
-            
-            toast({ title: '¡Imagen Subida!', description: 'La imagen de tu tienda ha sido actualizada.' });
-            
-            // Force a full page reload to get the new data cleanly
-            window.location.reload();
+            if (selectedFile) {
+                console.log("Intento de subida iniciado para la imagen de la tienda.");
+                const storageRef = ref(storage, `store-images/${user.uid}/${Date.now()}-${selectedFile.name}`);
+                const uploadResult = await uploadBytes(storageRef, selectedFile);
+                console.log("Subida completada, obteniendo URL...");
+                finalImageUrl = await getDownloadURL(uploadResult.ref);
+                console.log("URL obtenida con éxito.");
+            }
 
-        } catch (error) {
-            console.error("Error al subir la imagen:", error);
-            const errorMessage = error instanceof Error ? error.message : "No se pudo subir la imagen.";
-            toast({ variant: 'destructive', title: 'Error de Subida', description: `Causa: ${errorMessage}` });
-        } finally {
-            setIsUploading(false);
-        }
-    };
-
-    async function onTextSubmit(values: FormData) {
-        if (!store) return;
-        
-        setIsSavingText(true);
-        try {
-            const updatedStoreData = {
+            const updatedStoreData: Store = {
                 ...store,
                 name: values.name,
                 address: values.address,
                 horario: values.horario,
+                imageUrl: finalImageUrl,
             };
-
+            
             await updatePrototypeStore(updatedStoreData);
+            
             toast({ title: '¡Información Guardada!', description: 'Los detalles de tu tienda han sido guardados.' });
-            router.push(`/stores/${user!.storeId}`);
+            router.push(`/stores/${user.storeId}`);
+
         } catch (error) {
-            console.error("Error guardando datos de la tienda:", error);
-            const errorMessage = error instanceof Error ? error.message : "No se pudieron guardar los cambios.";
-            toast({ variant: 'destructive', title: 'Error al Guardar', description: errorMessage });
+            console.error("¡ERROR FATAL DURANTE LA SUBIDA O GUARDADO!", error);
         } finally {
-            setIsSavingText(false);
+            setIsSubmitting(false);
         }
     }
     
@@ -171,7 +152,7 @@ export default function MyStorePage() {
         <div className="container mx-auto">
             <PageHeader title="Editar Mi Tienda" description="Actualiza la información de tu negocio." />
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onTextSubmit)}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
                     <Card>
                         <CardHeader>
                             <CardTitle>Información General</CardTitle>
@@ -219,26 +200,22 @@ export default function MyStorePage() {
                                 )}
                                 <div className="flex gap-2 pt-2">
                                     <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isSavingText}>
+                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
                                         <UploadCloud className="mr-2 h-4 w-4" />
-                                        Seleccionar Imagen
+                                        Cambiar Imagen
                                     </Button>
-                                    {selectedFile && (
-                                        <Button type="button" onClick={handleImageUpload} disabled={isUploading || isSavingText}>
-                                            {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                            Subir Nueva Imagen
-                                        </Button>
-                                    )}
                                 </div>
+                                <FormDescription>
+                                    Selecciona una nueva imagen y luego haz clic en "Guardar Cambios".
+                                </FormDescription>
                                 <FormMessage />
                             </FormItem>
                         </CardContent>
                         <CardFooter>
-                            <Button type="submit" disabled={isSavingText || isUploading || !!selectedFile}>
-                                {isSavingText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                Guardar Cambios de Texto
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                Guardar Cambios
                             </Button>
-                            {selectedFile && <p className="ml-4 text-sm text-muted-foreground">Debes subir la nueva imagen antes de guardar otros cambios.</p>}
                         </CardFooter>
                     </Card>
                 </form>
@@ -246,4 +223,3 @@ export default function MyStorePage() {
         </div>
     );
 }
-

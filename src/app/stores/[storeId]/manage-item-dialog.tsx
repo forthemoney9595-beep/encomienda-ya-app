@@ -103,13 +103,17 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
   async function onSubmit(values: FormData) {
     if (!user || !user.storeId) return;
     setIsSubmitting(true);
-    let finalImageUrl = values.imageUrl;
 
     try {
+        let finalImageUrl = values.imageUrl;
+
         if (selectedFile) {
+            console.log("Intento de subida iniciado para la imagen de producto.");
             const storageRef = ref(storage, `product-images/${user.storeId}/${Date.now()}-${selectedFile.name}`);
             const uploadResult = await uploadBytes(storageRef, selectedFile);
+            console.log("Subida completada, obteniendo URL...");
             finalImageUrl = await getDownloadURL(uploadResult.ref);
+            console.log("URL obtenida con éxito.");
         }
 
         const productData: Product = {
@@ -127,13 +131,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         setIsOpen(false);
 
     } catch (error) {
-        console.error("Error al guardar el producto:", error);
-        const errorMessage = error instanceof Error ? error.message : "No se pudo guardar el producto.";
-        toast({
-            variant: "destructive",
-            title: "Error al Guardar",
-            description: errorMessage
-        });
+        console.error("¡ERROR FATAL DURANTE LA SUBIDA O GUARDADO!", error);
     } finally {
         setIsSubmitting(false);
     }
@@ -276,4 +274,3 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     </Dialog>
   );
 }
-
