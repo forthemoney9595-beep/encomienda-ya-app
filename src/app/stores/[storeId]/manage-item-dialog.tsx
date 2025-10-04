@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, PlusCircle, Edit, UploadCloud } from "lucide-react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
@@ -17,7 +17,10 @@ import Image from "next/image";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
-import { uploadImage } from "@/lib/upload-service";
+
+// --- Direct Firebase Storage Imports ---
+import { initializeFirebase } from '@/firebase';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -88,27 +91,52 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     }
   }, [product, form, isOpen, productCategories]);
 
-  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-        setIsUploading(true);
-        setUploadProgress(0);
-        setPreviewImage(URL.createObjectURL(file));
+    if (!file) return;
 
-        try {
-            const downloadURL = await uploadImage(file, (progress) => {
-              setUploadProgress(progress)
-            });
-            form.setValue('imageUrl', downloadURL, { shouldValidate: true });
-            toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error de Subida', description: error.message || 'No se pudo subir la imagen.' });
-            setPreviewImage(product?.imageUrl || null);
-        } finally {
-            setIsUploading(false);
-        }
+    if (!file.type.startsWith('image/')) {
+        toast({ variant: 'destructive', title: 'Archivo no válido', description: 'Por favor, selecciona un archivo de imagen.' });
+        return;
     }
-}, [form, toast, product?.imageUrl]);
+    if (file.size > 5 * 1024 * 1024) {
+        toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'La imagen no puede superar los 5MB.' });
+        return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    setPreviewImage(URL.createObjectURL(file));
+
+    const { firebaseApp } = initializeFirebase();
+    const storage = getStorage(firebaseApp);
+    const storageRef = ref(storage, `product-images/${Date.now()}-${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on('state_changed',
+        (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+        },
+        (error) => {
+            console.error("Upload error:", error);
+            toast({ variant: 'destructive', title: 'Error de Subida', description: "No se pudo subir la imagen. Revisa las reglas de Storage en Firebase." });
+            setIsUploading(false);
+            setPreviewImage(product?.imageUrl || null);
+        },
+        () => {
+            getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                form.setValue('imageUrl', downloadURL, { shouldValidate: true });
+                toast({ title: '¡Imagen Subida!', description: 'La URL de la imagen se ha actualizado.' });
+                setIsUploading(false);
+            }).catch(error => {
+                console.error("URL retrieval error:", error);
+                toast({ variant: 'destructive', title: 'Error de URL', description: "No se pudo obtener la URL de la imagen." });
+                setIsUploading(false);
+            });
+        }
+    );
+  };
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
@@ -151,7 +179,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 Rellena los detalles del producto y sube una imagen.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
               <FormField
                 control={form.control}
                 name="name"
@@ -237,7 +265,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                       disabled={isUploading || isSubmitting}
                     >
                       <UploadCloud className="mr-2 h-4 w-4" />
-                      {isUploading ? 'Subiendo...' : 'Seleccionar Archivo'}
+                      {isUploading ? `Subiendo... ${uploadProgress.toFixed(0)}%` : 'Seleccionar Archivo'}
                     </Button>
                     {(isUploading) && (
                       <Progress value={uploadProgress} className="w-full h-2" />
