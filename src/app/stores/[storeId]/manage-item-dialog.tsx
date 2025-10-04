@@ -91,9 +91,9 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-        setPreviewImage(URL.createObjectURL(file));
         setIsUploading(true);
         setUploadProgress(0);
+        setPreviewImage(URL.createObjectURL(file));
 
         try {
             const downloadURL = await uploadImage(file, setUploadProgress);
