@@ -44,6 +44,7 @@ export function MainNav() {
   const { setOpenMobile } = useSidebar();
   
   const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
+  const [isMyStoreOpen, setIsMyStoreOpen] = React.useState(pathname.startsWith('/my-store') || pathname.startsWith('/orders') || (user?.role === 'store' && user.storeId && pathname.includes(user.storeId)));
   const [isStoresOpen, setIsStoresOpen] = React.useState(
     pathname.startsWith('/stores') || pathname === '/'
   );
@@ -51,7 +52,7 @@ export function MainNav() {
   const isStoreOwner = user?.role === 'store';
   const isDelivery = user?.role === 'delivery';
   
-  const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname.includes(`/stores/${user.storeId}`);
+  const isOwnStoreProductsPageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
   
   const handleLinkClick = () => {
     setOpenMobile(false);
@@ -127,13 +128,13 @@ export function MainNav() {
       {!loading && isStoreOwner && (
         <>
           <Separator className="my-2" />
-          <Collapsible open={true} asChild>
+          <Collapsible open={isMyStoreOpen} onOpenChange={setIsMyStoreOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                  <SidebarMenuButton>
                     <Store />
                     <span>Mi Tienda</span>
-                    <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform rotate-180" />
+                    <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isMyStoreOpen && "rotate-180")} />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
               <CollapsibleContent>
@@ -148,7 +149,7 @@ export function MainNav() {
                   </SidebarMenuSubItem>
                   {user.storeId && (
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
+                      <SidebarMenuSubButton asChild isActive={isOwnStoreProductsPageActive}>
                         <Link href={`/stores/${user.storeId}`} onClick={handleLinkClick}>
                           <Package />
                           <span>Productos</span>
