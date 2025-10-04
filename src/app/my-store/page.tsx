@@ -19,9 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
 import { Progress } from '@/components/ui/progress';
-
-// --- Direct Firebase Storage Imports ---
-import { storage } from '@/firebase'; // Use the direct import
+import { storage } from '@/firebase';
 import { ref, uploadBytesResumable, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
 
 
@@ -104,13 +102,13 @@ export default function MyStorePage() {
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (!file) return;
+        if (!file || !user) return;
 
         if (!file.type.startsWith('image/')) {
             toast({ variant: 'destructive', title: 'Archivo no válido', description: 'Por favor, selecciona un archivo de imagen.' });
             return;
         }
-        if (file.size > 5 * 1024 * 1024) {
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
             toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'La imagen no puede superar los 5MB.' });
             return;
         }
@@ -119,7 +117,7 @@ export default function MyStorePage() {
         setUploadProgress(0);
         setPreviewImage(URL.createObjectURL(file));
 
-        const storageRef = ref(storage, `store-images/${user?.uid}/${Date.now()}-${file.name}`);
+        const storageRef = ref(storage, `store-images/${user.uid}/${Date.now()}-${file.name}`);
         const uploadTask = uploadBytesResumable(storageRef, file);
 
         uploadTask.on('state_changed',
@@ -128,8 +126,11 @@ export default function MyStorePage() {
                 setUploadProgress(progress);
             },
             (error) => {
+                setIsUploading(false);
+                setUploadProgress(0);
+                setPreviewImage(store?.imageUrl || null); // Revert preview
                 const firebaseError = error as FirebaseStorageError;
-                console.error("Firebase Storage Error:", firebaseError.code, firebaseError.message);
+                console.error("Upload failed:", firebaseError);
                 toast({
                     variant: "destructive",
                     title: "Error de Subida",
@@ -137,23 +138,16 @@ export default function MyStorePage() {
                         ? 'Permiso denegado. Revisa las reglas de Storage.' 
                         : firebaseError.message}`,
                 });
-                setPreviewImage(store?.imageUrl || null);
-                setIsUploading(false);
-                setUploadProgress(0);
             },
             () => {
                 getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
                     form.setValue('imageUrl', downloadURL, { shouldValidate: true });
                     toast({ title: '¡Imagen Subida!', description: 'La URL de la imagen se ha actualizado.' });
-                }).catch((error) => {
-                     toast({ variant: 'destructive', title: 'Error', description: 'No se pudo obtener la URL de la imagen.'});
-                }).finally(() => {
                     setIsUploading(false);
                 });
             }
         );
     };
-
 
     async function onSubmit(values: FormData) {
         if (!user?.storeId || !store) return;
