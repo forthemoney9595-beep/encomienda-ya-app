@@ -1,3 +1,4 @@
+
 'use client';
 import { initializeFirebase } from '@/firebase/index';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from 'firebase/storage';
@@ -36,6 +37,7 @@ export async function uploadImage(
             },
             (error) => {
                 console.error("Error en la subida:", error);
+                onProgress(0);
                 switch (error.code) {
                     case 'storage/unauthorized':
                         reject(new Error("No tienes permiso para subir archivos. Revisa las reglas de seguridad de Firebase Storage."));
@@ -48,14 +50,14 @@ export async function uploadImage(
                         break;
                 }
             },
-            async () => {
-                try {
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            () => {
+                getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                    onProgress(100);
                     resolve(downloadURL);
-                } catch (error) {
-                    console.error("Error al obtener la URL de descarga:", error);
-                    reject(new Error("No se pudo obtener la URL de la imagen subida."));
-                }
+                }).catch(error => {
+                     console.error("Error al obtener la URL de descarga:", error);
+                     reject(new Error("No se pudo obtener la URL de la imagen subida."));
+                });
             }
         );
     });

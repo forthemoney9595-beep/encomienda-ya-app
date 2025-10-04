@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, PlusCircle, Edit, UploadCloud } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
@@ -87,40 +87,41 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     }
   }, [product, form, isOpen, productCategories]);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setPreviewImage(URL.createObjectURL(file));
-      setIsUploading(true);
-      setUploadProgress(0);
-      
-      try {
-        const downloadURL = await uploadImage(file, setUploadProgress);
-        form.setValue('imageUrl', downloadURL, { shouldValidate: true });
-        toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
-      } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Error de Subida', description: error.message || 'No se pudo subir la imagen.' });
-        setPreviewImage(product?.imageUrl || null);
-      } finally {
-        setIsUploading(false);
+        setPreviewImage(URL.createObjectURL(file));
+        setIsUploading(true);
         setUploadProgress(0);
-      }
+
+        try {
+            const downloadURL = await uploadImage(file, (progress) => {
+                setUploadProgress(progress);
+            });
+            form.setValue('imageUrl', downloadURL, { shouldValidate: true });
+            toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error de Subida', description: error.message || 'No se pudo subir la imagen.' });
+            setPreviewImage(product?.imageUrl || null);
+        } finally {
+            setIsUploading(false);
+        }
     }
-  };
+}, [form, toast, product]);
 
   async function onSubmit(values: FormData) {
     setIsProcessing(true);
 
     try {
         const productData: Product = {
-          id: isEditing ? product.id : `prod-${Date.now()}`,
+          id: isEditing && product ? product.id : `prod-${Date.now()}`,
           name: values.name,
           description: values.description,
           price: values.price,
           category: values.category,
           imageUrl: values.imageUrl || '',
-          rating: isEditing ? product.rating : 0,
-          reviewCount: isEditing ? product.reviewCount : 0,
+          rating: isEditing && product ? product.rating : 0,
+          reviewCount: isEditing && product ? product.reviewCount : 0,
         };
 
         onSave(productData);

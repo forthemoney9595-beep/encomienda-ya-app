@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -98,7 +98,7 @@ export default function MyStorePage() {
         fetchStore();
     }, [user, authLoading, prototypeLoading, router, toast, form, isPrototypeMode, getPrototypeStoreById]);
 
-    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+     const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
             setPreviewImage(URL.createObjectURL(file));
@@ -106,7 +106,9 @@ export default function MyStorePage() {
             setUploadProgress(0);
 
             try {
-                const downloadURL = await uploadImage(file, setUploadProgress);
+                const downloadURL = await uploadImage(file, (progress) => {
+                    setUploadProgress(progress);
+                });
                 form.setValue('imageUrl', downloadURL, { shouldValidate: true });
                 toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
             } catch (error: any) {
@@ -114,10 +116,10 @@ export default function MyStorePage() {
                 setPreviewImage(store?.imageUrl || null);
             } finally {
                 setIsUploading(false);
-                setUploadProgress(0);
             }
         }
-    };
+    }, [form, toast, store]);
+
 
     async function onSubmit(values: FormData) {
         if (!user?.storeId || !store) return;
