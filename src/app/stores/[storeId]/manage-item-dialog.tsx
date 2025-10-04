@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { storage } from '@/firebase';
-import { ref, uploadBytes, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -35,7 +35,7 @@ interface ManageItemDialogProps {
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
     product: Product | null;
-    onSave: (data: Product) => void;
+    onSave: (data: Product) => Promise<void>;
     productCategories: string[];
 }
 
@@ -122,19 +122,21 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           rating: isEditing && product ? product.rating : 0,
           reviewCount: isEditing && product ? product.reviewCount : 0,
         };
-        onSave(productData);
+
+        // Corrected await here
+        await onSave(productData);
+        setIsOpen(false);
 
     } catch (error) {
         console.error("Error al guardar el producto:", error);
-        const firebaseError = error as FirebaseStorageError;
+        const errorMessage = error instanceof Error ? error.message : "No se pudo guardar el producto.";
         toast({
             variant: "destructive",
             title: "Error al Guardar",
-            description: firebaseError.message || "No se pudo guardar el producto.",
+            description: errorMessage
         });
     } finally {
         setIsSubmitting(false);
-        setIsOpen(false);
     }
   }
 

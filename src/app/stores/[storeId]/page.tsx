@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { notFound, useParams, useRouter } from 'next/navigation';
@@ -15,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Edit, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 
 function StoreDetailSkeleton() {
     return (
@@ -81,7 +81,6 @@ export default function StoreDetailPage() {
   const [loading, setLoading] = useState(true);
 
   const isOwner = user?.storeId === storeId;
-  const isPrototype = user?.uid.startsWith('proto-');
 
   // Fetch and update store data whenever prototype data changes
   useEffect(() => {
@@ -102,19 +101,10 @@ export default function StoreDetailPage() {
       const isEditing = store?.products.some(p => p.id === productData.id);
       
       try {
-          if (isPrototype) {
-               if (isEditing) {
-                  updatePrototypeProduct(storeId, productData);
-              } else {
-                  addPrototypeProduct(storeId, productData);
-              }
+           if (isEditing) {
+              updatePrototypeProduct(storeId, productData);
           } else {
-              // Real DB logic would go here
-              if (isEditing) {
-                  await updateProductInStore(storeId, productData.id, productData);
-              } else {
-                  await addProductToStore(storeId, productData, store?.productCategories || []);
-              }
+              addPrototypeProduct(storeId, productData);
           }
            
           toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
@@ -126,12 +116,7 @@ export default function StoreDetailPage() {
 
   const handleDeleteProduct = async (productId: string) => {
       try {
-          if (isPrototype) {
-              deletePrototypeProduct(storeId, productId);
-          } else {
-              // Real DB logic
-              await deleteProductFromStore(storeId, productId);
-          }
+          deletePrototypeProduct(storeId, productId);
           
           toast({
               title: "Producto Eliminado",

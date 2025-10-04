@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
 import { storage } from '@/firebase';
-import { ref, uploadBytes, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -121,37 +121,31 @@ export default function MyStorePage() {
         let finalImageUrl = values.imageUrl;
 
         try {
-            // Step 1: Upload image if a new one is selected
             if (selectedFile) {
                 const storageRef = ref(storage, `store-images/${user.uid}/${Date.now()}-${selectedFile.name}`);
                 await uploadBytes(storageRef, selectedFile);
                 finalImageUrl = await getDownloadURL(storageRef);
-                toast({ title: '¡Imagen Subida!', description: 'La nueva imagen se ha subido con éxito.' });
             }
 
-            // Step 2: Update store data (in context or DB)
             const updatedStoreData = {
                 ...store,
                 ...values,
-                imageUrl: finalImageUrl || store.imageUrl, // Use new URL or keep old one
+                imageUrl: finalImageUrl || store.imageUrl,
             };
 
-            if (isPrototypeMode) {
-                updatePrototypeStore(updatedStoreData);
-            } else {
-                // await updateStoreDataInDB(user.storeId, { ...values, imageUrl: finalImageUrl });
-            }
+            // Corrected await here
+            await updatePrototypeStore(updatedStoreData);
 
             toast({ title: '¡Tienda Actualizada!', description: 'La información de tu tienda ha sido guardada.' });
             router.push(`/stores/${user.storeId}`);
 
         } catch (error) {
             console.error("Error saving store:", error);
-            const firebaseError = error as FirebaseStorageError;
+            const errorMessage = error instanceof Error ? error.message : "No se pudieron guardar los cambios.";
             toast({ 
                 variant: 'destructive', 
                 title: 'Error al Guardar', 
-                description: firebaseError.message || 'No se pudieron guardar los cambios.' 
+                description: errorMessage 
             });
         } finally {
             setIsSubmitting(false);
