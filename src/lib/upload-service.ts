@@ -37,7 +37,7 @@ export async function uploadImage(
             },
             (error) => {
                 console.error("Error en la subida:", error);
-                onProgress(0);
+                onProgress(0); // Reset progress on error
                 switch (error.code) {
                     case 'storage/unauthorized':
                         reject(new Error("No tienes permiso para subir archivos. Revisa las reglas de seguridad de Firebase Storage."));
@@ -50,14 +50,15 @@ export async function uploadImage(
                         break;
                 }
             },
-            () => {
-                getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-                    onProgress(100);
+            async () => {
+                try {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    onProgress(100); // Ensure progress reaches 100% on completion
                     resolve(downloadURL);
-                }).catch(error => {
+                } catch (error) {
                      console.error("Error al obtener la URL de descarga:", error);
                      reject(new Error("No se pudo obtener la URL de la imagen subida."));
-                });
+                }
             }
         );
     });

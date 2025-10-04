@@ -106,9 +106,7 @@ export default function MyStorePage() {
             setUploadProgress(0);
 
             try {
-                const downloadURL = await uploadImage(file, (progress) => {
-                    setUploadProgress(progress);
-                });
+                const downloadURL = await uploadImage(file, setUploadProgress);
                 form.setValue('imageUrl', downloadURL, { shouldValidate: true });
                 toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
             } catch (error: any) {
@@ -118,7 +116,7 @@ export default function MyStorePage() {
                 setIsUploading(false);
             }
         }
-    }, [form, toast, store]);
+    }, [form, toast, store?.imageUrl]);
 
 
     async function onSubmit(values: FormData) {

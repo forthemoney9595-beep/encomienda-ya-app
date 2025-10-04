@@ -84,6 +84,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       }
       setUploadProgress(0);
       setIsUploading(false);
+      setIsProcessing(false);
     }
   }, [product, form, isOpen, productCategories]);
 
@@ -95,9 +96,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         setUploadProgress(0);
 
         try {
-            const downloadURL = await uploadImage(file, (progress) => {
-                setUploadProgress(progress);
-            });
+            const downloadURL = await uploadImage(file, setUploadProgress);
             form.setValue('imageUrl', downloadURL, { shouldValidate: true });
             toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
         } catch (error: any) {
@@ -107,7 +106,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
             setIsUploading(false);
         }
     }
-}, [form, toast, product]);
+}, [form, toast, product?.imageUrl]);
 
   async function onSubmit(values: FormData) {
     setIsProcessing(true);
