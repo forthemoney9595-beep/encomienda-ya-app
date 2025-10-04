@@ -22,7 +22,7 @@ import { Progress } from '@/components/ui/progress';
 
 // --- Direct Firebase Storage Imports ---
 import { initializeFirebase } from '@/firebase';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
 
 
 const formSchema = z.object({
@@ -102,7 +102,7 @@ export default function MyStorePage() {
         fetchStore();
     }, [user, authLoading, prototypeLoading, router, toast, form, isPrototypeMode, getPrototypeStoreById]);
 
-     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
@@ -119,34 +119,48 @@ export default function MyStorePage() {
         setUploadProgress(0);
         setPreviewImage(URL.createObjectURL(file));
 
-        const { firebaseApp } = initializeFirebase();
-        const storage = getStorage(firebaseApp);
-        const storageRef = ref(storage, `store-images/${Date.now()}-${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
+        try {
+            const { firebaseApp } = initializeFirebase();
+            const storage = getStorage(firebaseApp);
+            const storageRef = ref(storage, `store-images/${user?.uid}/${Date.now()}-${file.name}`);
+            const uploadTask = uploadBytesResumable(storageRef, file);
 
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(progress);
-            },
-            (error) => {
-                console.error("Upload error:", error);
-                toast({ variant: 'destructive', title: 'Error de Subida', description: "No se pudo subir la imagen. Revisa las reglas de Storage en Firebase." });
-                setIsUploading(false);
-                setPreviewImage(store?.imageUrl || null);
-            },
-            () => {
-                getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-                    form.setValue('imageUrl', downloadURL, { shouldValidate: true });
-                    toast({ title: '¡Imagen Subida!', description: 'La URL de la imagen se ha actualizado.' });
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    setUploadProgress(progress);
+                },
+                (error) => {
+                    // This is our new error handler
+                    const firebaseError = error as FirebaseStorageError;
+                    console.error("Firebase Storage Error:", firebaseError.code, firebaseError.message);
+                    toast({
+                        variant: "destructive",
+                        title: "Error de Subida",
+                        description: `Causa: ${firebaseError.code === 'storage/unauthorized' 
+                            ? 'Permiso denegado. Revisa las reglas de Storage.' 
+                            : firebaseError.message}`,
+                    });
+                    setPreviewImage(store?.imageUrl || null); // Revert preview on error
                     setIsUploading(false);
-                }).catch(error => {
-                    console.error("URL retrieval error:", error);
-                    toast({ variant: 'destructive', title: 'Error de URL', description: "No se pudo obtener la URL de la imagen." });
-                    setIsUploading(false);
-                });
-            }
-        );
+                    setUploadProgress(0);
+                },
+                () => {
+                    getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                        form.setValue('imageUrl', downloadURL, { shouldValidate: true });
+                        toast({ title: '¡Imagen Subida!', description: 'La URL de la imagen se ha actualizado.' });
+                    }).catch((error) => {
+                         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo obtener la URL de la imagen.'});
+                    }).finally(() => {
+                        setIsUploading(false);
+                    });
+                }
+            );
+        } catch(e) {
+            console.error("Upload initialization error:", e);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo iniciar la subida de la imagen.' });
+            setIsUploading(false);
+        }
     };
 
 
@@ -242,7 +256,7 @@ export default function MyStorePage() {
                                     <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" disabled={isUploading} />
                                     <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                                         <UploadCloud className="mr-2 h-4 w-4" />
-                                        {isUploading ? `Subiendo... ${uploadProgress.toFixed(0)}%` : 'Cambiar Imagen'}
+                                        {isUploading ? `Subiendo...` : 'Cambiar Imagen'}
                                     </Button>
                                     {(isUploading) && (
                                         <Progress value={uploadProgress} className="w-full h-2" />
