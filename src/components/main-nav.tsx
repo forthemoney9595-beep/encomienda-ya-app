@@ -11,6 +11,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import {
   Store,
@@ -40,6 +41,7 @@ import { cn } from '@/lib/utils';
 export function MainNav() {
   const pathname = usePathname();
   const { user, isAdmin, loading } = useAuth();
+  const { setOpenMobile } = useSidebar();
   
   const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
   const [isStoresOpen, setIsStoresOpen] = React.useState(
@@ -50,13 +52,16 @@ export function MainNav() {
   const isDelivery = user?.role === 'delivery';
   
   const isOwnStorePageActive = isStoreOwner && user?.storeId && pathname.includes(`/stores/${user.storeId}`);
-
+  
+  const handleLinkClick = () => {
+    setOpenMobile(false);
+  }
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Principal">
-          <Link href="/"><Home /><span>Principal</span></Link>
+          <Link href="/" onClick={handleLinkClick}><Home /><span>Principal</span></Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
 
@@ -65,12 +70,12 @@ export function MainNav() {
         <>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
-              <Link href="/orders"><ClipboardList /><span>Mis Pedidos</span></Link>
+              <Link href="/orders" onClick={handleLinkClick}><ClipboardList /><span>Mis Pedidos</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname.startsWith('/favorites')} tooltip="Mis Favoritos">
-              <Link href="/favorites"><Heart /><span>Mis Favoritos</span></Link>
+              <Link href="/favorites" onClick={handleLinkClick}><Heart /><span>Mis Favoritos</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </>
@@ -91,7 +96,7 @@ export function MainNav() {
             <SidebarMenuSub>
               <SidebarMenuSubItem>
                 <SidebarMenuSubButton asChild isActive={pathname === '/stores/food'}>
-                  <Link href="/stores/food">
+                  <Link href="/stores/food" onClick={handleLinkClick}>
                     <Utensils />
                     <span>Comida</span>
                   </Link>
@@ -99,7 +104,7 @@ export function MainNav() {
               </SidebarMenuSubItem>
               <SidebarMenuSubItem>
                 <SidebarMenuSubButton asChild isActive={pathname === '/stores/clothing'}>
-                  <Link href="/stores/clothing">
+                  <Link href="/stores/clothing" onClick={handleLinkClick}>
                     <Shirt />
                     <span>Ropa</span>
                   </Link>
@@ -107,7 +112,7 @@ export function MainNav() {
               </SidebarMenuSubItem>
               <SidebarMenuSubItem>
                 <SidebarMenuSubButton asChild isActive={pathname === '/stores/other'}>
-                  <Link href="/stores/other">
+                  <Link href="/stores/other" onClick={handleLinkClick}>
                     <ShoppingBag />
                     <span>Otros</span>
                   </Link>
@@ -135,7 +140,7 @@ export function MainNav() {
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders')}>
-                      <Link href="/orders">
+                      <Link href="/orders" onClick={handleLinkClick}>
                         <ClipboardList />
                         <span>Pedidos</span>
                       </Link>
@@ -144,7 +149,7 @@ export function MainNav() {
                   {user.storeId && (
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild isActive={isOwnStorePageActive}>
-                        <Link href={`/stores/${user.storeId}`}>
+                        <Link href={`/stores/${user.storeId}`} onClick={handleLinkClick}>
                           <Package />
                           <span>Productos</span>
                         </Link>
@@ -153,7 +158,7 @@ export function MainNav() {
                   )}
                    <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/categories')}>
-                      <Link href="/my-store/categories">
+                      <Link href="/my-store/categories" onClick={handleLinkClick}>
                         <Tag />
                         <span>Categorías</span>
                       </Link>
@@ -161,7 +166,7 @@ export function MainNav() {
                   </SidebarMenuSubItem>
                    <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/analytics')}>
-                      <Link href="/my-store/analytics">
+                      <Link href="/my-store/analytics" onClick={handleLinkClick}>
                         <BarChart3 />
                         <span>Analíticas</span>
                       </Link>
@@ -169,7 +174,7 @@ export function MainNav() {
                   </SidebarMenuSubItem>
                    <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/my-store'}>
-                      <Link href="/my-store">
+                      <Link href="/my-store" onClick={handleLinkClick}>
                         <Edit />
                         <span>Editar Tienda</span>
                       </Link>
@@ -187,12 +192,12 @@ export function MainNav() {
         <>
          <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === '/orders'} tooltip="Entregas">
-              <Link href="/orders"><Truck /><span>Entregas</span></Link>
+              <Link href="/orders" onClick={handleLinkClick}><Truck /><span>Entregas</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname.startsWith('/delivery/stats')} tooltip="Mis Estadísticas">
-              <Link href="/delivery/stats"><BarChart3 /><span>Mis Estadísticas</span></Link>
+              <Link href="/delivery/stats" onClick={handleLinkClick}><BarChart3 /><span>Mis Estadísticas</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </>
@@ -202,7 +207,7 @@ export function MainNav() {
 
        <SidebarMenuItem>
         <SidebarMenuButton asChild isActive={pathname.startsWith('/support')} tooltip="Soporte">
-          <Link href="/support"><LifeBuoy /><span>Soporte</span></Link>
+          <Link href="/support" onClick={handleLinkClick}><LifeBuoy /><span>Soporte</span></Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
 
@@ -224,7 +229,7 @@ export function MainNav() {
               <SidebarMenuSub>
                 <SidebarMenuSubItem>
                 <SidebarMenuSubButton asChild isActive={pathname === '/admin'}>
-                    <Link href="/admin">
+                    <Link href="/admin" onClick={handleLinkClick}>
                       <LayoutGrid />
                       <span>Panel</span>
                     </Link>
@@ -232,7 +237,7 @@ export function MainNav() {
                 </SidebarMenuSubItem>
                  <SidebarMenuSubItem>
                   <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/stores')}>
-                    <Link href="/admin/stores">
+                    <Link href="/admin/stores" onClick={handleLinkClick}>
                       <Store />
                       <span>Tiendas</span>
                     </Link>
@@ -240,7 +245,7 @@ export function MainNav() {
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
                   <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/delivery')}>
-                    <Link href="/admin/delivery">
+                    <Link href="/admin/delivery" onClick={handleLinkClick}>
                       <Truck />
                       <span>Reparto</span>
                     </Link>

@@ -72,30 +72,22 @@ function UserMenu() {
 function AppContentLayout({ children }: { children: React.ReactNode }) {
     const { user, loading } = useAuth();
     const [isClient, setIsClient] = useState(false);
-    const { setOpenMobile } = useSidebar();
 
     useEffect(() => {
         setIsClient(true);
     }, []);
 
-    // Close mobile sidebar on navigation
-    const handleLinkClick = () => {
-        setOpenMobile(false);
-    }
-
     return (
         <div className="flex min-h-screen">
             <Sidebar side="left" className="w-64" collapsible="icon">
                 <SidebarHeader>
-                    <Link href="/" className="flex items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center" onClick={handleLinkClick}>
+                    <Link href="/" className="flex items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center">
                         <Logo />
                         <span className="font-headline text-lg font-bold group-data-[collapsible=icon]:hidden">EncomiendaYA</span>
                     </Link>
                 </SidebarHeader>
                 <SidebarContent>
-                    <div onClick={handleLinkClick}>
-                        <MainNav />
-                    </div>
+                    <MainNav />
                 </SidebarContent>
                 {isClient && (
                      loading ? (
