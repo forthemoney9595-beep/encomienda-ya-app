@@ -133,7 +133,6 @@ export default function MyStorePage() {
                 imageUrl: finalImageUrl || store.imageUrl,
             };
 
-            // Corrected await here
             await updatePrototypeStore(updatedStoreData);
 
             toast({ title: '¡Tienda Actualizada!', description: 'La información de tu tienda ha sido guardada.' });

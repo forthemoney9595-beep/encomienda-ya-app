@@ -122,8 +122,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           rating: isEditing && product ? product.rating : 0,
           reviewCount: isEditing && product ? product.reviewCount : 0,
         };
-
-        // Corrected await here
+        
         await onSave(productData);
         setIsOpen(false);
 

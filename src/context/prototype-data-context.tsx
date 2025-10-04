@@ -18,21 +18,21 @@ interface PrototypeDataContextType {
     favoriteStores: string[];
     favoriteProducts: string[];
     loading: boolean;
-    updateUser: (updates: Partial<UserProfile>) => void;
-    updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => void;
-    addPrototypeOrder: (order: Order) => void;
-    addPrototypeStore: (store: Store) => void;
-    deletePrototypeStore: (storeId: string) => void;
-    addPrototypeProduct: (storeId: string, product: Product) => void;
-    updatePrototypeProduct: (storeId: string, product: Product) => void;
-    deletePrototypeProduct: (storeId: string, productId: string) => void;
-    addReviewToProduct: (storeId: string, productId: string, rating: number, reviewText: string) => void;
-    addDeliveryReviewToOrder: (orderId: string, rating: number, review: string) => void;
-    updatePrototypeStore: (updates: Partial<Store>) => void;
-    updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => void;
-    addPrototypeDelivery: (driver: DeliveryPersonnel) => void;
-    deletePrototypeDelivery: (driverId: string) => void;
-    clearPrototypeNotifications: () => void;
+    updateUser: (updates: Partial<UserProfile>) => Promise<void>;
+    updatePrototypeOrder: (orderId: string, updates: Partial<Order>) => Promise<void>;
+    addPrototypeOrder: (order: Order) => Promise<void>;
+    addPrototypeStore: (store: Store) => Promise<void>;
+    deletePrototypeStore: (storeId: string) => Promise<void>;
+    addPrototypeProduct: (storeId: string, product: Product) => Promise<void>;
+    updatePrototypeProduct: (storeId: string, product: Product) => Promise<void>;
+    deletePrototypeProduct: (storeId: string, productId: string) => Promise<void>;
+    addReviewToProduct: (storeId: string, productId: string, rating: number, reviewText: string) => Promise<void>;
+    addDeliveryReviewToOrder: (orderId: string, rating: number, review: string) => Promise<void>;
+    updatePrototypeStore: (updates: Partial<Store>) => Promise<void>;
+    updatePrototypeDelivery: (updates: Partial<DeliveryPersonnel>) => Promise<void>;
+    addPrototypeDelivery: (driver: DeliveryPersonnel) => Promise<void>;
+    deletePrototypeDelivery: (driverId: string) => Promise<void>;
+    clearPrototypeNotifications: () => Promise<void>;
     getOrdersByStore: (storeId: string) => Order[];
     getOrdersByUser: (userId: string) => Order[];
     getAvailableOrdersForDelivery: () => Order[];
@@ -124,221 +124,257 @@ export const PrototypeDataProvider = ({ children }: { children: ReactNode }) => 
     };
     
     const addNotification = (notification: Omit<Notification, 'id' | 'date'>) => {
-        setNotifications(prev => {
-            const newNotification: Notification = {
-                ...notification,
-                id: `notif-${Date.now()}`,
-                date: formatDistanceToNow(new Date(), { addSuffix: true, locale: es })
-            };
-            const updatedNotifications = [newNotification, ...prev];
-            updateSessionStorage(PROTOTYPE_NOTIFICATIONS_KEY, updatedNotifications);
-            return updatedNotifications;
+        return new Promise<void>((resolve) => {
+            setNotifications(prev => {
+                const newNotification: Notification = {
+                    ...notification,
+                    id: `notif-${Date.now()}`,
+                    date: formatDistanceToNow(new Date(), { addSuffix: true, locale: es })
+                };
+                const updatedNotifications = [newNotification, ...prev];
+                updateSessionStorage(PROTOTYPE_NOTIFICATIONS_KEY, updatedNotifications);
+                resolve();
+                return updatedNotifications;
+            });
         });
     }
 
     const clearPrototypeNotifications = () => {
-        setNotifications([]);
-        updateSessionStorage(PROTOTYPE_NOTIFICATIONS_KEY, []);
+        return new Promise<void>((resolve) => {
+            setNotifications([]);
+            updateSessionStorage(PROTOTYPE_NOTIFICATIONS_KEY, []);
+            resolve();
+        });
     };
     
     const updateUser = (updates: Partial<UserProfile>) => {
-        const currentUserEmail = sessionStorage.getItem('prototypeUserEmail');
-        if (!currentUserEmail) return;
+       return new Promise<void>((resolve) => {
+            const currentUserEmail = sessionStorage.getItem('prototypeUserEmail');
+            if (!currentUserEmail) return resolve();
 
-        setUsers(prevUsers => {
-            const userToUpdate = prevUsers[currentUserEmail];
-            if (!userToUpdate) return prevUsers;
-            
-            const updatedUser = { ...userToUpdate, ...updates };
-            const updatedUsers = { ...prevUsers, [currentUserEmail]: updatedUser };
-            
-            updateSessionStorage(PROTOTYPE_USERS_KEY, updatedUsers);
-            return updatedUsers;
-        });
+            setUsers(prevUsers => {
+                const userToUpdate = prevUsers[currentUserEmail];
+                if (!userToUpdate) return prevUsers;
+                
+                const updatedUser = { ...userToUpdate, ...updates };
+                const updatedUsers = { ...prevUsers, [currentUserEmail]: updatedUser };
+                
+                updateSessionStorage(PROTOTYPE_USERS_KEY, updatedUsers);
+                resolve();
+                return updatedUsers;
+            });
+       });
     };
 
     const updatePrototypeOrder = (orderId: string, updates: Partial<Order>) => {
-        setOrders(prevOrders => {
-            const originalOrder = prevOrders.find(o => o.id === orderId);
-            const updatedOrders = prevOrders.map(order => 
+        return new Promise<void>(async (resolve) => {
+            const originalOrder = orders.find(o => o.id === orderId);
+            const updatedOrders = orders.map(order => 
                 order.id === orderId ? { ...order, ...updates } : order
             );
             
             if (originalOrder && updates.status && originalOrder.status !== updates.status) {
-                 addNotification({
+                 await addNotification({
                     title: `Pedido Actualizado: #${orderId.substring(0,4)}`,
                     description: `Tu pedido de ${originalOrder.storeName} ahora está: ${updates.status}.`
                 });
             }
 
+            setOrders(updatedOrders);
             updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
-            return updatedOrders;
+            resolve();
         });
     };
 
     const addPrototypeOrder = (order: Order) => {
-        setOrders(prevOrders => {
-            const updatedOrders = [...prevOrders, order];
+        return new Promise<void>(async (resolve) => {
+            const updatedOrders = [...orders, order];
+            setOrders(updatedOrders);
             updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
-            return updatedOrders;
-        });
-         addNotification({
-            title: "Pedido Solicitado",
-            description: `Tu pedido a ${order.storeName} está pendiente de confirmación.`
+            await addNotification({
+                title: "Pedido Solicitado",
+                description: `Tu pedido a ${order.storeName} está pendiente de confirmación.`
+            });
+            resolve();
         });
     };
 
     const addPrototypeStore = (store: Store) => {
-        setStores(prevStores => {
-            const existingIndex = prevStores.findIndex(s => s.id === store.id);
-            let updatedStores;
-            if (existingIndex > -1) {
-                updatedStores = prevStores.map((s, i) => i === existingIndex ? store : s);
-            } else {
-                updatedStores = [...prevStores, store];
-            }
-            updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
-            return updatedStores;
+        return new Promise<void>((resolve) => {
+            setStores(prevStores => {
+                const existingIndex = prevStores.findIndex(s => s.id === store.id);
+                let updatedStores;
+                if (existingIndex > -1) {
+                    updatedStores = prevStores.map((s, i) => i === existingIndex ? store : s);
+                } else {
+                    updatedStores = [...prevStores, store];
+                }
+                updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
+                resolve();
+                return updatedStores;
+            });
         });
     };
 
     const deletePrototypeStore = (storeId: string) => {
-        setStores(prevStores => {
-            const updatedStores = prevStores.filter(s => s.id !== storeId);
-            updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
-            return updatedStores;
+        return new Promise<void>((resolve) => {
+            setStores(prevStores => {
+                const updatedStores = prevStores.filter(s => s.id !== storeId);
+                updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
+                resolve();
+                return updatedStores;
+            });
         });
     };
 
     const updatePrototypeStore = (updates: Partial<Store>) => {
-       setStores(prevStores => {
-            const originalStore = prevStores.find(s => s.id === updates.id);
-            const updatedStores = prevStores.map(s => s.id === updates.id ? { ...s, ...updates} : s)
+       return new Promise<void>(async (resolve) => {
+            const originalStore = stores.find(s => s.id === updates.id);
+            const updatedStores = stores.map(s => s.id === updates.id ? { ...s, ...updates} : s)
             
             if (originalStore && updates.status && originalStore.status !== updates.status && updates.status === 'Aprobado') {
-                addNotification({
+                await addNotification({
                     title: "¡Tu tienda ha sido aprobada!",
                     description: `¡Felicidades! La tienda "${originalStore.name}" ya está visible en la plataforma.`
                 });
             }
-
+            setStores(updatedStores);
             updateSessionStorage(PROTOTYPE_STORES_KEY, updatedStores);
-            return updatedStores;
+            resolve();
         });
     };
 
     const addPrototypeDelivery = (driver: DeliveryPersonnel) => {
-      // In prototype, delivery drivers are not stored in a list, we just update the main one or add temporarily
-      // This logic needs to be more robust if we want multi-driver prototype
-      setPrototypeDelivery(driver);
-      updateSessionStorage(PROTOTYPE_DELIVERY_KEY, driver);
+      return new Promise<void>((resolve) => {
+          setPrototypeDelivery(driver);
+          updateSessionStorage(PROTOTYPE_DELIVERY_KEY, driver);
+          resolve();
+      });
     }
     
     const deletePrototypeDelivery = (driverId: string) => {
-        // This is a placeholder as we only have one main prototype driver
-        if (prototypeDelivery.id === driverId) {
-            console.warn("Cannot delete the main prototype driver.");
-        }
+        return new Promise<void>((resolve) => {
+            if (prototypeDelivery.id === driverId) {
+                console.warn("Cannot delete the main prototype driver.");
+            }
+            resolve();
+        });
     }
 
     const updatePrototypeDelivery = (updates: Partial<DeliveryPersonnel>) => {
-        setPrototypeDelivery(prev => {
-            const updatedDelivery = { ...prev, ...updates };
-            if (prev.status !== updatedDelivery.status && updatedDelivery.status === 'Activo') {
-                 addNotification({
+        return new Promise<void>(async (resolve) => {
+            const updatedDelivery = { ...prototypeDelivery, ...updates };
+            if (prototypeDelivery.status !== updatedDelivery.status && updatedDelivery.status === 'Activo') {
+                 await addNotification({
                     title: "¡Tu cuenta ha sido aprobada!",
                     description: "Ya puedes empezar a aceptar entregas. ¡Bienvenido al equipo!"
                 });
             }
+            setPrototypeDelivery(updatedDelivery);
             updateSessionStorage(PROTOTYPE_DELIVERY_KEY, updatedDelivery);
-            return updatedDelivery;
+            resolve();
         });
     };
 
     const addPrototypeProduct = (storeId: string, product: Product) => {
-        setStores(prev => {
-            const newStores = prev.map(s => {
-                if (s.id === storeId) {
-                    const newProductCategories = [...s.productCategories];
-                    if (!newProductCategories.map(c => c.toLowerCase()).includes(product.category.toLowerCase())) {
-                        newProductCategories.push(product.category);
+        return new Promise<void>((resolve) => {
+            setStores(prev => {
+                const newStores = prev.map(s => {
+                    if (s.id === storeId) {
+                        const newProductCategories = [...s.productCategories];
+                        if (!newProductCategories.map(c => c.toLowerCase()).includes(product.category.toLowerCase())) {
+                            newProductCategories.push(product.category);
+                        }
+                        return { ...s, products: [...s.products, product], productCategories: newProductCategories };
                     }
-                    return { ...s, products: [...s.products, product], productCategories: newProductCategories };
-                }
-                return s;
+                    return s;
+                });
+                updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
+                resolve();
+                return newStores;
             });
-            updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
-            return newStores;
         });
     }
 
     const updatePrototypeProduct = (storeId: string, productData: Product) => {
-        setStores(prev => {
-            const newStores = prev.map(s => {
-                if (s.id === storeId) {
-                    const updatedProducts = s.products.map(p => p.id === productData.id ? productData : p);
-                     const newProductCategories = [...s.productCategories];
-                    if (!newProductCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
-                        newProductCategories.push(productData.category);
+        return new Promise<void>((resolve) => {
+            setStores(prev => {
+                const newStores = prev.map(s => {
+                    if (s.id === storeId) {
+                        const updatedProducts = s.products.map(p => p.id === productData.id ? productData : p);
+                         const newProductCategories = [...s.productCategories];
+                        if (!newProductCategories.map(c => c.toLowerCase()).includes(productData.category.toLowerCase())) {
+                            newProductCategories.push(productData.category);
+                        }
+                        return { ...s, products: updatedProducts, productCategories: newProductCategories };
                     }
-                    return { ...s, products: updatedProducts, productCategories: newProductCategories };
-                }
-                return s;
+                    return s;
+                });
+                updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
+                resolve();
+                return newStores;
             });
-            updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
-            return newStores;
         });
     }
 
     const deletePrototypeProduct = (storeId: string, productId: string) => {
-        setStores(prev => {
-            const newStores = prev.map(s => {
-                if (s.id === storeId) {
-                    const updatedProducts = s.products.filter(p => p.id !== productId);
-                    return { ...s, products: updatedProducts };
-                }
-                return s;
+        return new Promise<void>((resolve) => {
+            setStores(prev => {
+                const newStores = prev.map(s => {
+                    if (s.id === storeId) {
+                        const updatedProducts = s.products.filter(p => p.id !== productId);
+                        return { ...s, products: updatedProducts };
+                    }
+                    return s;
+                });
+                updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
+                resolve();
+                return newStores;
             });
-            updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
-            return newStores;
         });
     }
 
     const addReviewToProduct = (storeId: string, productId: string, rating: number, reviewText: string) => {
-        setStores(prevStores => {
-            const newStores = prevStores.map(store => {
-                if (store.id === storeId) {
-                    const newProducts = store.products.map(product => {
-                        if (product.id === productId) {
-                            const newReviewCount = product.reviewCount + 1;
-                            const newTotalRating = (product.rating * product.reviewCount) + rating;
-                            const newAverageRating = newTotalRating / newReviewCount;
-                            return {
-                                ...product,
-                                rating: newAverageRating,
-                                reviewCount: newReviewCount,
-                            };
-                        }
-                        return product;
-                    });
-                    return { ...store, products: newProducts };
-                }
-                return store;
+        return new Promise<void>((resolve) => {
+            setStores(prevStores => {
+                const newStores = prevStores.map(store => {
+                    if (store.id === storeId) {
+                        const newProducts = store.products.map(product => {
+                            if (product.id === productId) {
+                                const newReviewCount = product.reviewCount + 1;
+                                const newTotalRating = (product.rating * product.reviewCount) + rating;
+                                const newAverageRating = newTotalRating / newReviewCount;
+                                return {
+                                    ...product,
+                                    rating: newAverageRating,
+                                    reviewCount: newReviewCount,
+                                };
+                            }
+                            return product;
+                        });
+                        return { ...store, products: newProducts };
+                    }
+                    return store;
+                });
+                updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
+                resolve();
+                return newStores;
             });
-            updateSessionStorage(PROTOTYPE_STORES_KEY, newStores);
-            return newStores;
         });
     };
 
     const addDeliveryReviewToOrder = (orderId: string, rating: number, review: string) => {
-        setOrders(prevOrders => {
-            const updatedOrders = prevOrders.map(order => 
-                order.id === orderId 
-                    ? { ...order, deliveryRating: rating, deliveryReview: review } 
-                    : order
-            );
-            updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
-            return updatedOrders;
+        return new Promise<void>((resolve) => {
+            setOrders(prevOrders => {
+                const updatedOrders = prevOrders.map(order => 
+                    order.id === orderId 
+                        ? { ...order, deliveryRating: rating, deliveryReview: review } 
+                        : order
+                );
+                updateSessionStorage(PROTOTYPE_ORDERS_KEY, updatedOrders);
+                resolve();
+                return updatedOrders;
+            });
         });
     };
 
