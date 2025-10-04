@@ -14,12 +14,11 @@ import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { storage } from '@/firebase';
-import { ref, uploadBytesResumable, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -42,8 +41,7 @@ interface ManageItemDialogProps {
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -53,13 +51,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      price: 0,
-      category: "",
-      imageUrl: "",
-    },
+    defaultValues: { name: "", description: "", price: 0, category: "", imageUrl: "" },
   });
 
   const imageUrlValue = form.watch('imageUrl');
@@ -85,15 +77,14 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         });
         setPreviewImage(null);
       }
-      setUploadProgress(0);
-      setIsUploading(false);
+      setSelectedFile(null);
       setIsSubmitting(false);
     }
   }, [product, form, isOpen, productCategories]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     if (!file.type.startsWith('image/')) {
         toast({ variant: 'destructive', title: 'Archivo no válido', description: 'Por favor, selecciona un archivo de imagen.' });
@@ -104,62 +95,41 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         return;
     }
 
-    setIsUploading(true);
-    setUploadProgress(0);
+    setSelectedFile(file);
     setPreviewImage(URL.createObjectURL(file));
-
-    const storageRef = ref(storage, `product-images/${user.storeId}/${Date.now()}-${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on('state_changed',
-        (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(progress);
-        },
-        (error) => {
-            setIsUploading(false);
-            setUploadProgress(0);
-            setPreviewImage(product?.imageUrl || null);
-            const firebaseError = error as FirebaseStorageError;
-            console.error("Upload failed:", firebaseError);
-            toast({
-                variant: "destructive",
-                title: "Error de Subida",
-                description: `Causa: ${firebaseError.code === 'storage/unauthorized' 
-                    ? 'Permiso denegado. Revisa las reglas de Storage.' 
-                    : firebaseError.message}`,
-            });
-        },
-        () => {
-            getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-                form.setValue('imageUrl', downloadURL, { shouldValidate: true });
-                toast({ title: '¡Imagen Subida!', description: 'La URL de la imagen se ha actualizado.' });
-                setIsUploading(false);
-            });
-        }
-    );
   };
 
   async function onSubmit(values: FormData) {
+    if (!user || !user.storeId) return;
     setIsSubmitting(true);
+    let finalImageUrl = values.imageUrl;
+
     try {
+        if (selectedFile) {
+            const storageRef = ref(storage, `product-images/${user.storeId}/${Date.now()}-${selectedFile.name}`);
+            await uploadBytes(storageRef, selectedFile);
+            finalImageUrl = await getDownloadURL(storageRef);
+        }
+
         const productData: Product = {
           id: isEditing && product ? product.id : `prod-${Date.now()}`,
           name: values.name,
           description: values.description,
           price: values.price,
           category: values.category,
-          imageUrl: values.imageUrl || '',
+          imageUrl: finalImageUrl || '',
           rating: isEditing && product ? product.rating : 0,
           reviewCount: isEditing && product ? product.reviewCount : 0,
         };
         onSave(productData);
+
     } catch (error) {
         console.error("Error al guardar el producto:", error);
+        const firebaseError = error as FirebaseStorageError;
         toast({
             variant: "destructive",
             title: "Error al Guardar",
-            description: "No se pudo guardar el producto. Por favor, inténtalo de nuevo.",
+            description: firebaseError.message || "No se pudo guardar el producto.",
         });
     } finally {
         setIsSubmitting(false);
@@ -168,8 +138,8 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting && !isUploading) setIsOpen(open)}}>
-      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isSubmitting || isUploading) e.preventDefault() }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting) setIsOpen(open)}}>
+      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isSubmitting) e.preventDefault() }}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
@@ -255,20 +225,17 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                       ref={fileInputRef} 
                       onChange={handleFileChange}
                       accept="image/png, image/jpeg, image/gif"
-                      disabled={isUploading || isSubmitting}
+                      disabled={isSubmitting}
                     />
                     <Button 
                       type="button"
                       variant="outline" 
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading || isSubmitting}
+                      disabled={isSubmitting}
                     >
                       <UploadCloud className="mr-2 h-4 w-4" />
-                      {isUploading ? `Subiendo...` : 'Seleccionar Archivo'}
+                      Seleccionar Archivo
                     </Button>
-                    {(isUploading) && (
-                      <Progress value={uploadProgress} className="w-full h-2" />
-                    )}
                   </div>
                 </FormControl>
                 {(previewImage || imageUrlValue) && (
@@ -287,7 +254,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               </FormItem>
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting || isUploading || productCategories.length === 0}>
+              <Button type="submit" disabled={isSubmitting || productCategories.length === 0}>
                 {isSubmitting ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -307,3 +274,5 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     </Dialog>
   );
 }
+
+    

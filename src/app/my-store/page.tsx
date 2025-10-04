@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -18,10 +18,8 @@ import { Loader2, UploadCloud, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
-import { Progress } from '@/components/ui/progress';
 import { storage } from '@/firebase';
-import { ref, uploadBytesResumable, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
-
+import { ref, uploadBytes, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -42,8 +40,7 @@ export default function MyStorePage() {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [isUploading, setIsUploading] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     
@@ -78,7 +75,6 @@ export default function MyStorePage() {
                 storeData = getPrototypeStoreById(user.storeId!);
             } else {
                 // In real mode, you'd fetch from your DB
-                // storeData = await getStoreFromDB(user.storeId!);
             }
 
             if (storeData) {
@@ -102,7 +98,7 @@ export default function MyStorePage() {
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (!file || !user) return;
+        if (!file) return;
 
         if (!file.type.startsWith('image/')) {
             toast({ variant: 'destructive', title: 'Archivo no válido', description: 'Por favor, selecciona un archivo de imagen.' });
@@ -112,62 +108,50 @@ export default function MyStorePage() {
             toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'La imagen no puede superar los 5MB.' });
             return;
         }
-
-        setIsUploading(true);
-        setUploadProgress(0);
+        
+        setSelectedFile(file);
         setPreviewImage(URL.createObjectURL(file));
-
-        const storageRef = ref(storage, `store-images/${user.uid}/${Date.now()}-${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
-
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(progress);
-            },
-            (error) => {
-                setIsUploading(false);
-                setUploadProgress(0);
-                setPreviewImage(store?.imageUrl || null); // Revert preview
-                const firebaseError = error as FirebaseStorageError;
-                console.error("Upload failed:", firebaseError);
-                toast({
-                    variant: "destructive",
-                    title: "Error de Subida",
-                    description: `Causa: ${firebaseError.code === 'storage/unauthorized' 
-                        ? 'Permiso denegado. Revisa las reglas de Storage.' 
-                        : firebaseError.message}`,
-                });
-            },
-            () => {
-                getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-                    form.setValue('imageUrl', downloadURL, { shouldValidate: true });
-                    toast({ title: '¡Imagen Subida!', description: 'La URL de la imagen se ha actualizado.' });
-                    setIsUploading(false);
-                });
-            }
-        );
     };
 
     async function onSubmit(values: FormData) {
         if (!user?.storeId || !store) return;
         
         setIsSubmitting(true);
+        let finalImageUrl = values.imageUrl;
+
         try {
+            // Step 1: Upload image if a new one is selected
+            if (selectedFile) {
+                const storageRef = ref(storage, `store-images/${user.uid}/${Date.now()}-${selectedFile.name}`);
+                await uploadBytes(storageRef, selectedFile);
+                finalImageUrl = await getDownloadURL(storageRef);
+                toast({ title: '¡Imagen Subida!', description: 'La nueva imagen se ha subido con éxito.' });
+            }
+
+            // Step 2: Update store data (in context or DB)
+            const updatedStoreData = {
+                ...store,
+                ...values,
+                imageUrl: finalImageUrl || store.imageUrl, // Use new URL or keep old one
+            };
+
             if (isPrototypeMode) {
-                const updatedStoreData = {
-                    ...store,
-                    ...values
-                };
                 updatePrototypeStore(updatedStoreData);
             } else {
-                // await updateStoreDataInDB(user.storeId, { ...values });
+                // await updateStoreDataInDB(user.storeId, { ...values, imageUrl: finalImageUrl });
             }
+
             toast({ title: '¡Tienda Actualizada!', description: 'La información de tu tienda ha sido guardada.' });
             router.push(`/stores/${user.storeId}`);
 
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los cambios.' });
+            console.error("Error saving store:", error);
+            const firebaseError = error as FirebaseStorageError;
+            toast({ 
+                variant: 'destructive', 
+                title: 'Error al Guardar', 
+                description: firebaseError.message || 'No se pudieron guardar los cambios.' 
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -237,14 +221,11 @@ export default function MyStorePage() {
                                 <FormLabel>Imagen Principal de la Tienda</FormLabel>
                                 <FormControl>
                                 <div className="space-y-2">
-                                    <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" disabled={isUploading} />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                                    <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" disabled={isSubmitting} />
+                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
                                         <UploadCloud className="mr-2 h-4 w-4" />
-                                        {isUploading ? `Subiendo...` : 'Cambiar Imagen'}
+                                        Cambiar Imagen
                                     </Button>
-                                    {(isUploading) && (
-                                        <Progress value={uploadProgress} className="w-full h-2" />
-                                    )}
                                 </div>
                                 </FormControl>
                                 {(previewImage || imageUrlValue) && (
@@ -256,7 +237,7 @@ export default function MyStorePage() {
                             </FormItem>
                         </CardContent>
                         <CardFooter>
-                            <Button type="submit" disabled={isSubmitting || isUploading}>
+                            <Button type="submit" disabled={isSubmitting}>
                                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                 Guardar Cambios
                             </Button>
@@ -267,3 +248,5 @@ export default function MyStorePage() {
         </div>
     );
 }
+
+    
