@@ -114,6 +114,7 @@ export default function MyStorePage() {
                 setPreviewImage(store?.imageUrl || null);
             } finally {
                 setIsUploading(false);
+                setUploadProgress(0);
             }
         }
     };

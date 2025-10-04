@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -104,6 +103,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         setPreviewImage(product?.imageUrl || null);
       } finally {
         setIsUploading(false);
+        setUploadProgress(0);
       }
     }
   };
@@ -140,7 +140,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!isProcessing) setIsOpen(open)}}>
-      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isProcessing) e.preventDefault() }}>
+      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isProcessing || isUploading) e.preventDefault() }}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
