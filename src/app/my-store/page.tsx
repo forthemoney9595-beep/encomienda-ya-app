@@ -210,8 +210,8 @@ export default function MyStorePage() {
                                 <FormLabel>Imagen Principal de la Tienda</FormLabel>
                                 <FormControl>
                                 <div className="space-y-2">
-                                    <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" disabled={isUploading || isSubmitting} />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isSubmitting}>
+                                    <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" disabled={isUploading} />
+                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                                         <UploadCloud className="mr-2 h-4 w-4" />
                                         {isUploading ? 'Subiendo...' : 'Cambiar Imagen'}
                                     </Button>

@@ -52,7 +52,7 @@ export async function uploadImage(
             async () => {
                 try {
                     const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    onProgress(100); // Ensure it hits 100% on completion
+                    onProgress(100);
                     resolve(downloadURL);
                 } catch (error) {
                      console.error("Error al obtener la URL de descarga:", error);

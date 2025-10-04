@@ -38,7 +38,7 @@ interface ManageItemDialogProps {
 }
 
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -84,7 +84,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       }
       setUploadProgress(0);
       setIsUploading(false);
-      setIsProcessing(false);
+      setIsSubmitting(false);
     }
   }, [product, form, isOpen, productCategories]);
 
@@ -111,7 +111,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 }, [form, toast, product?.imageUrl]);
 
   async function onSubmit(values: FormData) {
-    setIsProcessing(true);
+    setIsSubmitting(true);
 
     try {
         const productData: Product = {
@@ -135,14 +135,14 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
             description: "No se pudo guardar el producto. Por favor, inténtalo de nuevo.",
         });
     } finally {
-        setIsProcessing(false);
+        setIsSubmitting(false);
         setIsOpen(false);
     }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!isProcessing) setIsOpen(open)}}>
-      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isProcessing || isUploading) e.preventDefault() }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting) setIsOpen(open)}}>
+      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isSubmitting || isUploading) e.preventDefault() }}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
@@ -159,7 +159,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Nombre del Producto</FormLabel>
                     <FormControl>
-                      <Input placeholder="Pizza Margarita" {...field} disabled={isProcessing} />
+                      <Input placeholder="Pizza Margarita" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -172,7 +172,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Descripción</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isProcessing} />
+                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -184,7 +184,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={isProcessing || productCategories.length === 0}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={isSubmitting || productCategories.length === 0}>
                        <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecciona una categoría" />
@@ -212,7 +212,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Precio</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isProcessing} />
+                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -228,13 +228,13 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                       ref={fileInputRef} 
                       onChange={handleFileChange}
                       accept="image/png, image/jpeg, image/gif"
-                      disabled={isUploading || isProcessing}
+                      disabled={isUploading || isSubmitting}
                     />
                     <Button 
                       type="button"
                       variant="outline" 
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading || isProcessing}
+                      disabled={isUploading || isSubmitting}
                     >
                       <UploadCloud className="mr-2 h-4 w-4" />
                       {isUploading ? 'Subiendo...' : 'Seleccionar Archivo'}
@@ -260,8 +260,8 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               </FormItem>
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isProcessing || isUploading || productCategories.length === 0}>
-                {isProcessing ? (
+              <Button type="submit" disabled={isSubmitting || isUploading || productCategories.length === 0}>
+                {isSubmitting ? (
                    <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Guardando...
