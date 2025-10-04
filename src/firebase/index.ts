@@ -1,47 +1,36 @@
+
 'use client';
 
 import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore'
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
-// This is a singleton to ensure we only initialize firebase once.
-// This is not strictly needed for this simple case, but good practice.
-let firebaseApp: ReturnType<typeof initializeApp> | undefined;
+let firebaseApp: FirebaseApp;
+let auth: Auth;
+let firestore: Firestore;
+let storage: FirebaseStorage;
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
-export function initializeFirebase() {
-  if (getApps().length) {
-    return getSdks(getApp());
-  }
-
-  const newFirebaseApp = initializeApp(firebaseConfig);
-  return getSdks(newFirebaseApp);
+if (getApps().length) {
+    firebaseApp = getApp();
+} else {
+    firebaseApp = initializeApp(firebaseConfig);
 }
 
-export function getSdks(firebaseApp: FirebaseApp) {
-  return {
-    firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp)
-  };
-}
+auth = getAuth(firebaseApp);
+firestore = getFirestore(firebaseApp);
+storage = getStorage(firebaseApp);
+
+export { firebaseApp, auth, firestore, storage };
 
 // This is the legacy getFirebase function, kept for compatibility with older components
-// New components should use the individual hooks like useFirestore() and useAuth() from a provider
+// It is recommended to import services directly (e.g. `import { auth } from '@/firebase'`)
 export function getFirebase() {
-    if (firebaseApp) {
-        return {
-            auth: getAuth(firebaseApp),
-            firestore: getFirestore(firebaseApp),
-            app: firebaseApp
-        };
-    }
-    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-    firebaseApp = app;
     return {
-      auth: getAuth(app),
-      firestore: getFirestore(app),
-      app: app
+        auth,
+        firestore,
+        storage,
+        app: firebaseApp
     };
 }
