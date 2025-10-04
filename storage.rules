@@ -1,0 +1,13 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Permite la lectura y escritura de cualquier archivo a cualquier usuario autenticado.
+    // Esta regla es permisiva y adecuada para la fase de prototipo y desarrollo.
+    // Para producción, se deberían implementar reglas más estrictas (por ejemplo, validar tamaño, tipo de archivo, y propiedad del usuario).
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
