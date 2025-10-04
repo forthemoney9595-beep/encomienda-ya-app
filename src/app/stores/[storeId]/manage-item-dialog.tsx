@@ -147,7 +147,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellena los detalles del producto y sube una imagen.
+                Rellena los detalles del producto. La imagen se subirá al guardar.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -276,3 +276,4 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     </Dialog>
   );
 }
+
