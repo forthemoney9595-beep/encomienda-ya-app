@@ -96,7 +96,9 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         setPreviewImage(URL.createObjectURL(file));
 
         try {
-            const downloadURL = await uploadImage(file, setUploadProgress);
+            const downloadURL = await uploadImage(file, (progress) => {
+              setUploadProgress(progress)
+            });
             form.setValue('imageUrl', downloadURL, { shouldValidate: true });
             toast({ title: '¡Imagen Subida!', description: 'La imagen se ha subido y la URL se ha guardado.' });
         } catch (error: any) {
