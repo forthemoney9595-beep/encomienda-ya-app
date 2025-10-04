@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -39,7 +38,8 @@ export default function MyStorePage() {
     
     const [store, setStore] = useState<Store | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSavingText, setIsSavingText] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -57,45 +57,28 @@ export default function MyStorePage() {
     useEffect(() => {
         if (authLoading || prototypeLoading) return;
 
-        if (!user || user.role !== 'store') {
-            toast({ variant: 'destructive', title: 'Acceso Denegado', description: 'No tienes permisos para ver esta página.' });
+        if (!user || user.role !== 'store' || !user.storeId) {
             router.push('/');
             return;
         }
 
-        if (!user.storeId) {
-             toast({ variant: 'destructive', title: 'Acceso Denegado', description: 'No tienes una tienda asignada.' });
-             router.push('/');
-             return;
+        const storeData = getPrototypeStoreById(user.storeId);
+
+        if (storeData) {
+            setStore(storeData);
+            form.reset({
+                name: storeData.name,
+                address: storeData.address,
+                horario: storeData.horario,
+                imageUrl: storeData.imageUrl,
+            });
+            setPreviewImage(storeData.imageUrl);
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar tu tienda.' });
+            router.push('/');
         }
-
-        async function fetchStore() {
-            setLoading(true);
-            let storeData: Store | null | undefined = null;
-            if (isPrototypeMode) {
-                storeData = getPrototypeStoreById(user.storeId!);
-            } else {
-                // In real mode, you'd fetch from your DB
-            }
-
-            if (storeData) {
-                setStore(storeData);
-                form.reset({
-                    name: storeData.name,
-                    address: storeData.address,
-                    horario: storeData.horario,
-                    imageUrl: storeData.imageUrl,
-                });
-                setPreviewImage(storeData.imageUrl);
-            } else {
-                toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar tu tienda.' });
-                router.push('/');
-            }
-            setLoading(false);
-        }
-
-        fetchStore();
-    }, [user, authLoading, prototypeLoading, router, toast, form, isPrototypeMode, getPrototypeStoreById]);
+        setLoading(false);
+    }, [user, authLoading, prototypeLoading, router, toast, form, getPrototypeStoreById]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -114,40 +97,55 @@ export default function MyStorePage() {
         setPreviewImage(URL.createObjectURL(file));
     };
 
-    async function onSubmit(values: FormData) {
-        if (!user?.storeId || !store) return;
+    const handleImageUpload = async () => {
+        if (!selectedFile || !store) {
+            toast({ variant: "destructive", title: "No hay imagen", description: "Por favor, selecciona una imagen primero." });
+            return;
+        }
         
-        setIsSubmitting(true);
-        let finalImageUrl = values.imageUrl;
-
+        setIsUploading(true);
         try {
-            if (selectedFile) {
-                const storageRef = ref(storage, `store-images/${user.uid}/${Date.now()}-${selectedFile.name}`);
-                await uploadBytes(storageRef, selectedFile);
-                finalImageUrl = await getDownloadURL(storageRef);
-            }
+            const storageRef = ref(storage, `store-images/${user!.uid}/${Date.now()}-${selectedFile.name}`);
+            const uploadResult = await uploadBytes(storageRef, selectedFile);
+            const downloadURL = await getDownloadURL(uploadResult.ref);
 
+            await updatePrototypeStore({ ...store, imageUrl: downloadURL });
+            
+            toast({ title: '¡Imagen Subida!', description: 'La imagen de tu tienda ha sido actualizada.' });
+            
+            // Force a full page reload to get the new data cleanly
+            window.location.reload();
+
+        } catch (error) {
+            console.error("Error al subir la imagen:", error);
+            const errorMessage = error instanceof Error ? error.message : "No se pudo subir la imagen.";
+            toast({ variant: 'destructive', title: 'Error de Subida', description: `Causa: ${errorMessage}` });
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    async function onTextSubmit(values: FormData) {
+        if (!store) return;
+        
+        setIsSavingText(true);
+        try {
             const updatedStoreData = {
                 ...store,
-                ...values,
-                imageUrl: finalImageUrl || store.imageUrl,
+                name: values.name,
+                address: values.address,
+                horario: values.horario,
             };
 
             await updatePrototypeStore(updatedStoreData);
-
-            toast({ title: '¡Tienda Actualizada!', description: 'La información de tu tienda ha sido guardada.' });
-            router.push(`/stores/${user.storeId}`);
-
+            toast({ title: '¡Información Guardada!', description: 'Los detalles de tu tienda han sido guardados.' });
+            router.push(`/stores/${user!.storeId}`);
         } catch (error) {
-            console.error("Error saving store:", error);
+            console.error("Error guardando datos de la tienda:", error);
             const errorMessage = error instanceof Error ? error.message : "No se pudieron guardar los cambios.";
-            toast({ 
-                variant: 'destructive', 
-                title: 'Error al Guardar', 
-                description: errorMessage 
-            });
+            toast({ variant: 'destructive', title: 'Error al Guardar', description: errorMessage });
         } finally {
-            setIsSubmitting(false);
+            setIsSavingText(false);
         }
     }
     
@@ -172,7 +170,7 @@ export default function MyStorePage() {
         <div className="container mx-auto">
             <PageHeader title="Editar Mi Tienda" description="Actualiza la información de tu negocio." />
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)}>
+                <form onSubmit={form.handleSubmit(onTextSubmit)}>
                     <Card>
                         <CardHeader>
                             <CardTitle>Información General</CardTitle>
@@ -213,28 +211,33 @@ export default function MyStorePage() {
                             />
                              <FormItem>
                                 <FormLabel>Imagen Principal de la Tienda</FormLabel>
-                                <FormControl>
-                                <div className="space-y-2">
-                                    <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" disabled={isSubmitting} />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
-                                        <UploadCloud className="mr-2 h-4 w-4" />
-                                        Cambiar Imagen
-                                    </Button>
-                                </div>
-                                </FormControl>
                                 {(previewImage || imageUrlValue) && (
-                                <div className="relative mt-4 h-48 w-full max-w-sm rounded-md border-2 border-dashed">
+                                <div className="relative mt-2 h-48 w-full max-w-sm rounded-md border-2 border-dashed">
                                     <Image src={previewImage || imageUrlValue || ''} alt="Vista previa" fill style={{ objectFit: 'cover' }} className="rounded-md" />
                                 </div>
                                 )}
+                                <div className="flex gap-2 pt-2">
+                                    <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
+                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isSavingText}>
+                                        <UploadCloud className="mr-2 h-4 w-4" />
+                                        Seleccionar Imagen
+                                    </Button>
+                                    {selectedFile && (
+                                        <Button type="button" onClick={handleImageUpload} disabled={isUploading || isSavingText}>
+                                            {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                            Subir Nueva Imagen
+                                        </Button>
+                                    )}
+                                </div>
                                 <FormMessage />
                             </FormItem>
                         </CardContent>
                         <CardFooter>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                Guardar Cambios
+                            <Button type="submit" disabled={isSavingText || isUploading || !!selectedFile}>
+                                {isSavingText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                Guardar Cambios de Texto
                             </Button>
+                            {selectedFile && <p className="ml-4 text-sm text-muted-foreground">Debes subir la nueva imagen antes de guardar otros cambios.</p>}
                         </CardFooter>
                     </Card>
                 </form>

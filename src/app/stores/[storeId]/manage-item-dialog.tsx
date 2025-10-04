@@ -108,8 +108,8 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     try {
         if (selectedFile) {
             const storageRef = ref(storage, `product-images/${user.storeId}/${Date.now()}-${selectedFile.name}`);
-            await uploadBytes(storageRef, selectedFile);
-            finalImageUrl = await getDownloadURL(storageRef);
+            const uploadResult = await uploadBytes(storageRef, selectedFile);
+            finalImageUrl = await getDownloadURL(uploadResult.ref);
         }
 
         const productData: Product = {
@@ -118,7 +118,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           description: values.description,
           price: values.price,
           category: values.category,
-          imageUrl: finalImageUrl || '',
+          imageUrl: finalImageUrl || (product?.imageUrl ?? ''),
           rating: isEditing && product ? product.rating : 0,
           reviewCount: isEditing && product ? product.reviewCount : 0,
         };
