@@ -17,8 +17,6 @@ import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
-import { storage } from '@/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -105,17 +103,23 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     let finalImageUrl = values.imageUrl || (isEditing ? product?.imageUrl : '') || '';
 
     try {
-        console.log("Intento de guardado de producto iniciado.");
         if (selectedFile) {
-            console.log("Detectado nuevo archivo de imagen para producto, iniciando subida...");
+            const formData = new FormData();
             const filePath = `product-images/${user.storeId}/${Date.now()}-${selectedFile.name}`;
-            const storageRef = ref(storage, filePath);
-            
-            await uploadBytes(storageRef, selectedFile);
-            console.log("Subida de imagen de producto completada. Obteniendo URL...");
+            formData.append('file', selectedFile);
+            formData.append('path', filePath);
 
-            finalImageUrl = await getDownloadURL(storageRef);
-            console.log("URL de imagen de producto obtenida:", finalImageUrl);
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.details || 'Error del servidor al subir la imagen.');
+            }
+            const { imageUrl } = await response.json();
+            finalImageUrl = imageUrl;
         }
 
         const productData: Product = {
@@ -132,12 +136,12 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         await onSave(productData);
         setIsOpen(false);
 
-    } catch (error) {
-        console.error("¡ERROR FATAL DURANTE EL GUARDADO O SUBIDA DE PRODUCTO!", error);
+    } catch (error: any) {
+        console.error("Error al guardar el producto:", error);
         toast({ 
             variant: 'destructive', 
             title: 'Error', 
-            description: 'No se pudo guardar el producto. Revisa la consola para más detalles.'
+            description: `No se pudo guardar el producto: ${error.message}`
         });
     } finally {
         setIsSubmitting(false);

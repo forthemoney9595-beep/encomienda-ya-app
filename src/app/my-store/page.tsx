@@ -18,8 +18,6 @@ import { Loader2, UploadCloud, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
-import { storage } from '@/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -38,7 +36,8 @@ export default function MyStorePage() {
     
     const [store, setStore] = useState<Store | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSavingText, setIsSavingText] = useState(false);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
     
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -94,47 +93,74 @@ export default function MyStorePage() {
         setPreviewImage(URL.createObjectURL(file));
     };
 
-    async function onSubmit(values: FormData) {
-        if (!store || !user?.storeId) return;
-        
-        setIsSubmitting(true);
-        let finalImageUrl = values.imageUrl || store.imageUrl;
+    const handleImageUpload = async () => {
+        if (!selectedFile || !user?.storeId || !store) return;
+
+        setIsUploadingImage(true);
+        const formData = new FormData();
+        const filePath = `store-images/${user.storeId}/${Date.now()}-${selectedFile.name}`;
+        formData.append('file', selectedFile);
+        formData.append('path', filePath);
 
         try {
-            console.log("Intento de subida iniciado para la imagen de la tienda.");
-            if (selectedFile) {
-                const filePath = `store-images/${user.storeId}/${Date.now()}-${selectedFile.name}`;
-                const storageRef = ref(storage, filePath);
-                
-                await uploadBytes(storageRef, selectedFile);
-                console.log("Subida completada. Obteniendo URL de descarga...");
-                
-                finalImageUrl = await getDownloadURL(storageRef);
-                console.log("URL de descarga obtenida:", finalImageUrl);
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.details || 'Error del servidor al subir la imagen.');
             }
+
+            const { imageUrl } = await response.json();
+
+            const updatedStoreData: Store = { ...store, imageUrl: imageUrl };
+            await updatePrototypeStore(updatedStoreData);
             
+            form.setValue('imageUrl', imageUrl);
+            toast({ title: '¡Imagen Subida!', description: 'La nueva imagen de tu tienda ha sido guardada.' });
+
+        } catch (error: any) {
+            console.error("Error al subir la imagen:", error);
+            toast({ 
+                variant: 'destructive', 
+                title: 'Error de Subida', 
+                description: `No se pudo subir la imagen: ${error.message}`
+            });
+        } finally {
+            setIsUploadingImage(false);
+            setSelectedFile(null);
+        }
+    };
+
+    async function onTextSubmit(values: FormData) {
+        if (!store) return;
+        
+        setIsSavingText(true);
+        
+        try {
             const updatedStoreData: Store = {
                 ...store,
                 name: values.name,
                 address: values.address,
                 horario: values.horario,
-                imageUrl: finalImageUrl,
+                // ImageUrl is now handled separately
             };
             
             await updatePrototypeStore(updatedStoreData);
             
-            toast({ title: '¡Información Guardada!', description: 'Los detalles de tu tienda han sido guardados.' });
-            router.push(`/stores/${store.id}`);
+            toast({ title: '¡Información Guardada!', description: 'Los detalles de tu tienda han sido actualizados.' });
 
         } catch (error) {
-            console.error("¡ERROR FATAL DURANTE EL GUARDADO O SUBIDA!", error);
+            console.error("Error al guardar la información de la tienda:", error);
             toast({ 
                 variant: 'destructive', 
                 title: 'Error al Guardar', 
-                description: 'No se pudo guardar la información de la tienda. Revisa la consola para más detalles.' 
+                description: 'No se pudo guardar la información de la tienda.' 
             });
         } finally {
-            setIsSubmitting(false);
+            setIsSavingText(false);
         }
     }
     
@@ -159,7 +185,7 @@ export default function MyStorePage() {
         <div className="container mx-auto">
             <PageHeader title="Editar Mi Tienda" description="Actualiza la información de tu negocio." />
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)}>
+                <form onSubmit={form.handleSubmit(onTextSubmit)}>
                     <Card>
                         <CardHeader>
                             <CardTitle>Información General</CardTitle>
@@ -207,21 +233,24 @@ export default function MyStorePage() {
                                 )}
                                 <div className="flex gap-2 pt-2">
                                     <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
+                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage}>
                                         <UploadCloud className="mr-2"/>
-                                        Cambiar Imagen
+                                        Seleccionar Imagen
                                     </Button>
+                                    {selectedFile && (
+                                        <Button type="button" onClick={handleImageUpload} disabled={isUploadingImage}>
+                                            {isUploadingImage ? <Loader2 className="mr-2 animate-spin" /> : null}
+                                            Subir Nueva Imagen
+                                        </Button>
+                                    )}
                                 </div>
-                                 <FormDescription>
-                                     Selecciona una nueva imagen y luego haz clic en "Guardar Cambios".
-                                 </FormDescription>
                                 <FormMessage />
                             </FormItem>
                         </CardContent>
                         <CardFooter>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
-                                Guardar Cambios
+                            <Button type="submit" disabled={isSavingText}>
+                                {isSavingText ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
+                                Guardar Cambios de Texto
                             </Button>
                         </CardFooter>
                     </Card>
