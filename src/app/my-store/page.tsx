@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
@@ -101,9 +101,8 @@ export default function MyStorePage() {
         let finalImageUrl = values.imageUrl || store.imageUrl;
 
         try {
-            console.log("Intento de guardado iniciado.");
+            console.log("Intento de subida iniciado para la imagen de la tienda.");
             if (selectedFile) {
-                console.log("Detectado nuevo archivo de imagen, iniciando subida...");
                 const filePath = `store-images/${user.storeId}/${Date.now()}-${selectedFile.name}`;
                 const storageRef = ref(storage, filePath);
                 
