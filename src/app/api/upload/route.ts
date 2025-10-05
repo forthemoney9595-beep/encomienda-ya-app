@@ -5,8 +5,6 @@ import admin from 'firebase-admin';
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   try {
-    // In some environments (like Cloud Workstations), application default credentials aren't available.
-    // We construct the credential object manually from environment variables.
     const serviceAccount = {
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -15,10 +13,10 @@ if (!admin.apps.length) {
 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      storageBucket: `${serviceAccount.projectId}.appspot.com`,
+      storageBucket: `${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.appspot.com`,
     });
   } catch (error: any) {
-    console.error('Firebase admin initialization error', error.stack);
+    console.error('Error de inicialización de Firebase Admin:', error.stack);
   }
 }
 
@@ -28,7 +26,7 @@ export async function POST(request: Request) {
   const path = formData.get('path') as string;
 
   if (!file || !path) {
-    return NextResponse.json({ error: 'No file or path provided.' }, { status: 400 });
+    return NextResponse.json({ error: 'No se proporcionó ningún archivo o ruta.' }, { status: 400 });
   }
 
   const bucket = admin.storage().bucket();
@@ -52,7 +50,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ imageUrl: publicUrl });
   } catch (error: any) {
-    console.error('Error uploading to Firebase Storage:', error);
-    return NextResponse.json({ error: 'Failed to upload file.', details: error.message }, { status: 500 });
+    console.error('Error al subir a Firebase Storage:', error);
+    return NextResponse.json({ error: 'La subida del archivo ha fallado.', details: error.message }, { status: 500 });
   }
 }
