@@ -18,8 +18,6 @@ import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
-import { storage } from '@/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -42,6 +40,7 @@ interface ManageItemDialogProps {
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,6 +79,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       }
       setSelectedFile(null);
       setIsSubmitting(false);
+      setIsUploading(false);
     }
   }, [product, form, isOpen, productCategories]);
 
@@ -99,30 +99,51 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     setSelectedFile(file);
     setPreviewImage(URL.createObjectURL(file));
   };
+  
+  const handleImageUpload = async () => {
+    if (!selectedFile || !user?.storeId) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('path', `product-images/${user.storeId}`);
+
+    try {
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'La subida de imagen ha fallado.');
+        }
+
+        const { imageUrl } = await response.json();
+        form.setValue('imageUrl', imageUrl, { shouldValidate: true });
+        setPreviewImage(imageUrl);
+        setSelectedFile(null); // Clear selected file after successful upload
+        toast({ title: 'Imagen Subida', description: 'La nueva imagen está lista para ser guardada con el producto.' });
+    } catch (error: any) {
+        console.error("¡ERROR FATAL DURANTE LA SUBIDA!", error);
+        toast({ variant: 'destructive', title: 'Error de Subida', description: error.message });
+    } finally {
+        setIsUploading(false);
+    }
+  };
 
   async function onSubmit(values: FormData) {
     if (!user || !user.storeId) return;
     setIsSubmitting(true);
 
     try {
-        let finalImageUrl = values.imageUrl;
-
-        if (selectedFile) {
-            console.log("Intento de subida iniciado para la imagen de producto.");
-            const storageRef = ref(storage, `product-images/${user.storeId}/${Date.now()}-${selectedFile.name}`);
-            const uploadResult = await uploadBytes(storageRef, selectedFile);
-            console.log("Subida completada, obteniendo URL...");
-            finalImageUrl = await getDownloadURL(uploadResult.ref);
-            console.log("URL obtenida con éxito.");
-        }
-
         const productData: Product = {
           id: isEditing && product ? product.id : `prod-${Date.now()}`,
           name: values.name,
           description: values.description,
           price: values.price,
           category: values.category,
-          imageUrl: finalImageUrl || (product?.imageUrl ?? ''),
+          imageUrl: values.imageUrl || (product?.imageUrl ?? ''),
           rating: isEditing && product ? product.rating : 0,
           reviewCount: isEditing && product ? product.reviewCount : 0,
         };
@@ -131,7 +152,8 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         setIsOpen(false);
 
     } catch (error) {
-        console.error("¡ERROR FATAL DURANTE LA SUBIDA O GUARDADO!", error);
+        console.error("¡ERROR FATAL DURANTE EL GUARDADO!", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el producto.' });
     } finally {
         setIsSubmitting(false);
     }
@@ -139,7 +161,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting) setIsOpen(open)}}>
-      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isSubmitting) e.preventDefault() }}>
+      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isSubmitting || isUploading) e.preventDefault() }}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
@@ -156,7 +178,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Nombre del Producto</FormLabel>
                     <FormControl>
-                      <Input placeholder="Pizza Margarita" {...field} disabled={isSubmitting} />
+                      <Input placeholder="Pizza Margarita" {...field} disabled={isSubmitting || isUploading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -169,7 +191,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Descripción</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isSubmitting} />
+                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isSubmitting || isUploading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -181,7 +203,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={isSubmitting || productCategories.length === 0}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={isSubmitting || isUploading || productCategories.length === 0}>
                        <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecciona una categoría" />
@@ -209,7 +231,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Precio</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isSubmitting} />
+                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isSubmitting || isUploading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -218,24 +240,30 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               <FormItem>
                 <FormLabel>Imagen del Producto</FormLabel>
                 <FormControl>
-                  <div className="space-y-2">
+                  <div className="flex gap-2 items-center">
                     <Input 
                       type="file" 
                       className="hidden" 
                       ref={fileInputRef} 
                       onChange={handleFileChange}
                       accept="image/png, image/jpeg, image/gif"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isUploading}
                     />
                     <Button 
                       type="button"
                       variant="outline" 
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isUploading}
                     >
-                      <UploadCloud className="mr-2 h-4 w-4" />
-                      Seleccionar Archivo
+                      <UploadCloud />
+                      Elegir Archivo
                     </Button>
+                    {selectedFile && (
+                        <Button type="button" size="sm" onClick={handleImageUpload} disabled={isUploading}>
+                           {isUploading ? <Loader2 className="animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                           Subir
+                        </Button>
+                    )}
                   </div>
                 </FormControl>
                 {(previewImage || imageUrlValue) && (
@@ -254,15 +282,15 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               </FormItem>
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting || productCategories.length === 0}>
+              <Button type="submit" disabled={isSubmitting || isUploading || productCategories.length === 0}>
                 {isSubmitting ? (
                    <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="animate-spin" />
                     Guardando...
                    </>
                 ) : (
                   <>
-                    {isEditing ? <Edit className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                    {isEditing ? <Edit /> : <PlusCircle />}
                     {isEditing ? 'Guardar Cambios' : 'Guardar Artículo'}
                   </>
                 )}
