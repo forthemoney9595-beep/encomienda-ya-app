@@ -1,14 +1,15 @@
 
+
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Edit, UploadCloud } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { Loader2, PlusCircle, Edit } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
@@ -16,14 +17,13 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/auth-context";
+import { getPlaceholderImage } from "@/lib/placeholder-images";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
   category: z.string({ required_error: "Debes seleccionar una categoría."}),
-  imageUrl: z.string().url("Debe ser una URL válida.").optional().or(z.literal('')),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -37,11 +37,7 @@ interface ManageItemDialogProps {
 }
 
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
-  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   
   const isEditing = product !== null;
@@ -49,10 +45,8 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", description: "", price: 0, category: "", imageUrl: "" },
+    defaultValues: { name: "", description: "", price: 0, category: "" },
   });
-
-  const imageUrlValue = form.watch('imageUrl');
 
   useEffect(() => {
     if (isOpen) {
@@ -62,73 +56,30 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           description: product.description,
           price: product.price,
           category: product.category,
-          imageUrl: product.imageUrl || "",
         });
-        setPreviewImage(product.imageUrl || null);
       } else {
         form.reset({
           name: "",
           description: "",
           price: 0,
           category: productCategories[0] || "",
-          imageUrl: "",
         });
-        setPreviewImage(null);
       }
-      setSelectedFile(null);
       setIsSubmitting(false);
     }
   }, [product, form, isOpen, productCategories]);
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-        toast({ variant: 'destructive', title: 'Archivo no válido', description: 'Por favor, selecciona un archivo de imagen.' });
-        return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-        toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'La imagen no puede superar los 5MB.' });
-        return;
-    }
-
-    setSelectedFile(file);
-    setPreviewImage(URL.createObjectURL(file));
-  };
   
   async function onSubmit(values: FormData) {
-    if (!user || !user.storeId) return;
     setIsSubmitting(true);
-    let finalImageUrl = values.imageUrl || (isEditing ? product?.imageUrl : '') || '';
 
     try {
-        if (selectedFile) {
-            const formData = new FormData();
-            const filePath = `product-images/${user.storeId}/${Date.now()}-${selectedFile.name}`;
-            formData.append('file', selectedFile);
-            formData.append('path', filePath);
-
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.details || 'Error del servidor al subir la imagen.');
-            }
-            const { imageUrl } = await response.json();
-            finalImageUrl = imageUrl;
-        }
-
         const productData: Product = {
           id: isEditing && product ? product.id : `prod-${Date.now()}`,
           name: values.name,
           description: values.description,
           price: values.price,
           category: values.category,
-          imageUrl: finalImageUrl,
+          imageUrl: (isEditing && product?.imageUrl) ? product.imageUrl : getPlaceholderImage(values.name),
           rating: isEditing && product ? product.rating : 0,
           reviewCount: isEditing && product ? product.reviewCount : 0,
         };
@@ -228,40 +179,20 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               />
               <FormItem>
                 <FormLabel>Imagen del Producto</FormLabel>
-                <FormControl>
-                  <div className="flex gap-2 items-center">
-                    <Input 
-                      type="file" 
-                      className="hidden" 
-                      ref={fileInputRef} 
-                      onChange={handleFileChange}
-                      accept="image/png, image/jpeg, image/gif"
-                      disabled={isSubmitting}
-                    />
-                    <Button 
-                      type="button"
-                      variant="outline" 
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isSubmitting}
-                    >
-                      <UploadCloud className="mr-2"/>
-                      Cambiar Imagen
-                    </Button>
-                  </div>
-                </FormControl>
-                {(previewImage || imageUrlValue) && (
-                  <div className="relative mt-2 h-32 w-full rounded-md border-2 border-dashed">
+                {product?.imageUrl && (
+                  <div className="relative mt-2 h-32 w-full rounded-md border">
                       <Image
-                          src={previewImage || imageUrlValue || ''}
+                          src={product.imageUrl}
                           alt="Vista previa de la imagen"
                           fill
                           style={{ objectFit: 'cover' }}
                           className="rounded-md"
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
                   </div>
                 )}
-                <FormMessage />
+                 <FormDescription>
+                   La subida de imágenes está temporalmente deshabilitada. Se asignará una imagen de marcador de posición si es un producto nuevo.
+                </FormDescription>
               </FormItem>
             </div>
             <DialogFooter>

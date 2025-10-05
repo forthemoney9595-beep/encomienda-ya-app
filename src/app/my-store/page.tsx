@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -14,7 +15,7 @@ import { useAuth } from '@/context/auth-context';
 import { usePrototypeData } from '@/context/prototype-data-context';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
-import { Loader2, UploadCloud, Save } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
@@ -36,20 +37,13 @@ export default function MyStorePage() {
     
     const [store, setStore] = useState<Store | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isSavingText, setIsSavingText] = useState(false);
-    const [isUploadingImage, setIsUploadingImage] = useState(false);
-    
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [previewImage, setPreviewImage] = useState<string | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isSaving, setIsSaving] = useState(false);
     
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
         defaultValues: { name: "", address: "", horario: "", imageUrl: "" },
     });
     
-    const imageUrlValue = form.watch('imageUrl');
-
     useEffect(() => {
         if (authLoading || prototypeLoading) return;
 
@@ -68,7 +62,6 @@ export default function MyStorePage() {
                 horario: storeData.horario,
                 imageUrl: storeData.imageUrl,
             });
-            setPreviewImage(storeData.imageUrl);
         } else {
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar tu tienda.' });
             router.push('/');
@@ -76,68 +69,10 @@ export default function MyStorePage() {
         setLoading(false);
     }, [user, authLoading, prototypeLoading, router, toast, form, getPrototypeStoreById]);
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        if (!file.type.startsWith('image/')) {
-            toast({ variant: 'destructive', title: 'Archivo no válido', description: 'Por favor, selecciona un archivo de imagen.' });
-            return;
-        }
-        if (file.size > 5 * 1024 * 1024) { // 5MB limit
-            toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'La imagen no puede superar los 5MB.' });
-            return;
-        }
-        
-        setSelectedFile(file);
-        setPreviewImage(URL.createObjectURL(file));
-    };
-
-    const handleImageUpload = async () => {
-        if (!selectedFile || !user?.storeId || !store) return;
-
-        setIsUploadingImage(true);
-        const formData = new FormData();
-        const filePath = `store-images/${user.storeId}/${Date.now()}-${selectedFile.name}`;
-        formData.append('file', selectedFile);
-        formData.append('path', filePath);
-
-        try {
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.details || 'Error del servidor al subir la imagen.');
-            }
-
-            const { imageUrl } = await response.json();
-
-            const updatedStoreData: Store = { ...store, imageUrl: imageUrl };
-            await updatePrototypeStore(updatedStoreData);
-            
-            form.setValue('imageUrl', imageUrl);
-            toast({ title: '¡Imagen Subida!', description: 'La nueva imagen de tu tienda ha sido guardada.' });
-
-        } catch (error: any) {
-            console.error("Error al subir la imagen:", error);
-            toast({ 
-                variant: 'destructive', 
-                title: 'Error de Subida', 
-                description: `No se pudo subir la imagen: ${error.message}`
-            });
-        } finally {
-            setIsUploadingImage(false);
-            setSelectedFile(null);
-        }
-    };
-
-    async function onTextSubmit(values: FormData) {
+    async function onSubmit(values: FormData) {
         if (!store) return;
         
-        setIsSavingText(true);
+        setIsSaving(true);
         
         try {
             const updatedStoreData: Store = {
@@ -145,7 +80,6 @@ export default function MyStorePage() {
                 name: values.name,
                 address: values.address,
                 horario: values.horario,
-                // ImageUrl is now handled separately
             };
             
             await updatePrototypeStore(updatedStoreData);
@@ -160,7 +94,7 @@ export default function MyStorePage() {
                 description: 'No se pudo guardar la información de la tienda.' 
             });
         } finally {
-            setIsSavingText(false);
+            setIsSaving(false);
         }
     }
     
@@ -185,7 +119,7 @@ export default function MyStorePage() {
         <div className="container mx-auto">
             <PageHeader title="Editar Mi Tienda" description="Actualiza la información de tu negocio." />
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onTextSubmit)}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
                     <Card>
                         <CardHeader>
                             <CardTitle>Información General</CardTitle>
@@ -226,31 +160,20 @@ export default function MyStorePage() {
                             />
                              <FormItem>
                                 <FormLabel>Imagen Principal de la Tienda</FormLabel>
-                                {(previewImage || imageUrlValue) && (
-                                <div className="relative mt-2 h-48 w-full max-w-sm rounded-md border-2 border-dashed">
-                                    <Image src={previewImage || imageUrlValue || ''} alt="Vista previa" fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                                {store?.imageUrl && (
+                                <div className="relative mt-2 h-48 w-full max-w-sm rounded-md border">
+                                    <Image src={store.imageUrl} alt="Vista previa" fill style={{ objectFit: 'cover' }} className="rounded-md" />
                                 </div>
                                 )}
-                                <div className="flex gap-2 pt-2">
-                                    <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage}>
-                                        <UploadCloud className="mr-2"/>
-                                        Seleccionar Imagen
-                                    </Button>
-                                    {selectedFile && (
-                                        <Button type="button" onClick={handleImageUpload} disabled={isUploadingImage}>
-                                            {isUploadingImage ? <Loader2 className="mr-2 animate-spin" /> : null}
-                                            Subir Nueva Imagen
-                                        </Button>
-                                    )}
-                                </div>
-                                <FormMessage />
+                                <FormDescription>
+                                  La subida de nuevas imágenes está deshabilitada temporalmente. La imagen actual de la tienda se mantendrá.
+                                </FormDescription>
                             </FormItem>
                         </CardContent>
                         <CardFooter>
-                            <Button type="submit" disabled={isSavingText}>
-                                {isSavingText ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
-                                Guardar Cambios de Texto
+                            <Button type="submit" disabled={isSaving}>
+                                {isSaving ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
+                                Guardar Cambios
                             </Button>
                         </CardFooter>
                     </Card>
