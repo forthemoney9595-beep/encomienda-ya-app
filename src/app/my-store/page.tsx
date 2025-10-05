@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -19,6 +18,8 @@ import { Loader2, UploadCloud, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
+import { storage } from '@/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -38,7 +39,6 @@ export default function MyStorePage() {
     const [store, setStore] = useState<Store | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
     
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -94,49 +94,32 @@ export default function MyStorePage() {
         setPreviewImage(URL.createObjectURL(file));
     };
 
-    const handleImageUpload = async () => {
-        if (!selectedFile || !user?.storeId) return;
-
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        formData.append('path', `store-images/${user.uid}`);
-
-        try {
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'La subida de imagen ha fallado.');
-            }
-
-            const { imageUrl } = await response.json();
-            form.setValue('imageUrl', imageUrl);
-            setPreviewImage(imageUrl);
-            setSelectedFile(null); // Clear selected file after successful upload
-            toast({ title: 'Imagen Subida', description: 'La nueva imagen está lista. Guarda los cambios para aplicarla.' });
-        } catch (error: any) {
-            console.error("¡ERROR FATAL DURANTE LA SUBIDA!", error);
-            toast({ variant: 'destructive', title: 'Error de Subida', description: error.message });
-        } finally {
-            setIsUploading(false);
-        }
-    };
-
     async function onSubmit(values: FormData) {
-        if (!store) return;
+        if (!store || !user?.storeId) return;
         
         setIsSubmitting(true);
+        let finalImageUrl = values.imageUrl || store.imageUrl;
+
         try {
+            console.log("Intento de guardado iniciado.");
+            if (selectedFile) {
+                console.log("Detectado nuevo archivo de imagen, iniciando subida...");
+                const filePath = `store-images/${user.storeId}/${Date.now()}-${selectedFile.name}`;
+                const storageRef = ref(storage, filePath);
+                
+                await uploadBytes(storageRef, selectedFile);
+                console.log("Subida completada. Obteniendo URL de descarga...");
+                
+                finalImageUrl = await getDownloadURL(storageRef);
+                console.log("URL de descarga obtenida:", finalImageUrl);
+            }
+            
             const updatedStoreData: Store = {
                 ...store,
                 name: values.name,
                 address: values.address,
                 horario: values.horario,
-                imageUrl: values.imageUrl || store.imageUrl,
+                imageUrl: finalImageUrl,
             };
             
             await updatePrototypeStore(updatedStoreData);
@@ -145,8 +128,12 @@ export default function MyStorePage() {
             router.push(`/stores/${store.id}`);
 
         } catch (error) {
-            console.error("¡ERROR FATAL DURANTE EL GUARDADO!", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar la información de la tienda.' });
+            console.error("¡ERROR FATAL DURANTE EL GUARDADO O SUBIDA!", error);
+            toast({ 
+                variant: 'destructive', 
+                title: 'Error al Guardar', 
+                description: 'No se pudo guardar la información de la tienda. Revisa la consola para más detalles.' 
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -221,23 +208,20 @@ export default function MyStorePage() {
                                 )}
                                 <div className="flex gap-2 pt-2">
                                     <Input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-                                        <UploadCloud />
-                                        Elegir Archivo
+                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
+                                        <UploadCloud className="mr-2"/>
+                                        Cambiar Imagen
                                     </Button>
-                                    {selectedFile && (
-                                        <Button type="button" onClick={handleImageUpload} disabled={isUploading}>
-                                            {isUploading ? <Loader2 className="animate-spin" /> : <UploadCloud />}
-                                            Subir Nueva Imagen
-                                        </Button>
-                                    )}
                                 </div>
+                                 <FormDescription>
+                                     Selecciona una nueva imagen y luego haz clic en "Guardar Cambios".
+                                 </FormDescription>
                                 <FormMessage />
                             </FormItem>
                         </CardContent>
                         <CardFooter>
-                            <Button type="submit" disabled={isSubmitting || isUploading}>
-                                {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
                                 Guardar Cambios
                             </Button>
                         </CardFooter>

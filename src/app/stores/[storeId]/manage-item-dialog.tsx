@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +17,8 @@ import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
+import { storage } from '@/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -40,7 +41,6 @@ interface ManageItemDialogProps {
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +79,6 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
       }
       setSelectedFile(null);
       setIsSubmitting(false);
-      setIsUploading(false);
     }
   }, [product, form, isOpen, productCategories]);
 
@@ -100,50 +99,32 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     setPreviewImage(URL.createObjectURL(file));
   };
   
-  const handleImageUpload = async () => {
-    if (!selectedFile || !user?.storeId) return;
-
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('path', `product-images/${user.storeId}`);
-
-    try {
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'La subida de imagen ha fallado.');
-        }
-
-        const { imageUrl } = await response.json();
-        form.setValue('imageUrl', imageUrl, { shouldValidate: true });
-        setPreviewImage(imageUrl);
-        setSelectedFile(null); // Clear selected file after successful upload
-        toast({ title: 'Imagen Subida', description: 'La nueva imagen está lista para ser guardada con el producto.' });
-    } catch (error: any) {
-        console.error("¡ERROR FATAL DURANTE LA SUBIDA!", error);
-        toast({ variant: 'destructive', title: 'Error de Subida', description: error.message });
-    } finally {
-        setIsUploading(false);
-    }
-  };
-
   async function onSubmit(values: FormData) {
     if (!user || !user.storeId) return;
     setIsSubmitting(true);
+    let finalImageUrl = values.imageUrl || (isEditing ? product?.imageUrl : '') || '';
 
     try {
+        console.log("Intento de guardado de producto iniciado.");
+        if (selectedFile) {
+            console.log("Detectado nuevo archivo de imagen para producto, iniciando subida...");
+            const filePath = `product-images/${user.storeId}/${Date.now()}-${selectedFile.name}`;
+            const storageRef = ref(storage, filePath);
+            
+            await uploadBytes(storageRef, selectedFile);
+            console.log("Subida de imagen de producto completada. Obteniendo URL...");
+
+            finalImageUrl = await getDownloadURL(storageRef);
+            console.log("URL de imagen de producto obtenida:", finalImageUrl);
+        }
+
         const productData: Product = {
           id: isEditing && product ? product.id : `prod-${Date.now()}`,
           name: values.name,
           description: values.description,
           price: values.price,
           category: values.category,
-          imageUrl: values.imageUrl || (product?.imageUrl ?? ''),
+          imageUrl: finalImageUrl,
           rating: isEditing && product ? product.rating : 0,
           reviewCount: isEditing && product ? product.reviewCount : 0,
         };
@@ -152,8 +133,12 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
         setIsOpen(false);
 
     } catch (error) {
-        console.error("¡ERROR FATAL DURANTE EL GUARDADO!", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el producto.' });
+        console.error("¡ERROR FATAL DURANTE EL GUARDADO O SUBIDA DE PRODUCTO!", error);
+        toast({ 
+            variant: 'destructive', 
+            title: 'Error', 
+            description: 'No se pudo guardar el producto. Revisa la consola para más detalles.'
+        });
     } finally {
         setIsSubmitting(false);
     }
@@ -161,13 +146,13 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting) setIsOpen(open)}}>
-      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isSubmitting || isUploading) e.preventDefault() }}>
+      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if (isSubmitting) e.preventDefault() }}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellena los detalles del producto. La imagen se subirá al guardar.
+                Rellena los detalles del producto.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -178,7 +163,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Nombre del Producto</FormLabel>
                     <FormControl>
-                      <Input placeholder="Pizza Margarita" {...field} disabled={isSubmitting || isUploading} />
+                      <Input placeholder="Pizza Margarita" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -191,7 +176,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Descripción</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isSubmitting || isUploading} />
+                      <Textarea placeholder="Queso clásico y tomate" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -203,7 +188,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={isSubmitting || isUploading || productCategories.length === 0}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={isSubmitting || productCategories.length === 0}>
                        <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecciona una categoría" />
@@ -231,7 +216,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   <FormItem>
                     <FormLabel>Precio</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isSubmitting || isUploading} />
+                      <Input type="number" step="0.01" placeholder="12.99" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -247,23 +232,17 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                       ref={fileInputRef} 
                       onChange={handleFileChange}
                       accept="image/png, image/jpeg, image/gif"
-                      disabled={isSubmitting || isUploading}
+                      disabled={isSubmitting}
                     />
                     <Button 
                       type="button"
                       variant="outline" 
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={isSubmitting || isUploading}
+                      disabled={isSubmitting}
                     >
-                      <UploadCloud />
-                      Elegir Archivo
+                      <UploadCloud className="mr-2"/>
+                      Cambiar Imagen
                     </Button>
-                    {selectedFile && (
-                        <Button type="button" size="sm" onClick={handleImageUpload} disabled={isUploading}>
-                           {isUploading ? <Loader2 className="animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                           Subir
-                        </Button>
-                    )}
                   </div>
                 </FormControl>
                 {(previewImage || imageUrlValue) && (
@@ -282,15 +261,15 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               </FormItem>
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting || isUploading || productCategories.length === 0}>
+              <Button type="submit" disabled={isSubmitting || productCategories.length === 0}>
                 {isSubmitting ? (
                    <>
-                    <Loader2 className="animate-spin" />
+                    <Loader2 className="mr-2 animate-spin" />
                     Guardando...
                    </>
                 ) : (
                   <>
-                    {isEditing ? <Edit /> : <PlusCircle />}
+                    {isEditing ? <Edit className="mr-2" /> : <PlusCircle className="mr-2" />}
                     {isEditing ? 'Guardar Cambios' : 'Guardar Artículo'}
                   </>
                 )}

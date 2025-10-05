@@ -1,15 +1,19 @@
 
 'use client';
 
-// This file's logic has been moved directly into the components that use it:
-// - /src/app/my-store/page.tsx
-// - /src/app/stores/[storeId]/manage-item-dialog.tsx
-//
-// This was done to resolve a persistent issue with state management and event handling
-// during the upload process. By co-locating the upload logic within the component,
-// we ensure that the component's state is always in sync with the upload progress,
-// preventing UI freezes and ensuring a more reliable user experience.
-//
-// This file is now intentionally left blank to prevent its further use.
+// This file is being deprecated in favor of direct client-side uploads.
+// The logic is now co-located with the components that use it to simplify state management and error handling.
+// See /src/app/my-store/page.tsx and /src/app/stores/[storeId]/manage-item-dialog.tsx
 
-export {};
+import { storage } from '@/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+/**
+ * @deprecated Use direct client-side upload logic within your component.
+ */
+export async function uploadImage(file: File, path: string): Promise<string> {
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  const downloadUrl = await getDownloadURL(storageRef);
+  return downloadUrl;
+}
