@@ -19,7 +19,8 @@ import { Loader2, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
-import { uploadImage } from '@/lib/upload-service';
+import { storage } from '@/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -89,7 +90,9 @@ export default function MyStorePage() {
             let imageUrl = store.imageUrl;
             if (imageFile) {
                 const imagePath = `stores/${store.id}/profile/${Date.now()}_${imageFile.name}`;
-                imageUrl = await uploadImage(imageFile, imagePath);
+                const storageRef = ref(storage, imagePath);
+                await uploadBytes(storageRef, imageFile);
+                imageUrl = await getDownloadURL(storageRef);
             }
 
             const updatedStoreData: Store = {

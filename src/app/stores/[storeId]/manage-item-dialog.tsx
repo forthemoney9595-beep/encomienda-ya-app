@@ -18,7 +18,8 @@ import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
-import { uploadImage } from '@/lib/upload-service';
+import { storage } from '@/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -93,7 +94,9 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
 
         if (imageFile) {
             const imagePath = `stores/${storeId}/products/${Date.now()}_${imageFile.name}`;
-            imageUrl = await uploadImage(imageFile, imagePath);
+            const storageRef = ref(storage, imagePath);
+            await uploadBytes(storageRef, imageFile);
+            imageUrl = await getDownloadURL(storageRef);
         }
 
         const productData: Product = {
