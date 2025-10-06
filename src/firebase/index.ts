@@ -12,6 +12,7 @@ let auth: Auth;
 let firestore: Firestore;
 let storage: FirebaseStorage;
 
+// This guard is necessary to prevent re-initialization on hot reloads
 if (getApps().length) {
     firebaseApp = getApp();
 } else {

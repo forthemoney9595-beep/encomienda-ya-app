@@ -18,8 +18,6 @@ import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
-import { storage } from '@/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -42,9 +40,6 @@ interface ManageItemDialogProps {
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories, storeId }: ManageItemDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const isEditing = product !== null;
   const { toast } = useToast();
@@ -63,7 +58,6 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           price: product.price,
           category: product.category,
         });
-        setPreviewUrl(product.imageUrl || null);
       } else {
         form.reset({
           name: "",
@@ -71,33 +65,16 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           price: 0,
           category: productCategories[0] || "",
         });
-        setPreviewUrl(null);
       }
-      setImageFile(null);
       setIsSubmitting(false);
     }
   }, [product, form, isOpen, productCategories]);
-
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-    }
-  };
   
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
 
     try {
-        let imageUrl = product?.imageUrl || getPlaceholderImage(values.name);
-
-        if (imageFile) {
-            const imagePath = `stores/${storeId}/products/${Date.now()}_${imageFile.name}`;
-            const storageRef = ref(storage, imagePath);
-            await uploadBytes(storageRef, imageFile);
-            imageUrl = await getDownloadURL(storageRef);
-        }
+        const imageUrl = product?.imageUrl || getPlaceholderImage(values.name);
 
         const productData: Product = {
           id: isEditing && product ? product.id : `prod-${Date.now()}`,
@@ -205,23 +182,16 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               />
               <FormItem>
                 <FormLabel>Imagen del Producto</FormLabel>
-                 <FormControl>
-                  <Input type="file" accept="image/*" onChange={handleImageChange} ref={fileInputRef} className="hidden" />
-                </FormControl>
-                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
-                    {previewUrl ? 'Cambiar Imagen' : 'Seleccionar Imagen'}
-                </Button>
-                {previewUrl && (
-                  <div className="relative mt-2 h-32 w-full rounded-md border">
+                <FormDescription>La subida de imágenes personalizadas no está disponible. La imagen se genera automáticamente basada en el nombre del producto.</FormDescription>
+                <div className="relative mt-2 h-32 w-full rounded-md border bg-muted">
                       <Image
-                          src={previewUrl}
+                          src={getPlaceholderImage(form.getValues('name') || 'default-product')}
                           alt="Vista previa de la imagen"
                           fill
                           style={{ objectFit: 'cover' }}
                           className="rounded-md"
                       />
-                  </div>
-                )}
+                </div>
               </FormItem>
             </div>
             <DialogFooter>
