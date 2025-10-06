@@ -158,7 +158,7 @@ export default function MyStorePage() {
                             />
                              <FormItem>
                                 <FormLabel>Imagen Principal de la Tienda</FormLabel>
-                                <FormDescription>La subida de imágenes personalizadas no está disponible. La imagen se genera automáticamente.</FormDescription>
+                                <FormDescription>La imagen se genera automáticamente basada en el nombre de la tienda.</FormDescription>
                                 <div className="relative mt-2 h-48 w-full max-w-sm rounded-md border">
                                     <Image src={store.imageUrl} alt="Vista previa" fill style={{ objectFit: 'cover' }} className="rounded-md" />
                                 </div>

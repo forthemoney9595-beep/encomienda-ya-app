@@ -74,7 +74,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
     setIsSubmitting(true);
 
     try {
-        const imageUrl = product?.imageUrl || getPlaceholderImage(values.name);
+        const imageUrl = getPlaceholderImage(values.name);
 
         const productData: Product = {
           id: isEditing && product ? product.id : `prod-${Date.now()}`,
@@ -182,10 +182,10 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               />
               <FormItem>
                 <FormLabel>Imagen del Producto</FormLabel>
-                <FormDescription>La subida de imágenes personalizadas no está disponible. La imagen se genera automáticamente basada en el nombre del producto.</FormDescription>
+                <FormDescription>La imagen se genera automáticamente basada en el nombre del producto.</FormDescription>
                 <div className="relative mt-2 h-32 w-full rounded-md border bg-muted">
                       <Image
-                          src={getPlaceholderImage(form.getValues('name') || 'default-product')}
+                          src={getPlaceholderImage(form.watch('name') || 'default-product')}
                           alt="Vista previa de la imagen"
                           fill
                           style={{ objectFit: 'cover' }}
