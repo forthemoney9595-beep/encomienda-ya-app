@@ -24,7 +24,6 @@ const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   address: z.string().min(5, "La dirección debe tener al menos 5 caracteres."),
   horario: z.string().min(5, "El horario debe tener al menos 5 caracteres."),
-  imageUrl: z.string().url("Debe ser una URL válida.").optional().or(z.literal('')),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -41,7 +40,7 @@ export default function MyStorePage() {
     
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
-        defaultValues: { name: "", address: "", horario: "", imageUrl: "" },
+        defaultValues: { name: "", address: "", horario: "" },
     });
     
     useEffect(() => {
@@ -60,7 +59,6 @@ export default function MyStorePage() {
                 name: storeData.name,
                 address: storeData.address,
                 horario: storeData.horario,
-                imageUrl: storeData.imageUrl,
             });
         } else {
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar tu tienda.' });
@@ -166,7 +164,7 @@ export default function MyStorePage() {
                                 </div>
                                 )}
                                 <FormDescription>
-                                  La subida de nuevas imágenes está deshabilitada temporalmente. La imagen actual de la tienda se mantendrá.
+                                  La subida de imágenes está deshabilitada.
                                 </FormDescription>
                             </FormItem>
                         </CardContent>

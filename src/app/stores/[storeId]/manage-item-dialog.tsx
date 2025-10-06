@@ -191,7 +191,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   </div>
                 )}
                  <FormDescription>
-                   La subida de imágenes está temporalmente deshabilitada. Se asignará una imagen de marcador de posición si es un producto nuevo.
+                   La subida de imágenes está deshabilitada. Se asignará una imagen de marcador de posición si es un producto nuevo.
                 </FormDescription>
               </FormItem>
             </div>
