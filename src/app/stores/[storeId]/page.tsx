@@ -169,6 +169,7 @@ export default function StoreDetailPage() {
                     products={store.products} 
                     productCategories={productCategories} 
                     ownerId={store.ownerId}
+                    storeId={store.id}
                     onSaveProduct={handleSaveProduct}
                     onDeleteProduct={handleDeleteProduct}
                    />

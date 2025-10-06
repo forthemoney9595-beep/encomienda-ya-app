@@ -19,6 +19,7 @@ import { Loader2, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
+import { uploadImage } from '@/lib/upload-service';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -37,6 +38,9 @@ export default function MyStorePage() {
     const [store, setStore] = useState<Store | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
@@ -60,6 +64,7 @@ export default function MyStorePage() {
                 address: storeData.address,
                 horario: storeData.horario,
             });
+            setPreviewUrl(storeData.imageUrl);
         } else {
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar tu tienda.' });
             router.push('/');
@@ -67,17 +72,32 @@ export default function MyStorePage() {
         setLoading(false);
     }, [user, authLoading, prototypeLoading, router, toast, form, getPrototypeStoreById]);
 
+    const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            setPreviewUrl(URL.createObjectURL(file));
+        }
+    };
+
     async function onSubmit(values: FormData) {
         if (!store) return;
         
         setIsSaving(true);
         
         try {
+            let imageUrl = store.imageUrl;
+            if (imageFile) {
+                const imagePath = `stores/${store.id}/profile/${Date.now()}_${imageFile.name}`;
+                imageUrl = await uploadImage(imageFile, imagePath);
+            }
+
             const updatedStoreData: Store = {
                 ...store,
                 name: values.name,
                 address: values.address,
                 horario: values.horario,
+                imageUrl: imageUrl,
             };
             
             await updatePrototypeStore(updatedStoreData);
@@ -158,14 +178,17 @@ export default function MyStorePage() {
                             />
                              <FormItem>
                                 <FormLabel>Imagen Principal de la Tienda</FormLabel>
-                                {store?.imageUrl && (
+                                <FormControl>
+                                    <Input type="file" accept="image/*" onChange={handleImageChange} ref={fileInputRef} className="hidden" />
+                                </FormControl>
+                                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSaving}>
+                                    {previewUrl ? 'Cambiar Imagen' : 'Seleccionar Imagen'}
+                                </Button>
+                                {previewUrl && (
                                 <div className="relative mt-2 h-48 w-full max-w-sm rounded-md border">
-                                    <Image src={store.imageUrl} alt="Vista previa" fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                                    <Image src={previewUrl} alt="Vista previa" fill style={{ objectFit: 'cover' }} className="rounded-md" />
                                 </div>
                                 )}
-                                <FormDescription>
-                                  La subida de imágenes está deshabilitada.
-                                </FormDescription>
                             </FormItem>
                         </CardContent>
                         <CardFooter>

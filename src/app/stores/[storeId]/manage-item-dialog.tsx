@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, PlusCircle, Edit } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Product } from "@/lib/placeholder-data";
@@ -18,6 +18,7 @@ import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
+import { uploadImage } from '@/lib/upload-service';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -34,11 +35,15 @@ interface ManageItemDialogProps {
     product: Product | null;
     onSave: (data: Product) => Promise<void>;
     productCategories: string[];
+    storeId: string;
 }
 
-export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories }: ManageItemDialogProps) {
+export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories, storeId }: ManageItemDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const isEditing = product !== null;
   const { toast } = useToast();
@@ -57,6 +62,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           price: product.price,
           category: product.category,
         });
+        setPreviewUrl(product.imageUrl || null);
       } else {
         form.reset({
           name: "",
@@ -64,22 +70,39 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           price: 0,
           category: productCategories[0] || "",
         });
+        setPreviewUrl(null);
       }
+      setImageFile(null);
       setIsSubmitting(false);
     }
   }, [product, form, isOpen, productCategories]);
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
   
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
 
     try {
+        let imageUrl = product?.imageUrl || getPlaceholderImage(values.name);
+
+        if (imageFile) {
+            const imagePath = `stores/${storeId}/products/${Date.now()}_${imageFile.name}`;
+            imageUrl = await uploadImage(imageFile, imagePath);
+        }
+
         const productData: Product = {
           id: isEditing && product ? product.id : `prod-${Date.now()}`,
           name: values.name,
           description: values.description,
           price: values.price,
           category: values.category,
-          imageUrl: (isEditing && product?.imageUrl) ? product.imageUrl : getPlaceholderImage(values.name),
+          imageUrl: imageUrl,
           rating: isEditing && product ? product.rating : 0,
           reviewCount: isEditing && product ? product.reviewCount : 0,
         };
@@ -179,10 +202,16 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
               />
               <FormItem>
                 <FormLabel>Imagen del Producto</FormLabel>
-                {product?.imageUrl && (
+                 <FormControl>
+                  <Input type="file" accept="image/*" onChange={handleImageChange} ref={fileInputRef} className="hidden" />
+                </FormControl>
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
+                    {previewUrl ? 'Cambiar Imagen' : 'Seleccionar Imagen'}
+                </Button>
+                {previewUrl && (
                   <div className="relative mt-2 h-32 w-full rounded-md border">
                       <Image
-                          src={product.imageUrl}
+                          src={previewUrl}
                           alt="Vista previa de la imagen"
                           fill
                           style={{ objectFit: 'cover' }}
@@ -190,9 +219,6 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                       />
                   </div>
                 )}
-                 <FormDescription>
-                   La subida de imágenes está deshabilitada. Se asignará una imagen de marcador de posición si es un producto nuevo.
-                </FormDescription>
               </FormItem>
             </div>
             <DialogFooter>

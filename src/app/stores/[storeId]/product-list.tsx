@@ -23,6 +23,7 @@ interface ProductListProps {
     products: Product[];
     productCategories: string[];
     ownerId: string;
+    storeId: string;
     onSaveProduct: (productData: Product) => void;
     onDeleteProduct: (productId: string) => void;
 }
@@ -39,7 +40,7 @@ function ProductRating({ rating, reviewCount, onClick }: { rating: number, revie
   )
 }
 
-export function ProductList({ products, productCategories, ownerId, onSaveProduct, onDeleteProduct }: ProductListProps) {
+export function ProductList({ products, productCategories, ownerId, storeId, onSaveProduct, onDeleteProduct }: ProductListProps) {
     const { addToCart, storeId: cartStoreId, clearCart } = useCart();
     const { toast } = useToast();
     const params = useParams();
@@ -144,6 +145,7 @@ export function ProductList({ products, productCategories, ownerId, onSaveProduc
                     setManageItemDialogOpen(false);
                 }}
                 productCategories={productCategories}
+                storeId={storeId}
             />
             <ProductReviewsDialog
                 isOpen={!!viewingReviewsFor}
