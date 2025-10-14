@@ -97,7 +97,7 @@ export type Notification = {
 
 
 export const prototypeUsers: Record<string, UserProfile> = {
-    'admin@test.com': { uid: 'proto-admin', name: 'Admin Proto', email: 'admin@test.com', role: 'admin' },
+    'admin@test.com': { uid: 'cSMFcBwN9whWS0blFbiavlniV6W2', name: 'Admin', email: 'admin@test.com', role: 'admin' },
     'tienda@test.com': { uid: 'proto-store-owner', name: 'Dueño Tienda Proto', email: 'tienda@test.com', role: 'store', storeId: 'proto-store-pizza' },
     'repartidor@test.com': { uid: 'proto-delivery', name: 'Repartidor Proto', email: 'repartidor@test.com', role: 'delivery' },
     'comprador@test.com': { 
