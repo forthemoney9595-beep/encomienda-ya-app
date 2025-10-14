@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         setProfileLoading(true);
-        // Reset isAdmin on user change
+        // Reset isAdmin on user change, it will be re-verified.
         setIsAdmin(false);
 
         // Listener for the main user profile in /users/{uid}
@@ -61,12 +61,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserProfile(null);
         });
 
-        // Separate, definitive check for admin role in /roles_admin/{uid}
+        // Separate, definitive check for admin role in /roles_admin/{uid}. This is the source of truth for admin status.
         const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
         const unsubscribeAdmin = onSnapshot(adminRoleRef, (docSnap) => {
-            setIsAdmin(docSnap.exists());
+            const userIsAdmin = docSnap.exists();
+            setIsAdmin(userIsAdmin);
+            
             // We consider loading complete once the admin check is done, 
-            // as it's the most critical for navigation.
+            // as it's the most critical for navigation and rendering decisions.
             setProfileLoading(false);
         }, (error) => {
             console.error("Error checking admin role:", error);
@@ -89,6 +91,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [auth]);
 
+    // The overall loading state is true if either the initial auth check OR the profile/admin check is running.
     const loading = isAuthLoading || isProfileLoading;
     
     const value = { user, userProfile, loading, isAdmin, logout };

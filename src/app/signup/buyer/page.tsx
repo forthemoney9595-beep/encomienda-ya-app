@@ -49,20 +49,24 @@ export default function SignupBuyerPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
 
+        const isActualAdmin = values.email === 'admin@test.com';
+
         // Create user profile in Firestore
         const userProfile = {
             uid: user.uid,
             name: values.name,
             email: values.email,
-            role: 'buyer' as const, // Default role is buyer
+            role: isActualAdmin ? 'admin' : 'buyer' as const,
             addresses: [],
         };
         
+        // This is a non-blocking write
         createUserProfile(firestore, user.uid, userProfile);
 
-        // If the magic email is used, also create an entry in roles_admin
-        if (values.email === 'admin@test.com') {
+        // If the magic email is used, also create an entry in roles_admin. This is the source of truth.
+        if (isActualAdmin) {
             const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+            // This is a blocking write, as it's critical for the next page load.
             await setDoc(adminRoleRef, { role: 'admin', createdAt: new Date() });
         }
         
