@@ -25,8 +25,22 @@ function UserMenu() {
         router.push('/login');
     };
 
-    if (!user || !userProfile) return null;
-
+    if (!user || !userProfile) {
+        return (
+            <div className="p-3">
+                <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center rounded-md transition-colors bg-sidebar/5">
+                    <Avatar className="h-9 w-9 border-2 border-sidebar-accent">
+                        <AvatarFallback><Loader2 className="animate-spin" /></AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 flex-col truncate group-data-[collapsible=icon]:hidden space-y-2">
+                        <div className="h-4 w-3/4 rounded bg-sidebar/10"></div>
+                        <div className="h-3 w-full rounded bg-sidebar/10"></div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -72,26 +86,6 @@ function UserMenu() {
 function AppContentLayout({ children }: { children: React.ReactNode }) {
     const { user, loading } = useAuth();
     
-    const userSection = () => {
-        if (loading) {
-            return (
-                <SidebarFooter>
-                    <div className='p-3 flex items-center gap-3'>
-                       <Loader2 className="h-9 w-9 animate-spin text-sidebar-primary" />
-                    </div>
-                </SidebarFooter>
-            );
-        }
-        if (user) {
-            return (
-                <SidebarFooter>
-                    <UserMenu />
-                </SidebarFooter>
-            );
-        }
-        return null;
-    }
-
     return (
         <div className="flex min-h-screen">
             <Sidebar side="left" className="w-64" collapsible="icon">
@@ -104,7 +98,17 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                 <SidebarContent>
                     <MainNav />
                 </SidebarContent>
-                {userSection()}
+                <SidebarFooter>
+                    {loading ? (
+                         <div className="p-3">
+                            <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center rounded-md transition-colors">
+                                <Loader2 className="h-9 w-9 animate-spin text-sidebar-primary" />
+                            </div>
+                        </div>
+                    ) : user ? (
+                        <UserMenu />
+                    ) : null}
+                </SidebarFooter>
             </Sidebar>
             <SidebarInset>
                 <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
