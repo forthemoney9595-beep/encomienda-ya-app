@@ -1,61 +1,41 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import PageHeader from '@/components/page-header';
-import { getDeliveryPersonnel, updateDeliveryPersonnelStatus } from '@/lib/data-service';
+import { updateDeliveryPersonnelStatus } from '@/lib/data-service';
 import { DeliveryPersonnelList } from './delivery-personnel-list';
-import { useAuth } from '@/context/auth-context';
-import type { DeliveryPersonnel } from '@/lib/placeholder-data';
+import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import type { DeliveryPersonnel, UserProfile } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 import { ManageDriverDialog } from './manage-driver-dialog';
 import AdminAuthGuard from '../admin-auth-guard';
-
+import { collection, CollectionReference, query, where, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { createUserProfile, updateUserProfile } from '@/lib/user-service';
 
 function AdminDeliveryPage() {
   const { user, loading: authLoading } = useAuth();
-  const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
-  const [loading, setLoading] = useState(true);
+  const firestore = useFirestore();
   const { toast } = useToast();
-  const { prototypeDelivery, updatePrototypeDelivery, loading: prototypeLoading, addPrototypeDelivery, deletePrototypeDelivery } = usePrototypeData();
-  const isPrototypeAdmin = user?.uid.startsWith('proto-');
   
   const [isManageDialogOpen, setManageDialogOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<DeliveryPersonnel | null>(null);
 
-
-  const fetchPersonnel = async () => {
-    setLoading(true);
-    const fetchedPersonnel = await getDeliveryPersonnel(isPrototypeAdmin);
-    
-    if (isPrototypeAdmin) {
-      const protoDeliveryExists = fetchedPersonnel.some(p => p.id === prototypeDelivery.id);
-      if (!protoDeliveryExists) {
-        setPersonnel([prototypeDelivery, ...fetchedPersonnel]);
-      } else {
-        setPersonnel(fetchedPersonnel.map(p => p.id === prototypeDelivery.id ? prototypeDelivery : p));
-      }
-    } else {
-      setPersonnel(fetchedPersonnel);
-    }
-    setLoading(false);
-  };
-  
-  useEffect(() => {
-    if (!authLoading && !prototypeLoading) {
-      fetchPersonnel();
-    }
-  }, [user, authLoading, prototypeLoading, prototypeDelivery]);
-
+  const personnelQuery = useMemoFirebase(() => 
+    firestore ? query(collection(firestore, 'users'), where('role', '==', 'delivery')) as CollectionReference<DeliveryPersonnel> : null, 
+    [firestore]
+  );
+  const { data: personnel, isLoading: personnelLoading } = useCollection<DeliveryPersonnel>(personnelQuery);
 
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
+    if (!firestore) return;
+
     try {
         const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
-        updatePrototypeDelivery({ id: personnelId, status: newStatus });
+        await updateDeliveryPersonnelStatus(firestore, personnelId, newStatus);
         
         toast({
             title: '¡Éxito!',
@@ -71,19 +51,46 @@ function AdminDeliveryPage() {
     }
   };
 
-  const handleSaveDriver = (driverData: DeliveryPersonnel) => {
-    addPrototypeDelivery(driverData);
-    toast({
-      title: editingDriver ? 'Repartidor Actualizado' : 'Repartidor Añadido',
-      description: `Los datos de ${driverData.name} han sido guardados.`,
-    });
-    setManageDialogOpen(false);
+  const handleSaveDriver = async (driverData: DeliveryPersonnel) => {
+    if(!firestore) return;
+    
+    const isEditing = !!editingDriver;
+
+    try {
+      if (isEditing) {
+        updateUserProfile(firestore, driverData.id, driverData as Partial<UserProfile>);
+      } else {
+        // This is a simplified creation flow for admins. In a real app, you'd create a Firebase Auth user first.
+        // For this prototype, we're just creating the Firestore user document.
+        const newDriverId = driverData.id || `driver-${Date.now()}`;
+        const profileToCreate: UserProfile = {
+            ...driverData,
+            uid: newDriverId,
+            role: 'delivery',
+        }
+        await setDoc(doc(firestore, "users", newDriverId), profileToCreate);
+      }
+       
+      toast({
+        title: editingDriver ? 'Repartidor Actualizado' : 'Repartidor Añadido',
+        description: `Los datos de ${driverData.name} han sido guardados.`,
+      });
+
+    } catch(error) {
+       toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'No se pudo guardar el repartidor.',
+        });
+    } finally {
+       setManageDialogOpen(false);
+    }
   };
 
   const handleDeleteDriver = (driverId: string) => {
-    deletePrototypeDelivery(driverId);
     toast({
       title: 'Repartidor Eliminado',
+      description: `Función no implementada para eliminar ${driverId}`,
       variant: 'destructive',
     });
   };
@@ -112,7 +119,7 @@ function AdminDeliveryPage() {
            Agregar Nuevo Conductor
          </Button>
       </PageHeader>
-      {loading || authLoading || prototypeLoading ? (
+      {authLoading || personnelLoading ? (
          <div className="border rounded-lg p-4">
             <Skeleton className="h-8 w-1/4 mb-4" />
             <div className="space-y-2">
@@ -122,7 +129,7 @@ function AdminDeliveryPage() {
         </div>
       ) : (
         <DeliveryPersonnelList
-          personnel={personnel}
+          personnel={personnel || []}
           onStatusUpdate={handleStatusUpdate}
           onEdit={openDialogForEdit}
           onDelete={handleDeleteDriver}
@@ -140,3 +147,5 @@ export default function GuardedAdminDeliveryPage() {
         </AdminAuthGuard>
     )
 }
+
+    

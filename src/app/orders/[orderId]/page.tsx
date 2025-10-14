@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useParams, useRouter, notFound } from 'next/navigation';
@@ -13,8 +12,7 @@ import { OrderStatusUpdater } from './order-status-updater';
 import { useEffect, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle, CookingPot, Bike, Home, Package, Clock, Wallet, Ban, Star, Repeat } from 'lucide-react';
@@ -26,6 +24,7 @@ import { useCart } from '@/context/cart-context';
 import { LeaveReviewDialog } from './leave-review-dialog';
 import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
+import { doc, updateDoc } from 'firebase/firestore';
 
 
 function OrderPageSkeleton() {
@@ -136,112 +135,80 @@ export default function OrderTrackingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { getOrderById: getPrototypeOrderById, loading: prototypeLoading, prototypeOrders, addReviewToProduct, addDeliveryReviewToOrder } = usePrototypeData();
+  const firestore = useFirestore();
   const { clearCart, addToCart, storeId: cartStoreId } = useCart();
   
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
   const [reviewingItem, setReviewingItem] = useState<CartItem | null>(null);
   const [isReorderAlertOpen, setReorderAlertOpen] = useState(false);
 
+  const orderRef = useMemoFirebase(() => firestore ? doc(firestore, 'orders', orderId) : null, [firestore, orderId]);
+  const { data: order, isLoading: orderLoading } = useDoc<Order>(orderRef);
 
   const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { 
     ssr: false,
     loading: () => <Skeleton className="h-full w-full" />,
   }), []);
 
+  const isLoading = authLoading || orderLoading;
+
   useEffect(() => {
-    async function fetchOrderData() {
-        if (!orderId || authLoading || prototypeLoading) return;
-        
-        setLoading(true);
-        let orderData: Order | null | undefined = null;
+    if (!isLoading && order) {
+      const isOwner = user?.storeId === order.storeId;
+      const isBuyer = user?.uid === order.userId;
+      const isAssignedDriver = user?.uid === order.deliveryPersonId;
+      const isAdmin = user?.role === 'admin';
+      const isAvailableForDelivery = user?.role === 'delivery' && order.status === 'En preparación' && !order.deliveryPersonId;
 
-        try {
-            if (orderId.startsWith('proto-')) {
-                orderData = getPrototypeOrderById(orderId);
-            } else {
-                orderData = await getOrderFromDb(orderId);
-            }
-          
-          if (!orderData) {
-            console.warn(`Pedido no encontrado (ID: ${orderId}), redirigiendo a /orders.`);
-            toast({
-                variant: 'destructive',
-                title: 'Pedido no encontrado',
-                description: `No se pudo encontrar el pedido con ID: ${orderId}`
-            });
-            router.push('/orders');
-            return;
-          }
-          
-          const isOwner = user?.storeId === orderData.storeId;
-          const isBuyer = user?.uid === orderData.userId;
-          const isAssignedDriver = user?.uid === orderData.deliveryPersonId;
-          const isAdmin = user?.role === 'admin';
-          const isAvailableForDelivery = user?.role === 'delivery' && orderData.status === 'En preparación' && !orderData.deliveryPersonId;
-    
-          if (!isOwner && !isBuyer && !isAssignedDriver && !isAdmin && !isAvailableForDelivery) {
-              console.warn("Acceso no autorizado al pedido denegado.");
-              toast({
-                variant: 'destructive',
-                title: 'Acceso Denegado',
-                description: 'No tienes permiso para ver este pedido.',
-            });
-              router.push('/orders'); 
-              return;
-          }
-    
-          setOrder(orderData);
-
-        } catch (error) {
-            console.error('Error fetching order data:', error);
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron cargar los datos del pedido.' });
-        } finally {
-            setLoading(false);
-        }
+      if (!isOwner && !isBuyer && !isAssignedDriver && !isAdmin && !isAvailableForDelivery) {
+          console.warn("Acceso no autorizado al pedido denegado.");
+          toast({
+            variant: 'destructive',
+            title: 'Acceso Denegado',
+            description: 'No tienes permiso para ver este pedido.',
+        });
+          router.push('/orders'); 
+      }
+    } else if (!isLoading && !order) {
+        notFound();
     }
-    
-    if (!authLoading && !prototypeLoading) {
-        fetchOrderData();
-    }
-
-  }, [orderId, user, authLoading, router, getPrototypeOrderById, prototypeLoading, toast, prototypeOrders]);
+  }, [order, isLoading, user, router, toast]);
   
-    const handleReviewSubmit = (rating: number, review: string) => {
-        if (!reviewingItem || !order) return;
-        addReviewToProduct(order.storeId, reviewingItem.id, rating, review);
+    const handleReviewSubmit = async (rating: number, review: string) => {
+        if (!reviewingItem || !order || !firestore) return;
         
-        setOrder(prevOrder => {
-            if (!prevOrder) return null;
-            const updatedItems = prevOrder.items.map(item => 
-                item.id === reviewingItem.id ? { ...item, userRating: rating } : item
-            );
-            return { ...prevOrder, items: updatedItems };
-        });
-
-        toast({
-            title: "¡Reseña de producto enviada!",
-            description: `Gracias por tu opinión sobre ${reviewingItem.name}.`
-        });
-        setReviewingItem(null);
+        const updatedItems = order.items.map(item => 
+            item.id === reviewingItem.id ? { ...item, userRating: rating } : item
+        );
+        
+        try {
+            await updateDoc(orderRef!, { items: updatedItems });
+             toast({
+                title: "¡Reseña de producto enviada!",
+                description: `Gracias por tu opinión sobre ${reviewingItem.name}.`
+            });
+            setReviewingItem(null);
+        } catch (error) {
+            toast({ variant: 'destructive', title: "Error", description: "No se pudo guardar la reseña." });
+        }
     };
 
-    const handleDeliveryReviewSubmit = (rating: number, review: string) => {
-        if (!order) return;
-        addDeliveryReviewToOrder(order.id, rating, review);
-        setOrder(prev => prev ? { ...prev, deliveryRating: rating, deliveryReview: review } : null);
-        toast({
-            title: "¡Reseña de entrega enviada!",
-            description: `Gracias por calificar a ${order.deliveryPersonName}.`
-        });
+    const handleDeliveryReviewSubmit = async (rating: number, review: string) => {
+        if (!order || !orderRef) return;
+        try {
+            await updateDoc(orderRef, { deliveryRating: rating, deliveryReview: review });
+            toast({
+                title: "¡Reseña de entrega enviada!",
+                description: `Gracias por calificar a ${order.deliveryPersonName}.`
+            });
+        } catch (error) {
+             toast({ variant: 'destructive', title: "Error", description: "No se pudo guardar la reseña de la entrega." });
+        }
     };
 
     const executeReorder = () => {
         if (!order) return;
         clearCart();
         order.items.forEach(item => {
-            // We need to pass the base product, not the cart item with quantity
             const { quantity, ...product } = item;
             for (let i = 0; i < quantity; i++) {
                 addToCart(product, order.storeId);
@@ -265,7 +232,7 @@ export default function OrderTrackingPage() {
     }
 
 
-  if (loading || authLoading || prototypeLoading || !order) {
+  if (isLoading || !order) {
     return <OrderPageSkeleton />;
   }
   
@@ -291,7 +258,7 @@ export default function OrderTrackingPage() {
 
       <PageHeader 
         title={`Pedido #${order.id.substring(0,7)}...`} 
-        description={`Realizado el ${format(order.createdAt, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`}
+        description={`Realizado el ${format(new Date(order.createdAt), "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}`}
       >
         {isBuyer && order.status === 'Entregado' && (
             <Button onClick={handleReorderClick}>
@@ -434,3 +401,5 @@ export default function OrderTrackingPage() {
     </div>
   );
 }
+
+    

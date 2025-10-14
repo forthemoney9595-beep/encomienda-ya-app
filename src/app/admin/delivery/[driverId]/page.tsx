@@ -9,16 +9,16 @@ import { Badge } from '@/components/ui/badge';
 import { getDeliveryPersonById } from '@/lib/data-service';
 import { Car, Mail, Phone, Star, PackageCheck, Bot, TrendingUp, TrendingDown } from 'lucide-react';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { useEffect, useState, useMemo } from 'react';
-import type { DeliveryPersonnel } from '@/lib/placeholder-data';
-import type { Order } from '@/lib/order-service';
+import type { DeliveryPersonnel, Order } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useDoc, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import AdminAuthGuard from '../../admin-auth-guard';
+import { collection, query, where, doc, CollectionReference } from 'firebase/firestore';
+import { type Order as OrderType } from '@/lib/order-service';
 
 function getStatusVariant(status: string) {
     switch (status) {
@@ -207,14 +207,34 @@ function DriverReviews({ reviews }: { reviews: Review[] }) {
 function DriverProfilePage() {
     const params = useParams();
     const driverId = params.driverId as string;
+    const firestore = useFirestore();
     
-    const { getReviewsByDriverId, prototypeDelivery, prototypeOrders, loading: prototypeLoading } = usePrototypeData();
-    const [driver, setDriver] = useState<DeliveryPersonnel | null>(null);
-    const [reviews, setReviews] = useState<Review[]>([]);
-    const [loading, setLoading] = useState(true);
+    const driverRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
+    const { data: driver, isLoading: driverLoading } = useDoc<DeliveryPersonnel>(driverRef);
+    
+    const ordersQuery = useMemoFirebase(() => 
+        firestore ? query(collection(firestore, 'orders'), where('deliveryPersonId', '==', driverId)) as CollectionReference<OrderType> : null,
+        [firestore, driverId]
+    );
+    const { data: orders, isLoading: ordersLoading } = useCollection<OrderType>(ordersQuery);
+
+    const reviews: Review[] = useMemo(() => {
+        if (!orders) return [];
+        return orders
+            .filter(order => order.deliveryRating)
+            .map(order => ({
+                orderId: order.id,
+                rating: order.deliveryRating!,
+                review: order.deliveryReview || '',
+                date: order.createdAt,
+                customerName: order.customerName,
+            }));
+    }, [orders]);
 
     const driverStats = useMemo(() => {
-        const completedDeliveries = prototypeOrders.filter(o => o.deliveryPersonId === driverId && o.status === 'Entregado');
+        if (!orders) return { avgRating: 0, totalDeliveries: 0 };
+
+        const completedDeliveries = orders.filter(o => o.status === 'Entregado');
         const reviewedDeliveries = completedDeliveries.filter(o => o.deliveryRating);
         
         if (reviewedDeliveries.length === 0) {
@@ -230,44 +250,11 @@ function DriverProfilePage() {
             avgRating: totalRating / reviewedDeliveries.length,
             totalDeliveries: completedDeliveries.length
         }
-    }, [driverId, prototypeOrders]);
+    }, [orders]);
+    
+    const isLoading = driverLoading || ordersLoading;
 
-    useEffect(() => {
-        async function fetchData() {
-            if (prototypeLoading) return;
-            setLoading(true);
-
-            let driverData: DeliveryPersonnel | null = null;
-
-            if (driverId === prototypeDelivery.id) {
-                 driverData = prototypeDelivery;
-            } else {
-                 const realDriver = await getDeliveryPersonById(driverId);
-                 if(realDriver) driverData = realDriver;
-            }
-
-            if (!driverData) {
-                notFound();
-                return;
-            }
-            
-            setDriver(driverData);
-            const fetchedReviews = getReviewsByDriverId(driverId);
-            setReviews(fetchedReviews.map(order => ({
-                orderId: order.id,
-                rating: order.deliveryRating!,
-                review: order.deliveryReview || '',
-                date: order.createdAt,
-                customerName: order.customerName,
-            })));
-
-            setLoading(false);
-        }
-        fetchData();
-    }, [driverId, prototypeDelivery, getReviewsByDriverId, prototypeLoading]);
-
-
-    if (loading || prototypeLoading) {
+    if (isLoading) {
         return (
             <div className="container mx-auto">
                 <PageHeader title={<Skeleton className="h-8 w-48" />} description={<Skeleton className="h-5 w-64" />} />
@@ -360,3 +347,5 @@ export default function GuardedDriverProfilePage() {
         </AdminAuthGuard>
     )
 }
+
+    

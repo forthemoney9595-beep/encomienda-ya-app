@@ -12,12 +12,12 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useFirestore } from '@/firebase';
 import { ManageItemDialog } from './manage-item-dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { ProductReviewsDialog } from './product-reviews-dialog';
+import { updateUserProfile } from '@/lib/user-service';
 
 interface ProductListProps {
     products: Product[];
@@ -45,8 +45,8 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
     const { toast } = useToast();
     const params = useParams();
     const currentStoreId = params.storeId as string;
-    const { user } = useAuth();
-    const { favoriteProducts, toggleFavoriteProduct } = usePrototypeData();
+    const { user, userProfile } = useAuth();
+    const firestore = useFirestore();
     
     const [isManageItemDialogOpen, setManageItemDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -56,6 +56,7 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
     const [viewingReviewsFor, setViewingReviewsFor] = useState<Product | null>(null);
 
     const isOwner = user?.uid === ownerId;
+    const favoriteProducts = userProfile?.favoriteProducts || [];
 
     const filteredProducts = useMemo(() => {
         if (!searchQuery) return products;
@@ -105,16 +106,17 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
     };
     
     const handleFavoriteToggle = (product: Product) => {
-        if (!user) {
-            toast({
-                variant: 'destructive',
-                title: 'Inicia Sesión para Guardar',
-                description: 'Debes iniciar sesión para guardar favoritos.',
-            });
+        if (!user || !firestore) {
+            toast({ variant: 'destructive', title: 'Inicia Sesión para Guardar' });
             return;
         }
-        toggleFavoriteProduct(product.id);
         const isFavorite = favoriteProducts.includes(product.id);
+        const updatedFavorites = isFavorite
+            ? favoriteProducts.filter(id => id !== product.id)
+            : [...favoriteProducts, product.id];
+        
+        updateUserProfile(firestore, user.uid, { favoriteProducts: updatedFavorites });
+
         toast({
             title: isFavorite ? 'Eliminado de Favoritos' : 'Añadido a Favoritos',
             description: `${product.name} ha sido ${isFavorite ? 'eliminado de' : 'añadido a'} tus favoritos.`,
@@ -140,8 +142,8 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
                 isOpen={isManageItemDialogOpen}
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
-                onSave={(productData) => {
-                    onSaveProduct(productData);
+                onSave={async (productData) => {
+                    await onSaveProduct(productData);
                     setManageItemDialogOpen(false);
                 }}
                 productCategories={productCategories}
@@ -294,3 +296,5 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
         </>
     )
 }
+
+    

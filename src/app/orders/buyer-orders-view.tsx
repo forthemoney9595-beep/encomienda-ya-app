@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,9 +9,9 @@ import { ArrowRight, PackageSearch } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Order, OrderStatus } from '@/lib/order-service';
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import { collection, query, where, orderBy, CollectionReference } from 'firebase/firestore';
 
 const getBadgeVariant = (status: OrderStatus) => {
     switch (status) {
@@ -60,27 +60,22 @@ function OrderRowSkeleton() {
 
 export default function BuyerOrdersView() {
   const { user, loading: authLoading } = useAuth();
-  const { getOrdersByUser, loading: prototypeLoading, prototypeOrders } = usePrototypeData();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const firestore = useFirestore();
+  
+  const ordersQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+        collection(firestore, 'orders'),
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+    ) as CollectionReference<Order>;
+  }, [firestore, user]);
+  
+  const { data: orders, isLoading: ordersLoading } = useCollection<Order>(ordersQuery);
 
-  useEffect(() => {
-    if (authLoading || prototypeLoading) {
-      setLoading(true);
-      return;
-    }
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+  const isLoading = authLoading || ordersLoading;
 
-    const userOrders = getOrdersByUser(user.uid);
-    setOrders(userOrders);
-    setLoading(false);
-  }, [user, authLoading, prototypeLoading, getOrdersByUser, prototypeOrders]);
-
-
-  if (loading) {
+  if (isLoading) {
      return (
         <div className="space-y-4">
           <OrderRowSkeleton />
@@ -91,7 +86,7 @@ export default function BuyerOrdersView() {
   
   return (
     <div className="space-y-4">
-      {orders.length === 0 ? (
+      {!orders || orders.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center text-muted-foreground flex flex-col items-center justify-center h-48">
             <PackageSearch className="h-12 w-12 mb-4" />
@@ -114,7 +109,7 @@ export default function BuyerOrdersView() {
               </CardHeader>
               <CardContent className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">{format(order.createdAt, "d 'de' MMMM, yyyy", { locale: es })}</p>
+                  <p className="text-sm text-muted-foreground">{format(new Date(order.createdAt), "d 'de' MMMM, yyyy", { locale: es })}</p>
                   <p className="text-2xl font-bold text-primary">${order.total.toFixed(2)}</p>
                 </div>
                 <ArrowRight className="h-5 w-5 text-muted-foreground" />
@@ -126,3 +121,5 @@ export default function BuyerOrdersView() {
     </div>
   );
 }
+
+    

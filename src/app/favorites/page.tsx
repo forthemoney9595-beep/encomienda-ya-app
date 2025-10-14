@@ -7,8 +7,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
 import type { Store, Product } from '@/lib/placeholder-data';
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Button } from '@/components/ui/button';
 import { Heart, ShoppingBag, Store as StoreIcon } from 'lucide-react';
@@ -18,6 +17,8 @@ import { Rating } from '@/components/ui/rating';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { collection, query, where, CollectionReference } from 'firebase/firestore';
+import { updateUserProfile } from '@/lib/user-service';
 
 // Helper to calculate a store's average rating
 const calculateStoreRating = (products: Product[]): number => {
@@ -39,17 +40,13 @@ const calculateStoreRating = (products: Product[]): number => {
 };
 
 export default function FavoritesPage() {
-  const { user, loading: authLoading } = useAuth();
-  const { 
-    prototypeStores, 
-    loading: prototypeLoading, 
-    favoriteStores, 
-    toggleFavoriteStore,
-    favoriteProducts,
-    toggleFavoriteProduct
-  } = usePrototypeData();
+  const { user, userProfile, loading: authLoading } = useAuth();
+  const firestore = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
+
+  const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<Store> : null, [firestore]);
+  const { data: allStores, isLoading: storesLoading } = useCollection<Store>(storesQuery);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -57,24 +54,27 @@ export default function FavoritesPage() {
     }
   }, [authLoading, user, router]);
 
+  const favoriteStores = userProfile?.favoriteStores || [];
+  const favoriteProducts = userProfile?.favoriteProducts || [];
+
   const favoriteStoreDetails = useMemo(() => {
-    if (prototypeLoading) return [];
+    if (storesLoading || !allStores) return [];
     
-    return prototypeStores
+    return allStores
       .filter(store => favoriteStores.includes(store.id))
       .map(store => ({
         ...store,
-        averageRating: calculateStoreRating(store.products),
+        averageRating: calculateStoreRating(store.products || []),
       }));
-  }, [prototypeStores, favoriteStores, prototypeLoading]);
+  }, [allStores, favoriteStores, storesLoading]);
   
   const favoriteProductDetails = useMemo(() => {
-      if (prototypeLoading) return [];
+      if (storesLoading || !allStores) return [];
       
       const favProducts: (Product & { storeId: string; storeName: string })[] = [];
 
-      prototypeStores.forEach(store => {
-          store.products.forEach(product => {
+      allStores.forEach(store => {
+          (store.products || []).forEach(product => {
               if (favoriteProducts.includes(product.id)) {
                   favProducts.push({
                       ...product,
@@ -85,26 +85,26 @@ export default function FavoritesPage() {
           });
       });
       return favProducts;
-  }, [prototypeStores, favoriteProducts, prototypeLoading]);
+  }, [allStores, favoriteProducts, storesLoading]);
 
+  const isLoading = authLoading || storesLoading;
 
-  const isLoading = authLoading || prototypeLoading;
+  const handleToggleFavorite = (type: 'store' | 'product', id: string, name: string) => {
+    if (!user || !firestore) return;
+    
+    const key = type === 'store' ? 'favoriteStores' : 'favoriteProducts';
+    const currentFavorites: string[] = userProfile?.[key] || [];
+    const isFavorite = currentFavorites.includes(id);
 
-  const handleFavoriteStoreToggle = (e: React.MouseEvent, storeId: string, storeName: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    toggleFavoriteStore(storeId);
+    const updatedFavorites = isFavorite
+      ? currentFavorites.filter((favId: string) => favId !== id)
+      : [...currentFavorites, id];
+
+    updateUserProfile(firestore, user.uid, { [key]: updatedFavorites });
+    
     toast({
-      title: 'Eliminado de Favoritos',
-      description: `${storeName} ha sido eliminado de tus tiendas favoritas.`,
-    });
-  };
-
-  const handleFavoriteProductToggle = (productId: string, productName: string) => {
-    toggleFavoriteProduct(productId);
-     toast({
-      title: 'Eliminado de Favoritos',
-      description: `${productName} ha sido eliminado de tus productos favoritos.`,
+      title: isFavorite ? 'Eliminado de Favoritos' : 'Añadido a Favoritos',
+      description: `${name} ha sido ${isFavorite ? 'eliminado de' : 'añadido a'} tus favoritos.`,
     });
   };
 
@@ -132,9 +132,7 @@ export default function FavoritesPage() {
                     <StoreCardSkeleton />
                 </>
                 ) : favoriteStoreDetails.length > 0 ? (
-                favoriteStoreDetails.map((store) => {
-                    const isFavorite = favoriteStores.includes(store.id);
-                    return (
+                favoriteStoreDetails.map((store) => (
                     <Link href={`/stores/${store.id}`} key={store.id} className="group">
                     <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
                         <div className="relative h-48 w-full">
@@ -148,11 +146,12 @@ export default function FavoritesPage() {
                         />
                         <Button
                             size="icon"
-                            className={cn(
-                                "absolute top-2 right-2 h-8 w-8 rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70",
-                                isFavorite ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                            )}
-                            onClick={(e) => handleFavoriteStoreToggle(e, store.id, store.name)}
+                            className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleToggleFavorite('store', store.id, store.name);
+                            }}
                             aria-label="Quitar de favoritos"
                         >
                             <Heart className="h-4 w-4 fill-red-500 text-red-500" />
@@ -220,7 +219,7 @@ export default function FavoritesPage() {
                                 <Button 
                                     variant="ghost" 
                                     size="icon"
-                                    onClick={() => handleFavoriteProductToggle(product.id, product.name)}
+                                    onClick={() => handleToggleFavorite('product', product.id, product.name)}
                                     className="text-red-500 hover:bg-red-500/10"
                                     aria-label="Quitar producto de favoritos"
                                 >
@@ -246,3 +245,5 @@ export default function FavoritesPage() {
     </div>
   );
 }
+
+    

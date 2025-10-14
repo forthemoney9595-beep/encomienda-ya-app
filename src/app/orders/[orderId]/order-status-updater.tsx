@@ -2,7 +2,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useFirestore } from '@/firebase';
 import type { Order, OrderStatus } from '@/lib/order-service';
 import { updateOrderStatus } from '@/lib/order-service';
 import { CardFooter, CardDescription, Card } from '@/components/ui/card';
@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2, CreditCard } from 'lucide-react';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface OrderStatusUpdaterProps {
@@ -31,11 +30,11 @@ const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
 
 export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { user: appUser, loading: authLoading } = useAuth();
+  const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
   const [isUpdating, setIsUpdating] = useState(false);
-  const { updatePrototypeOrder } = usePrototypeData();
 
   const isStoreOwner = appUser?.storeId === order.storeId;
   const isBuyer = appUser?.uid === order.userId;
@@ -44,13 +43,10 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const possibleNextStatuses = statusTransitions[order.status] || [];
 
   const handleUpdateStatus = async (newStatus: OrderStatus) => {
+    if (!firestore) return;
     setIsUpdating(true);
     try {
-      if (order.id.startsWith('proto-')) {
-        updatePrototypeOrder(order.id, { status: newStatus });
-      } else {
-        await updateOrderStatus(order.id, newStatus);
-      }
+      await updateOrderStatus(firestore, order.id, newStatus);
 
       toast({
           title: '¡Estado Actualizado!',
@@ -84,17 +80,14 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
 
 
   const handleBuyerPayment = async () => {
+    if (!firestore) return;
     setIsUpdating(true);
     // Simulating payment processing
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
         const newStatus = 'En preparación';
-        if (order.id.startsWith('proto-')) {
-            updatePrototypeOrder(order.id, { status: newStatus });
-        } else {
-            await updateOrderStatus(order.id, newStatus);
-        }
+        await updateOrderStatus(firestore, order.id, newStatus);
         toast({
             title: '¡Pago Realizado!',
             description: 'La tienda ha sido notificada para que comience a preparar tu pedido.',
@@ -171,3 +164,5 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
 
   return null; // Return null if not the right user or no actions are possible
 }
+
+    

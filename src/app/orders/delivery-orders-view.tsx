@@ -6,33 +6,46 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MapPin, Store, PackageSearch, Loader2, CheckCircle } from 'lucide-react';
 import type { Order } from '@/lib/order-service';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { assignOrderToDeliveryPerson, updateOrderStatus } from '@/lib/order-service';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { collection, query, where, orderBy, CollectionReference, or } from 'firebase/firestore';
 
 export default function DeliveryOrdersView() {
   const { user, loading: authLoading } = useAuth();
-  const { prototypeOrders, loading: prototypeLoading, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson, updatePrototypeOrder } = usePrototypeData();
+  const firestore = useFirestore();
   const { toast } = useToast();
   
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
-  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
-  const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
 
-  useEffect(() => {
-    if (!user || prototypeLoading) return;
-    setAvailableOrders(getAvailableOrdersForDelivery());
-    setAssignedOrders(getOrdersByDeliveryPerson(user.uid));
-  }, [user, prototypeOrders, prototypeLoading, getAvailableOrdersForDelivery, getOrdersByDeliveryPerson]);
+  const availableOrdersQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(
+        collection(firestore, 'orders'),
+        where('status', '==', 'En preparación')
+    ) as CollectionReference<Order>;
+  }, [firestore]);
 
+  const assignedOrdersQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+        collection(firestore, 'orders'),
+        where('deliveryPersonId', '==', user.uid),
+        where('status', 'in', ['En reparto', 'Entregado'])
+    ) as CollectionReference<Order>;
+  }, [firestore, user]);
+
+  const { data: availableOrders, isLoading: availableLoading } = useCollection<Order>(availableOrdersQuery);
+  const { data: assignedOrders, isLoading: assignedLoading } = useCollection<Order>(assignedOrdersQuery);
+  
+  const isLoading = authLoading || availableLoading || assignedLoading;
 
   const handleAcceptOrder = async (orderId: string) => {
-    if (!user) {
+    if (!user || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -43,15 +56,7 @@ export default function DeliveryOrdersView() {
 
     setLoadingOrderId(orderId);
     try {
-      if (orderId.startsWith('proto-')) {
-          updatePrototypeOrder(orderId, { 
-              status: 'En reparto', 
-              deliveryPersonId: user.uid,
-              deliveryPersonName: user.name,
-            });
-      } else {
-         await assignOrderToDeliveryPerson(orderId, user.uid, user.name);
-      }
+      await assignOrderToDeliveryPerson(firestore, orderId, user.uid, userProfile?.name || 'Repartidor');
       toast({
         title: '¡Pedido Aceptado!',
         description: 'El pedido ha sido asignado a ti. ¡Hora de ponerse en marcha!',
@@ -69,17 +74,14 @@ export default function DeliveryOrdersView() {
   };
 
   const handleCompleteOrder = async (orderId: string) => {
+    if (!firestore) return;
     setLoadingOrderId(orderId);
     try {
-        if(orderId.startsWith('proto-')) {
-            updatePrototypeOrder(orderId, { status: 'Entregado' });
-        } else {
-            await updateOrderStatus(orderId, 'Entregado');
-        }
-      toast({
-        title: '¡Entrega Completada!',
-        description: '¡Buen trabajo! El pedido ha sido marcado como entregado.',
-      });
+        await updateOrderStatus(firestore, orderId, 'Entregado');
+        toast({
+            title: '¡Entrega Completada!',
+            description: '¡Buen trabajo! El pedido ha sido marcado como entregado.',
+        });
     } catch (error) {
       console.error('Error completing order:', error);
       toast({
@@ -124,7 +126,9 @@ export default function DeliveryOrdersView() {
     </Card>
   );
 
-  if (prototypeLoading || authLoading) {
+  const activeAssignedOrders = useMemo(() => assignedOrders?.filter(o => o.status === 'En reparto') || [], [assignedOrders]);
+
+  if (isLoading) {
     return (
         <div className="space-y-4">
             <OrderCardSkeleton />
@@ -138,16 +142,16 @@ export default function DeliveryOrdersView() {
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="available">
           Disponibles
-          <Badge className="ml-2">{availableOrders.length}</Badge>
+          <Badge className="ml-2">{availableOrders?.length || 0}</Badge>
         </TabsTrigger>
         <TabsTrigger value="assigned">
           Mis Entregas
-          <Badge variant="secondary" className="ml-2">{assignedOrders.filter(o => o.status === 'En reparto').length}</Badge>
+          <Badge variant="secondary" className="ml-2">{activeAssignedOrders.length}</Badge>
         </TabsTrigger>
       </TabsList>
       <TabsContent value="available" className="mt-4">
         <div className="space-y-4">
-          {availableOrders.length === 0 ? (
+          {!availableOrders || availableOrders.length === 0 ? (
             <NoOrdersView title="No hay pedidos disponibles" description="Vuelve a consultar pronto." />
           ) : (
             availableOrders.map((order) => (
@@ -178,7 +182,7 @@ export default function DeliveryOrdersView() {
                         </Button>
                         <Button onClick={() => handleAcceptOrder(order.id)} disabled={loadingOrderId === order.id}>
                             {loadingOrderId === order.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Aceptar Pedido
+                            Aceptar Pedido (+${order.deliveryFee.toFixed(2)})
                         </Button>
                     </div>
                 </CardContent>
@@ -189,11 +193,10 @@ export default function DeliveryOrdersView() {
       </TabsContent>
       <TabsContent value="assigned" className="mt-4">
          <div className="space-y-4">
-          {assignedOrders.filter(o => o.status === 'En reparto').length === 0 ? (
+          {activeAssignedOrders.length === 0 ? (
             <NoOrdersView title="No tienes entregas activas" description="Acepta un pedido de la pestaña 'Disponibles'." />
           ) : (
-            assignedOrders.map((order) => (
-              order.status === 'En reparto' &&
+            activeAssignedOrders.map((order) => (
               <Card key={order.id} className="border-primary/50">
                 <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2"><Store className="h-5 w-5 text-primary" /> {order.storeName}</CardTitle>
@@ -233,3 +236,5 @@ export default function DeliveryOrdersView() {
     </Tabs>
   );
 }
+
+    

@@ -2,17 +2,16 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Order, OrderStatus } from '@/lib/order-service';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePrototypeData } from '@/context/prototype-data-context';
-
+import { collection, query, where, orderBy, CollectionReference } from 'firebase/firestore';
 
 const getBadgeVariant = (status: OrderStatus) => {
     switch (status) {
@@ -38,29 +37,26 @@ const getBadgeVariant = (status: OrderStatus) => {
 export default function StoreOrdersView() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
-    const { prototypeOrders, getOrdersByStore, loading: prototypeLoading } = usePrototypeData();
-    const [orders, setOrders] = useState<Order[]>([]);
-    const [loading, setLoading] = useState(true);
+    const firestore = useFirestore();
+    
+    const ordersQuery = useMemoFirebase(() => {
+        if (!firestore || !user?.storeId) return null;
+        return query(
+            collection(firestore, 'orders'),
+            where('storeId', '==', user.storeId),
+            orderBy('createdAt', 'desc')
+        ) as CollectionReference<Order>;
+    }, [firestore, user?.storeId]);
+    
+    const { data: orders, isLoading: ordersLoading } = useCollection<Order>(ordersQuery);
 
-    useEffect(() => {
-        if (!user || authLoading || prototypeLoading) {
-            setLoading(true);
-            return;
-        };
-
-        if (user.storeId) {
-            const storeOrders = getOrdersByStore(user.storeId);
-            setOrders(storeOrders);
-        }
-        setLoading(false);
-        
-    }, [user, authLoading, prototypeLoading, prototypeOrders, getOrdersByStore]);
+    const isLoading = authLoading || ordersLoading;
 
     const handleRowClick = (orderId: string) => {
         router.push(`/orders/${orderId}`);
     };
 
-    if (loading) {
+    if (isLoading) {
         return (
             <Card>
                 <CardHeader>
@@ -96,7 +92,7 @@ export default function StoreOrdersView() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.length === 0 ? (
+              {!orders || orders.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center">
                     Aún no has recibido ningún pedido.
@@ -121,3 +117,5 @@ export default function StoreOrdersView() {
       </Card>
     );
 }
+
+    

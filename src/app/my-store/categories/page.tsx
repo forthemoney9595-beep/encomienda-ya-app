@@ -1,49 +1,47 @@
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PlusCircle, Tag, Trash2, Edit, Loader2 } from 'lucide-react';
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ManageCategoryDialog } from './manage-category-dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { doc, updateDoc } from 'firebase/firestore';
+import type { Store } from '@/lib/placeholder-data';
 
 export default function StoreCategoriesPage() {
   const { user, loading: authLoading } = useAuth();
-  const { getStoreById, updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
+  const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
 
-  const [categories, setCategories] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const storeRef = useMemoFirebase(() => {
+    if (!firestore || !user?.storeId) return null;
+    return doc(firestore, 'stores', user.storeId);
+  }, [firestore, user?.storeId]);
+
+  const { data: store, isLoading: storeLoading } = useDoc<Store>(storeRef);
+  
   const [isManageDialogOpen, setManageDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
 
+  const categories = useMemo(() => store?.productCategories || [], [store]);
+  const isLoading = authLoading || storeLoading;
+
   useEffect(() => {
-    if (authLoading || prototypeLoading) return;
-
-    if (!user || user.role !== 'store' || !user.storeId) {
+    if (!isLoading && (!user || user.role !== 'store' || !user.storeId)) {
       router.push('/');
-      return;
     }
+  }, [user, isLoading, router]);
 
-    const store = getStoreById(user.storeId);
-    if (store) {
-      setCategories(store.productCategories || [store.category]);
-    }
-    setLoading(false);
-  }, [user, authLoading, prototypeLoading, router, getStoreById]);
-
-  const handleSaveCategory = (oldCategory: string | null, newCategory: string) => {
-    if (!user?.storeId) return;
-
-    const store = getStoreById(user.storeId);
-    if (!store) return;
+  const handleSaveCategory = async (oldCategory: string | null, newCategory: string) => {
+    if (!storeRef || !store) return;
     
     let updatedCategories: string[];
     let successMessage: string;
@@ -56,26 +54,28 @@ export default function StoreCategoriesPage() {
       successMessage = 'Categoría añadida con éxito.';
     }
     
-    // In prototype mode, we update the whole store object
-    updatePrototypeStore({ ...store, id: store.id, productCategories: updatedCategories });
-    setCategories(updatedCategories);
-
-    toast({ title: successMessage });
-    setManageDialogOpen(false);
+    try {
+        await updateDoc(storeRef, { productCategories: updatedCategories });
+        toast({ title: successMessage });
+        setManageDialogOpen(false);
+    } catch (error) {
+        console.error("Error saving category: ", error);
+        toast({ title: 'Error al guardar', variant: 'destructive' });
+    }
   };
 
-  const handleDeleteCategory = (categoryToDelete: string) => {
-     if (!user?.storeId) return;
-
-    const store = getStoreById(user.storeId);
-    if (!store) return;
+  const handleDeleteCategory = async (categoryToDelete: string) => {
+    if (!storeRef) return;
 
     const updatedCategories = categories.filter(c => c !== categoryToDelete);
 
-    updatePrototypeStore({ ...store, id: store.id, productCategories: updatedCategories });
-    setCategories(updatedCategories);
-
-    toast({ title: 'Categoría eliminada', variant: 'destructive' });
+    try {
+        await updateDoc(storeRef, { productCategories: updatedCategories });
+        toast({ title: 'Categoría eliminada', variant: 'destructive' });
+    } catch(error) {
+        console.error("Error deleting category: ", error);
+        toast({ title: 'Error al eliminar', variant: 'destructive' });
+    }
   };
   
   const openDialogForCreate = () => {
@@ -89,7 +89,7 @@ export default function StoreCategoriesPage() {
   };
 
 
-  if (loading || authLoading || prototypeLoading) {
+  if (isLoading) {
     return (
       <div className="container mx-auto">
         <PageHeader title="Gestionar Categorías" description="Organiza los productos de tu tienda." />
@@ -177,3 +177,5 @@ export default function StoreCategoriesPage() {
     </div>
   );
 }
+
+    

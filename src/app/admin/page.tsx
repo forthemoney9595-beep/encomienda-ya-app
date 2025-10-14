@@ -8,11 +8,11 @@ import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
 import type { UserProfile } from '@/lib/user-service';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, CollectionReference } from 'firebase/firestore';
 import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { subDays, format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -43,10 +43,11 @@ const getStatusVariant = (status: OrderStatus) => {
 
 function AdminDashboard() {
   const firestore = useFirestore();
+  const router = useRouter();
 
-  const ordersQuery = useMemo(() => firestore ? collection(firestore, 'orders') : null, [firestore]);
-  const storesQuery = useMemo(() => firestore ? collection(firestore, 'stores') : null, [firestore]);
-  const usersQuery = useMemo(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const ordersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'orders') as CollectionReference<OrderType> : null, [firestore]);
+  const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<StoreType> : null, [firestore]);
+  const usersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) as CollectionReference<UserProfile> : null, [firestore]);
 
   const { data: orders, isLoading: ordersLoading } = useCollection<OrderType>(ordersQuery);
   const { data: stores, isLoading: storesLoading } = useCollection<StoreType>(storesQuery);
@@ -250,3 +251,5 @@ export default function GuardedAdminDashboard() {
     </AdminAuthGuard>
   );
 }
+
+    

@@ -1,7 +1,7 @@
+
 'use client';
 
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import PageHeader from '@/components/page-header';
@@ -15,11 +15,25 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
+import { collection, query, where, CollectionReference, orderBy } from 'firebase/firestore';
+import type { Order } from '@/lib/order-service';
 
 export default function StoreAnalyticsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { getOrdersByStore, loading: prototypeLoading } = usePrototypeData();
+    const firestore = useFirestore();
     const router = useRouter();
+
+    const ordersQuery = useMemoFirebase(() => {
+        if (!firestore || !user?.storeId) return null;
+        return query(
+            collection(firestore, 'orders'),
+            where('storeId', '==', user.storeId),
+            where('status', '==', 'Entregado'),
+            orderBy('createdAt', 'desc')
+        ) as CollectionReference<Order>;
+    }, [firestore, user?.storeId]);
+
+    const { data: storeOrders, isLoading: ordersLoading } = useCollection<Order>(ordersQuery);
 
     useEffect(() => {
         if (!authLoading && (!user || user.role !== 'store')) {
@@ -27,16 +41,11 @@ export default function StoreAnalyticsPage() {
         }
     }, [user, authLoading, router]);
 
-    const storeOrders = useMemo(() => {
-        if (!user?.storeId) return [];
-        return getOrdersByStore(user.storeId).filter(order => order.status === 'Entregado');
-    }, [user, getOrdersByStore]);
-
     const totalRevenue = useMemo(() => {
-        return storeOrders.reduce((acc, order) => acc + order.total, 0);
+        return storeOrders?.reduce((acc, order) => acc + order.total, 0) || 0;
     }, [storeOrders]);
 
-    const totalOrders = storeOrders.length;
+    const totalOrders = storeOrders?.length || 0;
     
     const averageOrderValue = useMemo(() => {
         if (totalOrders === 0) return 0;
@@ -48,7 +57,7 @@ export default function StoreAnalyticsPage() {
         
         return last7Days.map(day => {
             const dayString = format(day, 'yyyy-MM-dd');
-            const salesForDay = storeOrders
+            const salesForDay = (storeOrders || [])
                 .filter(order => format(new Date(order.createdAt), 'yyyy-MM-dd') === dayString)
                 .reduce((sum, order) => sum + order.total, 0);
 
@@ -61,7 +70,7 @@ export default function StoreAnalyticsPage() {
 
     const topProducts = useMemo(() => {
         const productSales = new Map<string, { name: string, quantity: number, revenue: number, imageUrl?: string }>();
-        storeOrders.forEach(order => {
+        (storeOrders || []).forEach(order => {
             order.items.forEach(item => {
                 const existing = productSales.get(item.id);
                 const revenue = item.price * item.quantity;
@@ -80,7 +89,7 @@ export default function StoreAnalyticsPage() {
 
     const topCustomers = useMemo(() => {
         const customerData = new Map<string, { name: string, orders: number, total: number }>();
-        storeOrders.forEach(order => {
+        (storeOrders || []).forEach(order => {
             const customerId = order.userId;
             const customerName = order.customerName || 'Cliente Anónimo';
             const existing = customerData.get(customerId);
@@ -97,7 +106,7 @@ export default function StoreAnalyticsPage() {
     }, [storeOrders]);
 
 
-    if (authLoading || prototypeLoading || !user) {
+    if (authLoading || ordersLoading || !user) {
         return (
             <div className="container mx-auto">
                 <PageHeader title="Analíticas de la Tienda" description="Cargando tus métricas de rendimiento." />
@@ -246,3 +255,5 @@ export default function StoreAnalyticsPage() {
         </div>
     );
 }
+
+    

@@ -1,7 +1,6 @@
 
 'use server';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
-import { initialPrototypeStores, prototypeDelivery } from './placeholder-data';
 import { Firestore, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 
 /**
@@ -12,7 +11,7 @@ export async function getStoreById(db: Firestore, id: string): Promise<Store | n
     const storeRef = doc(db, 'stores', id);
     const storeSnap = await getDoc(storeRef);
     if (storeSnap.exists()) {
-        return storeSnap.data() as Store;
+        return { ...storeSnap.data(), id: storeSnap.id } as Store;
     }
     return null;
 }
@@ -58,57 +57,39 @@ export async function deleteProductFromStore(db: Firestore, storeId: string, pro
     });
 }
 
-/**
- * Fetches all delivery personnel. In prototype mode, returns a mix of real and proto data.
- */
-export async function getDeliveryPersonnel(isPrototype: boolean = false): Promise<DeliveryPersonnel[]> {
-  console.warn("getDeliveryPersonnel is a placeholder in prototype mode.");
-  if(isPrototype) {
-    return [prototypeDelivery];
-  }
-  return [];
-}
 
 /**
  * Fetches a single delivery person by their user ID. In prototype mode, this is a placeholder.
  */
-export async function getDeliveryPersonById(id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
-  console.warn("getDeliveryPersonById is a placeholder in prototype mode.");
-  if (id === prototypeDelivery.id) {
-    return prototypeDelivery;
-  }
-  return null;
+export async function getDeliveryPersonById(db: Firestore, id: string): Promise<(DeliveryPersonnel & { email: string }) | null> {
+    const userRef = doc(db, 'users', id);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists() && userSnap.data().role === 'delivery') {
+        return { ...userSnap.data(), id: userSnap.id } as DeliveryPersonnel & { email: string };
+    }
+    return null;
 }
 
 /**
- * Updates the status of a store. In prototype mode, this is a placeholder.
+ * Updates the status of a store.
+ * @param db The Firestore instance.
  * @param storeId The ID of the store to update.
  * @param status The new status ('Aprobado' or 'Rechazado').
  */
-export async function updateStoreStatus(storeId: string, status: 'Aprobado' | 'Rechazado'): Promise<void> {
-  console.warn("updateStoreStatus is a placeholder in prototype mode.");
-  return;
+export async function updateStoreStatus(db: Firestore, storeId: string, status: 'Aprobado' | 'Rechazado'): Promise<void> {
+  const storeRef = doc(db, 'stores', storeId);
+  await updateDoc(storeRef, { status });
 }
 
 /**
- * Updates store data. In prototype mode, this is a placeholder.
- * @param storeId The ID of the store to update.
- * @param storeData The data to update.
+ * Updates the status of a delivery person.
+ * @param db The Firestore instance.
+ * @param personnelId The UID of the delivery person to update.
+ * @param status The new status ('Activo' or 'Rechazado').
  */
-export async function updateStoreData(storeId: string, storeData: Partial<Store>): Promise<void> {
-    console.warn("updateStoreData is a placeholder in prototype mode.");
-    return;
-}
-
-
-/**
- * Updates the status of a delivery person. In prototype mode, this is a placeholder.
- * @param personnelId The ID of the delivery person to update.
- * @param status The new status ('approved' or 'rejected').
- */
-export async function updateDeliveryPersonnelStatus(personnelId: string, status: 'approved' | 'rejected'): Promise<void> {
-  console.warn("updateDeliveryPersonnelStatus is a placeholder in prototype mode.");
-  return;
+export async function updateDeliveryPersonnelStatus(db: Firestore, personnelId: string, status: 'Activo' | 'Rechazado'): Promise<void> {
+  const userRef = doc(db, 'users', personnelId);
+  await updateDoc(userRef, { status });
 }
 
     

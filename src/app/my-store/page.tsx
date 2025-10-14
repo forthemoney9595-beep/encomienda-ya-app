@@ -1,8 +1,7 @@
 
-
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -11,14 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Loader2, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Store } from '@/lib/placeholder-data';
 import Image from 'next/image';
+import { doc, updateDoc } from 'firebase/firestore';
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -30,13 +29,18 @@ type FormData = z.infer<typeof formSchema>;
 
 export default function MyStorePage() {
     const { user, loading: authLoading } = useAuth();
-    const { getStoreById: getPrototypeStoreById, updatePrototypeStore, loading: prototypeLoading } = usePrototypeData();
+    const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
     
-    const [store, setStore] = useState<Store | null>(null);
-    const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    
+    const storeRef = useMemoFirebase(() => {
+      if (!firestore || !user?.storeId) return null;
+      return doc(firestore, 'stores', user.storeId);
+    }, [firestore, user?.storeId]);
+    
+    const { data: store, isLoading: storeLoading } = useDoc<Store>(storeRef);
     
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
@@ -44,44 +48,32 @@ export default function MyStorePage() {
     });
     
     useEffect(() => {
-        if (authLoading || prototypeLoading) return;
-
-        if (!user || user.role !== 'store' || !user.storeId) {
-            router.push('/');
-            return;
+        if (!authLoading && !storeLoading) {
+            if (!user || user.role !== 'store' || !user.storeId) {
+                router.push('/');
+                return;
+            }
         }
+    }, [user, authLoading, storeLoading, router]);
 
-        const storeData = getPrototypeStoreById(user.storeId);
-
-        if (storeData) {
-            setStore(storeData);
-            form.reset({
-                name: storeData.name,
-                address: storeData.address,
-                horario: storeData.horario,
+    useEffect(() => {
+        if (store) {
+             form.reset({
+                name: store.name,
+                address: store.address,
+                horario: store.horario,
             });
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar tu tienda.' });
-            router.push('/');
         }
-        setLoading(false);
-    }, [user, authLoading, prototypeLoading, router, toast, form, getPrototypeStoreById]);
+    }, [store, form]);
 
 
     async function onSubmit(values: FormData) {
-        if (!store) return;
+        if (!storeRef) return;
         
         setIsSaving(true);
         
         try {
-            const updatedStoreData: Partial<Store> = {
-                name: values.name,
-                address: values.address,
-                horario: values.horario,
-            };
-            
-            await updatePrototypeStore({ ...store, ...updatedStoreData });
-            
+            await updateDoc(storeRef, values);
             toast({ title: '¡Información Guardada!', description: 'Los detalles de tu tienda han sido actualizados.' });
 
         } catch (error) {
@@ -96,7 +88,7 @@ export default function MyStorePage() {
         }
     }
     
-    if (loading || authLoading || prototypeLoading || !store) {
+    if (storeLoading || authLoading || !store) {
         return (
             <div className="container mx-auto">
                 <PageHeader title="Editar Mi Tienda" description="Actualiza la información de tu negocio." />
@@ -176,3 +168,5 @@ export default function MyStorePage() {
         </div>
     );
 }
+
+    

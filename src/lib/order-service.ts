@@ -1,4 +1,7 @@
+
 'use server';
+
+import { collection, addDoc, getDoc, doc, updateDoc, Firestore, Timestamp } from 'firebase/firestore';
 
 // A CartItem is a Product with a quantity.
 export interface CartItem {
@@ -49,11 +52,13 @@ interface CreateOrderInput {
 }
 
 /**
- * Creates an order. In prototype mode, it generates the data object with coordinates.
+ * Creates an order in Firestore.
+ * @param db The Firestore instance.
  * @param input The data for the new order.
- * @returns The created order object.
+ * @returns The created order object with its new ID.
  */
 export async function createOrder(
+   db: Firestore,
    input: CreateOrderInput
 ): Promise<Order> {
     const { userId, customerName, items, shippingInfo, storeId, storeName, storeAddress } = input;
@@ -76,58 +81,75 @@ export async function createOrder(
         total,
         deliveryFee,
         status: 'Pendiente de Confirmación' as const,
+        createdAt: Timestamp.now(),
         storeId,
         storeName,
         storeAddress,
         shippingAddress: shippingInfo,
         storeCoords,
         customerCoords,
-        deliveryPersonId: undefined,
-        deliveryPersonName: undefined,
+        deliveryPersonId: '',
+        deliveryPersonName: '',
     };
     
-    // In pure prototype mode, we just return the object for the context to handle.
+    const ordersCollection = collection(db, 'orders');
+    const newOrderRef = await addDoc(ordersCollection, newOrderData);
+
     return {
         ...newOrderData,
-        id: `proto-order-${Date.now()}`,
-        createdAt: new Date(),
+        id: newOrderRef.id,
+        createdAt: newOrderData.createdAt.toDate(),
     };
 }
 
 
-export async function getOrdersByUser(userId: string): Promise<Order[]> {
-    console.warn('getOrdersByUser is a placeholder in prototype mode.');
-    return [];
+/**
+ * Fetches a single order by its ID from Firestore.
+ * @param db The Firestore instance.
+ * @param orderId The ID of the order.
+ * @returns The order object or null if not found.
+ */
+export async function getOrderById(db: Firestore, orderId: string): Promise<Order | null> {
+    const orderRef = doc(db, 'orders', orderId);
+    const orderSnap = await getDoc(orderRef);
+    if (orderSnap.exists()) {
+        const data = orderSnap.data();
+        // Convert Firestore Timestamp to JS Date
+        return { 
+            ...data, 
+            id: orderSnap.id,
+            createdAt: (data.createdAt as Timestamp).toDate(),
+        } as Order;
+    }
+    return null;
 }
+
 
 /**
  * Updates the status of an order.
+ * @param db The Firestore instance.
  * @param orderId The ID of the order to update.
  * @param status The new status for the order.
  */
-export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
-  console.warn('updateOrderStatus is a placeholder in prototype mode.');
-  return;
+export async function updateOrderStatus(db: Firestore, orderId: string, status: OrderStatus): Promise<void> {
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, { status });
 }
 
 /**
  * Assigns an order to a delivery person and updates its status.
+ * @param db The Firestore instance.
  * @param orderId The ID of the order to assign.
  * @param driverId The ID of the delivery person.
  * @param driverName The name of the delivery person.
  */
-export async function assignOrderToDeliveryPerson(orderId: string, driverId: string, driverName: string): Promise<void> {
-    console.warn('assignOrderToDeliveryPerson is a placeholder in prototype mode.');
-    return;
+export async function assignOrderToDeliveryPerson(db: Firestore, orderId: string, driverId: string, driverName: string): Promise<void> {
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, {
+        deliveryPersonId: driverId,
+        deliveryPersonName: driverName,
+        status: 'En reparto'
+    });
 }
 
-export async function getAvailableOrdersForDelivery(): Promise<Order[]> {
-  console.warn('getAvailableOrdersForDelivery is a placeholder in prototype mode.');
-  return [];
-}
-
-
-export async function getOrderById(orderId: string): Promise<Order | null> {
-    console.warn('getOrderById is a placeholder in prototype mode.');
-    return null;
-}
+    
