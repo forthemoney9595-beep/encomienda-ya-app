@@ -25,7 +25,10 @@ function UserMenu() {
         router.push('/login');
     };
 
-    if (!user || !userProfile) {
+    const displayName = userProfile?.name || user?.displayName || 'Usuario';
+    const displayEmail = userProfile?.email || user?.email || '';
+
+    if (!user) {
         return (
             <div className="p-3">
                 <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center rounded-md transition-colors bg-sidebar/5">
@@ -46,12 +49,12 @@ function UserMenu() {
             <DropdownMenuTrigger asChild>
                 <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent/50 cursor-pointer rounded-md transition-colors">
                     <Avatar className="h-9 w-9 border-2 border-sidebar-accent">
-                        <AvatarImage src={getPlaceholderImage(userProfile.name, 40, 40)} alt={userProfile.name} />
-                        <AvatarFallback>{userProfile.name?.[0].toUpperCase()}</AvatarFallback>
+                        <AvatarImage src={getPlaceholderImage(displayName, 40, 40)} alt={displayName} />
+                        <AvatarFallback>{displayName?.[0].toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 flex-col truncate group-data-[collapsible=icon]:hidden">
-                        <span className="text-sm font-semibold text-sidebar-foreground truncate">{userProfile.name}</span>
-                        <span className="text-xs text-sidebar-foreground/70 truncate">{userProfile.email}</span>
+                        <span className="text-sm font-semibold text-sidebar-foreground truncate">{displayName}</span>
+                        <span className="text-xs text-sidebar-foreground/70 truncate">{displayEmail}</span>
                     </div>
                     <ChevronsUpDown className="h-4 w-4 text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden" />
                 </div>

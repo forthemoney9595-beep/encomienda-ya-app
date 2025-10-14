@@ -12,59 +12,58 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const { user, isAdmin, loading } = useAuth();
     const router = useRouter();
     const firestore = useFirestore();
-    const [isChecking, setIsChecking] = useState(true);
 
     useEffect(() => {
-        if (loading) return;
+        if (loading) {
+            return;
+        }
 
-        const checkAndSetAdminRole = async () => {
-            if (!user || !firestore) {
-                router.push('/');
-                return;
-            }
-
-            // This is a special hardcoded check to auto-promote the first admin.
-            // In a real app, this would be done via a backend script or manually in the console.
+        if (!user || !firestore) {
+            router.push('/login');
+            return;
+        }
+        
+        // This is the auto-promotion logic.
+        // It checks if the logged-in user is 'admin@test.com' and if their admin role document exists.
+        // If not, it creates it.
+        const setupAdmin = async () => {
             if (user.email === 'admin@test.com') {
                 const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
                 const adminSnap = await getDoc(adminRoleRef);
                 if (!adminSnap.exists()) {
                     try {
                         await setDoc(adminRoleRef, {
-                            name: user.displayName || 'Admin',
+                            name: 'Admin',
                             email: user.email,
                             role: 'superadmin',
                             createdAt: new Date(),
                         });
-                        // The onSnapshot listener in AuthContext should pick this up and update isAdmin.
-                        // We might need to give it a moment.
-                        setTimeout(() => setIsChecking(false), 1000); // Give time for context to update
+                        // After setting, the context's onSnapshot should update isAdmin,
+                        // triggering a re-render and granting access.
                     } catch (e) {
                          console.error("Failed to auto-promote admin:", e);
-                         router.push('/');
-                    }
-                } else {
-                     if (!isAdmin) {
-                        // The role document exists, but the context hasn't updated yet.
-                        setTimeout(() => setIsChecking(false), 1000);
-                    } else {
-                         setIsChecking(false);
                     }
                 }
-            } else {
-                 if (!isAdmin) {
-                    router.push('/');
-                 } else {
-                    setIsChecking(false);
-                 }
             }
         };
 
-        checkAndSetAdminRole();
+        setupAdmin().then(() => {
+            // After attempting to set up, check for admin status.
+            // A brief delay can help ensure the context has time to receive the update.
+            setTimeout(() => {
+                if (!isAdmin) {
+                     // Re-check isAdmin from context after potential update
+                    const { isAdmin: updatedIsAdmin } = useAuth.getState ? useAuth.getState() : { isAdmin: false };
+                    if(!updatedIsAdmin) {
+                        // router.push('/');
+                    }
+                }
+            }, 500)
+        });
 
     }, [user, isAdmin, loading, router, firestore]);
 
-    if (loading || isChecking) {
+    if (loading) {
         return (
             <div className="flex items-center justify-center h-screen">
                 <div className="flex flex-col items-center gap-2">
@@ -82,7 +81,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <ShieldAlert className="h-4 w-4" />
                     <AlertTitle>Acceso Denegado</AlertTitle>
                     <AlertDescription>
-                        No tienes permisos para acceder a esta área. Serás redirigido.
+                        No tienes permisos para acceder a esta área. Serás redirigido en breve...
                     </AlertDescription>
                 </Alert>
             </div>

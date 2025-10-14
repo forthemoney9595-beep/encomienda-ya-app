@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { useUser as useFirebaseUserHook, useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
 import type { User } from 'firebase/auth';
 import type { UserProfile } from '@/lib/user-service';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 
 interface AuthContextType {
     user: User | null;
@@ -23,53 +23,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const firestore = useFirestore();
     
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [isProfileLoading, setProfileLoading] = useState(true);
 
     useEffect(() => {
         if (isAuthLoading) {
             setProfileLoading(true);
             return;
-        };
+        }
 
         if (!user || !firestore) {
             setUserProfile(null);
+            setIsAdmin(false);
             setProfileLoading(false);
             return;
         }
 
         setProfileLoading(true);
-        const userDocRef = doc(firestore, 'users', user.uid);
 
-        const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        const userDocRef = doc(firestore, 'users', user.uid);
+        const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+
+        const unsubUser = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 setUserProfile(docSnap.data() as UserProfile);
             } else {
-                console.log(`No user profile found for UID: ${user.uid}, checking admin roles...`);
-                // If no user profile, check if they are an admin as a fallback
-                const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-                onSnapshot(adminRoleRef, (adminSnap) => {
-                    if (adminSnap.exists()) {
-                        setUserProfile({
-                            uid: user.uid,
-                            email: user.email || '',
-                            name: user.displayName || 'Admin',
-                            role: 'admin',
-                        });
-                    } else {
-                         setUserProfile(null);
-                    }
-                     setProfileLoading(false);
-                });
+                setUserProfile(null); // Explicitly set to null if no profile
             }
-             setProfileLoading(false);
         }, (error) => {
-            console.error("Error fetching user profile with onSnapshot:", error);
+            console.error("Error fetching user profile:", error);
             setUserProfile(null);
+        });
+
+        const unsubAdmin = onSnapshot(adminRoleRef, (adminSnap) => {
+            setIsAdmin(adminSnap.exists());
+             // Combine loading states: finish only when both checks are done conceptually
+            setProfileLoading(false);
+        }, (error) => {
+            console.error("Error fetching admin role:", error);
+            setIsAdmin(false);
             setProfileLoading(false);
         });
 
-        // Cleanup subscription on unmount or when user changes
-        return () => unsubscribe();
+        // Cleanup subscriptions on unmount
+        return () => {
+            unsubUser();
+            unsubAdmin();
+        };
 
     }, [user, firestore, isAuthLoading]);
 
@@ -79,10 +79,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [auth]);
 
-    const isAdmin = userProfile?.role === 'admin';
     const loading = isAuthLoading || isProfileLoading;
 
-    const value = { user, userProfile, loading, isAdmin, logout };
+    // The final isAdmin check should also consider the userProfile for robustness, though roles_admin is primary
+    const finalIsAdmin = isAdmin || userProfile?.role === 'admin';
+
+    const value = { user, userProfile, loading, isAdmin: finalIsAdmin, logout };
     
     return (
         <AuthContext.Provider value={value}>
