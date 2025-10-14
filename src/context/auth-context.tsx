@@ -1,68 +1,69 @@
+
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { prototypeUsers } from '@/lib/placeholder-data';
-import type { UserProfile as AppUserProfile } from '@/lib/user';
-import { usePrototypeData } from './prototype-data-context';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { useUser, useAuth as useFirebaseAuth, useFirestore, useMemoFirebase } from '@/firebase';
+import type { User } from 'firebase/auth';
+import type { UserProfile } from '@/lib/placeholder-data';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface AuthContextType {
-    user: AppUserProfile | null;
+    user: User | null;
+    userProfile: UserProfile | null;
     loading: boolean;
     isAdmin: boolean;
-    loginForPrototype: (email: string) => void;
-    logoutForPrototype: () => void;
+    logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const PROTOTYPE_USER_KEY = 'prototypeUserEmail';
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<AppUserProfile | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [isClient, setIsClient] = useState(false);
-    
-    // This is a bit of a hack to get the prototype users from the data context
-    // In a real app, this would be a single source of truth from a DB.
-    const prototypeData = usePrototypeData();
+    const { user, isUserLoading: isAuthLoading, userError } = useUser();
+    const auth = useFirebaseAuth();
+    const firestore = useFirestore();
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [isProfileLoading, setProfileLoading] = useState(true);
 
-
-    useEffect(() => {
-        setIsClient(true);
-    }, []);
+    const userDocRef = useMemoFirebase(() => {
+      if (!user?.uid || !firestore) return null;
+      return doc(firestore, 'users', user.uid);
+    }, [user?.uid, firestore]);
 
     useEffect(() => {
-        if (isClient && !prototypeData.loading) {
-            try {
-                const savedUserEmail = sessionStorage.getItem(PROTOTYPE_USER_KEY);
-                if (savedUserEmail && prototypeData.prototypeUsers[savedUserEmail]) {
-                    setUser(prototypeData.prototypeUsers[savedUserEmail]);
-                }
-            } catch (error) {
-                console.error("Failed to parse user from sessionStorage", error);
-                sessionStorage.removeItem(PROTOTYPE_USER_KEY);
-            } finally {
-                setLoading(false);
+        if (!userDocRef) {
+            setUserProfile(null);
+            setProfileLoading(false);
+            return;
+        }
+
+        setProfileLoading(true);
+        const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setUserProfile(docSnap.data() as UserProfile);
+            } else {
+                setUserProfile(null);
             }
+            setProfileLoading(false);
+        }, (error) => {
+            console.error("Error fetching user profile:", error);
+            setUserProfile(null);
+            setProfileLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [userDocRef]);
+
+
+    const logout = useCallback(async () => {
+        if(auth) {
+            await auth.signOut();
         }
-    }, [isClient, prototypeData.loading, prototypeData.prototypeUsers]);
+    }, [auth]);
 
-    const loginForPrototype = (email: string) => {
-        if (prototypeData.prototypeUsers[email]) {
-            const userToLogin = prototypeData.prototypeUsers[email];
-            setUser(userToLogin);
-            sessionStorage.setItem(PROTOTYPE_USER_KEY, email);
-        }
-    };
+    const isAdmin = userProfile?.role === 'admin';
+    const loading = isAuthLoading || isProfileLoading;
 
-    const logoutForPrototype = () => {
-        setUser(null);
-        sessionStorage.removeItem(PROTOTYPE_USER_KEY);
-    };
-
-    const isAdmin = user?.role === 'admin';
-
-    const value = { user, loading: !isClient || loading || prototypeData.loading, isAdmin, loginForPrototype, logoutForPrototype };
+    const value = { user, userProfile, loading, isAdmin, logout };
     
     return (
         <AuthContext.Provider value={value}>
@@ -78,5 +79,3 @@ export const useAuth = () => {
     }
     return context;
 };
-
-    

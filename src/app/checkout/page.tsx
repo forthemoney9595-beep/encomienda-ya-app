@@ -17,10 +17,13 @@ import { Home, Loader2, Info } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState } from 'react';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Address } from '@/lib/user';
+import { useDoc } from '@/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { useFirestore, useMemoFirebase } from '@/firebase';
+import type { Store } from '@/lib/placeholder-data';
+
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
@@ -31,8 +34,8 @@ const formSchema = z.object({
 
 export default function CheckoutPage() {
   const { cart, totalPrice, totalItems, clearCart, storeId } = useCart();
-  const { user, loading: authLoading } = useAuth();
-  const { addPrototypeOrder, prototypeStores } = usePrototypeData();
+  const { user, userProfile, loading: authLoading } = useAuth();
+  const firestore = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,29 +57,29 @@ export default function CheckoutPage() {
   const addressIdValue = form.watch('addressId');
 
   useEffect(() => {
-    if (clientLoaded && user && !authLoading) {
+    if (clientLoaded && userProfile && !authLoading) {
         form.reset({
-            name: user.name || "",
-            address: user.addresses && user.addresses.length > 0 
-                ? `${user.addresses[0].street}, ${user.addresses[0].city}, ${user.addresses[0].postalCode}`
+            name: userProfile.name || "",
+            address: userProfile.addresses && userProfile.addresses.length > 0 
+                ? `${userProfile.addresses[0].street}, ${userProfile.addresses[0].city}, ${userProfile.addresses[0].postalCode}`
                 : "",
-            addressId: user.addresses && user.addresses.length > 0 ? user.addresses[0].id : "new",
+            addressId: userProfile.addresses && userProfile.addresses.length > 0 ? userProfile.addresses[0].id : "new",
         });
     }
-  }, [user, authLoading, form, clientLoaded]);
+  }, [userProfile, authLoading, form, clientLoaded]);
   
   useEffect(() => {
-    if(addressIdValue && user?.addresses) {
+    if(addressIdValue && userProfile?.addresses) {
         if(addressIdValue === 'new') {
             form.setValue('address', '');
         } else {
-            const selectedAddress = user.addresses.find(a => a.id === addressIdValue);
+            const selectedAddress = userProfile.addresses.find(a => a.id === addressIdValue);
             if(selectedAddress) {
                  form.setValue('address', `${selectedAddress.street}, ${selectedAddress.city}, ${selectedAddress.postalCode}`);
             }
         }
     }
-  }, [addressIdValue, user?.addresses, form]);
+  }, [addressIdValue, userProfile?.addresses, form]);
 
 
   useEffect(() => {
@@ -96,7 +99,7 @@ export default function CheckoutPage() {
   }, [clientLoaded, authLoading, totalItems, storeId, router, toast]);
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!user || !storeId || cart.length === 0) {
+    if (!user || !userProfile || !storeId || !firestore || cart.length === 0) {
       toast({
         variant: "destructive",
         title: "Error de Validación",
@@ -108,37 +111,30 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
-      const isPrototype = storeId.startsWith('proto-');
-      
-      let storeName = "Nombre de Tienda Real"; // Placeholder for real store
-      let storeAddress = "Dirección de Tienda Real"; // Placeholder for real store
+      const storeRef = doc(firestore, 'stores', storeId);
+      const storeSnap = await getDoc(storeRef);
 
-      if (isPrototype) {
-        const protoStore = prototypeStores.find(s => s.id === storeId);
-        if (protoStore) {
-            storeName = protoStore.name;
-            storeAddress = protoStore.address;
-        }
-      } else {
-        // In a real app, you might fetch store details if not already available
+      if (!storeSnap.exists()) {
+        throw new Error("La tienda para este pedido no existe.");
       }
+
+      const storeData = storeSnap.data() as Store;
 
       const createdOrder = await createOrder({
         userId: user.uid,
-        customerName: user.name,
+        customerName: userProfile.name,
         items: cart,
         shippingInfo: {
           name: values.name,
           address: values.address
         },
         storeId: storeId,
-        storeName: storeName,
-        storeAddress: storeAddress,
+        storeName: storeData.name,
+        storeAddress: storeData.address,
       });
 
-      if (createdOrder.id.startsWith('proto-')) {
-        addPrototypeOrder(createdOrder);
-      }
+      // No need to manually add to context anymore, this will be handled by Firestore listeners
+      // addPrototypeOrder(createdOrder);
 
       toast({
         title: "¡Pedido Solicitado!",
@@ -159,11 +155,11 @@ export default function CheckoutPage() {
     }
   }
 
-  if (!clientLoaded || authLoading || !user || totalItems === 0) {
+  if (!clientLoaded || authLoading || !userProfile || totalItems === 0) {
      return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
   }
   
-  const hasAddresses = user.addresses && user.addresses.length > 0;
+  const hasAddresses = userProfile.addresses && userProfile.addresses.length > 0;
 
   return (
     <div className="container mx-auto">
@@ -204,7 +200,7 @@ export default function CheckoutPage() {
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
-                                                {user.addresses?.map(addr => (
+                                                {userProfile.addresses?.map(addr => (
                                                     <SelectItem key={addr.id} value={addr.id}>
                                                         {addr.label}: {addr.street}, {addr.city}
                                                     </SelectItem>
@@ -288,5 +284,3 @@ export default function CheckoutPage() {
     </div>
   );
 }
-
-    

@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import PageHeader from '@/components/page-header';
 import type { Store, Product } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Input } from '@/components/ui/input';
 import { Search, Heart } from 'lucide-react';
@@ -18,6 +17,9 @@ import { Rating } from '@/components/ui/rating';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useCollection } from '@/firebase';
+import { collection, query, where, CollectionReference } from 'firebase/firestore';
+import { useFirestore, useMemoFirebase } from '@/firebase';
 
 const ALL_CATEGORIES = 'all';
 
@@ -41,46 +43,38 @@ const calculateStoreRating = (products: Product[]): number => {
 };
 
 export default function Home() {
-  const { user, loading: authLoading } = useAuth();
-  const { prototypeStores, loading: prototypeLoading, favoriteStores, toggleFavoriteStore } = usePrototypeData();
+  const { user, userProfile, loading: authLoading } = useAuth();
+  const firestore = useFirestore();
   const { toast } = useToast();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
   const [ratingFilter, setRatingFilter] = useState(0);
 
-  const [stores, setStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(true);
+  const storesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'stores'), where('status', '==', 'Aprobado')) as CollectionReference<Store>;
+  }, [firestore]);
 
-  const isPrototype = user?.uid.startsWith('proto-');
-
-  useEffect(() => {
-    async function fetchStores() {
-      setLoading(true);
-      if (isPrototype) {
-        setStores(prototypeStores.filter(store => store.status === 'Aprobado'));
-      } else {
-        const fetchedStores = await getStores();
-        setStores(fetchedStores);
-      }
-      setLoading(false);
-    }
-    
-    if (!prototypeLoading) {
-        fetchStores();
-    }
-  }, [isPrototype, prototypeStores, prototypeLoading]);
+  const { data: stores, isLoading: storesLoading } = useCollection<Store>(storesQuery);
   
+  // TODO: Implement favorites in Firestore
+  const favoriteStores: string[] = []; 
+  const toggleFavoriteStore = (storeId: string) => { console.log("Toggling favorite for:", storeId)};
+
+
   const allStoreCategories = useMemo(() => {
+    if (!stores) return [];
     const categories = new Set(stores.map(store => store.category));
     return Array.from(categories);
   }, [stores]);
 
   const filteredStores = useMemo(() => {
+    if (!stores) return [];
     return stores
       .map(store => ({
         ...store,
-        averageRating: calculateStoreRating(store.products),
+        averageRating: calculateStoreRating(store.products || []),
       }))
       .filter(store => {
         const matchesSearch = store.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -91,7 +85,7 @@ export default function Home() {
       });
   }, [stores, searchQuery, categoryFilter, ratingFilter]);
 
-  const isLoading = authLoading || loading;
+  const isLoading = authLoading || storesLoading;
 
   const handleFavoriteToggle = (e: React.MouseEvent, storeId: string, storeName: string) => {
     e.stopPropagation();
@@ -209,7 +203,7 @@ export default function Home() {
           )})
         ) : (
           <div className="col-span-full text-center text-muted-foreground py-10">
-            {stores.length > 0 ? (
+            {stores && stores.length > 0 ? (
                 <p>No se encontraron tiendas que coincidan con tus filtros.</p>
             ) : (
                 <>

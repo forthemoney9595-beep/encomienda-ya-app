@@ -1,10 +1,11 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { CartProvider } from '@/context/cart-context';
 import { AuthProvider } from '@/context/auth-context';
 import { AppContent } from './app-content';
-import { PrototypeDataProvider } from '@/context/prototype-data-context';
+import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
   title: 'EncomiendaYA',
@@ -28,7 +29,7 @@ export default function RootLayout({
      crossOrigin=""/>
       </head>
       <body className="font-body antialiased">
-        <PrototypeDataProvider>
+        <FirebaseClientProvider>
           <AuthProvider>
             <CartProvider>
                 <AppContent>
@@ -36,11 +37,9 @@ export default function RootLayout({
                 </AppContent>
             </CartProvider>
           </AuthProvider>
-        </PrototypeDataProvider>
+        </FirebaseClientProvider>
         <Toaster />
       </body>
     </html>
   );
 }
-
-    
