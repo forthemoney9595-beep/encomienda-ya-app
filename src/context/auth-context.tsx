@@ -39,18 +39,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         setProfileLoading(true);
+        // Reset isAdmin on user change
+        setIsAdmin(false);
 
-        // Listener for the main user profile
+        // Listener for the main user profile in /users/{uid}
         const userDocRef = doc(firestore, 'users', user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
-                const profile = docSnap.data() as UserProfile;
-                setUserProfile(profile);
-                // Also set admin status from role if available here
-                if (profile.role === 'admin') {
-                    setIsAdmin(true);
-                }
+                setUserProfile(docSnap.data() as UserProfile);
             } else {
+                 // If no profile, create a temporary one. The guard might create a real one.
                  setUserProfile({
                     uid: user.uid,
                     email: user.email!,
@@ -63,14 +61,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserProfile(null);
         });
 
-        // Separate check for admin role, this is crucial
+        // Separate, definitive check for admin role in /roles_admin/{uid}
         const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
         const unsubscribeAdmin = onSnapshot(adminRoleRef, (docSnap) => {
-            // If the document exists, user is an admin, regardless of the userProfile role
-            if (docSnap.exists()) {
-                setIsAdmin(true);
-            }
-            // If we have listeners for both, we can consider loading complete
+            setIsAdmin(docSnap.exists());
+            // We consider loading complete once the admin check is done, 
+            // as it's the most critical for navigation.
             setProfileLoading(false);
         }, (error) => {
             console.error("Error checking admin role:", error);
@@ -89,17 +85,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = useCallback(async () => {
         if(auth) {
             await auth.signOut();
-            setUserProfile(null);
-            setIsAdmin(false);
+            // State will be cleared by the useEffect hook watching the user object
         }
     }, [auth]);
 
     const loading = isAuthLoading || isProfileLoading;
     
-    // Final check for isAdmin: userProfile might have the role, or the roles_admin check passed.
-    const finalIsAdmin = isAdmin || userProfile?.role === 'admin';
-
-    const value = { user, userProfile, loading, isAdmin: finalIsAdmin, logout };
+    const value = { user, userProfile, loading, isAdmin, logout };
     
     return (
         <AuthContext.Provider value={value}>

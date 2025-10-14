@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -50,19 +49,22 @@ export default function SignupBuyerPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
 
-        // Determine role based on email
-        const userRole = values.email === 'admin@test.com' ? 'admin' : 'buyer';
-
         // Create user profile in Firestore
         const userProfile = {
             uid: user.uid,
             name: values.name,
             email: values.email,
-            role: userRole,
+            role: 'buyer' as const, // Default role is buyer
             addresses: [],
         };
         
         createUserProfile(firestore, user.uid, userProfile);
+
+        // If the magic email is used, also create an entry in roles_admin
+        if (values.email === 'admin@test.com') {
+            const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+            await setDoc(adminRoleRef, { role: 'admin', createdAt: new Date() });
+        }
         
         toast({
             title: "¡Cuenta Creada!",
