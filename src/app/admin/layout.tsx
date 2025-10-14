@@ -2,7 +2,7 @@
 'use client';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useFirestore } from '@/firebase';
@@ -23,11 +23,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             return;
         }
         
-        // This is the auto-promotion logic.
-        // It checks if the logged-in user is 'admin@test.com' and if their admin role document exists.
-        // If not, it creates it.
+        // Auto-promotion for a specific admin email
         const setupAdmin = async () => {
-            if (user.email === 'admin@test.com') {
+            if (user.email === 'admin@test.com' && firestore) {
                 const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
                 const adminSnap = await getDoc(adminRoleRef);
                 if (!adminSnap.exists()) {
@@ -38,8 +36,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             role: 'superadmin',
                             createdAt: new Date(),
                         });
-                        // After setting, the context's onSnapshot should update isAdmin,
-                        // triggering a re-render and granting access.
+                        // The onSnapshot in AuthContext will handle the isAdmin state update
                     } catch (e) {
                          console.error("Failed to auto-promote admin:", e);
                     }
@@ -47,19 +44,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             }
         };
 
-        setupAdmin().then(() => {
-            // After attempting to set up, check for admin status.
-            // A brief delay can help ensure the context has time to receive the update.
-            setTimeout(() => {
-                if (!isAdmin) {
-                     // Re-check isAdmin from context after potential update
-                    const { isAdmin: updatedIsAdmin } = useAuth.getState ? useAuth.getState() : { isAdmin: false };
-                    if(!updatedIsAdmin) {
-                        // router.push('/');
-                    }
-                }
-            }, 500)
-        });
+        setupAdmin();
+
+        // Redirect if not admin after checks
+        if (!isAdmin) {
+            router.push('/');
+        }
 
     }, [user, isAdmin, loading, router, firestore]);
 
@@ -75,13 +65,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     
     if (!isAdmin) {
+        // This view is shown briefly while redirecting
         return (
             <div className="container mx-auto mt-10">
                  <Alert variant="destructive">
                     <ShieldAlert className="h-4 w-4" />
                     <AlertTitle>Acceso Denegado</AlertTitle>
                     <AlertDescription>
-                        No tienes permisos para acceder a esta área. Serás redirigido en breve...
+                        No tienes permisos para acceder a esta área. Serás redirigido a la página principal.
                     </AlertDescription>
                 </Alert>
             </div>

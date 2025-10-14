@@ -38,7 +38,7 @@ const getStatusVariant = (status: OrderStatus) => {
 
 
 export default function AdminDashboard() {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
   
   const [dashboardLoading, setDashboardLoading] = useState(true);
@@ -98,18 +98,18 @@ export default function AdminDashboard() {
 
 
   useEffect(() => {
-    if (!loading && !isAdmin) {
-      router.push('/login');
+    if (!authLoading && !isAdmin) {
+      router.push('/');
     }
-  }, [loading, isAdmin, router]);
+  }, [authLoading, isAdmin, router]);
 
    useEffect(() => {
     if (isAdmin && !prototypeLoading) {
         setDashboardLoading(false);
     }
-  }, [user, isAdmin, loading, router, prototypeLoading]);
+  }, [user, isAdmin, authLoading, router, prototypeLoading]);
   
-  if (loading || dashboardLoading || !isAdmin) {
+  if (authLoading || dashboardLoading) {
     return (
        <div className="container mx-auto">
         <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
@@ -248,7 +248,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-
-    
-
-    
