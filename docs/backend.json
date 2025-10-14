@@ -1,66 +1,121 @@
-
 {
   "entities": {
     "Store": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Store",
       "type": "object",
-      "description": "Represents a store offering items for sale in the EncomiendaYA application.",
+      "description": "Represents a store account on the platform.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the store."
+          "description": "Unique identifier for the store entity."
         },
         "name": {
           "type": "string",
-          "description": "The name of the store."
+          "description": "Name of the store."
         },
         "description": {
           "type": "string",
-          "description": "A brief description of the store and its offerings."
+          "description": "Description of the store and its offerings."
         },
-        "address": {
+        "location": {
           "type": "string",
-          "description": "The physical address of the store."
+          "description": "Physical address or location details of the store."
         },
         "contactEmail": {
           "type": "string",
-          "description": "The contact email address for the store.",
+          "description": "Email address for contacting the store.",
           "format": "email"
         },
         "contactPhone": {
           "type": "string",
-          "description": "The contact phone number for the store."
+          "description": "Phone number for contacting the store."
         },
         "openingHours": {
           "type": "string",
-          "description": "The store's opening hours (e.g., '9:00 AM - 5:00 PM')."
-        },
-        "closingHours": {
-          "type": "string",
-          "description": "The store's closing hours (e.g., '9:00 AM - 5:00 PM')."
+          "description": "Store's opening hours."
         }
       },
       "required": [
         "id",
         "name",
-        "description",
-        "address",
-        "contactEmail",
+        "location"
+      ]
+    },
+    "DeliveryPersonnel": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "DeliveryPersonnel",
+      "type": "object",
+      "description": "Represents a delivery personnel account.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the delivery personnel entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the delivery personnel."
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "Phone number of the delivery personnel."
+        },
+        "deliveryZone": {
+          "type": "string",
+          "description": "Area or zone assigned for deliveries."
+        },
+        "rating": {
+          "type": "number",
+          "description": "Average rating of the delivery personnel based on customer reviews."
+        }
+      },
+      "required": [
+        "id",
+        "name",
         "contactPhone",
-        "openingHours",
-        "closingHours"
+        "deliveryZone"
+      ]
+    },
+    "Admin": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Admin",
+      "type": "object",
+      "description": "Represents an administrator account.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the admin entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "Admin's full name."
+        },
+        "email": {
+          "type": "string",
+          "description": "Admin's email address.",
+          "format": "email"
+        },
+        "role": {
+          "type": "string",
+          "description": "Role or permission level of the admin (e.g., superadmin, moderator)."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "role"
       ]
     },
     "Item": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Item",
       "type": "object",
-      "description": "Represents an item offered for sale by a store.",
+      "description": "Represents an item for sale in a store.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the item."
+          "description": "Unique identifier for the item entity."
         },
         "storeId": {
           "type": "string",
@@ -68,81 +123,38 @@
         },
         "name": {
           "type": "string",
-          "description": "The name of the item."
+          "description": "Name of the item."
         },
         "description": {
           "type": "string",
-          "description": "A detailed description of the item."
+          "description": "Detailed description of the item."
         },
         "price": {
           "type": "number",
-          "description": "The price of the item.",
-          "format": "float"
+          "description": "Price of the item."
         },
         "imageUrl": {
           "type": "string",
-          "description": "URL of the image representing the item.",
+          "description": "URL of the item's image.",
           "format": "uri"
-        },
-        "category": {
-          "type": "string",
-          "description": "Category of item (e.g. food, electronics)."
         }
       },
       "required": [
         "id",
         "storeId",
         "name",
-        "description",
-        "price",
-        "imageUrl",
-        "category"
-      ]
-    },
-    "DeliveryPersonnel": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "DeliveryPersonnel",
-      "type": "object",
-      "description": "Represents a delivery person.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the delivery personnel."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the delivery personnel."
-        },
-        "contactPhone": {
-          "type": "string",
-          "description": "The contact phone number for the delivery personnel."
-        },
-        "deliveryZone": {
-          "type": "string",
-          "description": "The delivery zone assigned to the delivery personnel."
-        },
-        "currentLocation": {
-          "type": "string",
-          "description": "The current location of the delivery personnel."
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "contactPhone",
-        "deliveryZone",
-        "currentLocation"
+        "price"
       ]
     },
     "Order": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Order",
       "type": "object",
-      "description": "Represents an order placed by a customer.",
+      "description": "Represents a customer order.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the order."
+          "description": "Unique identifier for the order entity."
         },
         "customerId": {
           "type": "string",
@@ -158,148 +170,126 @@
         },
         "orderDate": {
           "type": "string",
-          "description": "The date and time the order was placed.",
+          "description": "Date and time when the order was placed.",
           "format": "date-time"
-        },
-        "totalAmount": {
-          "type": "number",
-          "description": "The total amount of the order.",
-          "format": "float"
         },
         "status": {
           "type": "string",
-          "description": "The current status of the order (e.g., 'Pending', 'Shipped', 'Delivered')."
+          "description": "Current status of the order (e.g., pending, processing, delivered)."
         },
-        "itemIds": {
-          "type": "array",
-          "description": "References to Items in the order. (Relationship: Item N:N Order)",
-          "items": {
-            "type": "string"
-          }
+        "totalAmount": {
+          "type": "number",
+          "description": "Total amount of the order."
         }
       },
       "required": [
         "id",
         "customerId",
         "storeId",
-        "deliveryPersonnelId",
         "orderDate",
-        "totalAmount",
         "status",
-        "itemIds"
+        "totalAmount"
       ]
     },
     "Customer": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Customer",
       "type": "object",
-      "description": "Represents a customer using the EncomiendaYA application.",
+      "description": "Represents a customer account.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the customer."
+          "description": "Unique identifier for the customer entity."
         },
-        "firstName": {
+        "name": {
           "type": "string",
-          "description": "The first name of the customer."
-        },
-        "lastName": {
-          "type": "string",
-          "description": "The last name of the customer."
+          "description": "Customer's full name."
         },
         "email": {
           "type": "string",
-          "description": "The email address of the customer.",
+          "description": "Customer's email address.",
           "format": "email"
         },
         "phoneNumber": {
           "type": "string",
-          "description": "The phone number of the customer."
+          "description": "Customer's phone number."
         },
         "address": {
           "type": "string",
-          "description": "The address of the customer."
-        }
-      },
-      "required": [
-        "id",
-        "firstName",
-        "lastName",
-        "email",
-        "phoneNumber",
-        "address"
-      ]
-    },
-    "Admin": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Admin",
-      "type": "object",
-      "description": "Represents an administrator of the EncomiendaYA application.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the admin."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the admin."
-        },
-        "email": {
-          "type": "string",
-          "description": "The email address of the admin.",
-          "format": "email"
-        },
-        "role": {
-          "type": "string",
-          "description": "The role of the admin (e.g., 'superAdmin', 'storeAdmin')."
+          "description": "Customer's shipping address."
         }
       },
       "required": [
         "id",
         "name",
         "email",
-        "role"
+        "phoneNumber"
+      ]
+    },
+    "OrderItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OrderItem",
+      "type": "object",
+      "description": "Represents an item within an order.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the order item entity."
+        },
+        "orderId": {
+          "type": "string",
+          "description": "Reference to Order. (Relationship: Order 1:N OrderItem)"
+        },
+        "itemId": {
+          "type": "string",
+          "description": "Reference to Item. (Relationship: Item 1:N OrderItem)"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Quantity of the item in the order."
+        },
+        "price": {
+          "type": "number",
+          "description": "Price of the item at the time of order."
+        }
+      },
+      "required": [
+        "id",
+        "orderId",
+        "itemId",
+        "quantity",
+        "price"
       ]
     },
     "Review": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Review",
       "type": "object",
-      "description": "Represents a customer review of a delivery.",
+      "description": "Represents a customer review for delivery personnel.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the review."
-        },
-        "orderId": {
-          "type": "string",
-          "description": "Reference to Order. (Relationship: Order 1:N Review)"
-        },
-        "customerId": {
-          "type": "string",
-          "description": "Reference to Customer. (Relationship: Customer 1:N Review)"
+          "description": "Unique identifier for the review entity."
         },
         "deliveryPersonnelId": {
           "type": "string",
           "description": "Reference to DeliveryPersonnel. (Relationship: DeliveryPersonnel 1:N Review)"
         },
+        "customerId": {
+          "type": "string",
+          "description": "Reference to Customer. (Relationship: Customer 1:N Review)"
+        },
         "rating": {
           "type": "number",
-          "description": "The rating given by the customer (e.g., 1-5 stars).",
-          "format": "integer"
+          "description": "Rating given by the customer."
         },
         "comment": {
           "type": "string",
-          "description": "The text comment provided by the customer."
-        },
-        "dateCreated": {
-          "type": "string",
-          "description": "The date and time the review was created.",
-          "format": "date-time"
+          "description": "Text comment provided by the customer."
         },
         "tags": {
           "type": "array",
-          "description": "Tags extracted by the LLM to classify the review.",
+          "description": "Tags generated based on comment analysis",
           "items": {
             "type": "string"
           }
@@ -307,12 +297,9 @@
       },
       "required": [
         "id",
-        "orderId",
-        "customerId",
         "deliveryPersonnelId",
-        "rating",
-        "comment",
-        "dateCreated"
+        "customerId",
+        "rating"
       ]
     }
   },
@@ -325,33 +312,17 @@
   "firestore": {
     "structure": [
       {
-        "path": "/admins/{adminId}",
-        "definition": {
-          "entityName": "Admin",
-          "schema": {
-            "$ref": "#/backend/entities/Admin"
-          },
-          "description": "Stores admin user accounts. Existence in this collection grants admin privileges.",
-          "params": [
-            {
-              "name": "adminId",
-              "description": "The unique identifier for the admin."
-            }
-          ]
-        }
-      },
-      {
         "path": "/stores/{storeId}",
         "definition": {
           "entityName": "Store",
           "schema": {
             "$ref": "#/backend/entities/Store"
           },
-          "description": "Stores the stores accounts.",
+          "description": "Stores account information. Top-level collection.",
           "params": [
             {
               "name": "storeId",
-              "description": "The unique identifier for the store."
+              "description": "The unique identifier of the store."
             }
           ]
         }
@@ -363,31 +334,47 @@
           "schema": {
             "$ref": "#/backend/entities/Item"
           },
-          "description": "Stores items belonging to a specific store. Includes denormalized 'storeId' for authorization independence.",
+          "description": "Items available for sale at each store. Includes denormalized 'storeId' for authorization independence.",
           "params": [
             {
               "name": "storeId",
-              "description": "The unique identifier for the store."
+              "description": "The unique identifier of the store."
             },
             {
               "name": "itemId",
-              "description": "The unique identifier for the item."
+              "description": "The unique identifier of the item."
             }
           ]
         }
       },
       {
-        "path": "/delivery_personnel/{personnelId}",
+        "path": "/delivery_personnel/{deliveryPersonnelId}",
         "definition": {
           "entityName": "DeliveryPersonnel",
           "schema": {
             "$ref": "#/backend/entities/DeliveryPersonnel"
           },
-          "description": "Stores delivery personnel accounts.",
+          "description": "Delivery personnel accounts.",
           "params": [
             {
-              "name": "personnelId",
-              "description": "The unique identifier for the delivery personnel."
+              "name": "deliveryPersonnelId",
+              "description": "The unique identifier of the delivery personnel."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{uid}",
+        "definition": {
+          "entityName": "Admin",
+          "schema": {
+            "$ref": "#/backend/entities/Admin"
+          },
+          "description": "Admin role assignment. Presence of a document grants admin privileges.",
+          "params": [
+            {
+              "name": "uid",
+              "description": "The Firebase Auth UID of the admin user."
             }
           ]
         }
@@ -399,11 +386,11 @@
           "schema": {
             "$ref": "#/backend/entities/Customer"
           },
-          "description": "Stores customer accounts.",
+          "description": "Customer accounts.",
           "params": [
             {
               "name": "customerId",
-              "description": "The unique identifier for the customer."
+              "description": "The unique identifier of the customer."
             }
           ]
         }
@@ -415,44 +402,64 @@
           "schema": {
             "$ref": "#/backend/entities/Order"
           },
-          "description": "Stores orders placed by a specific customer.",
+          "description": "Orders placed by customers. Includes denormalized 'customerId', 'storeId', and 'deliveryPersonnelId' for authorization independence.",
           "params": [
             {
               "name": "customerId",
-              "description": "The unique identifier for the customer."
+              "description": "The unique identifier of the customer."
             },
             {
               "name": "orderId",
-              "description": "The unique identifier for the order."
+              "description": "The unique identifier of the order."
             }
           ]
         }
       },
       {
-        "path": "/customers/{customerId}/orders/{orderId}/reviews/{reviewId}",
+        "path": "/customers/{customerId}/orders/{orderId}/order_items/{orderItemId}",
+        "definition": {
+          "entityName": "OrderItem",
+          "schema": {
+            "$ref": "#/backend/entities/OrderItem"
+          },
+          "description": "Items within an order.",
+          "params": [
+            {
+              "name": "customerId",
+              "description": "The unique identifier of the customer."
+            },
+            {
+              "name": "orderId",
+              "description": "The unique identifier of the order."
+            },
+            {
+              "name": "orderItemId",
+              "description": "The unique identifier of the order item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId}",
         "definition": {
           "entityName": "Review",
           "schema": {
             "$ref": "#/backend/entities/Review"
           },
-          "description": "Stores reviews for a specific order placed by a customer. Includes denormalized 'customerId', 'orderId', and 'deliveryPersonnelId' for authorization independence.",
+          "description": "Customer reviews for delivery personnel. Includes denormalized 'deliveryPersonnelId' and 'customerId' for authorization independence.",
           "params": [
             {
-              "name": "customerId",
-              "description": "The unique identifier for the customer."
-            },
-            {
-              "name": "orderId",
-              "description": "The unique identifier for the order."
+              "name": "deliveryPersonnelId",
+              "description": "The unique identifier of the delivery personnel."
             },
             {
               "name": "reviewId",
-              "description": "The unique identifier for the review."
+              "description": "The unique identifier of the review."
             }
           ]
         }
       }
     ],
-    "reasoning": "This Firestore structure is designed to support EncomiendaYA's core features, focusing on secure access control, scalability, and ease of maintenance. It uses structural segregation and denormalization to guarantee authorization independence, enabling efficient and secure data access. The design accommodates admin, store, delivery personnel, and customer roles, ensuring each user type has appropriate access.\n\n*   **Authorization Independence:** Access control is simplified by embedding authorization data directly within documents or using dedicated collections. This eliminates the need for complex hierarchical `get()` calls in security rules, improving performance and security.\n*   **Structural Segregation:** Data with different access requirements is stored in separate collections. This simplifies security rules by ensuring all documents within a collection share the same access control logic.\n*   **Access Modeling:** The structure incorporates path-based ownership for user-owned data (e.g., orders) and membership maps for collaborative scenarios (if any). Global roles are managed using existence checks in dedicated collections.\n*   **QAPs Support:** Secure list operations are achieved through structural segregation and appropriate indexing. Data is organized to prevent unauthorized listing of sensitive information.\n\n**Admin Accounts:**\nAdmin accounts are stored in the `/admins/{adminId}` collection. Existence in this collection grants admin privileges.\n\n**Store Accounts:**\nStore accounts are located at `/stores/{storeId}`.\n\n**Items:**\nItems are stored within each store at `/stores/{storeId}/items/{itemId}`. The `storeId` field is denormalized, ensuring that item-level security rules can efficiently verify the parent store.\n\n**Delivery Personnel:**\nDelivery personnel accounts reside in the `/delivery_personnel/{personnelId}` collection.\n\n**Customer Accounts:**\nCustomer accounts are stored in the `/customers/{customerId}` collection.\n\n**Orders:**\nOrders are placed under each customer's account at `/customers/{customerId}/orders/{orderId}`. This structure ensures that only the customer can access their order information, which supports clear ownership and simplifies data retrieval.\n\n**Reviews:**\nReviews are stored in a subcollection of orders `/customers/{customerId}/orders/{orderId}/reviews/{reviewId}`. The `customerId`, `orderId`, and `deliveryPersonnelId` are present in each Review to simplify security rules and enable efficient data retrieval based on any of these parameters."
+    "reasoning": "This Firestore data structure is designed to support the 'EncomiendaYA' application, focusing on secure and scalable data management for stores, delivery personnel, admins, items, orders, customers, order items, and reviews. The structure prioritizes authorization independence, clarity, and predictable security rules. It leverages structural segregation and denormalization to optimize security and performance.\n\n**Authorization Independence (Denormalization):**\n\n*   The `items` subcollection under each store includes the `storeId`. This allows reading and writing items with security rules that validate the request's `auth.uid` against the `storeId` without needing to `get()` the store document.\n*   Orders store both `customerId` and `storeId` and `deliveryPersonnelId` directly within the document, enabling security rules to be enforced based on the authenticated user's ID without requiring hierarchical lookups.\n*   Reviews store both `customerId` and `deliveryPersonnelId` directly within the document, enabling security rules to be enforced based on the authenticated user's ID without requiring hierarchical lookups.\n\n**Structural Segregation:**\n\n*   `admins` are stored in a separate collection (`/roles_admin/{uid}`) for global role management using existence checks. This allows for clearly defined security rules based on the presence of a document in this collection.\n\n**Access Modeling:**\n\n*   User-owned data: The structure uses path-based ownership for orders and reviews, making it straightforward to implement security rules based on the authenticated user's ID and the document path.\n\n**QAPs (Rules are not Filters):**\n\nThe structure enables secure list operations by adhering to structural segregation (all documents in a collection share the same security requirements) and denormalization (authorization context is included within each document)."
   }
 }
