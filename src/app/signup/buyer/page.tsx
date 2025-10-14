@@ -50,12 +50,15 @@ export default function SignupBuyerPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
 
+        // Determine role based on email
+        const userRole = values.email === 'admin@test.com' ? 'admin' : 'buyer';
+
         // Create user profile in Firestore
         const userProfile = {
             uid: user.uid,
             name: values.name,
             email: values.email,
-            role: 'buyer' as const,
+            role: userRole,
             addresses: [],
         };
         
@@ -63,7 +66,7 @@ export default function SignupBuyerPage() {
         
         toast({
             title: "¡Cuenta Creada!",
-            description: "Tu cuenta de comprador ha sido creada con éxito. Serás redirigido.",
+            description: "Tu cuenta ha sido creada con éxito. Serás redirigido.",
         });
         router.push('/');
 
