@@ -8,7 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Edit } from "lucide-react";
+import { Loader2, PlusCircle, Edit, Upload } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -18,12 +18,15 @@ import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useFirebaseApp } from "@/firebase";
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres."),
   price: z.coerce.number().positive("El precio debe ser un número positivo."),
   category: z.string({ required_error: "Debes seleccionar una categoría."}),
+  image: z.any().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -40,13 +43,17 @@ interface ManageItemDialogProps {
 export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCategories, storeId }: ManageItemDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const firebaseApp = useFirebaseApp();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const isEditing = product !== null;
   const { toast } = useToast();
+  
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", description: "", price: 0, category: "" },
+    defaultValues: { name: "", description: "", price: 0, category: "", image: null },
   });
 
   useEffect(() => {
@@ -58,26 +65,62 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
           price: product.price,
           category: product.category,
         });
+        setPreviewUrl(product.imageUrl || null);
       } else {
         form.reset({
           name: "",
           description: "",
           price: 0,
           category: productCategories[0] || "",
+          image: null,
         });
+        setPreviewUrl(null);
       }
       setIsSubmitting(false);
     }
   }, [product, form, isOpen, productCategories]);
   
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      form.setValue('image', file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  async function uploadImage(file: File, storeId: string, productId: string): Promise<string> {
+    if (!firebaseApp) throw new Error("Firebase no está inicializado.");
+    const storage = getStorage(firebaseApp);
+    const imageRef = storageRef(storage, `stores/${storeId}/products/${productId}-${file.name}`);
+    
+    await uploadBytes(imageRef, file);
+    const downloadUrl = await getDownloadURL(imageRef);
+    return downloadUrl;
+  }
+
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
-
+    
     try {
-        const imageUrl = getPlaceholderImage(values.name);
+        const productId = isEditing && product ? product.id : `prod-${Date.now()}`;
+        let imageUrl = product?.imageUrl;
+
+        if (values.image && values.image instanceof File) {
+            imageUrl = await uploadImage(values.image, storeId, productId);
+        } else if (!isEditing) {
+            imageUrl = getPlaceholderImage(values.name);
+        }
+
+        if (!imageUrl) {
+            throw new Error("La imagen es obligatoria para un nuevo producto.");
+        }
 
         const productData: Product = {
-          id: isEditing && product ? product.id : `prod-${Date.now()}`,
+          id: productId,
           name: values.name,
           description: values.description,
           price: values.price,
@@ -110,7 +153,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
             <DialogHeader>
               <DialogTitle>{isEditing ? 'Editar Artículo' : 'Añadir Nuevo Artículo'}</DialogTitle>
               <DialogDescription>
-                Rellena los detalles del producto.
+                Rellena los detalles y sube una imagen para tu producto.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -127,7 +170,7 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   </FormItem>
                 )}
               />
-              <FormField
+               <FormField
                 control={form.control}
                 name="description"
                 render={({ field }) => (
@@ -180,19 +223,34 @@ export function ManageItemDialog({ isOpen, setIsOpen, product, onSave, productCa
                   </FormItem>
                 )}
               />
-              <FormItem>
-                <FormLabel>Imagen del Producto</FormLabel>
-                <FormDescription>La imagen se genera automáticamente basada en el nombre del producto.</FormDescription>
-                <div className="relative mt-2 h-32 w-full rounded-md border bg-muted">
-                      <Image
-                          src={getPlaceholderImage(form.watch('name') || 'default-product')}
-                          alt="Vista previa de la imagen"
-                          fill
-                          style={{ objectFit: 'cover' }}
-                          className="rounded-md"
-                      />
-                </div>
-              </FormItem>
+              <FormField
+                control={form.control}
+                name="image"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Imagen del Producto</FormLabel>
+                    <div className="relative mt-2 h-40 w-full rounded-md border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
+                        {previewUrl ? (
+                            <Image src={previewUrl} alt="Vista previa" fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                        ) : (
+                            <div className="text-center text-muted-foreground">
+                                <Upload className="mx-auto h-8 w-8" />
+                                <p className="text-sm">Haz clic para subir</p>
+                            </div>
+                        )}
+                        <Input 
+                            ref={fileInputRef}
+                            type="file" 
+                            accept="image/png, image/jpeg, image/webp"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onChange={handleFileChange}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
             <DialogFooter>
               <Button type="submit" disabled={isSubmitting || productCategories.length === 0}>

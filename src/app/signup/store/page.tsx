@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -59,7 +60,7 @@ export default function SignupStorePage() {
         const user = userCredential.user;
 
         // Create the store document and get its ID
-        const newStore = await createStoreForUser(firestore, user.uid, {
+        const newStoreRef = await createStoreForUser(firestore, user.uid, {
             name: values.storeName,
             category: values.category,
             address: values.address,
@@ -71,9 +72,10 @@ export default function SignupStorePage() {
             name: values.ownerName,
             email: values.email,
             role: 'store' as const,
-            storeId: newStore.id,
+            storeId: newStoreRef.id,
         };
         
+        // This is non-blocking
         createUserProfile(firestore, user.uid, userProfile);
         
         toast({

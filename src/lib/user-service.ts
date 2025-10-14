@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -8,13 +9,15 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
+  addDoc,
+  collection,
   DocumentReference,
   Firestore,
 } from 'firebase/firestore';
-import type { UserProfile, Address } from './placeholder-data';
+import type { UserProfile, Address, Store } from './placeholder-data';
 import { getFirebase } from './firebase'; // Assuming getFirebase provides firestore instance
 import { getPlaceholderImage } from './placeholder-images';
-import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { setDocumentNonBlocking, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import { useFirestore } from '@/firebase';
 
 /**
@@ -99,17 +102,15 @@ export function deleteUserAddress(db: Firestore, uid: string, addressId: string)
 
 /**
  * Creates a store and associates it with a user.
- * This is a non-blocking operation.
+ * This is a blocking operation because we need the new store's ID.
  * @param db The Firestore instance.
  * @param ownerId The UID of the user who owns the store.
  * @param storeData Data for the new store.
  */
-export async function createStoreForUser(db: Firestore, ownerId: string, storeData: { name: string, category: string, address: string }) {
-    const newStoreId = `store-${Date.now()}`;
-    const storeRef = doc(db, 'stores', newStoreId);
+export async function createStoreForUser(db: Firestore, ownerId: string, storeData: { name: string, category: string, address: string }): Promise<DocumentReference> {
+    const storesCollectionRef = collection(db, 'stores');
     
-    const newStore = {
-        id: newStoreId,
+    const newStoreData: Omit<Store, 'id'> = {
         ...storeData,
         ownerId: ownerId,
         status: 'Pendiente' as const,
@@ -120,11 +121,11 @@ export async function createStoreForUser(db: Firestore, ownerId: string, storeDa
         horario: "9am - 5pm (simulado)"
     };
 
-    setDocumentNonBlocking(storeRef, newStore, { merge: false });
-
-    // Also update the user's profile with their new storeId
+    const storeDocRef = await addDoc(storesCollectionRef, newStoreData);
+    
+    // Now update the user's profile with the new store ID. This can be non-blocking.
     const userRef = doc(db, 'users', ownerId);
-    updateDocumentNonBlocking(userRef, { storeId: newStoreId });
+    updateDocumentNonBlocking(userRef, { storeId: storeDocRef.id });
 
-    return newStore;
+    return storeDocRef;
 }
