@@ -3,13 +3,13 @@
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Loader2, ShieldAlert } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Loader2 } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { createUserProfile } from '@/lib/user-service';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-    const { user, isAdmin, loading } = useAuth();
+    const { user, userProfile, isAdmin, loading } = useAuth();
     const router = useRouter();
     const firestore = useFirestore();
 
@@ -26,17 +26,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         // Auto-promotion for a specific admin email
         const setupAdmin = async () => {
             if (user.email === 'admin@test.com' && firestore) {
-                const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-                const adminSnap = await getDoc(adminRoleRef);
-                if (!adminSnap.exists()) {
-                    try {
-                        await setDoc(adminRoleRef, {
+                const userProfileRef = doc(firestore, 'users', user.uid);
+                const userProfileSnap = await getDoc(userProfileRef);
+
+                if (!userProfileSnap.exists() || userProfileSnap.data()?.role !== 'admin') {
+                     try {
+                        await createUserProfile(firestore, user.uid, { 
                             name: 'Admin',
                             email: user.email,
-                            role: 'superadmin',
-                            createdAt: new Date(),
+                            role: 'admin' 
                         });
-                        // The onSnapshot in AuthContext will handle the isAdmin state update
+                        // The onSnapshot in AuthContext will handle the state update
                     } catch (e) {
                          console.error("Failed to auto-promote admin:", e);
                     }
@@ -49,7 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         if (!isAdmin) {
              router.push('/');
         }
-    }, [user, isAdmin, loading, router, firestore]);
+    }, [user, isAdmin, userProfile, loading, router, firestore]);
 
     if (loading || !isAdmin) {
         return (
