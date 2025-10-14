@@ -55,7 +55,9 @@ export function MainNav() {
   const isOwnStoreProductsPageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
   
   const handleLinkClick = () => {
-    setOpenMobile(false);
+    if (useSidebar().isMobile) {
+      setOpenMobile(false);
+    }
   }
 
   return (

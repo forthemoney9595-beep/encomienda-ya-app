@@ -8,8 +8,11 @@ import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePrototypeData } from '@/context/prototype-data-context';
-import { prototypeUsers } from '@/lib/placeholder-data';
+import { useCollection, useFirestore } from '@/firebase';
+import type { Order as OrderType } from '@/lib/order-service';
+import type { Store as StoreType } from '@/lib/placeholder-data';
+import type { UserProfile } from '@/lib/user-service';
+import { collection, query, where } from 'firebase/firestore';
 import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { subDays, format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -40,34 +43,36 @@ const getStatusVariant = (status: OrderStatus) => {
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
-  
-  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const firestore = useFirestore();
 
-  const { prototypeLoading, prototypeStores, prototypeOrders, prototypeDelivery } = usePrototypeData();
-  const isPrototype = user?.uid.startsWith('proto-') ?? false;
+  const ordersQuery = useMemo(() => firestore ? collection(firestore, 'orders') : null, [firestore]);
+  const storesQuery = useMemo(() => firestore ? collection(firestore, 'stores') : null, [firestore]);
+  const usersQuery = useMemo(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+
+  const { data: orders, isLoading: ordersLoading } = useCollection<OrderType>(ordersQuery);
+  const { data: stores, isLoading: storesLoading } = useCollection<StoreType>(storesQuery);
+  const { data: users, isLoading: usersLoading } = useCollection<UserProfile>(usersQuery);
+  
+  const dashboardLoading = authLoading || ordersLoading || storesLoading || usersLoading;
 
   const stats = useMemo(() => {
-    if (prototypeLoading) return { totalStores: 0, totalDrivers: 0, totalRevenue: 0, totalUsers: 0, completedOrders: 0 };
+    if (!orders || !stores || !users) return { totalRevenue: 0, totalUsers: 0, completedOrders: 0, totalStores: 0 };
     
-    const completed = prototypeOrders.filter(o => o.status === 'Entregado');
+    const completed = orders.filter(o => o.status === 'Entregado');
     const totalRevenue = completed.reduce((sum, order) => sum + order.total, 0);
-
-    // In a real app, you would fetch all users from the DB
-    const totalUsers = Object.keys(prototypeUsers).length + prototypeStores.length - 1; // Exclude duplicate store owner
     
     return {
-      totalStores: prototypeStores.length,
-      totalDrivers: prototypeStores.filter(s => s.status === 'Aprobado').length > 0 ? 1 : 0, // Only one proto driver
       totalRevenue,
-      totalUsers,
-      completedOrders: completed.length
+      totalUsers: users.length,
+      completedOrders: completed.length,
+      totalStores: stores.length,
     }
 
-  }, [prototypeLoading, isPrototype, prototypeStores, prototypeOrders]);
+  }, [orders, stores, users]);
 
   const salesData = useMemo(() => {
     const last7Days = Array.from({ length: 7 }, (_, i) => startOfDay(subDays(new Date(), i))).reverse();
-    const completedOrders = prototypeOrders.filter(o => o.status === 'Entregado');
+    const completedOrders = orders?.filter(o => o.status === 'Entregado') || [];
     
     return last7Days.map(day => {
         const dayString = format(day, 'yyyy-MM-dd');
@@ -80,36 +85,26 @@ export default function AdminDashboard() {
             Ventas: salesForDay,
         };
     });
-  }, [prototypeOrders]);
+  }, [orders]);
 
   const orderStatusData = useMemo(() => {
-    const statusCounts = prototypeOrders.reduce((acc, order) => {
+    if (!orders) return [];
+    const statusCounts = orders.reduce((acc, order) => {
         const status = order.status || 'Desconocido';
         acc[status] = (acc[status] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
 
     return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
-  }, [prototypeOrders]);
+  }, [orders]);
 
-  const allOrders = useMemo(() => {
-    return [...prototypeOrders].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [prototypeOrders]);
+  const allOrdersSorted = useMemo(() => {
+    if (!orders) return [];
+    return [...orders].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [orders]);
 
-
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      router.push('/');
-    }
-  }, [authLoading, isAdmin, router]);
-
-   useEffect(() => {
-    if (isAdmin && !prototypeLoading) {
-        setDashboardLoading(false);
-    }
-  }, [user, isAdmin, authLoading, router, prototypeLoading]);
   
-  if (authLoading || dashboardLoading) {
+  if (dashboardLoading) {
     return (
        <div className="container mx-auto">
         <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
@@ -218,8 +213,8 @@ export default function AdminDashboard() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                    {allOrders.length > 0 ? (
-                        allOrders.map((order) => (
+                    {allOrdersSorted.length > 0 ? (
+                        allOrdersSorted.map((order) => (
                         <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
                             <TableCell className="font-medium">
                                 <Link href={`/orders/${order.id}`} className="hover:underline">#{order.id.substring(0, 7)}</Link>
