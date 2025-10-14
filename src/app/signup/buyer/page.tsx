@@ -61,7 +61,7 @@ export default function SignupBuyerPage() {
         };
         
         // This is a non-blocking write
-        createUserProfile(firestore, user.uid, userProfile);
+        await createUserProfile(firestore, user.uid, userProfile);
 
         // If the magic email is used, also create an entry in roles_admin. This is the source of truth.
         if (isActualAdmin) {
