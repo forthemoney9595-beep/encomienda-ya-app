@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { notFound, useParams, useRouter } from 'next/navigation';
@@ -11,11 +10,13 @@ import { useEffect, useState } from 'react';
 import type { Store, Product } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { Button } from '@/components/ui/button';
 import { Edit, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useDoc, useFirestore } from '@/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 
 function StoreDetailSkeleton() {
     return (
@@ -74,37 +75,23 @@ export default function StoreDetailPage() {
   const router = useRouter();
   const storeId = params.storeId as string;
   const { user, loading: authLoading } = useAuth();
-  const { getStoreById, updatePrototypeProduct, addPrototypeProduct, deletePrototypeProduct, prototypeStores, loading: prototypeLoading } = usePrototypeData();
   const { toast } = useToast();
-  
-  const [store, setStore] = useState<Store | null>(null);
-  const [loading, setLoading] = useState(true);
+  const firestore = useFirestore();
 
-  const isOwner = user?.storeId === storeId;
-
-  // Fetch and update store data whenever prototype data changes
-  useEffect(() => {
-    if (!storeId || authLoading || prototypeLoading) return;
-    
-    const storeData = getStoreById(storeId);
-    
-    if (!storeData) {
-      if (!loading) notFound(); // Prevent notFound flash on initial load
-      return;
-    }
-    
-    setStore(storeData);
-    setLoading(false);
-  }, [storeId, prototypeLoading, authLoading, user, getStoreById, prototypeStores, loading]);
+  const storeRef = useMemoFirebase(() => firestore ? doc(firestore, 'stores', storeId) : null, [firestore, storeId]);
+  const { data: store, isLoading: storeLoading } = useDoc<Store>(storeRef);
   
+  const isOwner = user?.uid === store?.ownerId;
+
   const handleSaveProduct = async (productData: Product) => {
-      const isEditing = store?.products.some(p => p.id === productData.id);
+      if (!firestore) return;
+      const isEditing = store?.products?.some(p => p.id === productData.id);
       
       try {
            if (isEditing) {
-              updatePrototypeProduct(storeId, productData);
+              await updateProductInStore(firestore, storeId, productData.id, productData);
           } else {
-              addPrototypeProduct(storeId, productData);
+              await addProductToStore(firestore, storeId, productData);
           }
            
           toast({ title: isEditing ? "¡Artículo Actualizado!" : "¡Artículo Añadido!" });
@@ -115,8 +102,9 @@ export default function StoreDetailPage() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
+    if (!firestore) return;
       try {
-          deletePrototypeProduct(storeId, productId);
+          await deleteProductFromStore(firestore, storeId, productId);
           
           toast({
               title: "Producto Eliminado",
@@ -129,7 +117,7 @@ export default function StoreDetailPage() {
   };
 
 
-  if (loading) {
+  if (storeLoading || authLoading) {
     return (
          <div className="container mx-auto">
             <PageHeader title={<Skeleton className='h-9 w-1/2' />} description={<Skeleton className='h-5 w-1/3' />} />
@@ -166,7 +154,7 @@ export default function StoreDetailPage() {
                 </CardHeader>
                 <CardContent>
                   <ProductList 
-                    products={store.products} 
+                    products={store.products || []} 
                     productCategories={productCategories} 
                     ownerId={store.ownerId}
                     storeId={store.id}
@@ -216,3 +204,5 @@ export default function StoreDetailPage() {
     </div>
   );
 }
+
+    

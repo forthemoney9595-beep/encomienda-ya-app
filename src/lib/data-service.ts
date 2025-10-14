@@ -1,54 +1,61 @@
+
 'use server';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 import { initialPrototypeStores, prototypeDelivery } from './placeholder-data';
-
-/**
- * Fetches stores. In prototype mode, this is a placeholder.
- * @param all - If true, fetches all stores regardless of status.
- */
-export async function getStores(all: boolean = false): Promise<Store[]> {
-  console.warn("getStores is a placeholder in prototype mode.");
-  return [];
-}
-
+import { Firestore, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 
 /**
  * Fetches a single store by its ID. In prototype mode, this is a placeholder.
  * @param id The ID of the store to fetch.
  */
-export async function getStoreById(id: string): Promise<Store | null> {
-    console.warn("getStoreById is a placeholder in prototype mode.");
+export async function getStoreById(db: Firestore, id: string): Promise<Store | null> {
+    const storeRef = doc(db, 'stores', id);
+    const storeSnap = await getDoc(storeRef);
+    if (storeSnap.exists()) {
+        return storeSnap.data() as Store;
+    }
     return null;
 }
 
-/**
- * Fetches all products for a given store ID. In prototype mode, this is a placeholder.
- * @param storeId The ID of the store whose products to fetch.
- */
-export async function getProductsByStoreId(storeId: string): Promise<Product[]> {
-  console.warn("getProductsByStoreId is a placeholder in prototype mode.");
-  return [];
-}
 
 /**
- * Adds a new product to a store. In prototype mode, this is a placeholder.
+ * Adds a new product to a store. This is a non-blocking operation.
+ * @param db The Firestore instance.
  * @param storeId The ID of the store.
  * @param productData The data for the new product.
- * @param currentCategories The current list of categories for the store.
  */
-export async function addProductToStore(storeId: string, productData: Product, currentCategories: string[]): Promise<void> {
-    console.warn("addProductToStore is a placeholder in prototype mode.");
-    return;
+export async function addProductToStore(db: Firestore, storeId: string, productData: Product): Promise<void> {
+    const storeRef = doc(db, 'stores', storeId);
+    await updateDoc(storeRef, {
+        products: arrayUnion(productData)
+    });
 }
 
-export async function updateProductInStore(storeId: string, productId: string, productData: Partial<Product>) {
-    console.warn("updateProductInStore is a placeholder in prototype mode.");
-    return;
+export async function updateProductInStore(db: Firestore, storeId: string, productId: string, productData: Partial<Product>) {
+    const store = await getStoreById(db, storeId);
+    if (!store || !store.products) return;
+
+    const productIndex = store.products.findIndex(p => p.id === productId);
+    if (productIndex === -1) return;
+
+    const updatedProducts = [...store.products];
+    updatedProducts[productIndex] = { ...updatedProducts[productIndex], ...productData };
+
+    const storeRef = doc(db, 'stores', storeId);
+    await updateDoc(storeRef, { products: updatedProducts });
 }
 
-export async function deleteProductFromStore(storeId: string, productId: string) {
-    console.warn("deleteProductFromStore is a placeholder in prototype mode.");
-    return;
+export async function deleteProductFromStore(db: Firestore, storeId: string, productId: string) {
+    const store = await getStoreById(db, storeId);
+    if (!store || !store.products) return;
+
+    const productToDelete = store.products.find(p => p.id === productId);
+    if (!productToDelete) return;
+    
+    const storeRef = doc(db, 'stores', storeId);
+    await updateDoc(storeRef, {
+        products: arrayRemove(productToDelete)
+    });
 }
 
 /**
@@ -103,3 +110,5 @@ export async function updateDeliveryPersonnelStatus(personnelId: string, status:
   console.warn("updateDeliveryPersonnelStatus is a placeholder in prototype mode.");
   return;
 }
+
+    
