@@ -26,6 +26,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isProfileLoading, setProfileLoading] = useState(true);
 
     useEffect(() => {
+        if (isAuthLoading) {
+            setProfileLoading(true);
+            return;
+        };
+
         if (!user || !firestore) {
             setUserProfile(null);
             setProfileLoading(false);
@@ -39,10 +44,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (docSnap.exists()) {
                 setUserProfile(docSnap.data() as UserProfile);
             } else {
-                console.log(`No user profile found for UID: ${user.uid}`);
-                setUserProfile(null);
+                console.log(`No user profile found for UID: ${user.uid}, checking admin roles...`);
+                // If no user profile, check if they are an admin as a fallback
+                const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+                onSnapshot(adminRoleRef, (adminSnap) => {
+                    if (adminSnap.exists()) {
+                        setUserProfile({
+                            uid: user.uid,
+                            email: user.email || '',
+                            name: user.displayName || 'Admin',
+                            role: 'admin',
+                        });
+                    } else {
+                         setUserProfile(null);
+                    }
+                     setProfileLoading(false);
+                });
             }
-            setProfileLoading(false);
+             setProfileLoading(false);
         }, (error) => {
             console.error("Error fetching user profile with onSnapshot:", error);
             setUserProfile(null);
@@ -52,12 +71,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Cleanup subscription on unmount or when user changes
         return () => unsubscribe();
 
-    }, [user, firestore]);
+    }, [user, firestore, isAuthLoading]);
 
     const logout = useCallback(async () => {
         if(auth) {
             await auth.signOut();
-            // The useEffect above will handle clearing the userProfile state
         }
     }, [auth]);
 
