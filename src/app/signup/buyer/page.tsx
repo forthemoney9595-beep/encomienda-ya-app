@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,6 +16,7 @@ import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
+import { createUserProfile } from '@/lib/user-service';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -56,7 +58,8 @@ export default function SignupBuyerPage() {
             role: 'buyer' as const,
             addresses: [],
         };
-        await setDoc(doc(firestore, "users", user.uid), userProfile);
+        
+        createUserProfile(firestore, user.uid, userProfile);
         
         toast({
             title: "¡Cuenta Creada!",

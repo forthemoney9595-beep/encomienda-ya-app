@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,9 +16,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { createStoreForUser } from '@/lib/user-service';
+import { createStoreForUser, createUserProfile } from '@/lib/user-service';
 import { Loader2 } from 'lucide-react';
-import { useState } from 'react';
 
 
 const formSchema = z.object({
@@ -58,8 +58,8 @@ export default function SignupStorePage() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
 
-        // Create the store document
-        await createStoreForUser(firestore, user.uid, {
+        // Create the store document and get its ID
+        const newStore = await createStoreForUser(firestore, user.uid, {
             name: values.storeName,
             category: values.category,
             address: values.address,
@@ -71,9 +71,10 @@ export default function SignupStorePage() {
             name: values.ownerName,
             email: values.email,
             role: 'store' as const,
-            storeId: user.uid, // Temporarily, will be updated by createStoreForUser logic
+            storeId: newStore.id,
         };
-        await setDoc(doc(firestore, "users", user.uid), userProfile);
+        
+        createUserProfile(firestore, user.uid, userProfile);
         
         toast({
             title: "¡Solicitud de Tienda Enviada!",
