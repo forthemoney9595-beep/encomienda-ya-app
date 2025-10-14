@@ -1,8 +1,6 @@
-
 'use client';
 
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import PageHeader from '@/components/page-header';
@@ -14,6 +12,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import type { Order } from '@/lib/order-service';
+import { collection, query, where } from 'firebase/firestore';
 
 function ReviewList({ reviews }: { reviews: Order[] }) {
     if (reviews.length === 0) {
@@ -52,41 +51,51 @@ function ReviewList({ reviews }: { reviews: Order[] }) {
 }
 
 export default function DeliveryStatsPage() {
-    const { user, loading: authLoading } = useAuth();
-    const { getReviewsByDriverId, getOrdersByDeliveryPerson, loading: prototypeLoading } = usePrototypeData();
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const firestore = useFirestore();
     const router = useRouter();
 
+    const deliveriesQuery = useMemoFirebase(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(
+            collection(firestore, 'orders'),
+            where('deliveryPersonId', '==', user.uid)
+        );
+    }, [firestore, user?.uid]);
+    
+    const { data: deliveries, isLoading: deliveriesLoading } = useCollection<Order>(deliveriesQuery);
+
     useEffect(() => {
-        if (!authLoading && (!user || user.role !== 'delivery')) {
+        if (!authLoading && (!user || userProfile?.role !== 'delivery')) {
             router.push('/');
         }
-    }, [user, authLoading, router]);
+    }, [user, userProfile, authLoading, router]);
+    
+    const completedDeliveries = useMemo(() => {
+        if (!deliveries) return [];
+        return deliveries.filter(o => o.status === 'Entregado');
+    }, [deliveries]);
 
     const driverReviews = useMemo(() => {
-        if (!user?.uid) return [];
-        return getReviewsByDriverId(user.uid);
-    }, [user, getReviewsByDriverId]);
-
-    const driverDeliveries = useMemo(() => {
-        if (!user?.uid) return [];
-        return getOrdersByDeliveryPerson(user.uid).filter(o => o.status === 'Entregado');
-    }, [user, getOrdersByDeliveryPerson]);
+        if (!completedDeliveries) return [];
+        return completedDeliveries.filter(o => o.deliveryRating);
+    }, [completedDeliveries]);
 
     const stats = useMemo(() => {
         const totalRating = driverReviews.reduce((acc, review) => acc + (review.deliveryRating || 0), 0);
         const avgRating = driverReviews.length > 0 ? totalRating / driverReviews.length : 0;
-        const totalDeliveries = driverDeliveries.length;
-        const totalEarnings = driverDeliveries.reduce((acc, order) => acc + order.deliveryFee, 0);
+        const totalDeliveries = completedDeliveries.length;
+        const totalEarnings = completedDeliveries.reduce((acc, order) => acc + order.deliveryFee, 0);
 
         return {
             avgRating,
             totalDeliveries,
             totalEarnings
         };
-    }, [driverReviews, driverDeliveries]);
+    }, [driverReviews, completedDeliveries]);
 
 
-    if (authLoading || prototypeLoading || !user) {
+    if (authLoading || deliveriesLoading || !user) {
         return (
             <div className="container mx-auto">
                 <PageHeader title="Mis Estadísticas" description="Cargando tus métricas de rendimiento." />
@@ -157,8 +166,8 @@ export default function DeliveryStatsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {driverDeliveries.length > 0 ? (
-                                    driverDeliveries.map(delivery => (
+                                {completedDeliveries.length > 0 ? (
+                                    completedDeliveries.map(delivery => (
                                         <TableRow key={delivery.id}>
                                             <TableCell>{format(delivery.createdAt, 'dd/MM/yy')}</TableCell>
                                             <TableCell className="font-medium">{delivery.storeName}</TableCell>

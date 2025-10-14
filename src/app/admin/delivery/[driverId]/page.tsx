@@ -1,4 +1,3 @@
-
 'use client';
 
 import { notFound, useParams } from 'next/navigation';
@@ -6,11 +5,10 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { getDeliveryPersonById } from '@/lib/data-service';
 import { Car, Mail, Phone, Star, PackageCheck, Bot, TrendingUp, TrendingDown } from 'lucide-react';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { useEffect, useState, useMemo } from 'react';
-import type { DeliveryPersonnel, Order } from '@/lib/placeholder-data';
+import type { DeliveryPersonnel } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -347,5 +345,3 @@ export default function GuardedDriverProfilePage() {
         </AdminAuthGuard>
     )
 }
-
-    
