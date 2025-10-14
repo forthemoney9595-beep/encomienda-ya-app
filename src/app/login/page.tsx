@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { useAuth as useFirebaseAuthContext } from '@/context/auth-context';
 import { useAuth } from '@/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
@@ -53,6 +54,7 @@ export default function LoginPage() {
             description: "Has iniciado sesión correctamente.",
         });
         router.push('/');
+        router.refresh(); // Force a refresh to ensure layout updates
     } catch (error: any) {
         console.error("Error signing in:", error);
         toast({

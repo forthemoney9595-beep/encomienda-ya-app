@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarFooter, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { MainNav } from '@/components/main-nav';
 import Logo from '@/components/logo';
@@ -71,11 +71,26 @@ function UserMenu() {
 
 function AppContentLayout({ children }: { children: React.ReactNode }) {
     const { user, loading } = useAuth();
-    const [isClient, setIsClient] = useState(false);
-
-    useEffect(() => {
-        setIsClient(true);
-    }, []);
+    
+    const userSection = () => {
+        if (loading) {
+            return (
+                <SidebarFooter>
+                    <div className='p-3 flex items-center gap-3'>
+                       <Loader2 className="h-9 w-9 animate-spin text-sidebar-primary" />
+                    </div>
+                </SidebarFooter>
+            );
+        }
+        if (user) {
+            return (
+                <SidebarFooter>
+                    <UserMenu />
+                </SidebarFooter>
+            );
+        }
+        return null;
+    }
 
     return (
         <div className="flex min-h-screen">
@@ -89,19 +104,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                 <SidebarContent>
                     <MainNav />
                 </SidebarContent>
-                {isClient && (
-                     loading ? (
-                        <SidebarFooter>
-                            <div className='p-3 flex items-center gap-3'>
-                               <Loader2 className="h-9 w-9 animate-spin text-sidebar-primary" />
-                            </div>
-                        </SidebarFooter>
-                    ) : user ? (
-                        <SidebarFooter>
-                            <UserMenu />
-                        </SidebarFooter>
-                    ) : null
-                )}
+                {userSection()}
             </Sidebar>
             <SidebarInset>
                 <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
@@ -109,7 +112,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                     <div className="ml-auto flex items-center gap-2 sm:gap-4">
                         <Notifications />
                         <Cart />
-                        {isClient && !loading && !user && (
+                        {!loading && !user && (
                             <Link href="/login">
                                 <Button>Iniciar Sesión</Button>
                             </Link>

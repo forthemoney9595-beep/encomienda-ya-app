@@ -2,10 +2,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { useUser, useAuth as useFirebaseAuth, useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser as useFirebaseUserHook, useAuth as useFirebaseAuth, useFirestore, useMemoFirebase } from '@/firebase';
 import type { User } from 'firebase/auth';
-import type { UserProfile } from '@/lib/placeholder-data';
-import { doc, onSnapshot } from 'firebase/firestore';
+import type { UserProfile } from '@/lib/user-service';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 
 interface AuthContextType {
     user: User | null;
@@ -18,45 +18,44 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const { user, isUserLoading: isAuthLoading, userError } = useUser();
+    const { user, isUserLoading: isAuthLoading, userError } = useFirebaseUserHook();
     const auth = useFirebaseAuth();
     const firestore = useFirestore();
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isProfileLoading, setProfileLoading] = useState(true);
 
-    const userDocRef = useMemoFirebase(() => {
-      if (!user?.uid || !firestore) return null;
-      return doc(firestore, 'users', user.uid);
-    }, [user?.uid, firestore]);
-
     useEffect(() => {
-        if (!userDocRef) {
-            setUserProfile(null);
-            setProfileLoading(false);
-            return;
-        }
-
+      const fetchUserProfile = async (uid: string) => {
+        if (!firestore) return;
         setProfileLoading(true);
-        const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setUserProfile(docSnap.data() as UserProfile);
-            } else {
-                setUserProfile(null);
-            }
-            setProfileLoading(false);
-        }, (error) => {
-            console.error("Error fetching user profile:", error);
+        try {
+          const userDocRef = doc(firestore, 'users', uid);
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data() as UserProfile);
+          } else {
             setUserProfile(null);
-            setProfileLoading(false);
-        });
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+          setUserProfile(null);
+        } finally {
+          setProfileLoading(false);
+        }
+      };
 
-        return () => unsubscribe();
-    }, [userDocRef]);
-
+      if (user) {
+        fetchUserProfile(user.uid);
+      } else {
+        setUserProfile(null);
+        setProfileLoading(false);
+      }
+    }, [user, firestore]);
 
     const logout = useCallback(async () => {
         if(auth) {
             await auth.signOut();
+            // User profile will be cleared by the useEffect above
         }
     }, [auth]);
 
