@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import type { OrderStatus } from '@/lib/order-service';
+import AdminAuthGuard from './admin-auth-guard';
 
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
@@ -40,9 +41,7 @@ const getStatusVariant = (status: OrderStatus) => {
   };
 
 
-export default function AdminDashboard() {
-  const { user, isAdmin, loading: authLoading } = useAuth();
-  const router = useRouter();
+function AdminDashboard() {
   const firestore = useFirestore();
 
   const ordersQuery = useMemo(() => firestore ? collection(firestore, 'orders') : null, [firestore]);
@@ -53,7 +52,7 @@ export default function AdminDashboard() {
   const { data: stores, isLoading: storesLoading } = useCollection<StoreType>(storesQuery);
   const { data: users, isLoading: usersLoading } = useCollection<UserProfile>(usersQuery);
   
-  const dashboardLoading = authLoading || ordersLoading || storesLoading || usersLoading;
+  const dashboardLoading = ordersLoading || storesLoading || usersLoading;
 
   const stats = useMemo(() => {
     if (!orders || !stores || !users) return { totalRevenue: 0, totalUsers: 0, completedOrders: 0, totalStores: 0 };
@@ -241,5 +240,13 @@ export default function AdminDashboard() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function GuardedAdminDashboard() {
+  return (
+    <AdminAuthGuard>
+      <AdminDashboard />
+    </AdminAuthGuard>
   );
 }

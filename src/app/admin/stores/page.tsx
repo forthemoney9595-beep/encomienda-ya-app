@@ -11,8 +11,9 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 import { StoresList } from './stores-list';
 import { ManageStoreDialog } from './manage-store-dialog';
+import AdminAuthGuard from '../admin-auth-guard';
 
-export default function AdminStoresPage() {
+function AdminStoresPage() {
   const { user, loading: authLoading } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,4 +92,12 @@ export default function AdminStoresPage() {
       )}
     </div>
   );
+}
+
+export default function GuardedAdminStoresPage() {
+    return (
+        <AdminAuthGuard>
+            <AdminStoresPage />
+        </AdminAuthGuard>
+    )
 }

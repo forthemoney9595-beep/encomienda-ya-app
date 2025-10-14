@@ -13,9 +13,10 @@ import { usePrototypeData } from '@/context/prototype-data-context';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 import { ManageDriverDialog } from './manage-driver-dialog';
+import AdminAuthGuard from '../admin-auth-guard';
 
 
-export default function AdminDeliveryPage() {
+function AdminDeliveryPage() {
   const { user, loading: authLoading } = useAuth();
   const [personnel, setPersonnel] = useState<DeliveryPersonnel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,4 +130,13 @@ export default function AdminDeliveryPage() {
       )}
     </div>
   );
+}
+
+
+export default function GuardedAdminDeliveryPage() {
+    return (
+        <AdminAuthGuard>
+            <AdminDeliveryPage />
+        </AdminAuthGuard>
+    )
 }

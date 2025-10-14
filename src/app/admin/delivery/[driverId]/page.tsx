@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
+import AdminAuthGuard from '../../admin-auth-guard';
 
 function getStatusVariant(status: string) {
     switch (status) {
@@ -203,7 +204,7 @@ function DriverReviews({ reviews }: { reviews: Review[] }) {
 }
 
 
-export default function DriverProfilePage() {
+function DriverProfilePage() {
     const params = useParams();
     const driverId = params.driverId as string;
     
@@ -349,4 +350,13 @@ export default function DriverProfilePage() {
             </div>
         </div>
     );
+}
+
+
+export default function GuardedDriverProfilePage() {
+    return (
+        <AdminAuthGuard>
+            <DriverProfilePage />
+        </AdminAuthGuard>
+    )
 }
