@@ -1,47 +1,34 @@
 
-
 'use client';
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/context/auth-context';
-import { getUserProfile } from '@/lib/user';
+import { useAuth, useFirestore } from '@/firebase';
 import { ProfileForm } from './profile-form';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import type { UserProfile } from '@/lib/user';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { useRouter } from 'next/navigation';
+import { doc, setDoc } from 'firebase/firestore';
+import { updateUserProfile } from '@/lib/user-service';
 
 export default function ProfilePage() {
-    const { user: authUser, loading: authLoading } = useAuth();
-    const { updateUser, loading: prototypeLoading } = usePrototypeData();
+    const { user, userProfile, loading } = useAuth();
+    const firestore = useFirestore();
     const router = useRouter();
 
-    const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [loading, setLoading] = useState(true);
-
     useEffect(() => {
-        if (authLoading || prototypeLoading) return;
-        
-        if (!authUser) {
+        if (!loading && !user) {
             router.push('/login');
-            return;
         }
-
-        // In prototype mode, authUser from context is the source of truth
-        setProfile(authUser);
-        setLoading(false);
-
-    }, [authUser, authLoading, prototypeLoading, router]);
+    }, [user, loading, router]);
 
     const handleProfileUpdate = (updatedProfileData: Partial<UserProfile>) => {
-        if (!profile) return;
-        // The updateUser function from the context will handle the state update and session storage.
-        updateUser(updatedProfileData);
+        if (!user || !firestore) return;
+        updateUserProfile(firestore, user.uid, updatedProfileData);
     };
 
-    if (loading || authLoading || prototypeLoading || !profile) {
+    if (loading || !userProfile) {
         return (
             <div className="container mx-auto">
                 <PageHeader title="Mi Perfil" description="Gestiona la información de tu cuenta." />
@@ -74,9 +61,7 @@ export default function ProfilePage() {
     return (
         <div className="container mx-auto">
             <PageHeader title="Mi Perfil" description="Gestiona la información de tu cuenta y direcciones." />
-            <ProfileForm user={profile} onSave={handleProfileUpdate} />
+            <ProfileForm user={userProfile} onSave={handleProfileUpdate} />
         </div>
     );
 }
-
-    

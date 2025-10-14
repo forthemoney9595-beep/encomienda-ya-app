@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -10,7 +11,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { Bike, Car, Motorcycle } from 'lucide-react';
+import { Bike, Car, Motorcycle, Loader2 } from 'lucide-react';
+import { useAuth, useFirestore } from '@/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { useState } from 'react';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -24,6 +29,10 @@ const formSchema = z.object({
 export default function SignupDeliveryPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -34,12 +43,45 @@ export default function SignupDeliveryPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // In prototype mode, just show a success message and redirect
-    toast({
-      title: "¡Solicitud Enviada (Simulado)!",
-      description: "Tu cuenta de repartidor ha sido creada y está pendiente de aprobación. Puedes usar las cuentas de prueba para iniciar sesión.",
-    });
-    router.push('/login');
+    if (!auth || !firestore) {
+        toast({ variant: "destructive", title: "Error", description: "Los servicios de Firebase no están disponibles." });
+        return;
+    }
+    setIsSubmitting(true);
+
+    try {
+        const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+        const user = userCredential.user;
+
+        // Create user profile in Firestore
+        const userProfile = {
+            uid: user.uid,
+            name: values.name,
+            email: values.email,
+            role: 'delivery' as const,
+            vehicle: values.vehicleType,
+            status: 'Pendiente', // Delivery personnel needs approval
+        };
+        await setDoc(doc(firestore, "users", user.uid), userProfile);
+        
+        toast({
+            title: "¡Solicitud Enviada!",
+            description: "Tu cuenta de repartidor ha sido creada y está pendiente de aprobación.",
+        });
+        router.push('/');
+        
+    } catch (error: any) {
+        console.error("Error creating delivery account:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al Registrarse",
+            description: error.code === 'auth/email-already-in-use' 
+                ? "Este correo electrónico ya está en uso."
+                : "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   }
 
   return (
@@ -136,8 +178,8 @@ export default function SignupDeliveryPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Enviando solicitud..." : "Crear Cuenta de Repartidor"}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando solicitud...</> : "Crear Cuenta de Repartidor"}
               </Button>
               <div className="mt-4 text-center text-sm">
                 ¿Ya tienes una cuenta?{" "}

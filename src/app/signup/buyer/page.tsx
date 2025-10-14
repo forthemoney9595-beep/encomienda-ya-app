@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -10,6 +11,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { useAuth, useFirestore } from '@/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -20,6 +25,10 @@ const formSchema = z.object({
 export default function SignupBuyerPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -30,12 +39,43 @@ export default function SignupBuyerPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // In prototype mode, just show a success message and redirect
-    toast({
-      title: "¡Cuenta Creada (Simulado)!",
-      description: "Tu cuenta de comprador ha sido creada. Ahora puedes iniciar sesión con las cuentas de prueba.",
-    });
-    router.push('/login');
+    if (!auth || !firestore) {
+        toast({ variant: "destructive", title: "Error", description: "Los servicios de Firebase no están disponibles." });
+        return;
+    }
+    setIsSubmitting(true);
+    try {
+        const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+        const user = userCredential.user;
+
+        // Create user profile in Firestore
+        const userProfile = {
+            uid: user.uid,
+            name: values.name,
+            email: values.email,
+            role: 'buyer' as const,
+            addresses: [],
+        };
+        await setDoc(doc(firestore, "users", user.uid), userProfile);
+        
+        toast({
+            title: "¡Cuenta Creada!",
+            description: "Tu cuenta de comprador ha sido creada con éxito. Serás redirigido.",
+        });
+        router.push('/');
+
+    } catch (error: any) {
+        console.error("Error creating buyer account:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al Registrarse",
+            description: error.code === 'auth/email-already-in-use' 
+                ? "Este correo electrónico ya está en uso."
+                : "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   }
 
   return (
@@ -91,8 +131,8 @@ export default function SignupBuyerPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Creando cuenta..." : "Crear Cuenta"}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Creando cuenta...</> : "Crear Cuenta"}
               </Button>
               <div className="mt-4 text-center text-sm">
                 ¿Ya tienes una cuenta?{" "}

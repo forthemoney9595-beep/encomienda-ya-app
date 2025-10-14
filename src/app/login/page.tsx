@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -10,12 +11,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { prototypeUsers } from '@/lib/placeholder-data';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/context/auth-context';
-import { prototypeUsers } from '@/lib/placeholder-data';
-import { Loader2 } from 'lucide-react';
-
 
 const formSchema = z.object({
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
@@ -25,7 +27,8 @@ const formSchema = z.object({
 export default function LoginPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const { loginForPrototype } = useAuth();
+  const auth = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -36,22 +39,29 @@ export default function LoginPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!auth) {
+        toast({ variant: "destructive", title: "Error", description: "El servicio de autenticación no está disponible." });
+        return;
+    }
+    setIsSubmitting(true);
     form.clearErrors();
-    // Check if it's a prototype user
-    if (Object.keys(prototypeUsers).includes(values.email)) {
-        loginForPrototype(values.email); // This now comes from context and is simpler
+
+    try {
+        await signInWithEmailAndPassword(auth, values.email, values.password);
         toast({
-          title: "Iniciando como Prototipo",
-          description: `Has iniciado sesión como ${prototypeUsers[values.email].name}.`,
+            title: "¡Sesión Iniciada!",
+            description: "Has iniciado sesión correctamente.",
         });
         router.push('/');
-    } else {
-      // Handle non-prototype users if necessary, for now show error
-      toast({
-        variant: "destructive",
-        title: "Error al Iniciar Sesión",
-        description: "En modo prototipo, solo puedes usar las cuentas de prueba.",
-      });
+    } catch (error: any) {
+        console.error("Error signing in:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al Iniciar Sesión",
+            description: "Las credenciales son incorrectas o el usuario no existe.",
+        });
+    } finally {
+        setIsSubmitting(false);
     }
   }
 
@@ -96,8 +106,8 @@ export default function LoginPage() {
                 />
               </CardContent>
               <CardFooter className="flex flex-col">
-                <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Iniciando Sesión...</> : "Iniciar Sesión"}
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Iniciando Sesión...</> : "Iniciar Sesión"}
                 </Button>
                 <div className="mt-4 text-center text-sm">
                   ¿No tienes una cuenta?{" "}
@@ -112,8 +122,8 @@ export default function LoginPage() {
         
         <Card className="w-full max-w-lg">
             <CardHeader>
-                <CardTitle>Cuentas de Prueba (Modo Prototipo)</CardTitle>
-                <CardDescription>Usa estas cuentas para explorar los diferentes roles. El inicio de sesión es simulado. La contraseña para todas es <Badge variant="secondary" className="font-mono">password</Badge>.</CardDescription>
+                <CardTitle>Cuentas de Prueba Sugeridas</CardTitle>
+                <CardDescription>Puedes usar estos correos para registrarte. La contraseña para todas puede ser <Badge variant="secondary" className="font-mono">password</Badge>.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>

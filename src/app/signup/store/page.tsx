@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -11,9 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { createStoreForUser } from '@/lib/user';
-import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
+import { useAuth, useFirestore } from '@/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { createStoreForUser } from '@/lib/user-service';
+import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+
 
 const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
@@ -27,8 +32,9 @@ const formSchema = z.object({
 export default function SignupStorePage() {
   const { toast } = useToast();
   const router = useRouter();
-  const { loginForPrototype } = useAuth();
-  const { addPrototypeStore } = usePrototypeData();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -42,21 +48,51 @@ export default function SignupStorePage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // In prototype mode, we simulate the creation and redirect.
-    const newOwnerId = `proto-owner-${Date.now()}`;
-    const newStore = await createStoreForUser(newOwnerId, {
-        name: values.storeName,
-        category: values.category,
-        address: values.address,
-    });
+    if (!auth || !firestore) {
+      toast({ variant: "destructive", title: "Error", description: "Los servicios de Firebase no están disponibles." });
+      return;
+    }
+    setIsSubmitting(true);
     
-    addPrototypeStore(newStore);
+    try {
+        const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+        const user = userCredential.user;
 
-    toast({
-      title: "¡Solicitud de Tienda Enviada!",
-      description: "Tu tienda ha sido registrada y está pendiente de aprobación por un administrador.",
-    });
-    router.push('/');
+        // Create the store document
+        await createStoreForUser(firestore, user.uid, {
+            name: values.storeName,
+            category: values.category,
+            address: values.address,
+        });
+
+        // Create the user profile document for the store owner
+        const userProfile = {
+            uid: user.uid,
+            name: values.ownerName,
+            email: values.email,
+            role: 'store' as const,
+            storeId: user.uid, // Temporarily, will be updated by createStoreForUser logic
+        };
+        await setDoc(doc(firestore, "users", user.uid), userProfile);
+        
+        toast({
+            title: "¡Solicitud de Tienda Enviada!",
+            description: "Tu tienda ha sido registrada y está pendiente de aprobación por un administrador.",
+        });
+        router.push('/');
+
+    } catch (error: any) {
+        console.error("Error creating store account:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al Registrarse",
+            description: error.code === 'auth/email-already-in-use' 
+                ? "Este correo electrónico ya está en uso."
+                : "No se pudo registrar la tienda. Por favor, inténtalo de nuevo.",
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   }
 
   return (
@@ -166,8 +202,8 @@ export default function SignupStorePage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Registrando tienda..." : "Registrar Tienda"}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Registrando tienda...</> : "Registrar Tienda"}
               </Button>
               <div className="mt-4 text-center text-sm">
                 ¿Ya tienes una cuenta?{" "}

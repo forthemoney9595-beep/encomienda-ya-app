@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/context/auth-context';
+import { useAuth } from '@/firebase';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarFooter, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { MainNav } from '@/components/main-nav';
 import Logo from '@/components/logo';
@@ -17,27 +17,27 @@ import { useRouter } from 'next/navigation';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 
 function UserMenu() {
-    const { user, isAdmin, logoutForPrototype } = useAuth();
+    const { user, userProfile, isAdmin, logout } = useAuth();
     const router = useRouter();
 
     const handleSignOut = async () => {
-        logoutForPrototype();
+        await logout();
         router.push('/login');
     };
 
-    if (!user) return null;
+    if (!user || !userProfile) return null;
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <div className="flex items-center gap-3 p-3 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent/50 cursor-pointer rounded-md transition-colors">
                     <Avatar className="h-9 w-9 border-2 border-sidebar-accent">
-                        <AvatarImage src={getPlaceholderImage(user.name, 40, 40)} alt={user.name} />
-                        <AvatarFallback>{user.name?.[0].toUpperCase()}</AvatarFallback>
+                        <AvatarImage src={getPlaceholderImage(userProfile.name, 40, 40)} alt={userProfile.name} />
+                        <AvatarFallback>{userProfile.name?.[0].toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 flex-col truncate group-data-[collapsible=icon]:hidden">
-                        <span className="text-sm font-semibold text-sidebar-foreground truncate">{user.name}</span>
-                        <span className="text-xs text-sidebar-foreground/70 truncate">{user.email}</span>
+                        <span className="text-sm font-semibold text-sidebar-foreground truncate">{userProfile.name}</span>
+                        <span className="text-xs text-sidebar-foreground/70 truncate">{userProfile.email}</span>
                     </div>
                     <ChevronsUpDown className="h-4 w-4 text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden" />
                 </div>
