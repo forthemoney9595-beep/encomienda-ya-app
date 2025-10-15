@@ -143,7 +143,7 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
                 setIsOpen={setManageItemDialogOpen}
                 product={editingProduct}
                 onSave={async (productData) => {
-                    await onSaveProduct(productData);
+                    await onSaveProduct(productData as Product);
                     setManageItemDialogOpen(false);
                 }}
                 productCategories={productCategories}

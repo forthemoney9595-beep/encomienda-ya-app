@@ -6,7 +6,7 @@ import Image from 'next/image';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProductList } from './product-list';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import type { Store, Product } from '@/lib/placeholder-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Edit, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useDoc, useFirestore } from '@/firebase';
+import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { addProductToStore, updateProductInStore, deleteProductFromStore } from '@/lib/data-service';
 
@@ -205,4 +205,3 @@ export default function StoreDetailPage() {
   );
 }
 
-    
