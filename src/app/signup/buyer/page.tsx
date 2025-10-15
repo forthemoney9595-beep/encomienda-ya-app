@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, AuthErrorCodes } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, writeBatch } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { createUserProfile } from '@/lib/user-service';
 
@@ -52,6 +52,9 @@ export default function SignupBuyerPage() {
 
         const isActualAdmin = values.email === 'admin@test.com';
 
+        const batch = writeBatch(firestore);
+
+        const userDocRef = doc(firestore, 'users', user.uid);
         const userProfile = {
             uid: user.uid,
             name: values.name,
@@ -59,13 +62,14 @@ export default function SignupBuyerPage() {
             role: isActualAdmin ? 'admin' : 'buyer' as const,
             addresses: [],
         };
-        
-        await setDoc(doc(firestore, 'users', user.uid), userProfile);
+        batch.set(userDocRef, userProfile);
         
         if (isActualAdmin) {
             const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-            await setDoc(adminRoleRef, { role: 'admin', createdAt: new Date() });
+            batch.set(adminRoleRef, { role: 'admin', createdAt: new Date() });
         }
+        
+        await batch.commit();
         
         toast({
             title: "¡Cuenta Creada!",
@@ -75,7 +79,6 @@ export default function SignupBuyerPage() {
 
     } catch (error: any) {
         if (error.code === AuthErrorCodes.EMAIL_EXISTS) {
-            // If email exists, try to sign in instead.
             try {
                 await signInWithEmailAndPassword(auth, values.email, values.password);
                  toast({
