@@ -1,49 +1,35 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
 import type { Store } from '@/lib/placeholder-data';
 import { useAuth } from '@/context/auth-context';
-import { usePrototypeData } from '@/context/prototype-data-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
-import { getStores } from '@/lib/data-service';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, where, CollectionReference } from 'firebase/firestore';
 
 export default function FoodStoresPage() {
   const { user, loading: authLoading } = useAuth();
-  const { prototypeStores, loading: prototypeLoading } = usePrototypeData();
-  const [stores, setStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(true);
+  const firestore = useFirestore();
 
-  const isPrototype = user?.uid.startsWith('proto-');
   const foodCategories = ['italiana', 'comida-rapida', 'japonesa', 'mexicana', 'saludable', 'dulces'];
 
-  useEffect(() => {
-    async function fetchStores() {
-        setLoading(true);
-        if (isPrototype) {
-            const foodStores = prototypeStores.filter(store => 
-                store.status === 'Aprobado' && foodCategories.includes(store.category.toLowerCase())
-            );
-            setStores(foodStores);
-        } else {
-            const allStores = await getStores();
-            const foodStores = allStores.filter(store => 
-                foodCategories.includes(store.category.toLowerCase())
-            );
-            setStores(foodStores);
-        }
-        setLoading(false);
-    }
-    if (!prototypeLoading) {
-        fetchStores();
-    }
-  }, [isPrototype, prototypeStores, prototypeLoading]);
+  const storesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(
+        collection(firestore, 'stores'), 
+        where('status', '==', 'Aprobado'),
+        where('category', 'in', foodCategories)
+    ) as CollectionReference<Store>;
+  }, [firestore]);
   
-  const isLoading = authLoading || loading;
+  const { data: stores, isLoading: storesLoading } = useCollection<Store>(storesQuery);
+
+  const isLoading = authLoading || storesLoading;
 
   return (
     <div className="container mx-auto">
@@ -57,10 +43,10 @@ export default function FoodStoresPage() {
             <StoreCardSkeleton />
             <StoreCardSkeleton />
           </>
-        ) : stores.length > 0 ? (
+        ) : stores && stores.length > 0 ? (
           stores.map((store) => (
             <Link href={`/stores/${store.id}`} key={store.id} className="group">
-              <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover-shadow-xl hover:-translate-y-1">
+              <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
                 <div className="relative h-48 w-full">
                   <Image
                     src={store.imageUrl}

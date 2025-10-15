@@ -7,19 +7,17 @@ import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
 import type { Store, Product } from '@/lib/placeholder-data';
-import { useAuth } from '@/context/auth-context';
+import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Input } from '@/components/ui/input';
 import { Search, Heart } from 'lucide-react';
-import { getStores } from '@/lib/data-service';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Rating } from '@/components/ui/rating';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection } from '@/firebase';
 import { collection, query, where, CollectionReference } from 'firebase/firestore';
-import { useFirestore, useMemoFirebase } from '@/firebase';
+import { updateUserProfile } from '@/lib/user-service';
 
 const ALL_CATEGORIES = 'all';
 
@@ -58,9 +56,31 @@ export default function Home() {
 
   const { data: stores, isLoading: storesLoading } = useCollection<Store>(storesQuery);
   
-  // TODO: Implement favorites in Firestore
-  const favoriteStores: string[] = []; 
-  const toggleFavoriteStore = (storeId: string) => { console.log("Toggling favorite for:", storeId)};
+  const favoriteStores = userProfile?.favoriteStores || [];
+  
+  const handleFavoriteToggle = (e: React.MouseEvent, storeId: string, storeName: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!user || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Inicia Sesión',
+        description: 'Debes iniciar sesión para guardar favoritos.',
+      });
+      return;
+    }
+    const isFavorite = favoriteStores.includes(storeId);
+    const updatedFavorites = isFavorite 
+      ? favoriteStores.filter((id: string) => id !== storeId)
+      : [...favoriteStores, storeId];
+
+    updateUserProfile(firestore, user.uid, { favoriteStores: updatedFavorites });
+
+    toast({
+      title: isFavorite ? 'Eliminado de Favoritos' : 'Añadido a Favoritos',
+      description: `${storeName} ha sido ${isFavorite ? 'eliminado de' : 'añadido a'} tus favoritos.`,
+    });
+  };
 
 
   const allStoreCategories = useMemo(() => {
@@ -86,25 +106,6 @@ export default function Home() {
   }, [stores, searchQuery, categoryFilter, ratingFilter]);
 
   const isLoading = authLoading || storesLoading;
-
-  const handleFavoriteToggle = (e: React.MouseEvent, storeId: string, storeName: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (!user) {
-      toast({
-        variant: 'destructive',
-        title: 'Inicia Sesión',
-        description: 'Debes iniciar sesión para guardar favoritos.',
-      });
-      return;
-    }
-    toggleFavoriteStore(storeId);
-    const isFavorite = favoriteStores.includes(storeId);
-    toast({
-      title: isFavorite ? 'Eliminado de Favoritos' : 'Añadido a Favoritos',
-      description: `${storeName} ha sido ${isFavorite ? 'eliminado de' : 'añadido a'} tus favoritos.`,
-    });
-  };
 
   return (
     <div className="container mx-auto">
@@ -172,11 +173,12 @@ export default function Home() {
                     size="icon"
                     className={cn(
                         "absolute top-2 right-2 h-8 w-8 rounded-full bg-black/30 text-white backdrop-blur-sm transition-all hover:bg-black/50",
-                        "opacity-0 group-hover:opacity-100",
+                        user && "opacity-0 group-hover:opacity-100",
                         isFavorite && "opacity-100"
                     )}
                     onClick={(e) => handleFavoriteToggle(e, store.id, store.name)}
                     aria-label={isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+                    disabled={!user}
                   >
                     <Heart className={cn("h-4 w-4", isFavorite && "fill-red-500 text-red-500")} />
                   </Button>
