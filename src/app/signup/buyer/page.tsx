@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, AuthErrorCodes } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { createUserProfile } from '@/lib/user-service';
@@ -45,6 +45,7 @@ export default function SignupBuyerPage() {
         return;
     }
     setIsSubmitting(true);
+    
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
@@ -73,14 +74,30 @@ export default function SignupBuyerPage() {
         router.push('/');
 
     } catch (error: any) {
-        console.error("Error creating buyer account:", error);
-        toast({
-            variant: "destructive",
-            title: "Error al Registrarse",
-            description: error.code === 'auth/email-already-in-use' 
-                ? "Este correo electrónico ya está en uso."
-                : "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
-        });
+        if (error.code === AuthErrorCodes.EMAIL_EXISTS) {
+            // If email exists, try to sign in instead.
+            try {
+                await signInWithEmailAndPassword(auth, values.email, values.password);
+                 toast({
+                    title: "¡Sesión Iniciada!",
+                    description: "Ya tenías una cuenta, así que hemos iniciado sesión por ti.",
+                });
+                router.push('/');
+            } catch (signInError: any) {
+                 toast({
+                    variant: "destructive",
+                    title: "Error al Iniciar Sesión",
+                    description: "El correo ya existe pero la contraseña es incorrecta.",
+                });
+            }
+        } else {
+             console.error("Error creating buyer account:", error);
+            toast({
+                variant: "destructive",
+                title: "Error al Registrarse",
+                description: "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
+            });
+        }
     } finally {
         setIsSubmitting(false);
     }
