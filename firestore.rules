@@ -3,50 +3,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper Functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      // Allow read access to roles_admin for any authenticated user
+      return request.auth != null && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
-    // Global Admin Read Access
     match /{document=**} {
-      allow read: if isAdmin();
-    }
-
-    // User Profiles
-    match /users/{userId} {
-      allow read, update, delete: if isOwner(userId);
-      allow create: if isSignedIn();
-    }
-
-    // Admin Roles - Only readable by signed-in users, not listable
-    match /roles_admin/{userId} {
-      allow get: if isSignedIn();
-      allow list, write, delete: if false; // Admins cannot be created/deleted via client
+      // Admins can read and write anything
+      allow read, write: if isAdmin();
     }
     
-    // Stores
-    match /stores/{storeId} {
-      allow read: if true; // Anyone can see the stores
-      allow update: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid);
-      allow create: if isSignedIn();
+    // Fallback rules for non-admins
+    match /users/{userId} {
+      allow read, update: if request.auth.uid == userId;
+      allow create: if request.auth.uid != null;
     }
 
-    // Orders
+    match /stores/{storeId} {
+      allow read: if true;
+      allow update: if request.auth.uid == resource.data.ownerId;
+    }
+    
     match /orders/{orderId} {
-      allow read: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId);
-      allow create: if isSignedIn();
-      allow update: if isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || 
-                      (isSignedIn() && get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryPersonId == request.auth.uid) ||
-                      (isSignedIn() && get(/databases/$(database)/documents/stores/$(get(/databases/$(database)/documents/orders/$(orderId)).data.storeId)).data.ownerId == request.auth.uid);
+        allow read, update: if request.auth.uid == resource.data.userId || request.auth.uid == resource.data.deliveryPersonId;
+        allow create: if request.auth.uid != null;
+    }
+
+    match /roles_admin/{uid} {
+      allow read: if request.auth != null;
     }
   }
 }
