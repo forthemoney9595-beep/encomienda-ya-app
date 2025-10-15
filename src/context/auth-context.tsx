@@ -39,16 +39,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         setProfileLoading(true);
-        // Reset isAdmin on user change, it will be re-verified.
-        setIsAdmin(false);
+        let adminCheckDone = false;
+        let profileCheckDone = false;
 
-        // Listener for the main user profile in /users/{uid}
+        const checkLoadingComplete = () => {
+            if (adminCheckDone && profileCheckDone) {
+                setProfileLoading(false);
+            }
+        };
+
         const userDocRef = doc(firestore, 'users', user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 setUserProfile(docSnap.data() as UserProfile);
             } else {
-                 // If no profile, create a temporary one. The guard might create a real one.
                  setUserProfile({
                     uid: user.uid,
                     email: user.email!,
@@ -56,24 +60,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     role: 'buyer'
                  });
             }
+            profileCheckDone = true;
+            checkLoadingComplete();
         }, (error) => {
             console.error("Error fetching user profile:", error);
             setUserProfile(null);
+            profileCheckDone = true;
+            checkLoadingComplete();
         });
 
-        // Separate, definitive check for admin role in /roles_admin/{uid}. This is the source of truth for admin status.
         const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
         const unsubscribeAdmin = onSnapshot(adminRoleRef, (docSnap) => {
-            const userIsAdmin = docSnap.exists();
-            setIsAdmin(userIsAdmin);
-            
-            // We consider loading complete once the admin check is done, 
-            // as it's the most critical for navigation and rendering decisions.
-            setProfileLoading(false);
+            setIsAdmin(docSnap.exists());
+            adminCheckDone = true;
+            checkLoadingComplete();
         }, (error) => {
             console.error("Error checking admin role:", error);
             setIsAdmin(false);
-            setProfileLoading(false);
+            adminCheckDone = true;
+            checkLoadingComplete();
         });
 
 
@@ -87,11 +92,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = useCallback(async () => {
         if(auth) {
             await auth.signOut();
-            // State will be cleared by the useEffect hook watching the user object
         }
     }, [auth]);
 
-    // The overall loading state is true if either the initial auth check OR the profile/admin check is running.
     const loading = isAuthLoading || isProfileLoading;
     
     const value = { user, userProfile, loading, isAdmin, logout };
