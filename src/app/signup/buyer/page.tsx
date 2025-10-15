@@ -51,7 +51,6 @@ export default function SignupBuyerPage() {
 
         const isActualAdmin = values.email === 'admin@test.com';
 
-        // Create user profile in Firestore
         const userProfile = {
             uid: user.uid,
             name: values.name,
@@ -60,13 +59,10 @@ export default function SignupBuyerPage() {
             addresses: [],
         };
         
-        // This is a non-blocking write
-        await createUserProfile(firestore, user.uid, userProfile);
-
-        // If the magic email is used, also create an entry in roles_admin. This is the source of truth.
+        await setDoc(doc(firestore, 'users', user.uid), userProfile);
+        
         if (isActualAdmin) {
             const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-            // This is a blocking write, as it's critical for the next page load.
             await setDoc(adminRoleRef, { role: 'admin', createdAt: new Date() });
         }
         
