@@ -54,6 +54,7 @@ export default function SignupBuyerPage() {
 
         const batch = writeBatch(firestore);
 
+        // 1. Set User Profile
         const userDocRef = doc(firestore, 'users', user.uid);
         const userProfile = {
             uid: user.uid,
@@ -64,11 +65,13 @@ export default function SignupBuyerPage() {
         };
         batch.set(userDocRef, userProfile);
         
+        // 2. Set Admin Role if applicable
         if (isActualAdmin) {
             const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
             batch.set(adminRoleRef, { role: 'admin', createdAt: new Date() });
         }
         
+        // 3. Commit both writes as a single transaction
         await batch.commit();
         
         toast({
@@ -79,6 +82,7 @@ export default function SignupBuyerPage() {
 
     } catch (error: any) {
         if (error.code === AuthErrorCodes.EMAIL_EXISTS) {
+            // If email exists, try to sign in instead
             try {
                 await signInWithEmailAndPassword(auth, values.email, values.password);
                  toast({

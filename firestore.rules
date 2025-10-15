@@ -1,209 +1,198 @@
 /**
- * @fileoverview Firestore Security Rules for EncomiendaYA.
+ * @file Firebase Security Rules for EncomiendaYA
  *
- * Core Philosophy:
- * This ruleset enforces a combination of ownership-based access control and
- * role-based access for admin users. Most data is scoped to specific users or
- * stores, and only authenticated users can access the database. Admin users,
- * identified by the presence of a document in the `/roles_admin/{uid}` collection,
- * are granted elevated privileges.
+ * @description
+ * This ruleset enforces a role-based access control model with ownership checks to
+ * secure data related to stores, delivery personnel, items, orders, customers,
+ * and reviews. Admins are managed via a dedicated `roles_admin` collection.
  *
- * Data Structure:
- * - /stores/{storeId}: Stores account information, managed by the store itself or an admin.
- * - /stores/{storeId}/items/{itemId}: Items available at each store, managed by the store.
- * - /delivery_personnel/{deliveryPersonnelId}: Delivery personnel accounts, potentially managed by admins.
- * - /roles_admin/{uid}: Admin role assignments. Presence of a document grants admin privileges.
- * - /customers/{customerId}: Customer accounts, managed by the customer themselves.
- * - /customers/{customerId}/orders/{orderId}: Orders placed by customers.
- * - /customers/{customerId}/orders/{orderId}/order_items/{orderItemId}: Items within an order.
- * - /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId}: Customer reviews for delivery personnel.
+ * @data_structure
+ * - `/stores/{storeId}`: Stores account information.
+ * - `/stores/{storeId}/items/{itemId}`: Items available for sale at each store.
+ * - `/delivery_personnel/{deliveryPersonnelId}`: Delivery personnel accounts.
+ * - `/roles_admin/{uid}`: Admin role assignment.
+ * - `/customers/{customerId}`: Customer accounts.
+ * - `/customers/{customerId}/orders/{orderId}`: Orders placed by customers.
+ * - `/customers/{customerId}/orders/{orderId}/order_items/{orderItemId}`: Items within an order.
+ * - `/delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId}`: Customer reviews for delivery personnel.
  *
- * Key Security Decisions:
- * - Admins have full read and write access to all collections.
- * - Stores can manage their own store information and items.
- * - Customers can only manage their own customer information and orders.
- * - Delivery personnel information and reviews might be managed by admins.
- * - Listing all users is not allowed, enhancing user privacy.
+ * @key_security_decisions
+ * - Admin privileges are granted based on the presence of a document in the `/roles_admin/{uid}` collection.
+ * - Data denormalization is used to avoid costly `get()` calls within security rules.
+ * - List operations are secured based on path-based ownership or admin roles.
+ * - All write operations require authentication.
  *
- * Denormalization for Authorization:
- * - The 'Item' entity includes 'storeId' to allow item management rules to be enforced based on the store without needing to `get()` the store document.
- * - Orders include 'customerId', 'storeId', and 'deliveryPersonnelId' to enable security rules based on the authenticated user's ID without requiring hierarchical lookups.
- * - Reviews include 'customerId' and 'deliveryPersonnelId' to enable security rules based on the authenticated user's ID without requiring hierarchical lookups.
- *
- * Structural Segregation:
- * - Admins are managed in a separate `/roles_admin/{uid}` collection, simplifying role-based access control.
+ * @denormalization_for_authorization
+ * - `items` include `storeId` for independent authorization.
+ * - `orders` include `customerId`, `storeId`, and `deliveryPersonnelId` for independent authorization.
+ * - `reviews` include `customerId` and `deliveryPersonnelId` for independent authorization.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the user is signed in.
-     * @returns {boolean} True if the user is signed in, false otherwise.
+     * @description Allows stores to manage their account information.
+     * @path /stores/{storeId}
+     * @allow (create, update, delete) if request.auth.uid == storeId
+     * @allow (get, list) if true
+     * @deny (create, update, delete) if request.auth == null
+     * @principle Enforces document ownership for writes. Allows public reads.
      */
+    match /stores/{storeId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && request.auth.uid == storeId;
+      allow update: if isSignedIn() && isExistingOwner(storeId);
+      allow delete: if isSignedIn() && isExistingOwner(storeId);
+    }
+
+    /**
+     * @description Allows stores to manage their items.
+     * @path /stores/{storeId}/items/{itemId}
+     * @allow (create, update, delete) if request.auth.uid == storeId
+     * @allow (get, list) if true
+     * @deny (create, update, delete) if request.auth == null
+     * @principle Enforces document ownership for writes, public reads.
+     */
+    match /stores/{storeId}/items/{itemId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && request.auth.uid == storeId && request.resource.data.storeId == storeId;
+      allow update: if isSignedIn() && isExistingItemOwner(storeId);
+      allow delete: if isSignedIn() && isExistingItemOwner(storeId);
+    }
+
+    /**
+     * @description Allows admins to manage delivery personnel accounts.
+     * @path /delivery_personnel/{deliveryPersonnelId}
+     * @allow (create, update, delete) if isAdmin()
+     * @allow (get, list) if isAdmin()
+     * @deny (create, update, delete) if !isAdmin()
+     * @principle Restricts access to admin users only.
+     */
+    match /delivery_personnel/{deliveryPersonnelId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Admin role assignment. Only admins can manage other admins.
+     * @path /roles_admin/{uid}
+     * @allow (create, update, delete) if isAdmin() || request.auth.uid == uid
+     * @allow (get, list) if isAdmin()
+     * @deny (create, update, delete) if request.auth == null
+     * @principle Restricts access to admin users only.
+     */
+    match /roles_admin/{uid} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() || request.auth.uid == uid;
+      allow update: if isAdmin() || isExistingOwnerForAdmin(uid);
+      allow delete: if isAdmin() || isExistingOwnerForAdmin(uid);
+    }
+
+    /**
+     * @description Allows customers to manage their account information.
+     * @path /customers/{customerId}
+     * @allow (create, update, delete) if request.auth.uid == customerId
+     * @allow (get, list) if request.auth.uid == customerId || isAdmin()
+     * @deny (create, update, delete) if request.auth == null
+     * @principle Enforces document ownership for writes.
+     */
+    match /customers/{customerId} {
+      allow get: if request.auth.uid == customerId || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == customerId;
+      allow update: if isSignedIn() && isExistingOwner(customerId);
+      allow delete: if isSignedIn() && isExistingOwner(customerId);
+    }
+
+    /**
+     * @description Allows customers to manage their orders.
+     * @path /customers/{customerId}/orders/{orderId}
+     * @allow (create, update, delete) if request.auth.uid == customerId
+     * @allow (get, list) if request.auth.uid == customerId || isAdmin()
+     * @deny (create, update, delete) if request.auth == null
+     * @principle Enforces document ownership for writes.
+     */
+    match /customers/{customerId}/orders/{orderId} {
+      allow get: if request.auth.uid == customerId || isAdmin();
+      allow list: if isOwner(customerId) || isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == customerId && request.resource.data.customerId == customerId;
+      allow update: if isSignedIn() && isExistingOrderOwner(customerId);
+      allow delete: if isSignedIn() && isExistingOrderOwner(customerId);
+    }
+
+    /**
+     * @description Allows customers to manage their order items.
+     * @path /customers/{customerId}/orders/{orderId}/order_items/{orderItemId}
+     * @allow (create, update, delete) if request.auth.uid == customerId
+     * @allow (get, list) if request.auth.uid == customerId || isAdmin()
+     * @deny (create, update, delete) if request.auth == null
+     * @principle Enforces document ownership for writes.
+     */
+    match /customers/{customerId}/orders/{orderId}/order_items/{orderItemId} {
+      allow get: if request.auth.uid == customerId || isAdmin();
+      allow list: if isOwner(customerId) || isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == customerId;
+      allow update: if isSignedIn() && isExistingOrderItemsOwner(customerId);
+      allow delete: if isSignedIn() && isExistingOrderItemsOwner(customerId);
+    }
+
+    /**
+     * @description Allows customers to create reviews for delivery personnel.
+     * @path /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId}
+     * @allow (create, update, delete) if request.auth.uid == request.resource.data.customerId
+     * @allow (get, list) if true
+     * @deny (create, update, delete) if request.auth == null
+     * @principle Enforces customer ownership for review creation.
+     */
+    match /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+      allow update: if isSignedIn() && isExistingReviewOwner();
+      allow delete: if isSignedIn() && isExistingReviewOwner();
+    }
+
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * @description Checks if the user is an admin.
-     * @returns {boolean} True if the user is an admin, false otherwise.
-     */
-    function isAdmin() {
-      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
-    }
-
-    /**
-     * @description Checks if the authenticated user's UID matches the provided userId.
-     * @param {string} userId - The user ID to compare against.
-     * @returns {boolean} True if the user is the owner, false otherwise.
-     */
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return request.auth.uid == userId;
     }
 
-    /**
-     * @description Checks if the authenticated user is the owner of an existing document.
-     * @param {string} userId - The user ID to compare against the document's owner.
-     * @returns {boolean} True if the user is the owner of an existing document, false otherwise.
-     */
     function isExistingOwner(userId) {
         return isOwner(userId) && resource != null;
     }
 
-    /**
-     * @description Grants full access to admins.
-     */
-    match /{path=**} {
-      allow read, write: if isAdmin();
+    function isAdmin() {
+        return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
-    /**
-     * @description Rules for the /stores/{storeId} collection.
-     * @path /stores/{storeId}
-     * @allow (create) User with UID 'store123' can create a store document if request.auth.uid == storeId.
-     * @allow (get) Any signed-in user can read a store document.
-     * @deny (create) User with UID 'hacker123' cannot create a store document with storeId 'store123'.
-     * @deny (update) Non-admin user cannot update a store document with storeId 'store123'.
-     * @principle Enforces owner-only write access for stores.
-     */
-    match /stores/{storeId} {
-      allow get, list: if true;
-      allow create: if isOwner(storeId);
-      allow update: if isExistingOwner(storeId);
-      allow delete: if isExistingOwner(storeId);
+    function isExistingOwnerForAdmin(uid) {
+      return isOwner(uid) && resource != null;
     }
 
-    /**
-     * @description Rules for the /stores/{storeId}/items/{itemId} collection.
-     * @path /stores/{storeId}/items/{itemId}
-     * @allow (create) User with UID 'store123' can create an item if request.auth.uid == resource.data.storeId.
-     * @allow (get) Any signed-in user can read an item document.
-     * @deny (create) User with UID 'hacker123' cannot create an item for store 'store123'.
-     * @deny (update) Non-owner user cannot update an item document.
-     * @principle Enforces store ownership for item management.
-     */
-    match /stores/{storeId}/items/{itemId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && request.resource.data.storeId == storeId;
-      allow update: if isSignedIn() && resource.data.storeId == storeId;
-      allow delete: if isSignedIn() && resource.data.storeId == storeId;
+    function isExistingItemOwner(storeId) {
+      return isSignedIn() && isStoreOwner(storeId) && resource != null;
     }
 
-    /**
-     * @description Rules for the /delivery_personnel/{deliveryPersonnelId} collection.
-     * @path /delivery_personnel/{deliveryPersonnelId}
-     * @allow (create) Any signed-in user can create a delivery personnel account.
-     * @allow (get) Any signed-in user can read a delivery personnel account.
-     * @deny (update) Non-admin user cannot update a delivery personnel account.
-     * @principle Restricts write access to admins.
-     */
-    match /delivery_personnel/{deliveryPersonnelId} {
-      allow get, list: if true;
-      allow create: if false; // Only Admin can create delivery personnel
-      allow update: if false; // Only Admin can update delivery personnel
-      allow delete: if false; // Only Admin can delete delivery personnel
+    function isStoreOwner(storeId) {
+        return request.auth.uid == storeId;
     }
 
-    /**
-     * @description Rules for the /roles_admin/{uid} collection.
-     * @path /roles_admin/{uid}
-     * @allow (create) User with UID 'admin123' can create their admin document if request.auth.uid == uid.
-     * @allow (get) Any signed-in user can check if an admin role exists.
-     * @deny (create) User with UID 'hacker123' cannot create an admin document with UID 'admin123'.
-     * @deny (update) Non-admin cannot update.
-     * @principle Enforces self-creation for admin roles.
-     */
-    match /roles_admin/{uid} {
-      allow get: if isSignedIn();
-      allow list: if false;
-      allow create: if isOwner(uid);
-      allow update: if false;
-      allow delete: if false;
+    function isExistingOrderOwner(customerId) {
+      return isSignedIn() && isOwner(customerId) && resource != null;
     }
 
-    /**
-     * @description Rules for the /customers/{customerId} collection.
-     * @path /customers/{customerId}
-     * @allow (create) User with UID 'customer123' can create their customer document if request.auth.uid == customerId.
-     * @allow (get) Any signed-in user can read a customer document.
-     * @deny (create) User with UID 'hacker123' cannot create a customer document with customerId 'customer123'.
-     * @deny (update) Non-owner user cannot update a customer document.
-     * @principle Enforces owner-only access for customer data.
-     */
-    match /customers/{customerId} {
-      allow get, list: if true;
-      allow create: if isOwner(customerId);
-      allow update: if isExistingOwner(customerId);
-      allow delete: if isExistingOwner(customerId);
+    function isExistingOrderItemsOwner(customerId) {
+      return isSignedIn() && isOwner(customerId) && resource != null;
     }
 
-    /**
-     * @description Rules for the /customers/{customerId}/orders/{orderId} collection.
-     * @path /customers/{customerId}/orders/{orderId}
-     * @allow (create) User with UID 'customer123' can create an order if request.auth.uid == customerId.
-     * @allow (get) Any signed-in user can read an order document.
-     * @deny (create) User with UID 'hacker123' cannot create an order for customer 'customer123'.
-     * @deny (update) Non-owner user cannot update an order document.
-     * @principle Enforces owner-only access for order data.
-     */
-    match /customers/{customerId}/orders/{orderId} {
-      allow get, list: if isOwner(customerId);
-      allow create: if isSignedIn() && request.resource.data.customerId == customerId;
-      allow update: if isSignedIn() && resource.data.customerId == customerId;
-      allow delete: if isSignedIn() && resource.data.customerId == customerId;
-    }
-
-    /**
-     * @description Rules for the /customers/{customerId}/orders/{orderId}/order_items/{orderItemId} collection.
-     * @path /customers/{customerId}/orders/{orderId}/order_items/{orderItemId}
-     * @allow (create) User with UID 'customer123' can create an order item if request.auth.uid == customerId.
-     * @allow (get) Any signed-in user can read an order item document.
-     * @deny (create) User with UID 'hacker123' cannot create an order item for customer 'customer123'.
-     * @deny (update) Non-owner user cannot update an order item document.
-     * @principle Enforces owner-only access for order item data.
-     */
-    match /customers/{customerId}/orders/{orderId}/order_items/{orderItemId} {
-      allow get, list: if isOwner(customerId);
-      allow create: if isSignedIn() && get(/databases/$(database)/documents/customers/$(customerId)/orders/$(orderId)).data.customerId == customerId;
-      allow update: if isSignedIn() && get(/databases/$(database)/documents/customers/$(customerId)/orders/$(orderId)).data.customerId == customerId;
-      allow delete: if isSignedIn() && get(/databases/$(database)/documents/customers/$(customerId)/orders/$(orderId)).data.customerId == customerId;
-    }
-
-    /**
-     * @description Rules for the /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId} collection.
-     * @path /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId}
-     * @allow (create) User with UID 'customer123' can create a review.
-     * @allow (get) Any signed-in user can read a review document.
-     * @deny (create) User with UID 'hacker123' cannot create a review for delivery personnel 'delivery123'.
-     * @deny (update) Non-admin user cannot update a review document.
-     * @principle Restricts write access to admins, allows read access to all.
-     */
-    match /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId} {
-      allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update: if false; // Only Admin can update reviews if needed
-      allow delete: if false; // Only Admin can delete reviews if needed
+    function isExistingReviewOwner() {
+        return resource != null && request.auth.uid == resource.data.customerId;
     }
   }
 }

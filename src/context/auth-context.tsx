@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setProfileLoading(false);
             }
         };
-
+        
         const userDocRef = doc(firestore, 'users', user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -92,6 +92,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = useCallback(async () => {
         if(auth) {
             await auth.signOut();
+            // Reset state on logout
+            setUserProfile(null);
+            setIsAdmin(false);
         }
     }, [auth]);
 
