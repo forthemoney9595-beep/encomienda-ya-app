@@ -12,6 +12,8 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
   useSidebar,
+  SidebarGroup,
+  SidebarGroupLabel,
 } from '@/components/ui/sidebar';
 import {
   Store,
@@ -44,7 +46,6 @@ export function MainNav() {
   const { setOpenMobile } = useSidebar();
   
   const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
-  const [isMyStoreOpen, setIsMyStoreOpen] = React.useState(pathname.startsWith('/my-store') || pathname.startsWith('/orders') || (user?.role === 'store' && user.storeId && pathname.includes(user.storeId)));
   const [isStoresOpen, setIsStoresOpen] = React.useState(
     pathname.startsWith('/stores') || pathname === '/'
   );
@@ -139,63 +140,54 @@ export function MainNav() {
               </SidebarMenuButton>
           </SidebarMenuItem>
 
-          <Collapsible open={isMyStoreOpen} onOpenChange={setIsMyStoreOpen}>
-            <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                 <SidebarMenuButton>
-                    <Store />
-                    <span>Mi Tienda</span>
-                    <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isMyStoreOpen && "rotate-180")} />
+          <SidebarGroup>
+            <SidebarGroupLabel>Operaciones</SidebarGroupLabel>
+             <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')}>
+                  <Link href="/orders" onClick={handleLinkClick}>
+                    <ClipboardList />
+                    <span>Gestionar Pedidos</span>
+                  </Link>
                 </SidebarMenuButton>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders')}>
-                      <Link href="/orders" onClick={handleLinkClick}>
-                        <ClipboardList />
-                        <span>Gestionar Pedidos</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  {user.storeId && (
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isOwnStoreProductsPageActive}>
-                        <Link href={`/stores/${user.storeId}`} onClick={handleLinkClick}>
-                          <Package />
-                          <span>Gestionar Productos</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  )}
-                   <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/categories')}>
-                      <Link href="/my-store/categories" onClick={handleLinkClick}>
-                        <Tag />
-                        <span>Categorías</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                   <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/my-store/analytics')}>
-                      <Link href="/my-store/analytics" onClick={handleLinkClick}>
-                        <BarChart3 />
-                        <span>Analíticas</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                   <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/my-store'}>
-                      <Link href="/my-store" onClick={handleLinkClick}>
-                        <Edit />
-                        <span>Editar Tienda</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </SidebarMenuItem>
-          </Collapsible>
+              </SidebarMenuItem>
+              {user.storeId && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isOwnStoreProductsPageActive}>
+                    <Link href={`/stores/${user.storeId}`} onClick={handleLinkClick}>
+                      <Package />
+                      <span>Gestionar Productos</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+          </SidebarGroup>
+           <SidebarGroup>
+            <SidebarGroupLabel>Configuración</SidebarGroupLabel>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/my-store/categories')}>
+                  <Link href="/my-store/categories" onClick={handleLinkClick}>
+                    <Tag />
+                    <span>Categorías</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+               <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/my-store/analytics')}>
+                  <Link href="/my-store/analytics" onClick={handleLinkClick}>
+                    <BarChart3 />
+                    <span>Analíticas</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+               <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/my-store'}>
+                  <Link href="/my-store" onClick={handleLinkClick}>
+                    <Edit />
+                    <span>Editar Tienda</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+          </SidebarGroup>
         </>
       )}
 
