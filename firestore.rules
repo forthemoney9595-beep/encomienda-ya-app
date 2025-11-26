@@ -32,126 +32,85 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows stores to manage their account information.
+     * @description Public read access for stores. Writes are restricted.
      * @path /stores/{storeId}
-     * @allow (create, update, delete) if request.auth.uid == storeId
      * @allow (get, list) if true
-     * @deny (create, update, delete) if request.auth == null
-     * @principle Enforces document ownership for writes. Allows public reads.
+     * @allow (create, update, delete) if isAdmin() or (isSignedIn() and isOwner(storeId))
      */
     match /stores/{storeId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && request.auth.uid == storeId;
-      allow update: if isSignedIn() && isExistingOwner(storeId);
-      allow delete: if isSignedIn() && isExistingOwner(storeId);
+      allow read: if true;
+      allow write: if isAdmin() || (isSignedIn() && isOwner(storeId));
     }
 
     /**
      * @description Allows stores to manage their items.
      * @path /stores/{storeId}/items/{itemId}
-     * @allow (create, update, delete) if request.auth.uid == storeId
+     * @allow (create, update, delete) if isAdmin() or request.auth.uid == storeId
      * @allow (get, list) if true
      * @deny (create, update, delete) if request.auth == null
      * @principle Enforces document ownership for writes, public reads.
      */
     match /stores/{storeId}/items/{itemId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && request.auth.uid == storeId && request.resource.data.storeId == storeId;
-      allow update: if isSignedIn() && isExistingItemOwner(storeId);
-      allow delete: if isSignedIn() && isExistingItemOwner(storeId);
+      allow read: if true;
+      allow write: if isAdmin() || (isSignedIn() && isOwner(storeId));
     }
 
     /**
      * @description Allows admins to manage delivery personnel accounts.
      * @path /delivery_personnel/{deliveryPersonnelId}
-     * @allow (create, update, delete) if isAdmin()
-     * @allow (get, list) if isAdmin()
-     * @deny (create, update, delete) if !isAdmin()
+     * @allow (read, write) if isAdmin()
      * @principle Restricts access to admin users only.
      */
     match /delivery_personnel/{deliveryPersonnelId} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     /**
      * @description Admin role assignment. Only admins can manage other admins.
      * @path /roles_admin/{uid}
-     * @allow (create, update, delete) if isAdmin() || request.auth.uid == uid
-     * @allow (get, list) if isAdmin()
-     * @deny (create, update, delete) if request.auth == null
-     * @principle Restricts access to admin users only.
+     * @allow read: if isSignedIn();
+     * @allow write: if isAdmin();
      */
     match /roles_admin/{uid} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin() || request.auth.uid == uid;
-      allow update: if isAdmin() || isExistingOwnerForAdmin(uid);
-      allow delete: if isAdmin() || isExistingOwnerForAdmin(uid);
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     /**
      * @description Allows customers to manage their account information.
      * @path /customers/{customerId}
-     * @allow (create, update, delete) if request.auth.uid == customerId
-     * @allow (get, list) if request.auth.uid == customerId || isAdmin()
-     * @deny (create, update, delete) if request.auth == null
-     * @principle Enforces document ownership for writes.
+     * @allow (read, write) if isAdmin() or isOwner(customerId)
      */
     match /customers/{customerId} {
-      allow get: if request.auth.uid == customerId || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == customerId;
-      allow update: if isSignedIn() && isExistingOwner(customerId);
-      allow delete: if isSignedIn() && isExistingOwner(customerId);
+      allow read, write: if isAdmin() || isOwner(customerId);
     }
 
     /**
      * @description Allows customers to manage their orders.
      * @path /customers/{customerId}/orders/{orderId}
-     * @allow (create, update, delete) if request.auth.uid == customerId
-     * @allow (get, list) if request.auth.uid == customerId || isAdmin()
-     * @deny (create, update, delete) if request.auth == null
-     * @principle Enforces document ownership for writes.
+     * @allow (read, write) if isAdmin() or isOwner(customerId)
      */
     match /customers/{customerId}/orders/{orderId} {
-      allow get: if request.auth.uid == customerId || isAdmin();
-      allow list: if isOwner(customerId) || isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == customerId && request.resource.data.customerId == customerId;
-      allow update: if isSignedIn() && isExistingOrderOwner(customerId);
-      allow delete: if isSignedIn() && isExistingOrderOwner(customerId);
+      allow read, write: if isAdmin() || isOwner(customerId);
     }
 
     /**
      * @description Allows customers to manage their order items.
      * @path /customers/{customerId}/orders/{orderId}/order_items/{orderItemId}
-     * @allow (create, update, delete) if request.auth.uid == customerId
-     * @allow (get, list) if request.auth.uid == customerId || isAdmin()
-     * @deny (create, update, delete) if request.auth == null
-     * @principle Enforces document ownership for writes.
+     * @allow (read, write) if isAdmin() or isOwner(customerId)
      */
     match /customers/{customerId}/orders/{orderId}/order_items/{orderItemId} {
-      allow get: if request.auth.uid == customerId || isAdmin();
-      allow list: if isOwner(customerId) || isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == customerId;
-      allow update: if isSignedIn() && isExistingOrderItemsOwner(customerId);
-      allow delete: if isSignedIn() && isExistingOrderItemsOwner(customerId);
+      allow read, write: if isAdmin() || isOwner(customerId);
     }
-
+    
     /**
-     * @description Allows customers to create reviews for delivery personnel.
+     * @description Allows public read of reviews. Create/update restricted to owner.
      * @path /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId}
-     * @allow (create, update, delete) if request.auth.uid == request.resource.data.customerId
-     * @allow (get, list) if true
-     * @deny (create, update, delete) if request.auth == null
-     * @principle Enforces customer ownership for review creation.
      */
     match /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
-      allow update: if isSignedIn() && isExistingReviewOwner();
-      allow delete: if isSignedIn() && isExistingReviewOwner();
+      allow read: if true;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.customerId;
+      allow update, delete: if isSignedIn() && isExistingReviewOwner();
     }
 
     // Helper functions
@@ -163,36 +122,12 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
-    function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-    }
-
     function isAdmin() {
-        return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
-    }
-
-    function isExistingOwnerForAdmin(uid) {
-      return isOwner(uid) && resource != null;
-    }
-
-    function isExistingItemOwner(storeId) {
-      return isSignedIn() && isStoreOwner(storeId) && resource != null;
-    }
-
-    function isStoreOwner(storeId) {
-        return request.auth.uid == storeId;
-    }
-
-    function isExistingOrderOwner(customerId) {
-      return isSignedIn() && isOwner(customerId) && resource != null;
-    }
-
-    function isExistingOrderItemsOwner(customerId) {
-      return isSignedIn() && isOwner(customerId) && resource != null;
+      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
     function isExistingReviewOwner() {
-        return resource != null && request.auth.uid == resource.data.customerId;
+        return isSignedIn() && exists(path(request.path)) && request.auth.uid == get(path(request.path)).data.customerId;
     }
   }
 }
