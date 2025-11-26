@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { Bike, Car, Motorcycle, Loader2 } from 'lucide-react';
+import { Bike, Car, Loader2 } from 'lucide-react';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
@@ -150,7 +150,7 @@ export default function SignupDeliveryPage() {
                                 onClick={() => field.onChange('motocicleta')}
                                 className="flex-col h-16"
                             >
-                                <Motorcycle className="mb-1" />
+                                <Bike className="mb-1" />
                                 Motocicleta
                             </Button>
                             <Button
