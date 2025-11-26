@@ -77,11 +77,11 @@ export default function SignupStorePage() {
         
         toast({
             title: "¡Solicitud de Tienda Enviada!",
-            description: "Tu tienda ha sido registrada y está pendiente de aprobación por un administrador.",
+            description: "Tu tienda ha sido registrada. Refrescando la página...",
         });
         
-        router.push('/');
-        router.refresh();
+        // Force a full page reload to ensure the auth context is re-initialized correctly
+        window.location.href = '/';
 
     } catch (error: any) {
         console.error("Error creating store account:", error);

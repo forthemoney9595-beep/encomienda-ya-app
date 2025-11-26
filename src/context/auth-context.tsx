@@ -17,7 +17,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const { user, isUserLoading: isAuthLoading } = useFirebaseUserHook();
+    const { user, isUserLoading: authHookLoading } = useFirebaseUserHook();
     const auth = useFirebaseAuth();
     const firestore = useFirestore();
     
@@ -26,38 +26,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isProfileLoading, setProfileLoading] = useState(true);
 
     useEffect(() => {
-        if (!firestore || !user) {
+        if (!user) {
             setUserProfile(null);
             setIsAdmin(false);
-            // If auth has finished loading and there's no user, profile loading is also done.
-            if (!isAuthLoading && !user) {
-                setProfileLoading(false);
-            }
+            setProfileLoading(false); // No user, so profile loading is done.
             return;
         }
 
+        // If user exists, start loading profile
         setProfileLoading(true);
 
         const userDocRef = doc(firestore, 'users', user.uid);
-        const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
+        const unsubscribeUser = onSnapshot(userDocRef, async (docSnap) => {
             if (docSnap.exists()) {
-                setUserProfile(docSnap.data() as UserProfile);
-            } else {
-                 setUserProfile({
-                    uid: user.uid,
-                    email: user.email!,
-                    name: user.displayName || 'Nuevo Usuario',
-                    role: 'buyer'
-                 });
-            }
-            // Profile is loaded, now check admin status
-            const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-            getDoc(adminRoleRef).then(adminSnap => {
-                setIsAdmin(adminSnap.exists());
-            }).finally(() => {
-                setProfileLoading(false); // Finished loading profile and admin status
-            });
+                const profileData = docSnap.data() as UserProfile;
+                setUserProfile(profileData);
 
+                // Admin check can be done in parallel or sequentially.
+                // Doing it here ensures it happens after profile is fetched.
+                const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+                const adminSnap = await getDoc(adminRoleRef);
+                setIsAdmin(adminSnap.exists());
+            } else {
+                // This case handles brand new users who might not have a profile doc yet.
+                setUserProfile(null); 
+                setIsAdmin(false);
+            }
+            // Finished loading profile and admin status for this user
+            setProfileLoading(false);
         }, (error) => {
             console.error("Error fetching user profile:", error);
             setUserProfile(null);
@@ -65,23 +61,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setProfileLoading(false);
         });
 
-        return () => {
-            unsubscribeUser();
-        };
+        return () => unsubscribeUser();
 
-    }, [user, firestore, isAuthLoading]);
+    }, [user, firestore]);
 
     const logout = useCallback(async () => {
         if(auth) {
             await auth.signOut();
-            // Reset state on logout
-            setUserProfile(null);
-            setIsAdmin(false);
-            setProfileLoading(false);
+            // State is reset via the useEffect when `user` becomes null
         }
     }, [auth]);
-
-    const loading = isAuthLoading || isProfileLoading;
+    
+    // The overall loading state is true if the auth hook is loading OR if we have a user but are still fetching their profile.
+    const loading = authHookLoading || (!!user && isProfileLoading);
     
     const value = { user, userProfile, loading, isAdmin, logout };
     
