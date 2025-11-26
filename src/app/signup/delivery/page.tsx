@@ -16,7 +16,6 @@ import { Bike, Car, Motorcycle, Loader2 } from 'lucide-react';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { createUserProfile } from '@/lib/user-service';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -64,7 +63,7 @@ export default function SignupDeliveryPage() {
             status: 'Pendiente', // Delivery personnel needs approval
         };
         
-        createUserProfile(firestore, user.uid, userProfile);
+        await setDoc(doc(firestore, "users", user.uid), userProfile);
         
         toast({
             title: "¡Solicitud Enviada!",
