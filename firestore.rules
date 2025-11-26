@@ -38,7 +38,7 @@ service cloud.firestore {
      * @allow (create, update, delete) if isAdmin() or (isSignedIn() and isOwner(storeId))
      */
     match /stores/{storeId} {
-      allow read: if true;
+      allow get, list: if true;
       allow write: if isAdmin() || (isSignedIn() && isOwner(storeId));
     }
 
@@ -127,7 +127,7 @@ service cloud.firestore {
     }
 
     function isExistingReviewOwner() {
-        return isSignedIn() && exists(path(request.path)) && request.auth.uid == get(path(request.path)).data.customerId;
+        return isSignedIn() && exists(path(request.path)) && get(path(request.path)).data.customerId == request.auth.uid;
     }
   }
 }
