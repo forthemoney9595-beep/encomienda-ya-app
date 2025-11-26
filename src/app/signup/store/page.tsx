@@ -15,7 +15,7 @@ import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, writeBatch } from 'firebase/firestore';
 import { createStoreForUser } from '@/lib/user-service';
 import { Loader2 } from 'lucide-react';
@@ -59,15 +59,12 @@ export default function SignupStorePage() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
 
-        // The key change is here: we now `await` the creation of the store
-        // to ensure we have the storeId before creating the user profile.
         const newStoreRef = await createStoreForUser(firestore, user.uid, {
             name: values.storeName,
             category: values.category,
             address: values.address,
         });
 
-        // Now we have the storeId, we can create the user profile with it.
         const userProfile = {
             uid: user.uid,
             name: values.ownerName,
@@ -82,7 +79,11 @@ export default function SignupStorePage() {
             title: "¡Solicitud de Tienda Enviada!",
             description: "Tu tienda ha sido registrada y está pendiente de aprobación por un administrador.",
         });
+        
+        // Sign in the user automatically and then redirect
+        await signInWithEmailAndPassword(auth, values.email, values.password);
         router.push('/');
+        router.refresh();
 
     } catch (error: any) {
         console.error("Error creating store account:", error);
@@ -221,4 +222,3 @@ export default function SignupStorePage() {
     </div>
   );
 }
-

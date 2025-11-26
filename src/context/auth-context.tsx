@@ -26,28 +26,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isProfileLoading, setProfileLoading] = useState(true);
 
     useEffect(() => {
-        if (isAuthLoading) {
-            setProfileLoading(true);
-            return;
-        }
-
-        if (!user || !firestore) {
+        if (!firestore || !user) {
             setUserProfile(null);
             setIsAdmin(false);
-            setProfileLoading(false);
+            // If auth has finished loading and there's no user, profile loading is also done.
+            if (!isAuthLoading && !user) {
+                setProfileLoading(false);
+            }
             return;
         }
 
         setProfileLoading(true);
-        let adminCheckDone = false;
-        let profileCheckDone = false;
 
-        const checkLoadingComplete = () => {
-            if (adminCheckDone && profileCheckDone) {
-                setProfileLoading(false);
-            }
-        };
-        
         const userDocRef = doc(firestore, 'users', user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -60,31 +50,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     role: 'buyer'
                  });
             }
-            profileCheckDone = true;
-            checkLoadingComplete();
+            // Profile is loaded, now check admin status
+            const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+            getDoc(adminRoleRef).then(adminSnap => {
+                setIsAdmin(adminSnap.exists());
+            }).finally(() => {
+                setProfileLoading(false); // Finished loading profile and admin status
+            });
+
         }, (error) => {
             console.error("Error fetching user profile:", error);
             setUserProfile(null);
-            profileCheckDone = true;
-            checkLoadingComplete();
-        });
-
-        const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-        const unsubscribeAdmin = onSnapshot(adminRoleRef, (docSnap) => {
-            setIsAdmin(docSnap.exists());
-            adminCheckDone = true;
-            checkLoadingComplete();
-        }, (error) => {
-            console.error("Error checking admin role:", error);
             setIsAdmin(false);
-            adminCheckDone = true;
-            checkLoadingComplete();
+            setProfileLoading(false);
         });
-
 
         return () => {
             unsubscribeUser();
-            unsubscribeAdmin();
         };
 
     }, [user, firestore, isAuthLoading]);
@@ -95,6 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Reset state on logout
             setUserProfile(null);
             setIsAdmin(false);
+            setProfileLoading(false);
         }
     }, [auth]);
 
