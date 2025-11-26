@@ -15,10 +15,8 @@ import {
   Firestore,
 } from 'firebase/firestore';
 import type { UserProfile, Address, Store } from './placeholder-data';
-import { getFirebase } from './firebase'; // Assuming getFirebase provides firestore instance
 import { getPlaceholderImage } from './placeholder-images';
-import { setDocumentNonBlocking, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
-import { useFirestore } from '@/firebase';
+import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 
 /**
  * Fetches a user profile from Firestore.
@@ -122,10 +120,7 @@ export async function createStoreForUser(db: Firestore, ownerId: string, storeDa
     };
 
     const storeDocRef = await addDoc(storesCollectionRef, newStoreData);
-    
-    // Now update the user's profile with the new store ID. This can be non-blocking.
-    const userRef = doc(db, 'users', ownerId);
-    updateDocumentNonBlocking(userRef, { storeId: storeDocRef.id });
 
     return storeDocRef;
 }
+

@@ -16,8 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { createStoreForUser, createUserProfile } from '@/lib/user-service';
+import { doc, setDoc, writeBatch } from 'firebase/firestore';
+import { createStoreForUser } from '@/lib/user-service';
 import { Loader2 } from 'lucide-react';
 
 
@@ -59,14 +59,15 @@ export default function SignupStorePage() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
 
-        // Create the store document and get its ID
+        // The key change is here: we now `await` the creation of the store
+        // to ensure we have the storeId before creating the user profile.
         const newStoreRef = await createStoreForUser(firestore, user.uid, {
             name: values.storeName,
             category: values.category,
             address: values.address,
         });
 
-        // Create the user profile document for the store owner
+        // Now we have the storeId, we can create the user profile with it.
         const userProfile = {
             uid: user.uid,
             name: values.ownerName,
@@ -75,8 +76,7 @@ export default function SignupStorePage() {
             storeId: newStoreRef.id,
         };
         
-        // This is non-blocking
-        createUserProfile(firestore, user.uid, userProfile);
+        await setDoc(doc(firestore, "users", user.uid), userProfile);
         
         toast({
             title: "¡Solicitud de Tienda Enviada!",
@@ -221,3 +221,4 @@ export default function SignupStorePage() {
     </div>
   );
 }
+
