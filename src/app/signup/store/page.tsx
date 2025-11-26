@@ -80,8 +80,6 @@ export default function SignupStorePage() {
             description: "Tu tienda ha sido registrada y está pendiente de aprobación por un administrador.",
         });
         
-        // Sign in the user automatically and then redirect
-        await signInWithEmailAndPassword(auth, values.email, values.password);
         router.push('/');
         router.refresh();
 
