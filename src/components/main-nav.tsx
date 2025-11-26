@@ -130,6 +130,15 @@ export function MainNav() {
       {!loading && isStoreOwner && (
         <>
           <Separator className="my-2" />
+           <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === '/orders'} tooltip="Panel">
+                <Link href="/orders" onClick={handleLinkClick}>
+                  <LayoutGrid />
+                  <span>Panel</span>
+                </Link>
+              </SidebarMenuButton>
+          </SidebarMenuItem>
+
           <Collapsible open={isMyStoreOpen} onOpenChange={setIsMyStoreOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
@@ -145,7 +154,7 @@ export function MainNav() {
                     <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders')}>
                       <Link href="/orders" onClick={handleLinkClick}>
                         <ClipboardList />
-                        <span>Pedidos</span>
+                        <span>Gestionar Pedidos</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -154,7 +163,7 @@ export function MainNav() {
                       <SidebarMenuSubButton asChild isActive={isOwnStoreProductsPageActive}>
                         <Link href={`/stores/${user.storeId}`} onClick={handleLinkClick}>
                           <Package />
-                          <span>Productos</span>
+                          <span>Gestionar Productos</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
