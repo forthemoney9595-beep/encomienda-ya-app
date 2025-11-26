@@ -9,46 +9,33 @@
  * @data_structure
  * - `/stores/{storeId}`: Stores account information.
  * - `/stores/{storeId}/items/{itemId}`: Items available for sale at each store.
- * - `/delivery_personnel/{deliveryPersonnelId}`: Delivery personnel accounts.
+ * - `/users/{userId}`: User profile documents for all roles.
  * - `/roles_admin/{uid}`: Admin role assignment.
- * - `/customers/{customerId}`: Customer accounts.
- * - `/customers/{customerId}/orders/{orderId}`: Orders placed by customers.
- * - `/customers/{customerId}/orders/{orderId}/order_items/{orderItemId}`: Items within an order.
- * - `/delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId}`: Customer reviews for delivery personnel.
+ * - `/orders/{orderId}`: Flat collection for all orders.
  *
  * @key_security_decisions
  * - Admin privileges are granted based on the presence of a document in the `/roles_admin/{uid}` collection.
  * - Data denormalization is used to avoid costly `get()` calls within security rules.
  * - List operations are secured based on path-based ownership or admin roles.
  * - All write operations require authentication.
- *
- * @denormalization_for_authorization
- * - `items` include `storeId` for independent authorization.
- * - `orders` include `customerId`, `storeId`, and `deliveryPersonnelId` for independent authorization.
- * - `reviews` include `customerId` and `deliveryPersonnelId` for independent authorization.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Public read access for stores. Writes are restricted.
+     * @description Public read. Create allowed if owner. Update restricted.
      * @path /stores/{storeId}
-     * @allow (get, list) if true
-     * @allow (create, update, delete) if isAdmin() or (isSignedIn() and isOwner(storeId))
      */
     match /stores/{storeId} {
-      allow get, list: if true;
-      allow write: if isAdmin() || (isSignedIn() && isOwner(storeId));
+      allow read: if true;
+      allow create: if isSignedIn() && isOwner(request.resource.data.ownerId);
+      allow update, delete: if isAdmin() || (isSignedIn() && isOwner(get(path(request.path)).data.ownerId));
     }
 
     /**
-     * @description Allows stores to manage their items.
+     * @description Public read. Write restricted to store owner.
      * @path /stores/{storeId}/items/{itemId}
-     * @allow (create, update, delete) if isAdmin() or request.auth.uid == storeId
-     * @allow (get, list) if true
-     * @deny (create, update, delete) if request.auth == null
-     * @principle Enforces document ownership for writes, public reads.
      */
     match /stores/{storeId}/items/{itemId} {
       allow read: if true;
@@ -56,62 +43,46 @@ service cloud.firestore {
     }
 
     /**
-     * @description Allows admins to manage delivery personnel accounts.
-     * @path /delivery_personnel/{deliveryPersonnelId}
-     * @allow (read, write) if isAdmin()
-     * @principle Restricts access to admin users only.
+     * @description User profiles. Create allowed if owner. Read/Update restricted.
+     * @path /users/{userId}
      */
-    match /delivery_personnel/{deliveryPersonnelId} {
-      allow read, write: if isAdmin();
+    match /users/{userId} {
+      allow create: if isSignedIn() && isOwner(userId);
+      allow read, update, delete: if isAdmin() || isOwner(userId);
     }
 
     /**
      * @description Admin role assignment. Only admins can manage other admins.
      * @path /roles_admin/{uid}
-     * @allow read: if isSignedIn();
-     * @allow write: if isAdmin();
      */
     match /roles_admin/{uid} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
-
-    /**
-     * @description Allows customers to manage their account information.
-     * @path /customers/{customerId}
-     * @allow (read, write) if isAdmin() or isOwner(customerId)
-     */
-    match /customers/{customerId} {
-      allow read, write: if isAdmin() || isOwner(customerId);
-    }
-
-    /**
-     * @description Allows customers to manage their orders.
-     * @path /customers/{customerId}/orders/{orderId}
-     * @allow (read, write) if isAdmin() or isOwner(customerId)
-     */
-    match /customers/{customerId}/orders/{orderId} {
-      allow read, write: if isAdmin() || isOwner(customerId);
-    }
-
-    /**
-     * @description Allows customers to manage their order items.
-     * @path /customers/{customerId}/orders/{orderId}/order_items/{orderItemId}
-     * @allow (read, write) if isAdmin() or isOwner(customerId)
-     */
-    match /customers/{customerId}/orders/{orderId}/order_items/{orderItemId} {
-      allow read, write: if isAdmin() || isOwner(customerId);
-    }
     
     /**
-     * @description Allows public read of reviews. Create/update restricted to owner.
-     * @path /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId}
+     * @description Orders collection. Read/Write restricted.
+     * @path /orders/{orderId}
      */
-    match /delivery_personnel/{deliveryPersonnelId}/reviews/{reviewId} {
-      allow read: if true;
-      allow create: if isSignedIn() && request.auth.uid == request.resource.data.customerId;
-      allow update, delete: if isSignedIn() && isExistingReviewOwner();
+    match /orders/{orderId} {
+      // Allow create if user is creating their own order
+      allow create: if isSignedIn() && isOwner(request.resource.data.userId);
+      
+      // Allow read for the customer, store owner, assigned delivery person, or an admin
+      allow read: if isSignedIn() && 
+                    (isOwner(resource.data.userId) || 
+                     isOwner(resource.data.storeId) || 
+                     isOwner(resource.data.deliveryPersonId) ||
+                     isAdmin());
+                     
+      // Allow update for customer (to cancel), store owner, delivery person, or admin
+      allow update: if isSignedIn() && 
+                     (isOwner(resource.data.userId) || 
+                      isOwner(resource.data.storeId) || 
+                      isOwner(resource.data.deliveryPersonId) ||
+                      isAdmin());
     }
+
 
     // Helper functions
     function isSignedIn() {
@@ -124,10 +95,6 @@ service cloud.firestore {
 
     function isAdmin() {
       return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
-    }
-
-    function isExistingReviewOwner() {
-        return isSignedIn() && exists(path(request.path)) && get(path(request.path)).data.customerId == request.auth.uid;
     }
   }
 }
