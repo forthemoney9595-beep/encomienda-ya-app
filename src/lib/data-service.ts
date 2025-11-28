@@ -1,5 +1,3 @@
-
-'use server';
 import type { Store, Product, DeliveryPersonnel } from './placeholder-data';
 import { Firestore, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 
@@ -91,5 +89,3 @@ export async function updateDeliveryPersonnelStatus(db: Firestore, personnelId: 
   const userRef = doc(db, 'users', personnelId);
   await updateDoc(userRef, { status });
 }
-
-    

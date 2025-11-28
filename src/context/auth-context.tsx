@@ -1,93 +1,117 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { useUser as useFirebaseUserHook, useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
-import type { User } from 'firebase/auth';
-import type { UserProfile } from '@/lib/user-service';
-import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { 
+    getAuth, 
+    onAuthStateChanged, 
+    User, 
+    signInAnonymously, 
+    signInWithCustomToken 
+} from 'firebase/auth';
+import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 
-interface AuthContextType {
-    user: User | null;
-    userProfile: UserProfile | null;
-    loading: boolean;
-    isAdmin: boolean;
-    logout: () => Promise<void>;
+// Definimos la interfaz del perfil
+export interface UserProfile {
+  // ✅ CORRECCIÓN 1: Agregamos 'id' como propiedad opcional para compatibilidad
+  id?: string; 
+  role: 'buyer' | 'store' | 'delivery' | 'admin';
+  name: string;
+  email: string;
+  phoneNumber?: string; 
+  displayName?: string;
+  profileImageUrl?: string;
+  
+  storeId?: string;
+  addresses?: { 
+      id: string; 
+      street: string; 
+      city: string; 
+      zipCode: string; 
+  }[];
+  favoriteStores?: string[];
+  favoriteProducts?: string[];
+  isApproved?: boolean; 
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+interface AuthContextType {
+  user: User | null;
+  userProfile: UserProfile | null;
+  loading: boolean;
+}
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const { user, isUserLoading: authHookLoading } = useFirebaseUserHook();
-    const auth = useFirebaseAuth();
-    const firestore = useFirestore();
-    
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [isProfileLoading, setProfileLoading] = useState(true);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  userProfile: null,
+  loading: true,
+});
 
-    useEffect(() => {
-        if (!user) {
-            setUserProfile(null);
-            setIsAdmin(false);
-            setProfileLoading(false); // No user, so profile loading is done.
-            return;
-        }
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
-        // If user exists, start loading profile
-        setProfileLoading(true);
-
-        const userDocRef = doc(firestore, 'users', user.uid);
-        const unsubscribeUser = onSnapshot(userDocRef, async (docSnap) => {
-            if (docSnap.exists()) {
-                const profileData = docSnap.data() as UserProfile;
-                setUserProfile(profileData);
-
-                // Admin check can be done in parallel or sequentially.
-                // Doing it here ensures it happens after profile is fetched.
-                const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-                const adminSnap = await getDoc(adminRoleRef);
-                setIsAdmin(adminSnap.exists());
-            } else {
-                // This case handles brand new users who might not have a profile doc yet.
-                setUserProfile(null); 
-                setIsAdmin(false);
-            }
-            // Finished loading profile and admin status for this user
-            setProfileLoading(false);
-        }, (error) => {
-            console.error("Error fetching user profile:", error);
-            setUserProfile(null);
-            setIsAdmin(false);
-            setProfileLoading(false);
-        });
-
-        return () => unsubscribeUser();
-
-    }, [user, firestore]);
-
-    const logout = useCallback(async () => {
-        if(auth) {
-            await auth.signOut();
-            // State is reset via the useEffect when `user` becomes null
-        }
-    }, [auth]);
-    
-    // The overall loading state is true if the auth hook is loading OR if we have a user but are still fetching their profile.
-    const loading = authHookLoading || (!!user && isProfileLoading);
-    
-    const value = { user, userProfile, loading, isAdmin, logout };
-    
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
-};
-
-export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
+  useEffect(() => {
+    let app;
+    if (!getApps().length) {
+        // @ts-ignore
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        app = initializeApp(firebaseConfig);
+    } else {
+        app = getApp();
     }
-    return context;
-};
+    
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const initAuth = async () => {
+        // @ts-ignore
+        const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_initial_auth_token : undefined;
+        if (initialToken) {
+            await signInWithCustomToken(auth, initialToken);
+        }
+    };
+    initAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+
+      if (currentUser) {
+        const profileRef = doc(db, 'users', currentUser.uid);
+        const unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
+          if (docSnap.exists()) {
+            // ✅ CORRECCIÓN 2: El 'id' ahora es una propiedad conocida de UserProfile
+            setUserProfile({ ...docSnap.data() as UserProfile, id: docSnap.id });
+          } else {
+            setUserProfile({
+                id: currentUser.uid, // Aseguramos el ID aquí también
+                role: 'buyer',
+                name: currentUser.displayName || 'Usuario',
+                email: currentUser.email || '',
+                displayName: currentUser.displayName || 'Usuario',
+                profileImageUrl: '',
+            });
+          }
+          setLoading(false);
+        }, (error) => {
+            console.error("Error fetching profile:", error);
+            setLoading(false);
+        });
+        return () => unsubscribeProfile();
+      } else {
+        setUserProfile(null);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ user, userProfile, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => useContext(AuthContext);

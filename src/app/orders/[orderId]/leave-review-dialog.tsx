@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -23,12 +22,10 @@ export function LeaveReviewDialog({ isOpen, setIsOpen, productName, onSubmit }: 
 
   const handleSubmit = () => {
     setIsSubmitting(true);
-    // Simulate API call
     setTimeout(() => {
       onSubmit(rating, review);
       setIsSubmitting(false);
       setIsOpen(false);
-      // Reset state for next time
       setRating(0);
       setReview('');
     }, 500);
@@ -76,5 +73,3 @@ export function LeaveReviewDialog({ isOpen, setIsOpen, productName, onSubmit }: 
     </Dialog>
   );
 }
-
-    

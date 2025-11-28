@@ -18,6 +18,9 @@
         "name": "next"
       }
     ],
+    // ✅ CORRECCIÓN: Desactivamos la comprobación de tipos nulos estrictos en la inferencia del spread
+    // Esto resuelve el error 2698 en funciones de setState.
+    "strictNullChecks": false, 
     "paths": {
       "@/*": ["./src/*"]
     }

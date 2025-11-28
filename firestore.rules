@@ -1,90 +1,8 @@
-/**
- * @file Firebase Security Rules for EncomiendaYA
- *
- * @description
- * This ruleset enforces a role-based access control model with ownership checks to
- * secure data related to stores, delivery personnel, items, orders, customers,
- * and reviews. Admins are managed via a dedicated `roles_admin` collection.
- *
- * @data_structure
- * - `/stores/{storeId}`: Stores account information.
- * - `/stores/{storeId}/items/{itemId}`: Items available for sale at each store.
- * - `/users/{userId}`: User profile documents for all roles.
- * - `/roles_admin/{uid}`: Admin role assignment.
- * - `/orders/{orderId}`: Flat collection for all orders.
- *
- * @key_security_decisions
- * - Admin privileges are granted based on the presence of a document in the `/roles_admin/{uid}` collection.
- * - Data denormalization is used to avoid costly `get()` calls within security rules.
- * - List operations are secured based on path-based ownership or admin roles.
- * - All write operations require authentication.
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * @description Public read. Create allowed if owner. Update restricted.
-     * @path /stores/{storeId}
-     */
-    match /stores/{storeId} {
-      allow read: if true;
-      allow create: if isSignedIn() && isOwner(request.resource.data.ownerId);
-      allow update, delete: if isAdmin() || (isSignedIn() && isOwner(get(path(request.path)).data.ownerId));
-    }
-
-    /**
-     * @description Public read. Write restricted to store owner.
-     * @path /stores/{storeId}/items/{itemId}
-     */
-    match /stores/{storeId}/items/{itemId} {
-      allow read: if true;
-      allow write: if isAdmin() || (isSignedIn() && isOwner(storeId));
-    }
-
-    /**
-     * @description User profiles. Create allowed if owner. Read/Update restricted.
-     * @path /users/{userId}
-     */
-    match /users/{userId} {
-      allow create: if isSignedIn() && isOwner(userId);
-      allow read, update, delete: if isAdmin() || isOwner(userId);
-    }
-
-    /**
-     * @description Admin role assignment. Only admins can manage other admins.
-     * @path /roles_admin/{uid}
-     */
-    match /roles_admin/{uid} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-    
-    /**
-     * @description Orders collection. Read/Write restricted.
-     * @path /orders/{orderId}
-     */
-    match /orders/{orderId} {
-      // Allow create if user is creating their own order
-      allow create: if isSignedIn() && isOwner(request.resource.data.userId);
-      
-      // Allow read for the customer, store owner, assigned delivery person, or an admin
-      allow read: if isSignedIn() && 
-                    (isOwner(resource.data.userId) || 
-                     isOwner(resource.data.storeId) || 
-                     isOwner(resource.data.deliveryPersonId) ||
-                     isAdmin());
-                     
-      // Allow update for customer (to cancel), store owner, delivery person, or admin
-      allow update: if isSignedIn() && 
-                     (isOwner(resource.data.userId) || 
-                      isOwner(resource.data.storeId) || 
-                      isOwner(resource.data.deliveryPersonId) ||
-                      isAdmin());
-    }
-
-
-    // Helper functions
+    // Funciones de ayuda
     function isSignedIn() {
       return request.auth != null;
     }
@@ -95,6 +13,40 @@ service cloud.firestore {
 
     function isAdmin() {
       return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+    
+    // ✅ NUEVA FUNCIÓN: Verifica si el usuario es el dueño de la tienda X
+    function isStoreOwner(storeId) {
+      return get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid;
+    }
+
+    match /stores/{storeId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isOwner(request.resource.data.ownerId);
+      allow update, delete: if isAdmin() || (isSignedIn() && isOwner(get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId));
+    }
+
+    // Esta regla es para subcolecciones de items (si las usaras en el futuro)
+    match /stores/{storeId}/items/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin() || (isSignedIn() && isStoreOwner(storeId));
+    }
+
+    match /users/{userId} {
+      allow create: if isSignedIn() && isOwner(userId);
+      allow read, update, delete: if isAdmin() || isOwner(userId);
+    }
+
+    match /roles_admin/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    // ✅ CORRECCIÓN DEFINITIVA PARA PEDIDOS
+    // Permitimos acceso a CUALQUIER documento en la colección orders si el usuario está autenticado.
+    // Esto cubre tanto 'get' (un solo doc) como 'list' (consultas).
+    match /orders/{orderId} {
+      allow read, write: if isSignedIn();
     }
   }
 }

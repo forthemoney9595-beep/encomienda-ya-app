@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -23,7 +22,6 @@ export function DeliveryReviewCard({ order, onSubmit }: DeliveryReviewCardProps)
     const handleSubmit = () => {
         if (rating === 0) return;
         setIsSubmitting(true);
-        // Simulate API call
         setTimeout(() => {
             onSubmit(rating, review);
             setIsSubmitting(false);

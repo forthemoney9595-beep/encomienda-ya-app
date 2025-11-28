@@ -1,155 +1,140 @@
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  getDoc, 
+  serverTimestamp, 
+  Firestore, 
+  Timestamp 
+} from 'firebase/firestore';
 
-'use server';
+export type OrderStatus = 
+  | 'Pendiente de Confirmación'
+  | 'Pendiente de Pago'
+  | 'En preparación'
+  | 'En reparto'
+  | 'Entregado'
+  | 'Cancelado'
+  | 'Rechazado';
 
-import { collection, addDoc, getDoc, doc, updateDoc, Firestore, Timestamp } from 'firebase/firestore';
-
-// A CartItem is a Product with a quantity.
-export interface CartItem {
-    id: string;
-    name: string;
-    description: string;
-    price: number;
-    category: string;
-    imageUrl?: string;
-    quantity: number;
-    userRating?: number; // New field to track if user has rated this item in this order
+export interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  userRating?: number;
+  description?: string;
+  category?: string;
+  imageUrl?: string;
 }
 
-export type OrderStatus = 'Pendiente de Confirmación' | 'Pendiente de Pago' | 'En preparación' | 'En reparto' | 'Entregado' | 'Cancelado' | 'Rechazado';
-
+// ✅ ACTUALIZADO: Incluye campos financieros y de contacto
 export interface Order {
-    id: string;
-    userId: string;
-    items: CartItem[];
-    total: number;
-    deliveryFee: number;
-    status: OrderStatus;
-    createdAt: Date;
-    storeId: string; 
-    storeName: string; 
-    shippingAddress: {
-        name: string;
-        address: string;
-    };
-    customerName?: string;
-    storeAddress?: string; 
-    deliveryPersonId?: string;
-    deliveryPersonName?: string;
-    storeCoords?: { latitude: number, longitude: number };
-    customerCoords?: { latitude: number, longitude: number };
-    deliveryRating?: number;
-    deliveryReview?: string;
+  id: string;
+  userId: string;
+  customerName: string;
+  customerPhoneNumber?: string; 
+  storeId: string;
+  storeName: string;
+  storeAddress?: string;
+  status: OrderStatus;
+  
+  // Desglose de precios
+  items: OrderItem[];
+  subtotal?: number;
+  deliveryFee: number;
+  serviceFee?: number;
+  total: number;
+  
+  createdAt: Timestamp | Date;
+  
+  shippingInfo?: {
+    name: string;
+    address: string;
+  };
+  
+  shippingAddress: { // Mantener compatibilidad si usas ambos nombres
+    name: string;
+    address: string;
+  };
+
+  deliveryPersonId?: string | null;
+  deliveryPersonName?: string | null;
+  readyForPickup?: boolean;
+  
+  storeCoords?: { latitude: number; longitude: number };
+  customerCoords?: { latitude: number; longitude: number };
+  
+  deliveryRating?: number;
+  deliveryReview?: string;
 }
 
-interface CreateOrderInput {
-    userId: string;
-    customerName: string;
-    items: CartItem[];
-    shippingInfo: { name: string, address: string };
-    storeId: string;
-    storeName: string;
-    storeAddress: string;
+// ✅ ACTUALIZADO: Input para crear orden con nuevos campos
+export interface CreateOrderInput {
+  userId: string;
+  customerName: string;
+  customerPhoneNumber: string; 
+  storeId: string;
+  storeName: string;
+  storeAddress: string;
+  items: any[];
+  shippingInfo: {
+    name: string;
+    address: string;
+  };
+  
+  // Campos financieros
+  subtotal: number;
+  deliveryFee: number;
+  serviceFee?: number;
+  total: number;
 }
 
-/**
- * Creates an order in Firestore.
- * @param db The Firestore instance.
- * @param input The data for the new order.
- * @returns The created order object with its new ID.
- */
-export async function createOrder(
-   db: Firestore,
-   input: CreateOrderInput
-): Promise<Order> {
-    const { userId, customerName, items, shippingInfo, storeId, storeName, storeAddress } = input;
+export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
+  if (!db) throw new Error("Firestore instance is required");
 
-    if (items.length === 0) {
-        throw new Error("No se puede crear un pedido sin artículos.");
-    }
+  // Coordenadas simuladas para demostración
+  const mockStoreCoords = { latitude: -28.46957, longitude: -65.77954 }; 
+  const mockCustomerCoords = { 
+      latitude: mockStoreCoords.latitude + (Math.random() * 0.01 - 0.005), 
+      longitude: mockStoreCoords.longitude + (Math.random() * 0.01 - 0.005) 
+  };
+
+  const orderData = {
+    userId: input.userId,
+    customerName: input.customerName,
+    customerPhoneNumber: input.customerPhoneNumber, 
+    storeId: input.storeId,
+    storeName: input.storeName,
+    storeAddress: input.storeAddress,
+    status: 'Pendiente de Confirmación' as OrderStatus,
     
-    // --- Geocoding and Fee Calculation Logic ---
-    // In a real app, this would involve a geocoding API. Here we use static/random values.
-    const storeCoords = { latitude: 40.7128, longitude: -74.0060 }; // Example: NYC
-    const customerCoords = { latitude: 34.0522, longitude: -118.2437 }; // Example: LA
-    const deliveryFee = 5.00 + Math.random() * 5; // Example fee
-    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0) + deliveryFee;
-
-    const newOrderData = {
-        userId,
-        customerName,
-        items: items.map(item => ({ ...item })), // Store a clean copy
-        total,
-        deliveryFee,
-        status: 'Pendiente de Confirmación' as const,
-        createdAt: Timestamp.now(),
-        storeId,
-        storeName,
-        storeAddress,
-        shippingAddress: shippingInfo,
-        storeCoords,
-        customerCoords,
-        deliveryPersonId: '',
-        deliveryPersonName: '',
-    };
+    items: input.items,
     
-    const ordersCollection = collection(db, 'orders');
-    const newOrderRef = await addDoc(ordersCollection, newOrderData);
-
-    return {
-        ...newOrderData,
-        id: newOrderRef.id,
-        createdAt: newOrderData.createdAt.toDate(),
-    };
-}
-
-
-/**
- * Fetches a single order by its ID from Firestore.
- * @param db The Firestore instance.
- * @param orderId The ID of the order.
- * @returns The order object or null if not found.
- */
-export async function getOrderById(db: Firestore, orderId: string): Promise<Order | null> {
-    const orderRef = doc(db, 'orders', orderId);
-    const orderSnap = await getDoc(orderRef);
-    if (orderSnap.exists()) {
-        const data = orderSnap.data();
-        // Convert Firestore Timestamp to JS Date
-        return { 
-            ...data, 
-            id: orderSnap.id,
-            createdAt: (data.createdAt as Timestamp).toDate(),
-        } as Order;
-    }
-    return null;
-}
-
-
-/**
- * Updates the status of an order.
- * @param db The Firestore instance.
- * @param orderId The ID of the order to update.
- * @param status The new status for the order.
- */
-export async function updateOrderStatus(db: Firestore, orderId: string, status: OrderStatus): Promise<void> {
-    const orderRef = doc(db, 'orders', orderId);
-    await updateDoc(orderRef, { status });
-}
-
-/**
- * Assigns an order to a delivery person and updates its status.
- * @param db The Firestore instance.
- * @param orderId The ID of the order to assign.
- * @param driverId The ID of the delivery person.
- * @param driverName The name of the delivery person.
- */
-export async function assignOrderToDeliveryPerson(db: Firestore, orderId: string, driverId: string, driverName: string): Promise<void> {
-    const orderRef = doc(db, 'orders', orderId);
-    await updateDoc(orderRef, {
-        deliveryPersonId: driverId,
-        deliveryPersonName: driverName,
-        status: 'En reparto'
-    });
-}
-
+    // Guardamos los valores calculados que vienen del input
+    subtotal: input.subtotal,
+    deliveryFee: input.deliveryFee,
+    serviceFee: input.serviceFee || 0,
+    total: input.total,
     
+    createdAt: serverTimestamp(),
+    shippingAddress: input.shippingInfo,
+    shippingInfo: input.shippingInfo,
+    
+    deliveryPersonId: null,
+    readyForPickup: false,
+    
+    storeCoords: mockStoreCoords,
+    customerCoords: mockCustomerCoords,
+  };
+
+  const docRef = await addDoc(collection(db, 'orders'), orderData);
+  return { id: docRef.id, ...orderData };
+};
+
+export const updateOrderStatus = async (db: Firestore, orderId: string, status: OrderStatus) => {
+  if (!db) throw new Error("Firestore instance is required");
+  const orderRef = doc(db, 'orders', orderId);
+  await updateDoc(orderRef, { status });
+};

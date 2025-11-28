@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -10,7 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
-import { useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+// ✅ CORRECCIÓN 1: Separamos imports
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Loader2, Save } from 'lucide-react';
@@ -28,7 +29,8 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export default function MyStorePage() {
-    const { user, loading: authLoading } = useAuth();
+    // ✅ CORRECCIÓN 2: Usamos userProfile
+    const { user, userProfile, loading: authLoading } = useAuth();
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
@@ -36,9 +38,10 @@ export default function MyStorePage() {
     const [isSaving, setIsSaving] = useState(false);
     
     const storeRef = useMemoFirebase(() => {
-      if (!firestore || !user?.storeId) return null;
-      return doc(firestore, 'stores', user.storeId);
-    }, [firestore, user?.storeId]);
+      // ✅ CORRECCIÓN 3: Usamos userProfile.storeId
+      if (!firestore || !userProfile?.storeId) return null;
+      return doc(firestore, 'stores', userProfile.storeId);
+    }, [firestore, userProfile?.storeId]);
     
     const { data: store, isLoading: storeLoading } = useDoc<Store>(storeRef);
     
@@ -49,12 +52,13 @@ export default function MyStorePage() {
     
     useEffect(() => {
         if (!authLoading && !storeLoading) {
-            if (!user || user.role !== 'store' || !user.storeId) {
+            // ✅ CORRECCIÓN 4: Validamos contra userProfile
+            if (!user || userProfile?.role !== 'store' || !userProfile?.storeId) {
                 router.push('/');
                 return;
             }
         }
-    }, [user, authLoading, storeLoading, router]);
+    }, [user, userProfile, authLoading, storeLoading, router]);
 
     useEffect(() => {
         if (store) {
@@ -168,5 +172,3 @@ export default function MyStorePage() {
         </div>
     );
 }
-
-    

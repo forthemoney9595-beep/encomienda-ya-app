@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useCart } from '@/context/cart-context';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { useForm } from 'react-hook-form';
@@ -13,24 +12,27 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { Home, Loader2, Info } from 'lucide-react';
+import { Home, Loader2, Info, Phone, AlertTriangle, ArrowLeft, Store as StoreIcon, Receipt } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useDoc } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { useFirestore, useMemoFirebase } from '@/firebase';
-import type { Store } from '@/lib/placeholder-data';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase'; 
 
+// Definición local simple para evitar dependencias rotas
+interface StoreData {
+  name: string;
+  address: string;
+  maintenanceMode?: boolean;
+}
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
   address: z.string().min(5, "La dirección es obligatoria."),
   addressId: z.string().optional(),
 });
-
 
 export default function CheckoutPage() {
   const { cart, totalPrice, totalItems, clearCart, storeId } = useCart();
@@ -41,9 +43,32 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clientLoaded, setClientLoaded] = useState(false);
 
+  // --- 1. LECTURA DE CONFIGURACIÓN GLOBAL (Mantenimiento y Comisión) ---
+  const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
+  // Leemos tanto el modo mantenimiento como la comisión
+  const { data: globalConfig } = useDoc<{ maintenanceMode: boolean, serviceFee?: number }>(configRef);
+
+  // --- 2. LECTURA DE TIENDA ESPECÍFICA ---
+  const storeRef = useMemoFirebase(() => (firestore && storeId) ? doc(firestore, 'stores', storeId) : null, [firestore, storeId]);
+  const { data: storeData, isLoading: storeLoading } = useDoc<StoreData>(storeRef);
+
   useEffect(() => {
     setClientLoaded(true);
   }, []);
+
+  // --- CÁLCULOS DE COSTOS ---
+  const { serviceFeeAmount, shippingCost, finalTotal } = useMemo(() => {
+    const feePercentage = globalConfig?.serviceFee || 0; // Por defecto 0 si no hay config
+    const fee = (totalPrice * feePercentage) / 100;
+    const shipping = 5.00; // Costo fijo por ahora
+    const total = totalPrice + fee + shipping;
+    
+    return {
+        serviceFeeAmount: fee,
+        shippingCost: shipping,
+        finalTotal: total
+    };
+  }, [totalPrice, globalConfig]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -56,60 +81,65 @@ export default function CheckoutPage() {
   
   const addressIdValue = form.watch('addressId');
 
+  // Inicializar formulario con datos del usuario
   useEffect(() => {
     if (clientLoaded && userProfile && !authLoading) {
+        // Verificación temprana de teléfono
+        if (!userProfile.phoneNumber || userProfile.phoneNumber.trim() === '') {
+            toast({ variant: 'destructive', title: 'Información Faltante', description: 'Por favor, añade tu número de teléfono.' });
+            router.push('/profile');
+            return;
+        }
+
         form.reset({
-            name: userProfile.name || "",
-            address: userProfile.addresses && userProfile.addresses.length > 0 
-                ? `${userProfile.addresses[0].street}, ${userProfile.addresses[0].city}, ${userProfile.addresses[0].postalCode}`
-                : "",
-            addressId: userProfile.addresses && userProfile.addresses.length > 0 ? userProfile.addresses[0].id : "new",
+            name: userProfile.name || userProfile.displayName || "",
+            address: userProfile.addresses?.[0] ? `${userProfile.addresses[0].street}, ${userProfile.addresses[0].city}` : "",
+            addressId: userProfile.addresses?.[0]?.id || "new",
         });
     }
-  }, [userProfile, authLoading, form, clientLoaded]);
+  }, [userProfile, authLoading, form, clientLoaded, router, toast]);
   
+  // Cambiar dirección al seleccionar del dropdown
   useEffect(() => {
-    if(addressIdValue && userProfile?.addresses) {
-        if(addressIdValue === 'new') {
-            form.setValue('address', '');
-        } else {
-            const selectedAddress = userProfile.addresses.find(a => a.id === addressIdValue);
-            if(selectedAddress) {
-                 form.setValue('address', `${selectedAddress.street}, ${selectedAddress.city}, ${selectedAddress.postalCode}`);
-            }
-        }
+    if(addressIdValue && userProfile?.addresses && addressIdValue !== 'new') {
+        const selected = userProfile.addresses.find((a: any) => a.id === addressIdValue);
+        if(selected) form.setValue('address', `${selected.street}, ${selected.city}, ${selected.zipCode}`);
+    } else if (addressIdValue === 'new') {
+        form.setValue('address', '');
     }
   }, [addressIdValue, userProfile?.addresses, form]);
 
-
   useEffect(() => {
-    if (clientLoaded && !authLoading && !user) {
-      router.push('/login');
-    }
+    if (clientLoaded && !authLoading && !user) router.push('/login');
   }, [clientLoaded, authLoading, user, router]);
 
   useEffect(() => {
     if (clientLoaded && !authLoading && (totalItems === 0 || !storeId)) {
-      toast({
-        title: 'Tu carrito está vacío',
-        description: 'Serás redirigido a la página principal.',
-      })
       router.push('/');
     }
-  }, [clientLoaded, authLoading, totalItems, storeId, router, toast]);
+  }, [clientLoaded, authLoading, totalItems, storeId, router]);
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!user || !userProfile || !storeId || !firestore || cart.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Error de Validación",
-        description: "Falta información del usuario, la tienda o el carrito está vacío.",
-      });
-      return;
-    };
+    // Validaciones de mantenimiento
+    if (globalConfig?.maintenanceMode || storeData?.maintenanceMode) {
+        toast({ variant: "destructive", title: "Lo sentimos", description: "No se pueden realizar pedidos en este momento." });
+        return;
+    }
+
+    if (!user || !userProfile || !storeId || !firestore) return;
+
+    // Verificación de teléfono
+    if (!userProfile.phoneNumber || userProfile.phoneNumber.trim() === '') {
+        toast({
+            variant: 'destructive',
+            title: 'Faltan datos',
+            description: 'Por favor, guarda tu número de teléfono en tu perfil antes de finalizar la compra.',
+        });
+        router.push('/profile');
+        return;
+    }
 
     setIsSubmitting(true);
-
     try {
       const storeRef = doc(firestore, 'stores', storeId);
       const storeSnap = await getDoc(storeRef);
@@ -118,105 +148,127 @@ export default function CheckoutPage() {
         throw new Error("La tienda para este pedido no existe.");
       }
 
-      const storeData = storeSnap.data() as Store;
+      const currentStoreData = storeSnap.data() as StoreData;
 
-      const createdOrder = await createOrder({
+      // ✅ Enviar pedido con datos financieros y teléfono validado
+      const createdOrder = await createOrder(firestore, {
         userId: user.uid,
-        customerName: userProfile.name,
+        customerName: values.name, 
+        // Usamos el operador ! porque ya validamos arriba que existe
+        customerPhoneNumber: userProfile.phoneNumber!, 
         items: cart,
-        shippingInfo: {
-          name: values.name,
-          address: values.address
-        },
+        shippingInfo: { name: values.name, address: values.address },
         storeId: storeId,
-        storeName: storeData.name,
-        storeAddress: storeData.address,
+        storeName: currentStoreData.name || 'Tienda',
+        storeAddress: currentStoreData.address || '',
+        // Guardamos los valores calculados
+        subtotal: totalPrice,
+        deliveryFee: shippingCost,
+        serviceFee: serviceFeeAmount,
+        total: finalTotal
       });
 
-      // No need to manually add to context anymore, this will be handled by Firestore listeners
-      // addPrototypeOrder(createdOrder);
-
-      toast({
-        title: "¡Pedido Solicitado!",
-        description: "Tu solicitud ha sido enviada a la tienda. Serás notificado cuando confirmen.",
-      });
+      toast({ title: "¡Pedido Solicitado!" });
       clearCart();
       router.push(`/orders/${createdOrder.id}`);
 
     } catch (error) {
-      console.error("Error creating order:", error);
-      toast({
-        variant: "destructive",
-        title: "Error al Realizar el Pedido",
-        description: "Hubo un problema al guardar tu pedido. Por favor, inténtalo de nuevo.",
-      });
+      console.error(error);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo procesar el pedido." });
     } finally {
         setIsSubmitting(false);
     }
   }
 
-  if (!clientLoaded || authLoading || !userProfile || totalItems === 0) {
-     return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin" /></div>
+  // --- UI DE BLOQUEO POR MANTENIMIENTO ---
+  if (globalConfig?.maintenanceMode) {
+    return (
+        <div className="container mx-auto py-20 flex justify-center items-center">
+            <Card className="max-w-md w-full border-red-200 bg-red-50 shadow-lg">
+                <CardHeader className="text-center pb-2">
+                    <div className="mx-auto bg-red-100 p-4 rounded-full mb-4 w-fit">
+                        <AlertTriangle className="h-10 w-10 text-red-600" />
+                    </div>
+                    <CardTitle className="text-2xl text-red-800">Plataforma en Mantenimiento</CardTitle>
+                    <CardDescription className="text-red-700">Estamos realizando mejoras técnicas.</CardDescription>
+                </CardHeader>
+                <CardFooter className="justify-center pt-4">
+                    <Button variant="outline" onClick={() => router.push('/')} className="w-full border-red-200 text-red-700 bg-white">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Volver al Inicio
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
+    );
+  }
+
+  if (storeData?.maintenanceMode) {
+    return (
+        <div className="container mx-auto py-20 flex justify-center items-center">
+            <Card className="max-w-md w-full border-orange-200 bg-orange-50 shadow-lg">
+                <CardHeader className="text-center pb-2">
+                    <div className="mx-auto bg-orange-100 p-4 rounded-full mb-4 w-fit">
+                        <StoreIcon className="h-10 w-10 text-orange-600" />
+                    </div>
+                    <CardTitle className="text-2xl text-orange-800">{storeData.name} Cerrada</CardTitle>
+                    <CardDescription className="text-orange-700 font-medium">
+                        Esta tienda está temporalmente fuera de servicio.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter className="justify-center pt-0">
+                    <Button variant="outline" onClick={() => router.push('/')} className="w-full border-orange-200 text-orange-700 bg-white">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Buscar otra tienda
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
+    );
+  }
+
+  if (!clientLoaded || authLoading || !userProfile || storeLoading) {
+      return <div className="container mx-auto text-center py-20"><Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" /></div>
   }
   
   const hasAddresses = userProfile.addresses && userProfile.addresses.length > 0;
 
   return (
     <div className="container mx-auto">
-      <PageHeader title="Solicitar Pedido" description="Confirma tu dirección y envía la solicitud a la tienda." />
+      <PageHeader title="Solicitar Pedido" description="Confirma tu dirección y revisa el desglose final." />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        
+        {/* COLUMNA IZQUIERDA: FORMULARIO */}
         <div className="md:col-span-2">
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><Home /> Información de Envío</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle className="flex items-center gap-2"><Home /> Información de Envío</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
-                             <FormField
-                                control={form.control}
-                                name="name"
-                                render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Nombre Completo</FormLabel>
-                                    <FormControl>
-                                    <Input placeholder="Tu Nombre Completo" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                                )}
-                            />
+                             {/* Mostramos el número de teléfono del perfil */}
+                             <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                                <Phone className="h-5 w-5 text-primary" />
+                                <div className="flex flex-col">
+                                    <p className="text-sm font-medium">Contacto:</p>
+                                    <p className="text-lg font-bold">{userProfile.phoneNumber}</p>
+                                </div>
+                            </div>
+
+                             <FormField control={form.control} name="name" render={({ field }) => (
+                                <FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                             )} />
                             {hasAddresses && (
-                                <FormField
-                                control={form.control}
-                                name="addressId"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Dirección</FormLabel>
+                                <FormField control={form.control} name="addressId" render={({ field }) => (
+                                    <FormItem><FormLabel>Dirección</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Selecciona una dirección guardada" />
-                                                </SelectTrigger>
-                                            </FormControl>
+                                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                             <SelectContent>
-                                                {userProfile.addresses?.map(addr => (
-                                                    <SelectItem key={addr.id} value={addr.id}>
-                                                        {addr.label}: {addr.street}, {addr.city}
-                                                    </SelectItem>
-                                                ))}
-                                                <SelectItem value="new">Usar una dirección nueva</SelectItem>
+                                                {userProfile.addresses?.map(addr => <SelectItem key={addr.id} value={addr.id}>{addr.street}</SelectItem>)}
+                                                <SelectItem value="new">Nueva dirección</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        <FormMessage />
                                     </FormItem>
-                                )}
-                                />
+                                )} />
                             )}
-                            <FormField
-                                control={form.control}
-                                name="address"
-                                render={({ field }) => (
+                            <FormField control={form.control} name="address" render={({ field }) => (
                                 <FormItem>
                                     {!hasAddresses && <FormLabel>Dirección de Entrega</FormLabel>}
                                     <FormControl>
@@ -229,29 +281,25 @@ export default function CheckoutPage() {
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
-                                )}
-                            />
+                            )} />
                         </CardContent>
                     </Card>
                      <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                        {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Solicitando Pedido...</> : `Solicitar Pedido por $${(totalPrice + 5.00).toFixed(2)}`}
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : `Pagar $${finalTotal.toFixed(2)}`}
                     </Button>
                 </form>
             </Form>
         </div>
+
+        {/* COLUMNA DERECHA: RESUMEN DE COSTOS */}
         <div className="md:col-span-1">
           <Card>
-            <CardHeader>
-              <CardTitle>Resumen del Pedido</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Resumen</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {cart.map(item => (
-                <div key={item.id} className="flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">Cantidad: {item.quantity}</p>
-                  </div>
-                  <p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                <div key={item.id} className="flex justify-between text-sm">
+                  <div><span className="font-medium">{item.name}</span> <span className="text-muted-foreground">x{item.quantity}</span></div>
+                  <span className="font-semibold">${(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
               <Separator />
@@ -260,21 +308,28 @@ export default function CheckoutPage() {
                 <p>${totalPrice.toFixed(2)}</p>
               </div>
               <div className="flex justify-between text-muted-foreground">
-                <p>Tarifa de envío (aprox.)</p>
-                <p>$5.00</p>
+                <p>Envío</p>
+                <p>${shippingCost.toFixed(2)}</p>
               </div>
+              {/* Solo mostramos la comisión si es mayor a 0 */}
+              {serviceFeeAmount > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <p>Tarifa de servicio ({globalConfig?.serviceFee}%)</p>
+                    <p>${serviceFeeAmount.toFixed(2)}</p>
+                  </div>
+              )}
               <Separator />
-              <div className="flex justify-between font-bold text-lg">
-                <p>Total (aprox.)</p>
-                <p>${(totalPrice + 5.00).toFixed(2)}</p>
+              <div className="flex justify-between font-bold text-xl">
+                <p>Total</p>
+                <p className="text-green-600">${finalTotal.toFixed(2)}</p>
               </div>
             </CardContent>
              <CardFooter>
-                 <Alert>
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>Paso Siguiente</AlertTitle>
-                    <AlertDescription>
-                        Una vez que envíes tu solicitud, la tienda confirmará la disponibilidad de los productos.
+                 <Alert className="bg-blue-50 border-blue-200">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertTitle className="text-blue-800">Confirmación</AlertTitle>
+                    <AlertDescription className="text-blue-700 text-xs">
+                        La tienda revisará la disponibilidad de los productos tras tu solicitud.
                     </AlertDescription>
                 </Alert>
             </CardFooter>

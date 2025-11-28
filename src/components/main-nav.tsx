@@ -1,265 +1,195 @@
-
 'use client';
 
-import * as React from 'react';
-import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import {
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
-  useSidebar,
-  SidebarGroup,
-  SidebarGroupLabel,
-} from '@/components/ui/sidebar';
-import {
+import { usePathname, useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/context/auth-context';
+import { 
+  Home, 
+  ShoppingBag, 
+  Heart, 
+  ListOrdered, 
+  BarChart3, 
+  Bike, 
   Store,
-  ClipboardList,
-  Shield,
-  Truck,
-  LayoutGrid,
+  Package,
+  LayoutDashboard, 
   Utensils,
   Shirt,
-  ShoppingBag,
-  ChevronDown,
-  Home,
-  Package,
-  Edit,
-  BarChart3,
-  Contact,
-  Tag,
-  Heart,
-  LifeBuoy,
+  MoreHorizontal
 } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useAuth } from '@/context/auth-context';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Notifications } from './notifications'; 
 
-
-export function MainNav() {
+export function MainNav({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLElement>) {
   const pathname = usePathname();
-  const { user, isAdmin, loading } = useAuth();
-  const { setOpenMobile } = useSidebar();
+  const { userProfile } = useAuth();
   
-  const [isAdminOpen, setIsAdminOpen] = React.useState(pathname.startsWith('/admin'));
-  const [isStoresOpen, setIsStoresOpen] = React.useState(
-    pathname.startsWith('/stores') || pathname === '/'
+  // No necesitamos handleLogout aquí porque está en el UserMenu del footer
+
+  if (!userProfile) {
+    return null;
+  }
+  
+  const renderAdminLinks = () => (
+    <>
+      <div className="px-3 py-2">
+        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+          Supervisión
+        </h2>
+        <div className="space-y-1">
+          <Link href="/admin/dashboard">
+            <Button variant={pathname.startsWith('/admin/dashboard') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              Dashboard
+            </Button>
+          </Link>
+          <Link href="/">
+            <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Store className="mr-2 h-4 w-4" />
+              Ver Tiendas (Home)
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </>
   );
 
-  const isStoreOwner = user?.role === 'store';
-  const isDelivery = user?.role === 'delivery';
-  
-  const isOwnStoreProductsPageActive = isStoreOwner && user?.storeId && pathname === `/stores/${user.storeId}`;
-  
-  const handleLinkClick = () => {
-    if (useSidebar().isMobile) {
-      setOpenMobile(false);
-    }
-  }
+  const renderStoreLinks = () => (
+    <>
+      <div className="px-3 py-2">
+        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+          Operaciones
+        </h2>
+        <div className="space-y-1">
+          <Link href="/orders">
+            <Button variant={pathname === '/orders' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <ListOrdered className="mr-2 h-4 w-4" />
+              Gestionar Pedidos
+            </Button>
+          </Link>
+          <Link href="/my-store/products">
+            <Button variant={pathname === '/my-store/products' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Package className="mr-2 h-4 w-4" />
+              Gestionar Productos
+            </Button>
+          </Link>
+        </div>
+      </div>
+      <div className="px-3 py-2">
+        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+          Reportes
+        </h2>
+        <div className="space-y-1">
+          <Link href="/my-store/analytics">
+            <Button variant={pathname === '/my-store/analytics' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Analíticas
+            </Button>
+          </Link>
+          {/* "Editar Tienda" se movió al menú de usuario en el footer para evitar duplicidad */}
+        </div>
+      </div>
+    </>
+  );
+
+  const renderBuyerLinks = () => (
+    <>
+      <div className="px-3 py-2">
+        <div className="space-y-1">
+          <Link href="/">
+            <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Home className="mr-2 h-4 w-4" />
+              Principal
+            </Button>
+          </Link>
+          <Link href="/orders">
+            <Button variant={pathname === '/orders' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <ShoppingBag className="mr-2 h-4 w-4" />
+              Mis Pedidos
+            </Button>
+          </Link>
+          <Link href="/favorites">
+            <Button variant={pathname === '/favorites' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Heart className="mr-2 h-4 w-4" />
+              Mis Favoritos
+            </Button>
+          </Link>
+        </div>
+      </div>
+      <div className="px-3 py-2">
+        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+          Explorar Tiendas
+        </h2>
+        <div className="space-y-1">
+          {/* Enlaces funcionales con filtro por URL */}
+          <Link href="/?category=comida-rapida">
+            <Button variant="ghost" className="w-full justify-start">
+                <Utensils className="mr-2 h-4 w-4" />
+                Comida Rápida
+            </Button>
+          </Link>
+          <Link href="/?category=Ropa">
+            <Button variant="ghost" className="w-full justify-start">
+                <Shirt className="mr-2 h-4 w-4" />
+                Ropa
+            </Button>
+          </Link>
+          <Link href="/?category=Otros">
+            <Button variant="ghost" className="w-full justify-start">
+                <MoreHorizontal className="mr-2 h-4 w-4" />
+                Otros
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderDeliveryLinks = () => (
+    <>
+      <div className="px-3 py-2">
+        <div className="space-y-1">
+          <Link href="/">
+            <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Home className="mr-2 h-4 w-4" />
+              Principal
+            </Button>
+          </Link>
+          <Link href="/orders">
+            <Button variant={pathname === '/orders' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Bike className="mr-2 h-4 w-4" />
+              Entregas
+            </Button>
+          </Link>
+          <Link href="/delivery/earnings"> 
+            <Button variant={pathname.startsWith('/delivery/earnings') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Mis Estadísticas
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </>
+  );
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Principal">
-          <Link href="/" onClick={handleLinkClick}><Home /><span>Principal</span></Link>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
+    <nav className={cn("pb-12 relative", className)} {...props}>
+      <div className="absolute top-2 right-2 z-50">
+          <Notifications /> 
+      </div>
 
-      {/* Buyer & Guest specific menu */}
-      {!loading && user?.role === 'buyer' && (
-        <>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Mis Pedidos">
-              <Link href="/orders" onClick={handleLinkClick}><ClipboardList /><span>Mis Pedidos</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/favorites')} tooltip="Mis Favoritos">
-              <Link href="/favorites" onClick={handleLinkClick}><Heart /><span>Mis Favoritos</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </>
-      )}
-      
-      {!loading && !isStoreOwner && !isDelivery && (
-        <Collapsible open={isStoresOpen} onOpenChange={setIsStoresOpen}>
-          <SidebarMenuItem>
-            <CollapsibleTrigger asChild>
-              <SidebarMenuButton>
-                <Store />
-                <span>Explorar Tiendas</span>
-                <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isStoresOpen && "rotate-180")} />
-              </SidebarMenuButton>
-            </CollapsibleTrigger>
-          </SidebarMenuItem>
-          <CollapsibleContent>
-            <SidebarMenuSub>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/stores/food'}>
-                  <Link href="/stores/food" onClick={handleLinkClick}>
-                    <Utensils />
-                    <span>Comida</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/stores/clothing'}>
-                  <Link href="/stores/clothing" onClick={handleLinkClick}>
-                    <Shirt />
-                    <span>Ropa</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/stores/other'}>
-                  <Link href="/stores/other" onClick={handleLinkClick}>
-                    <ShoppingBag />
-                    <span>Otros</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            </SidebarMenuSub>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-
-      {/* Store Owner specific menu */}
-      {!loading && isStoreOwner && (
-        <>
-          <Separator className="my-2" />
-           <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === '/orders'} tooltip="Panel">
-                <Link href="/orders" onClick={handleLinkClick}>
-                  <LayoutGrid />
-                  <span>Panel</span>
-                </Link>
-              </SidebarMenuButton>
-          </SidebarMenuItem>
-
-          <SidebarGroup>
-            <SidebarGroupLabel>Operaciones</SidebarGroupLabel>
-             <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')}>
-                  <Link href="/orders" onClick={handleLinkClick}>
-                    <ClipboardList />
-                    <span>Gestionar Pedidos</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              {user.storeId && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isOwnStoreProductsPageActive}>
-                    <Link href={`/stores/${user.storeId}`} onClick={handleLinkClick}>
-                      <Package />
-                      <span>Gestionar Productos</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-          </SidebarGroup>
-           <SidebarGroup>
-            <SidebarGroupLabel>Configuración</SidebarGroupLabel>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/my-store/categories')}>
-                  <Link href="/my-store/categories" onClick={handleLinkClick}>
-                    <Tag />
-                    <span>Categorías</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/my-store/analytics')}>
-                  <Link href="/my-store/analytics" onClick={handleLinkClick}>
-                    <BarChart3 />
-                    <span>Analíticas</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/my-store'}>
-                  <Link href="/my-store" onClick={handleLinkClick}>
-                    <Edit />
-                    <span>Editar Tienda</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-          </SidebarGroup>
-        </>
-      )}
-
-      {/* Delivery person specific menu */}
-      {!loading && isDelivery && (
-        <>
-         <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/orders'} tooltip="Entregas">
-              <Link href="/orders" onClick={handleLinkClick}><Truck /><span>Entregas</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/delivery/stats')} tooltip="Mis Estadísticas">
-              <Link href="/delivery/stats" onClick={handleLinkClick}><BarChart3 /><span>Mis Estadísticas</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </>
-      )}
-
-      <Separator className="my-2" />
-
-       <SidebarMenuItem>
-        <SidebarMenuButton asChild isActive={pathname.startsWith('/support')} tooltip="Soporte">
-          <Link href="/support" onClick={handleLinkClick}><LifeBuoy /><span>Soporte</span></Link>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-
-      {/* Admin Menu */}
-      {!loading && isAdmin && (
-        <>
-          <Separator className="my-2" />
-          <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
-            <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton>
-                  <Shield />
-                  <span>Admin</span>
-                   <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isAdminOpen && "rotate-180")} />
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-            </SidebarMenuItem>
-            <CollapsibleContent>
-              <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                <SidebarMenuSubButton asChild isActive={pathname === '/admin'}>
-                    <Link href="/admin" onClick={handleLinkClick}>
-                      <LayoutGrid />
-                      <span>Panel</span>
-                    </Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                 <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/stores')}>
-                    <Link href="/admin/stores" onClick={handleLinkClick}>
-                      <Store />
-                      <span>Tiendas</span>
-                    </Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild isActive={pathname.startsWith('/admin/delivery')}>
-                    <Link href="/admin/delivery" onClick={handleLinkClick}>
-                      <Truck />
-                      <span>Reparto</span>
-                    </Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              </SidebarMenuSub>
-            </CollapsibleContent>
-          </Collapsible>
-        </>
-      )}
-    </SidebarMenu>
+      <div className="space-y-4 py-4 pt-10">
+        {userProfile.role === 'admin' && renderAdminLinks()}
+        {userProfile.role === 'store' && renderStoreLinks()}
+        {userProfile.role === 'buyer' && renderBuyerLinks()}
+        {userProfile.role === 'delivery' && renderDeliveryLinks()}
+        
+        {/* Se eliminó el bloque de "Soporte" y "Cerrar Sesión" de aquí para no duplicar con el footer */}
+      </div>
+    </nav>
   );
 }

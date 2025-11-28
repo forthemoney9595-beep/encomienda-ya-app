@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,11 +7,12 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ShoppingCart, Edit, Trash2, PlusCircle, Search, Star, Heart } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
+import { useAuth } from '@/context/auth-context'; 
+import { useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { useAuth, useFirestore } from '@/firebase';
 import { ManageItemDialog } from './manage-item-dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -45,6 +45,7 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
     const { toast } = useToast();
     const params = useParams();
     const currentStoreId = params.storeId as string;
+    
     const { user, userProfile } = useAuth();
     const firestore = useFirestore();
     
@@ -111,8 +112,10 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
             return;
         }
         const isFavorite = favoriteProducts.includes(product.id);
+        
+        // ✅ CORRECCIÓN: Agregamos (id: string) para que TypeScript no se queje
         const updatedFavorites = isFavorite
-            ? favoriteProducts.filter(id => id !== product.id)
+            ? favoriteProducts.filter((id: string) => id !== product.id)
             : [...favoriteProducts, product.id];
         
         updateUserProfile(firestore, user.uid, { favoriteProducts: updatedFavorites });
@@ -296,5 +299,3 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
         </>
     )
 }
-
-    

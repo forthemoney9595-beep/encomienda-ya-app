@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState } from 'react';
@@ -15,8 +13,8 @@ import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, writeBatch } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { createStoreForUser } from '@/lib/user-service';
 import { Loader2 } from 'lucide-react';
 
@@ -59,11 +57,23 @@ export default function SignupStorePage() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
 
-        const newStoreRef = await createStoreForUser(firestore, user.uid, {
+        // ✅ CORRECCIÓN: Inicializamos la tienda con campos críticos para las reglas de seguridad
+        const storeData = {
             name: values.storeName,
             category: values.category,
             address: values.address,
-        });
+            maintenanceMode: false, // CRUCIAL: Para que la regla isNotMaintenanceMode pase
+            isApproved: false,      // Requiere aprobación del admin
+            rating: 0,
+            deliveryTime: "30-45 min",
+            minOrder: 500,
+            ownerId: user.uid,
+            ownerName: values.ownerName,
+            createdAt: new Date()
+        };
+
+        // Usamos createStoreForUser pero pasándole el objeto completo
+        const newStoreRef = await createStoreForUser(firestore, user.uid, storeData);
 
         const userProfile = {
             uid: user.uid,
@@ -71,6 +81,7 @@ export default function SignupStorePage() {
             email: values.email,
             role: 'store' as const,
             storeId: newStoreRef.id,
+            isApproved: false // El usuario también nace como no aprobado
         };
         
         await setDoc(doc(firestore, "users", user.uid), userProfile);
@@ -80,7 +91,7 @@ export default function SignupStorePage() {
             description: "Tu tienda ha sido registrada. Refrescando la página...",
         });
         
-        // Force a full page reload to ensure the auth context is re-initialized correctly
+        // Recarga completa para reinicializar el contexto de autenticación
         window.location.href = '/';
 
     } catch (error: any) {
@@ -98,7 +109,7 @@ export default function SignupStorePage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center">
+    <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center py-10">
       <Card className="w-full max-w-md">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>

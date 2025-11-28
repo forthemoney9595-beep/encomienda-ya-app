@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -6,38 +5,34 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
-import type { Store, Product } from '@/lib/placeholder-data';
-import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Button } from '@/components/ui/button';
-import { Heart, ShoppingBag, Store as StoreIcon } from 'lucide-react';
+import { Heart, ShoppingBag, Store as StoreIcon, MapPin, Clock, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Rating } from '@/components/ui/rating';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { collection, query, where, CollectionReference } from 'firebase/firestore';
-import { updateUserProfile } from '@/lib/user-service';
+import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
 
-// Helper to calculate a store's average rating
-const calculateStoreRating = (products: Product[]): number => {
-  if (!products || products.length === 0) return 0;
-
-  let totalRatingPoints = 0;
-  let totalReviews = 0;
-
-  products.forEach(product => {
-    if (product.reviewCount > 0) {
-      totalRatingPoints += product.rating * product.reviewCount;
-      totalReviews += product.reviewCount;
-    }
-  });
-
-  if (totalReviews === 0) return 0;
-
-  return totalRatingPoints / totalReviews;
-};
+// Interfaz compatible con los datos de Firestore
+interface Store {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  rating?: number;
+  imageUrl?: string;
+  imageHint?: string;
+  deliveryTime?: string;
+  minOrder?: number;
+  address?: string;
+  isApproved?: boolean;
+  available?: boolean;
+}
 
 export default function FavoritesPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -45,8 +40,24 @@ export default function FavoritesPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<Store> : null, [firestore]);
+  // 1. Consultar todas las Tiendas (para tener los detalles completos)
+  const storesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'stores');
+  }, [firestore]);
+
   const { data: allStores, isLoading: storesLoading } = useCollection<Store>(storesQuery);
+
+  // 2. Consultar la Subcolección de Favoritos del Usuario
+  const favoritesQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'users', user.uid, 'favorites');
+  }, [firestore, user]);
+
+  const { data: favoritesData, isLoading: favoritesLoading } = useCollection<{id: string, type?: string}>(favoritesQuery);
+
+  // Crear un Set de IDs para búsqueda rápida
+  const favoriteIds = useMemo(() => new Set(favoritesData?.map(f => f.id)), [favoritesData]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -54,196 +65,149 @@ export default function FavoritesPage() {
     }
   }, [authLoading, user, router]);
 
-  const favoriteStores = userProfile?.favoriteStores || [];
-  const favoriteProducts = userProfile?.favoriteProducts || [];
+  // Filtrar las tiendas que están en favoritos
+  const favoriteStores = useMemo(() => {
+    if (!allStores || !favoriteIds) return [];
+    return allStores.filter(store => favoriteIds.has(store.id));
+  }, [allStores, favoriteIds]);
 
-  const favoriteStoreDetails = useMemo(() => {
-    if (storesLoading || !allStores) return [];
-    
-    return allStores
-      .filter(store => favoriteStores.includes(store.id))
-      .map(store => ({
-        ...store,
-        averageRating: calculateStoreRating(store.products || []),
-      }));
-  }, [allStores, favoriteStores, storesLoading]);
-  
-  const favoriteProductDetails = useMemo(() => {
-      if (storesLoading || !allStores) return [];
-      
-      const favProducts: (Product & { storeId: string; storeName: string })[] = [];
+  // (Futuro: Aquí filtrarías los productos favoritos cuando implementemos esa parte)
+  const favoriteProducts: any[] = []; 
 
-      allStores.forEach(store => {
-          (store.products || []).forEach(product => {
-              if (favoriteProducts.includes(product.id)) {
-                  favProducts.push({
-                      ...product,
-                      storeId: store.id,
-                      storeName: store.name,
-                  });
-              }
-          });
-      });
-      return favProducts;
-  }, [allStores, favoriteProducts, storesLoading]);
+  const isLoading = authLoading || storesLoading || favoritesLoading;
 
-  const isLoading = authLoading || storesLoading;
-
-  const handleToggleFavorite = (type: 'store' | 'product', id: string, name: string) => {
+  // Manejador para quitar de favoritos
+  const handleRemoveFavorite = async (e: React.MouseEvent, id: string, name: string) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!user || !firestore) return;
-    
-    const key = type === 'store' ? 'favoriteStores' : 'favoriteProducts';
-    const currentFavorites: string[] = userProfile?.[key] || [];
-    const isFavorite = currentFavorites.includes(id);
 
-    const updatedFavorites = isFavorite
-      ? currentFavorites.filter((favId: string) => favId !== id)
-      : [...currentFavorites, id];
-
-    updateUserProfile(firestore, user.uid, { [key]: updatedFavorites });
-    
-    toast({
-      title: isFavorite ? 'Eliminado de Favoritos' : 'Añadido a Favoritos',
-      description: `${name} ha sido ${isFavorite ? 'eliminado de' : 'añadido a'} tus favoritos.`,
-    });
+    try {
+        await deleteDoc(doc(firestore, 'users', user.uid, 'favorites', id));
+        toast({
+            title: 'Eliminado de Favoritos',
+            description: `${name} ha sido eliminado de tu lista.`,
+        });
+    } catch (error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar favoritos.' });
+    }
   };
 
+  if (isLoading) {
+    return (
+      <div className="container mx-auto space-y-6 py-6">
+        <PageHeader title="Cargando Favoritos..." description="" />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map(i => <StoreCardSkeleton key={i} />)}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto">
+    <div className="container mx-auto pb-20">
       <PageHeader title="Mis Favoritos" description="Tus tiendas y productos preferidos en un solo lugar." />
       
       <Tabs defaultValue="stores" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="stores">
                 <StoreIcon className="mr-2 h-4 w-4" />
-                Tiendas
+                Tiendas ({favoriteStores.length})
             </TabsTrigger>
-            <TabsTrigger value="products">
+            <TabsTrigger value="products" disabled>
                 <ShoppingBag className="mr-2 h-4 w-4" />
-                Productos
+                Productos (Próximamente)
             </TabsTrigger>
         </TabsList>
-        <TabsContent value="stores" className="mt-4">
+        
+        <TabsContent value="stores" className="mt-6">
              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {isLoading ? (
-                <>
-                    <StoreCardSkeleton />
-                    <StoreCardSkeleton />
-                    <StoreCardSkeleton />
-                </>
-                ) : favoriteStoreDetails.length > 0 ? (
-                favoriteStoreDetails.map((store) => (
-                    <Link href={`/stores/${store.id}`} key={store.id} className="group">
-                    <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
-                        <div className="relative h-48 w-full">
-                        <Image
-                            src={store.imageUrl}
-                            alt={store.name}
-                            fill
-                            style={{ objectFit: 'cover' }}
-                            className="transition-transform duration-300 group-hover:scale-105"
-                            data-ai-hint={store.imageHint}
-                        />
-                        <Button
-                            size="icon"
-                            className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleToggleFavorite('store', store.id, store.name);
-                            }}
-                            aria-label="Quitar de favoritos"
-                        >
-                            <Heart className="h-4 w-4 fill-red-500 text-red-500" />
+                {favoriteStores.length === 0 ? (
+                    <div className="col-span-full text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
+                        <Heart className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                        <h3 className="text-lg font-semibold">No tienes tiendas favoritas</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Marca el corazón en las tiendas que te gusten para verlas aquí.</p>
+                        <Button variant="outline" onClick={() => router.push('/')}>
+                            Explorar Tiendas
                         </Button>
-                        </div>
-                        <CardHeader>
-                        <div className="flex justify-between items-start">
-                            <div>
-                            <CardTitle>{store.name}</CardTitle>
-                            <CardDescription>{store.category}</CardDescription>
-                            </div>
-                            {store.averageRating > 0 && (
-                            <div className="flex items-center gap-1 text-sm shrink-0">
-                                <Rating rating={store.averageRating} size={16} />
-                                <span className="font-bold text-muted-foreground">({store.averageRating.toFixed(1)})</span>
-                            </div>
-                            )}
-                        </div>
-                        </CardHeader>
-                        <CardContent>
-                        <p className="text-sm text-muted-foreground">{store.address}</p>
-                        </CardContent>
-                    </Card>
-                    </Link>
-                )})
+                    </div>
                 ) : (
-                <div className="col-span-full">
-                    <Card>
-                        <CardContent className="pt-6 text-center text-muted-foreground flex flex-col items-center justify-center h-64">
-                            <StoreIcon className="h-12 w-12 mb-4" />
-                            <h3 className="text-lg font-semibold">Tu lista de tiendas está vacía</h3>
-                            <p className="text-sm">Aún no has guardado ninguna tienda como favorita.</p>
-                            <Button variant="link" asChild className="mt-2">
-                                <Link href="/">Explorar tiendas</Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
+                    favoriteStores.map((store) => (
+                        <Link href={`/stores/${store.id}`} key={store.id} className="group">
+                            <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1 relative border-transparent hover:border-primary/20">
+                                {/* Imagen */}
+                                <div className="relative h-48 w-full bg-muted">
+                                    {store.imageUrl ? (
+                                        <Image
+                                            src={store.imageUrl}
+                                            alt={store.name}
+                                            fill
+                                            style={{ objectFit: 'cover' }}
+                                            className="transition-transform duration-500 group-hover:scale-105"
+                                        />
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-muted-foreground">
+                                            <StoreIcon className="h-10 w-10 opacity-20" />
+                                        </div>
+                                    )}
+                                    
+                                    {/* Botón Quitar Favorito */}
+                                    <button
+                                        onClick={(e) => handleRemoveFavorite(e, store.id, store.name)}
+                                        className="absolute top-2 right-2 p-2 rounded-full bg-white/90 hover:bg-white shadow-sm backdrop-blur-sm transition-all hover:scale-110 z-10"
+                                        title="Quitar de favoritos"
+                                    >
+                                        <Heart className="h-5 w-5 fill-red-500 text-red-500" />
+                                    </button>
+
+                                    <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
+                                        {store.category || 'General'}
+                                    </span>
+                                </div>
+
+                                <CardHeader className="p-4 pb-2 space-y-1">
+                                    <div className="flex justify-between items-start">
+                                        <CardTitle className="text-base font-bold">{store.name}</CardTitle>
+                                        {store.rating && (
+                                            <div className="flex items-center gap-1 text-xs font-medium bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
+                                                <Star className="h-3 w-3 fill-yellow-700" />
+                                                {store.rating.toFixed(1)}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <MapPin className="h-3 w-3" /> 
+                                        <span className="line-clamp-1">{store.address || 'Ubicación desconocida'}</span>
+                                    </div>
+                                </CardHeader>
+                                
+                                <CardContent className="p-4 pt-2">
+                                    <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
+                                        <div className="flex items-center gap-1">
+                                            <Clock className="h-3 w-3" />
+                                            {store.deliveryTime || '30-45 min'}
+                                        </div>
+                                        <div>
+                                            Envío: ${store.minOrder || '5.00'}
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    ))
                 )}
             </div>
         </TabsContent>
+
         <TabsContent value="products" className="mt-4">
-            {isLoading ? (
-                 <div className="space-y-4">
-                    <Skeleton className="h-24 w-full rounded-lg" />
-                    <Skeleton className="h-24 w-full rounded-lg" />
-                </div>
-            ) : favoriteProductDetails.length > 0 ? (
-                <div className="space-y-4">
-                    {favoriteProductDetails.map(product => (
-                        <Card key={product.id} className="overflow-hidden">
-                            <CardContent className="p-4 flex items-start gap-4">
-                                <Image
-                                    src={product.imageUrl!}
-                                    alt={product.name}
-                                    width={80}
-                                    height={80}
-                                    className="rounded-md object-cover"
-                                />
-                                <div className="flex-1">
-                                    <p className="font-semibold">{product.name}</p>
-                                    <Link href={`/stores/${product.storeId}`} className="text-sm text-muted-foreground hover:underline">{product.storeName}</Link>
-                                    <p className="font-bold mt-2">${product.price.toFixed(2)}</p>
-                                </div>
-                                <Button 
-                                    variant="ghost" 
-                                    size="icon"
-                                    onClick={() => handleToggleFavorite('product', product.id, product.name)}
-                                    className="text-red-500 hover:bg-red-500/10"
-                                    aria-label="Quitar producto de favoritos"
-                                >
-                                    <Heart className="h-5 w-5 fill-current" />
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            ) : (
-                 <div className="col-span-full">
-                    <Card>
-                        <CardContent className="pt-6 text-center text-muted-foreground flex flex-col items-center justify-center h-64">
-                            <ShoppingBag className="h-12 w-12 mb-4" />
-                            <h3 className="text-lg font-semibold">Tu lista de productos está vacía</h3>
-                            <p className="text-sm">Marca el corazón en los productos que te gustan para guardarlos aquí.</p>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+            <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
+                <ShoppingBag className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                <h3 className="text-lg font-semibold">Próximamente</h3>
+                <p className="text-sm text-muted-foreground">Pronto podrás guardar tus productos favoritos individualmente.</p>
+            </div>
         </TabsContent>
       </Tabs>
     </div>
   );
 }
-
-    

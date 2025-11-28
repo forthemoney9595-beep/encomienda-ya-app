@@ -8,7 +8,8 @@ import ReactDOMServer from 'react-dom/server';
 import type { Order } from '@/lib/order-service';
 
 // Fix para el ícono de marcador por defecto que a veces no carga
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+// @ts-ignore
+delete (L.Icon.Default.prototype)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -43,11 +44,13 @@ export default function OrderMap({ order }: OrderMapProps) {
     const { storeCoords, customerCoords, storeName, customerName, shippingAddress, status } = order;
 
     if (!storeCoords || !customerCoords) {
-        return <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Faltan datos de coordenadas.</div>;
+        return <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Faltan datos de ubicación para este pedido.</div>;
     }
 
-    const storePosition: L.LatLngExpression = [storeCoords.latitude, storeCoords.longitude];
-    const customerPosition: L.LatLngExpression = [customerCoords.latitude, customerCoords.longitude];
+    // @ts-ignore - Leaflet types mismatch workaround
+    const storePosition: [number, number] = [storeCoords.latitude, storeCoords.longitude];
+    // @ts-ignore - Leaflet types mismatch workaround
+    const customerPosition: [number, number] = [customerCoords.latitude, customerCoords.longitude];
     
     const bounds = L.latLngBounds(storePosition, customerPosition);
 

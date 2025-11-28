@@ -1,30 +1,30 @@
-// This file is intentionally left blank. It has been replaced by the /src/firebase directory.
-// It is kept to avoid breaking old imports until they are all updated.
-// The getFirebase function is now in /src/firebase/index.ts
-
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+// ✅ IMPORTANTE: Importamos Storage
+import { getStorage } from 'firebase/storage';
 import { firebaseConfig } from '@/firebase/config';
 
-// This is a singleton to ensure we only initialize firebase once.
-let firebaseApp: ReturnType<typeof initializeApp> | undefined;
+// Inicialización Singleton
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+// ✅ Inicializamos Storage
+const storage = getStorage(app);
+
+// --- HOOKS Y EXPORTACIONES PARA COMPONENTES NUEVOS ---
+// Estos son necesarios para que image-upload.tsx y profile/page.tsx funcionen
+export const useAuth = () => auth;
+export const useFirestore = () => db;
+export const useStorage = () => storage;
+
+// Exportaciones directas
+export { app, auth, db, storage };
 
 /**
- * Gets the firebase services.
- * @returns an object with the firestore, auth and app services.
+ * Función legacy para compatibilidad con código anterior.
+ * Ahora incluye 'storage' en el objeto retornado.
  */
 export function getFirebase() {
-  if (firebaseApp) {
-    const auth = getAuth(firebaseApp);
-    const firestore = getFirestore(firebaseApp);
-    return { firestore, auth, app: firebaseApp };
-  }
-
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const firestore = getFirestore(app);
-
-  firebaseApp = app;
-  return { firestore, auth, app };
+  return { firestore: db, auth, storage, app };
 }

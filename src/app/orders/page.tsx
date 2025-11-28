@@ -1,5 +1,5 @@
-
 'use client';
+
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useEffect } from 'react';
 
 export default function OrdersPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const router = useRouter();
   
   useEffect(() => {
@@ -19,7 +19,7 @@ export default function OrdersPage() {
     }
   }, [authLoading, user, router]);
 
-  if (authLoading || !user) {
+  if (authLoading || !user || !userProfile) {
     return (
       <div className="container mx-auto">
         <PageHeader title="Cargando Pedidos..." description="Por favor, espera un momento." />
@@ -32,7 +32,7 @@ export default function OrdersPage() {
   }
 
   const renderView = () => {
-    switch (user.role) {
+    switch (userProfile.role) {
       case 'store':
         return <StoreOrdersView />;
       case 'delivery':
@@ -40,13 +40,12 @@ export default function OrdersPage() {
       case 'buyer':
         return <BuyerOrdersView />;
       default:
-        // Default to buyer view if role is something else, but still logged in
         return <BuyerOrdersView />;
     }
   };
 
   const getPageInfo = () => {
-    switch (user.role) {
+    switch (userProfile.role) {
       case 'store':
         return { title: "Gestión de Pedidos", description: "Gestiona los pedidos de tu tienda." };
       case 'delivery':
