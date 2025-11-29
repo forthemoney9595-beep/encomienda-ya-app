@@ -78,14 +78,17 @@ function UserMenu() {
                 <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 
-                <DropdownMenuItem asChild>
-                    <Link href="/profile" className="cursor-pointer w-full flex items-center">
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Perfil</span>
-                    </Link>
-                </DropdownMenuItem>
+                {/* ✅ CORRECCIÓN: Ocultar "Perfil" si es una tienda */}
+                {userProfile?.role !== 'store' && (
+                    <DropdownMenuItem asChild>
+                        <Link href="/profile" className="cursor-pointer w-full flex items-center">
+                            <User className="mr-2 h-4 w-4" />
+                            <span>Perfil</span>
+                        </Link>
+                    </DropdownMenuItem>
+                )}
 
-                {/* ✅ Opción de Editar Tienda movida aquí */}
+                {/* ✅ Opción de Editar Tienda (Solo para tiendas) */}
                 {userProfile?.role === 'store' && (
                     <DropdownMenuItem asChild>
                         <Link href="/my-store" className="cursor-pointer w-full flex items-center">

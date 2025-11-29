@@ -6,10 +6,11 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth, UserProfile } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, query, where, CollectionReference, doc, updateDoc, orderBy, limit, getDoc, setDoc } from 'firebase/firestore';
+// ✅ CORRECCIÓN: Importamos desde @/lib/firebase
+import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/lib/firebase';
+import { collection, query, where, CollectionReference, doc, updateDoc, orderBy, limit, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store, Bike, Check, X, Users, DollarSign, Package, Clock, Loader2, Shield, Search, MoreHorizontal, Settings, AlertTriangle, Save, Power, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
+import { Store, Bike, Check, X, Users, DollarSign, Package, Clock, Loader2, Shield, Search, MoreHorizontal, Settings, AlertTriangle, Save, Power, TrendingUp, TrendingDown, Calendar, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -21,6 +22,16 @@ import { Label } from '@/components/ui/label';
 import type { Order } from '@/lib/order-service'; 
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // --- TIPOS LOCALES ---
 interface PendingUser extends UserProfile {
@@ -45,10 +56,6 @@ interface SalesData {
 // COMPONENTE: GRÁFICO SIMPLE DE VENTAS (Simulado)
 // ====================================================================
 
-/**
- * Procesa los datos de las órdenes completadas para generar una lista de ventas diarias
- * de los últimos 7 días.
- */
 function processOrderDataForChart(allOrders: Order[] | undefined): SalesData[] {
     if (!allOrders) return [];
     
@@ -56,18 +63,15 @@ function processOrderDataForChart(allOrders: Order[] | undefined): SalesData[] {
     const dataMap: { [key: string]: { ventas: number; pedidos: number } } = {};
     const salesData: SalesData[] = [];
 
-    // Inicializar los últimos 7 días con valores en 0
     for (let i = 6; i >= 0; i--) {
         const date = subDays(today, i);
         const dateKey = format(date, 'yyyy-MM-dd');
         dataMap[dateKey] = { ventas: 0, pedidos: 0 };
     }
 
-    // Procesar solo órdenes "Entregado"
     const completedOrders = allOrders.filter(order => order.status === 'Entregado');
 
     completedOrders.forEach(order => {
-        // Aseguramos la conversión segura de Timestamp a Date
         const orderDate = (order.createdAt && typeof (order.createdAt as any).toDate === 'function') 
             ? (order.createdAt as any).toDate() 
             : new Date(); 
@@ -80,21 +84,18 @@ function processOrderDataForChart(allOrders: Order[] | undefined): SalesData[] {
         }
     });
 
-    // Convertir el mapa en el formato final para el gráfico
     for (const dateKey in dataMap) {
         salesData.push({
-            name: format(new Date(dateKey), 'EEE', { locale: es }), // Ej: Lun, Mar
+            name: format(new Date(dateKey), 'EEE', { locale: es }), 
             ventas: parseFloat(dataMap[dateKey].ventas.toFixed(2)),
             pedidos: dataMap[dateKey].pedidos,
         });
     }
     
-    // Ordenar por fecha (aunque ya deberían estar ordenados por la inserción del bucle for)
     return salesData;
 }
 
 const SalesChart = ({ data }: { data: SalesData[] }) => {
-    // Usamos el Math.max sobre todas las ventas para establecer una escala relativa para las barras
     const maxSales = Math.max(...data.map(d => d.ventas)) || 100;
 
     return (
@@ -105,17 +106,13 @@ const SalesChart = ({ data }: { data: SalesData[] }) => {
             <div className="flex justify-between items-end h-40 border-b border-muted-foreground/30 pb-2">
                 {data.map((item, index) => (
                     <div key={index} className="flex flex-col items-center group relative h-full justify-end w-full mx-1">
-                        {/* Tooltip flotante */}
                         <div className="absolute bottom-full mb-2 p-1.5 rounded bg-foreground text-background text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none shadow-md">
                             ${item.ventas.toFixed(0)} ({item.pedidos} pedidos)
                         </div>
-                        {/* Barra */}
                         <div 
                             className="w-full max-w-[30px] rounded-t-sm bg-primary/80 transition-all duration-500 hover:bg-primary cursor-pointer"
-                            // Escala dinámica: 5% mínimo para que las barras con 0 se vean como una línea base, 95% para el máximo.
                             style={{ height: `${(item.ventas / maxSales) * 95 + 5}%` }}
                         />
-                        {/* Etiqueta del día */}
                         <span className="text-[10px] mt-2 text-muted-foreground uppercase font-medium">{item.name}</span>
                     </div>
                 ))}
@@ -186,7 +183,15 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
 // ====================================================================
 // COMPONENTE: TABLA DE TIENDAS ACTIVAS
 // ====================================================================
-function ActiveStoresTable({ stores, onToggleMaintenance }: { stores: any[], onToggleMaintenance: (id: string, currentStatus: boolean) => void }) {
+function ActiveStoresTable({ 
+    stores, 
+    onToggleMaintenance,
+    onDeleteStore 
+}: { 
+    stores: any[], 
+    onToggleMaintenance: (id: string, currentStatus: boolean) => void,
+    onDeleteStore: (id: string) => void
+}) {
     return (
         <Card className="col-span-full shadow-sm">
             <CardHeader>
@@ -201,7 +206,7 @@ function ActiveStoresTable({ stores, onToggleMaintenance }: { stores: any[], onT
                                 <TableHead>Tienda</TableHead>
                                 <TableHead>Dueño</TableHead>
                                 <TableHead>Estado</TableHead>
-                                <TableHead className="text-right">Mantenimiento</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -226,15 +231,26 @@ function ActiveStoresTable({ stores, onToggleMaintenance }: { stores: any[], onT
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <div className="flex justify-end items-center gap-2">
-                                            <Label htmlFor={`maint-${store.id}`} className="text-xs text-muted-foreground hidden sm:block cursor-pointer">
-                                                {store.maintenanceMode ? 'Desactivar' : 'Activar'}
-                                            </Label>
-                                            <Switch 
-                                                id={`maint-${store.id}`}
-                                                checked={store.maintenanceMode || false}
-                                                onCheckedChange={() => onToggleMaintenance(store.id, store.maintenanceMode || false)}
-                                            />
+                                        <div className="flex justify-end items-center gap-4">
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor={`maint-${store.id}`} className="text-xs text-muted-foreground hidden sm:block cursor-pointer">
+                                                    {store.maintenanceMode ? 'Desactivar' : 'Activar'}
+                                                </Label>
+                                                <Switch 
+                                                    id={`maint-${store.id}`}
+                                                    checked={store.maintenanceMode || false}
+                                                    onCheckedChange={() => onToggleMaintenance(store.id, store.maintenanceMode || false)}
+                                                />
+                                            </div>
+                                            <Button 
+                                                variant="destructive" 
+                                                size="icon" 
+                                                className="h-8 w-8"
+                                                onClick={() => onDeleteStore(store.id)}
+                                                title="Eliminar Tienda"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -255,7 +271,17 @@ function ActiveStoresTable({ stores, onToggleMaintenance }: { stores: any[], onT
 // ====================================================================
 // COMPONENTE: TABLA DE GESTIÓN DE USUARIOS
 // ====================================================================
-function UserManagementTable({ users, onUpdateRole }: { users: PendingUser[], onUpdateRole: (id: string, role: string) => void }) {
+function UserManagementTable({ 
+    users, 
+    onUpdateRole,
+    onDeleteUser,
+    currentUserId
+}: { 
+    users: PendingUser[], 
+    onUpdateRole: (id: string, role: string) => void,
+    onDeleteUser: (id: string) => void,
+    currentUserId?: string
+}) {
     const [search, setSearch] = useState('');
     
     const filteredUsers = users.filter(u => 
@@ -324,31 +350,45 @@ function UserManagementTable({ users, onUpdateRole }: { users: PendingUser[], on
                                         ) : <span className="text-xs text-muted-foreground">-</span>}
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
-                                                    <span className="sr-only">Abrir menú</span>
-                                                    <MoreHorizontal className="h-4 w-4" />
+                                        <div className="flex items-center justify-end gap-2">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
+                                                        <span className="sr-only">Abrir menú</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48">
+                                                    <DropdownMenuLabel>Cambiar Rol</DropdownMenuLabel>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'buyer')}>
+                                                        Convertir en Cliente
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'store')}>
+                                                        Convertir en Tienda
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'delivery')}>
+                                                        Convertir en Repartidor
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem className="text-purple-600 font-bold focus:text-purple-700 focus:bg-purple-50" onClick={() => onUpdateRole(user.id, 'admin')}>
+                                                        <Shield className="mr-2 h-4 w-4" /> Hacer Admin
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                            {/* ✅ Seguridad: No mostrar botón de eliminar si es el usuario actual */}
+                                            {user.id !== currentUserId && (
+                                                <Button 
+                                                    variant="destructive" 
+                                                    size="icon" 
+                                                    className="h-8 w-8"
+                                                    onClick={() => onDeleteUser(user.id)}
+                                                    title="Eliminar Usuario"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
                                                 </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-48">
-                                                <DropdownMenuLabel>Cambiar Rol</DropdownMenuLabel>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'buyer')}>
-                                                    Convertir en Cliente
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'store')}>
-                                                    Convertir en Tienda
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'delivery')}>
-                                                    Convertir en Repartidor
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-purple-600 font-bold focus:text-purple-700 focus:bg-purple-50" onClick={() => onUpdateRole(user.id, 'admin')}>
-                                                    <Shield className="mr-2 h-4 w-4" /> Hacer Admin
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                            )}
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -373,7 +413,8 @@ function UserManagementTable({ users, onUpdateRole }: { users: PendingUser[], on
 // ====================================================================
 
 export default function AdminDashboardPage() {
-    const { userProfile, loading: authLoading } = useAuth();
+    // ✅ Agregamos 'user' para obtener el ID del admin actual
+    const { user, userProfile, loading: authLoading } = useAuth();
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
@@ -385,13 +426,18 @@ export default function AdminDashboardPage() {
     const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, maintenanceMode: false });
     const [isSavingConfig, setIsSavingConfig] = useState(false);
 
+    // Estado para el diálogo de confirmación de eliminación
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [deleteType, setDeleteType] = useState<'store' | 'user' | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     useEffect(() => {
         if (configData) {
             setLocalConfig(configData);
         }
     }, [configData]);
 
-    // 1. Optimización de Carga: Limitar la cantidad de usuarios y tiendas si hay muchos
+    // 1. Optimización de Carga
     const usersQuery = useMemoFirebase(() => {
         if (!firestore) return null;
         return collection(firestore, 'users');
@@ -399,12 +445,9 @@ export default function AdminDashboardPage() {
 
     const { data: rawUsers, isLoading: usersLoading } = useCollection<PendingUser>(usersQuery);
     
-    // 2. Optimización de Carga: Limitar pedidos para analíticas
+    // 2. Optimización de Carga
     const allOrdersQuery = useMemoFirebase(() => {
         if (!firestore) return null;
-        // En una app real grande, aquí filtraríamos por fecha (ej: últimos 30 días)
-        // usando where('createdAt', '>', startDate).
-        // Por ahora traemos todos para que los gráficos tengan datos históricos.
         return collection(firestore, 'orders') as CollectionReference<Order>;
     }, [firestore]);
 
@@ -451,8 +494,6 @@ export default function AdminDashboardPage() {
         };
     }, [allOrders, approvedStores, users]);
     
-    // ✅ PROCESAMIENTO DE DATOS PARA GRÁFICO
-    // CORRECCIÓN: Pasamos allOrders de forma segura (allOrders || undefined)
     const chartData = useMemo(() => processOrderDataForChart(allOrders || undefined), [allOrders]);
 
 
@@ -529,6 +570,30 @@ export default function AdminDashboardPage() {
         }
     };
 
+    // --- LÓGICA DE ELIMINACIÓN ---
+    const confirmDelete = (id: string, type: 'store' | 'user') => {
+        setDeleteId(id);
+        setDeleteType(type);
+    };
+
+    const handleDelete = async () => {
+        if (!firestore || !deleteId || !deleteType) return;
+        setIsDeleting(true);
+        try {
+            const collectionName = deleteType === 'store' ? 'stores' : 'users';
+            await deleteDoc(doc(firestore, collectionName, deleteId));
+            
+            toast({ title: `${deleteType === 'store' ? 'Tienda' : 'Usuario'} eliminado permanentemente` });
+        } catch (error) {
+            console.error(error);
+            toast({ variant: "destructive", title: "Error al eliminar" });
+        } finally {
+            setIsDeleting(false);
+            setDeleteId(null);
+            setDeleteType(null);
+        }
+    };
+
     if (authLoading || userProfile?.role !== 'admin') {
         return <div className="container mx-auto py-20 flex justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
@@ -553,6 +618,7 @@ export default function AdminDashboardPage() {
 
             {/* METRICAS PRINCIPALES */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {/* ... (Tarjetas de métricas, sin cambios) ... */}
                 <Card className="shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos Totales</CardTitle>
@@ -595,7 +661,7 @@ export default function AdminDashboardPage() {
                 </Card>
             </div>
 
-            {/* ✅ SECCIÓN GRÁFICOS */}
+            {/* SECCIÓN GRÁFICOS */}
             <Card className="shadow-sm">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -715,11 +781,36 @@ export default function AdminDashboardPage() {
                 </div>
             </div>
 
-            {/* ✅ NUEVA SECCIÓN: GESTIÓN DE TIENDAS ACTIVAS */}
-            <ActiveStoresTable stores={approvedStores} onToggleMaintenance={handleToggleStoreMaintenance} />
+            {/* SECCIÓN: GESTIÓN DE TIENDAS ACTIVAS */}
+            <ActiveStoresTable stores={approvedStores} onToggleMaintenance={handleToggleStoreMaintenance} onDeleteStore={(id) => confirmDelete(id, 'store')} />
 
             {/* TABLA DE GESTIÓN DE USUARIOS (Abajo, ancho completo) */}
-            <UserManagementTable users={users} onUpdateRole={handleRoleChange} />
+            <UserManagementTable users={users} onUpdateRole={handleRoleChange} onDeleteUser={(id) => confirmDelete(id, 'user')} currentUserId={user?.uid} />
+
+            {/* DIÁLOGO DE CONFIRMACIÓN */}
+            <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+                <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                    Esta acción no se puede deshacer. Se eliminará permanentemente 
+                    {deleteType === 'store' ? ' la tienda y sus productos' : ' el perfil del usuario'} de la base de datos.
+                    {deleteType === 'store' && " La tienda dejará de aparecer en el inicio inmediatamente."}
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction 
+                        onClick={(e) => { e.preventDefault(); handleDelete(); }} 
+                        className="bg-red-600 hover:bg-red-700"
+                        disabled={isDeleting}
+                    >
+                    {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                    {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

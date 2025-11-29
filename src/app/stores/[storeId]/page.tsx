@@ -1,18 +1,16 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
+// ✅ CORRECCIÓN: Importamos desde @/lib/firebase para tener los hooks con onSnapshot (tiempo real)
+import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/lib/firebase';
 import { doc, collection, query } from 'firebase/firestore';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-// ✅ CORRECCIÓN: Agregado 'Package' a la importación
-import { ShoppingCart, Store as StoreIcon, MapPin, Star, Plus, Package } from 'lucide-react';
-import PageHeader from '@/components/page-header';
+import { Store as StoreIcon, MapPin, Star, Plus, Package } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 
 interface StoreData {
   name: string;
@@ -35,42 +33,47 @@ interface Product {
 
 export default function StorePublicPage() {
   const params = useParams();
-  const storeId = params.storeId as string;
+  const storeId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
+  
   const firestore = useFirestore();
   const { addToCart } = useCart();
   const { toast } = useToast();
   const router = useRouter();
 
   // 1. Obtener datos de la TIENDA
-  const storeRef = useMemoFirebase(() => firestore ? doc(firestore, 'stores', storeId) : null, [firestore, storeId]);
+  const storeRef = useMemoFirebase(() => {
+      return firestore && storeId ? doc(firestore, 'stores', storeId) : null;
+  }, [firestore, storeId]);
+  
   const { data: store, isLoading: storeLoading } = useDoc<StoreData>(storeRef);
 
-  // 2. Obtener PRODUCTOS de la tienda (Consulta Simplificada)
+  // 2. Obtener PRODUCTOS de la tienda (Tiempo Real)
   const productsQuery = useMemoFirebase(() => {
     if (!firestore || !storeId) return null;
-    // ✅ SOLUCIÓN ROBUSTA: Traemos la colección simple sin filtros complejos
-    // Esto evita errores de índices o permisos en Firestore.
+    // Escuchamos la colección completa. Si eliminas algo en el admin, desaparecerá aquí.
     return query(collection(firestore, 'stores', storeId, 'items'));
   }, [firestore, storeId]);
 
   const { data: rawProducts, isLoading: productsLoading } = useCollection<Product>(productsQuery);
 
-  // 3. Filtrar y Ordenar en el Cliente (Memoria)
+  // 3. Filtrar y Ordenar en el Cliente
   const products = useMemo(() => {
     if (!rawProducts) return [];
     
     return rawProducts
-      // Solo mostramos productos disponibles (available == true)
+      // Solo mostramos productos que tengan available en true
       .filter(p => p.available === true)
       // Ordenamos por fecha: los más nuevos primero
       .sort((a, b) => {
         const dateA = a.createdAt?.seconds || 0;
         const dateB = b.createdAt?.seconds || 0;
-        return dateB - dateA; // Descendente
+        return dateB - dateA;
       });
   }, [rawProducts]);
 
   const handleAddToCart = (product: Product) => {
+    if (!storeId) return;
+    
     addToCart({
       id: product.id,
       name: product.name,
@@ -78,8 +81,8 @@ export default function StorePublicPage() {
       description: product.description,
       category: product.category,
       imageUrl: product.imageUrl,
-      rating: 0, // Default
-      reviewCount: 0 // Default
+      rating: 0, 
+      reviewCount: 0 
     }, storeId); 
     
     toast({
@@ -114,13 +117,12 @@ export default function StorePublicPage() {
     );
   }
 
-  // Separar destacados
   const featuredProducts = products.filter(p => p.isFeatured);
   const regularProducts = products.filter(p => !p.isFeatured);
 
   return (
     <div className="container mx-auto pb-20">
-      {/* --- CABECERA DE LA TIENDA --- */}
+      {/* CABECERA */}
       <div className="relative bg-muted/30 -mx-4 px-4 py-8 sm:mx-0 sm:rounded-xl sm:mt-4 mb-8 border-b sm:border">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
             <div className="h-24 w-24 bg-white rounded-full flex items-center justify-center shadow-sm border overflow-hidden shrink-0">
@@ -142,7 +144,7 @@ export default function StorePublicPage() {
         </div>
       </div>
 
-      {/* --- PRODUCTOS DESTACADOS --- */}
+      {/* DESTACADOS */}
       {featuredProducts.length > 0 && (
         <div className="mb-10">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
@@ -156,7 +158,7 @@ export default function StorePublicPage() {
         </div>
       )}
 
-      {/* --- MENU COMPLETO --- */}
+      {/* MENU COMPLETO */}
       <h2 className="text-xl font-bold mb-4">Menú Completo</h2>
       {products.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

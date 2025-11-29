@@ -4,25 +4,23 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
-// ✅ CORRECCIÓN: Importamos desde @/lib/firebase
 import { useFirestore } from '@/lib/firebase';
-import { collection, doc, addDoc, updateDoc, deleteDoc, query, serverTimestamp, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, query, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-// ✅ CORRECCIÓN: Agregamos 'Search' que faltaba en los imports
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Loader2, Star, ExternalLink, Eye, EyeOff, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Loader2, Star, ExternalLink, Eye, EyeOff, Search, Bug, AlertTriangle } from 'lucide-react'; 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-// ✅ IMPORTANTE: Componente de imagen
 import { ImageUpload } from '@/components/image-upload';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface Product {
   id: string;
@@ -46,12 +44,12 @@ export default function ProductManagementPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isLoadingAction, setIsLoadingAction] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  // ✅ VUELVE A FALSE PARA QUE NO MOLESTE
+  const [showDebug, setShowDebug] = useState(false); 
   
-  // Estado local para los productos (reemplaza useCollection)
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
 
-  // Estado del formulario
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -62,27 +60,30 @@ export default function ProductManagementPage() {
     isFeatured: false
   });
 
-  // Seguridad: Redirigir si no es tienda
   useEffect(() => {
     if (!authLoading && (!user || userProfile?.role !== 'store')) {
       router.push('/');
     }
   }, [authLoading, user, userProfile, router]);
 
-  // ✅ Lógica de Carga en Tiempo Real (Snapshot)
+  // Lógica de Carga (Trae TODO sin filtros)
   useEffect(() => {
     if (!firestore || !userProfile?.storeId) return;
 
-    const q = query(
-        collection(firestore, 'stores', userProfile.storeId, 'items'),
-        orderBy('createdAt', 'desc') 
-    );
+    const q = query(collection(firestore, 'stores', userProfile.storeId, 'items'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as Product));
+
+        items.sort((a, b) => {
+            const dateA = a.createdAt?.seconds || 0;
+            const dateB = b.createdAt?.seconds || 0;
+            return dateB - dateA;
+        });
+
         setProducts(items);
         setProductsLoading(false);
     }, (error) => {
@@ -93,22 +94,22 @@ export default function ProductManagementPage() {
     return () => unsubscribe();
   }, [firestore, userProfile?.storeId]);
 
-  // Filtrado
-  const filteredProducts = products.filter(product => 
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts = products.filter(product => {
+    const name = (product.name || '').toLowerCase();
+    const category = (product.category || '').toLowerCase();
+    const search = searchTerm.toLowerCase();
+    return name.includes(search) || category.includes(search);
+  });
 
-  // Abrir Modal
   const openDialog = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
       setFormData({
-        name: product.name,
-        description: product.description,
-        price: product.price.toString(),
-        category: product.category,
-        imageUrl: product.imageUrl,
+        name: product.name || '',
+        description: product.description || '',
+        price: product.price ? product.price.toString() : '',
+        category: product.category || 'Comida',
+        imageUrl: product.imageUrl || '',
         available: product.available !== undefined ? product.available : true,
         isFeatured: product.isFeatured || false
       });
@@ -127,12 +128,10 @@ export default function ProductManagementPage() {
     setIsDialogOpen(true);
   };
 
-  // ✅ Callback para actualizar la URL cuando se sube la imagen
   const handleImageUploaded = (url: string) => {
       setFormData(prev => ({ ...prev, imageUrl: url }));
   };
 
-  // Guardar Producto
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !userProfile?.storeId) return;
@@ -144,7 +143,6 @@ export default function ProductManagementPage() {
         description: formData.description,
         price: parseFloat(formData.price),
         category: formData.category,
-        // Usamos la URL del form (que viene del upload) o un placeholder si está vacío
         imageUrl: formData.imageUrl || 'https://placehold.co/400?text=Sin+Imagen',
         available: formData.available,
         isFeatured: formData.isFeatured,
@@ -170,7 +168,6 @@ export default function ProductManagementPage() {
     }
   };
 
-  // Alternar disponibilidad
   const toggleAvailability = async (product: Product) => {
     if (!firestore || !userProfile?.storeId) return;
     try {
@@ -182,7 +179,6 @@ export default function ProductManagementPage() {
     }
   };
 
-  // Alternar destacado
   const toggleFeatured = async (product: Product) => {
     if (!firestore || !userProfile?.storeId) return;
     try {
@@ -196,7 +192,7 @@ export default function ProductManagementPage() {
 
   const handleDelete = async (productId: string) => {
     if (!firestore || !userProfile?.storeId) return;
-    if (!confirm("¿Estás seguro de eliminar este producto?")) return;
+    if (!confirm("¿Estás seguro de eliminar este producto permanentemente?")) return;
 
     try {
       const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', productId);
@@ -233,7 +229,57 @@ export default function ProductManagementPage() {
             <Button onClick={() => openDialog()}>
                 <Plus className="mr-2 h-4 w-4" /> Nuevo Producto
             </Button>
+            {/* Botón discreto para activar modo limpieza si se necesita en el futuro */}
+            <Button variant="ghost" size="icon" onClick={() => setShowDebug(!showDebug)} title="Modo Limpieza">
+                <Bug className="h-4 w-4 text-muted-foreground/50" />
+            </Button>
         </div>
+
+       {/* ✅ TABLA DE LIMPIEZA (Solo visible si activas el bichito) */}
+       {showDebug && (
+           <Card className="mb-8 border-red-200 bg-red-50/20">
+               <CardHeader>
+                   <CardTitle className="text-red-700 flex items-center gap-2">
+                        <Trash2 className="h-5 w-5"/> MODO LIMPIEZA ACTIVADO
+                   </CardTitle>
+                   <CardDescription>Aquí aparecen TODOS los items. Borra los que no tengan nombre.</CardDescription>
+               </CardHeader>
+               <CardContent>
+                   <Table>
+                       <TableHeader>
+                           <TableRow>
+                               <TableHead>ID Documento</TableHead>
+                               <TableHead>Nombre</TableHead>
+                               <TableHead>Acción</TableHead>
+                           </TableRow>
+                       </TableHeader>
+                       <TableBody>
+                           {products.length === 0 ? (
+                               <TableRow>
+                                   <TableCell colSpan={3} className="text-center text-muted-foreground">
+                                       Base de datos vacía para este ID de tienda.
+                                   </TableCell>
+                               </TableRow>
+                           ) : (
+                               products.map(p => (
+                                   <TableRow key={p.id}>
+                                       <TableCell className="font-mono text-xs">{p.id}</TableCell>
+                                       <TableCell>
+                                           {p.name ? p.name : <span className="text-red-600 font-bold">⚠️ SIN NOMBRE</span>}
+                                       </TableCell>
+                                       <TableCell>
+                                           <Button variant="destructive" size="sm" onClick={() => handleDelete(p.id)}>
+                                               ELIMINAR
+                                           </Button>
+                                       </TableCell>
+                                   </TableRow>
+                               ))
+                           )}
+                       </TableBody>
+                   </Table>
+               </CardContent>
+           </Card>
+       )}
 
       <div className="mb-6 max-w-md relative">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -245,7 +291,6 @@ export default function ProductManagementPage() {
         />
       </div>
 
-      {/* Lista de Productos */}
       {(!filteredProducts || filteredProducts.length === 0) ? (
         <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed">
           <Package className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
@@ -262,7 +307,7 @@ export default function ProductManagementPage() {
                 {product.imageUrl ? (
                   <img 
                     src={product.imageUrl} 
-                    alt={product.name} 
+                    alt={product.name || 'Producto'} 
                     className={`w-full h-full object-cover transition-transform group-hover:scale-105 ${!product.available ? 'grayscale' : ''}`}
                     onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400?text=Error+Imagen'; }}
                   />
@@ -271,7 +316,7 @@ export default function ProductManagementPage() {
                 )}
                 
                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                    <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">{product.category}</span>
+                    <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">{product.category || 'Sin cat.'}</span>
                     {product.isFeatured && (
                         <span className="bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-md font-bold flex items-center gap-1">
                             <Star className="h-3 w-3 fill-yellow-900" /> TOP
@@ -288,9 +333,11 @@ export default function ProductManagementPage() {
               
               <CardHeader className="p-4 pb-2">
                 <div className="flex justify-between items-start">
-                  <CardTitle className="text-lg line-clamp-1" title={product.name}>{product.name}</CardTitle>
+                  <CardTitle className={`text-lg line-clamp-1 ${!product.name ? 'text-red-500 italic' : ''}`} title={product.name}>
+                      {product.name || '⚠️ Sin Nombre'}
+                  </CardTitle>
                   <span className="font-bold text-green-600 flex items-center">
-                    ${product.price.toFixed(2)}
+                    ${(product.price || 0).toFixed(2)}
                   </span>
                 </div>
               </CardHeader>
@@ -348,14 +395,13 @@ export default function ProductManagementPage() {
           
           <form onSubmit={handleSave} className="space-y-4 py-2">
             
-            {/* ✅ ZONA DE CARGA DE IMAGEN */}
             <div className="grid gap-2">
                 <Label>Imagen del Producto</Label>
                 <ImageUpload 
                     currentImageUrl={formData.imageUrl}
                     onImageUploaded={handleImageUploaded}
                     folder="products"
-                    variant="banner" // Usamos estilo rectangular
+                    variant="banner"
                 />
             </div>
 
