@@ -1,512 +1,241 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
+// ✅ Importamos desde @/lib/firebase para consistencia
 import { useFirestore } from '@/lib/firebase';
-import { collection, doc, addDoc, updateDoc, deleteDoc, query, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import PageHeader from '@/components/page-header';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Loader2, Star, ExternalLink, Eye, EyeOff, Search, Bug, AlertTriangle } from 'lucide-react'; 
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+import { Loader2, Save, Store as StoreIcon } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useRouter } from 'next/navigation';
 
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  category: string;
-  imageUrl: string;
-  available?: boolean;
-  isFeatured?: boolean;
-  createdAt?: any;
-}
-
-export default function ProductManagementPage() {
+export default function MyStorePage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const firestore = useFirestore();
-  const router = useRouter();
   const { toast } = useToast();
-
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isLoadingAction, setIsLoadingAction] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showDebug, setShowDebug] = useState(true); // ✅ FORZADO A TRUE
+  const router = useRouter();
   
-  const [products, setProducts] = useState<Product[]>([]);
-  const [productsLoading, setProductsLoading] = useState(true);
-
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Estado del formulario
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    price: '',
-    category: 'Comida',
-    imageUrl: '',
-    available: true,
-    isFeatured: false
+    category: '',
+    address: '',
+    imageUrl: '', 
+    deliveryTime: '',
+    minOrder: ''
   });
 
+  // 1. Cargar datos de la tienda
   useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'store')) {
-      router.push('/');
+    const fetchStoreData = async () => {
+      if (!user || !userProfile?.storeId || !firestore) return;
+
+      try {
+        const storeRef = doc(firestore, 'stores', userProfile.storeId);
+        const storeSnap = await getDoc(storeRef);
+
+        if (storeSnap.exists()) {
+          const data = storeSnap.data();
+          setFormData({
+            name: data.name || '',
+            description: data.description || '',
+            category: data.category || '',
+            address: data.address || '',
+            imageUrl: data.imageUrl || '',
+            deliveryTime: data.deliveryTime || '',
+            minOrder: data.minOrder ? String(data.minOrder) : ''
+          });
+        }
+      } catch (error) {
+        console.error("Error cargando tienda:", error);
+        toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los datos de la tienda." });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (!authLoading) {
+        if (userProfile?.role !== 'store') {
+            router.push('/');
+        } else {
+            fetchStoreData();
+        }
     }
-  }, [authLoading, user, userProfile, router]);
+  }, [user, userProfile, firestore, authLoading, router, toast]);
 
-  // Lógica de Carga (Trae TODO sin filtros)
-  useEffect(() => {
-    if (!firestore || !userProfile?.storeId) return;
-
-    const q = query(collection(firestore, 'stores', userProfile.storeId, 'items'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const items = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Product));
-
-        items.sort((a, b) => {
-            const dateA = a.createdAt?.seconds || 0;
-            const dateB = b.createdAt?.seconds || 0;
-            return dateB - dateA;
-        });
-
-        setProducts(items);
-        setProductsLoading(false);
-    }, (error) => {
-        console.error("Error fetching products:", error);
-        setProductsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [firestore, userProfile?.storeId]);
-
-  const filteredProducts = products.filter(product => {
-    const name = (product.name || '').toLowerCase();
-    const category = (product.category || '').toLowerCase();
-    const search = searchTerm.toLowerCase();
-    return name.includes(search) || category.includes(search);
-  });
-
-  const openDialog = (product?: Product) => {
-    if (product) {
-      setEditingProduct(product);
-      setFormData({
-        name: product.name || '',
-        description: product.description || '',
-        price: product.price ? product.price.toString() : '',
-        category: product.category || 'Comida',
-        imageUrl: product.imageUrl || '',
-        available: product.available !== undefined ? product.available : true,
-        isFeatured: product.isFeatured || false
-      });
-    } else {
-      setEditingProduct(null);
-      setFormData({
-        name: '',
-        description: '',
-        price: '',
-        category: 'Comida',
-        imageUrl: '',
-        available: true,
-        isFeatured: false
-      });
-    }
-    setIsDialogOpen(true);
+  // 2. Manejar cambios en inputs de texto
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // 3. Callback para actualizar la imagen cuando se sube
   const handleImageUploaded = (url: string) => {
-      setFormData(prev => ({ ...prev, imageUrl: url }));
+    setFormData(prev => ({ ...prev, imageUrl: url }));
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  // 4. Guardar cambios en Firestore
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firestore || !userProfile?.storeId) return;
+    if (!firestore || !userProfile?.storeId || !user) return;
 
-    setIsLoadingAction(true);
+    setIsSaving(true);
     try {
-      const productData: any = {
+      // A. Actualizar documento de la TIENDA
+      const storeRef = doc(firestore, 'stores', userProfile.storeId);
+      await updateDoc(storeRef, {
         name: formData.name,
         description: formData.description,
-        price: parseFloat(formData.price),
-        category: formData.category,
-        imageUrl: formData.imageUrl || 'https://placehold.co/400?text=Sin+Imagen',
-        available: formData.available,
-        isFeatured: formData.isFeatured,
-        updatedAt: serverTimestamp()
-      };
+        address: formData.address,
+        imageUrl: formData.imageUrl,
+        deliveryTime: formData.deliveryTime,
+        minOrder: parseFloat(formData.minOrder) || 0,
+        updatedAt: new Date()
+      });
 
-      if (editingProduct) {
-        const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', editingProduct.id);
-        await updateDoc(docRef, productData);
-        toast({ title: "Producto actualizado" });
-      } else {
-        productData.createdAt = serverTimestamp(); 
-        const colRef = collection(firestore, 'stores', userProfile.storeId, 'items');
-        await addDoc(colRef, productData);
-        toast({ title: "Producto creado" });
+      // B. ✅ ACTUALIZAR TAMBIÉN EL USUARIO (Para que cambie el avatar de la izquierda)
+      // Si cambias la foto de la tienda, asumimos que quieres que sea tu avatar
+      if (formData.imageUrl) {
+          const userRef = doc(firestore, 'users', user.uid);
+          await updateDoc(userRef, {
+              profileImageUrl: formData.imageUrl,
+              photoURL: formData.imageUrl
+          });
       }
-      setIsDialogOpen(false);
+
+      toast({
+        title: "Tienda actualizada",
+        description: "La información y tu foto de perfil se han actualizado.",
+      });
     } catch (error) {
-      console.error(error);
-      toast({ variant: "destructive", title: "Error", description: "No se pudo guardar." });
+      console.error("Error actualizando tienda:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo actualizar la tienda.",
+      });
     } finally {
-      setIsLoadingAction(false);
+      setIsSaving(false);
     }
   };
 
-  const toggleAvailability = async (product: Product) => {
-    if (!firestore || !userProfile?.storeId) return;
-    try {
-      const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', product.id);
-      await updateDoc(docRef, { available: !product.available });
-      toast({ title: "Disponibilidad actualizada" });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
-  const toggleFeatured = async (product: Product) => {
-    if (!firestore || !userProfile?.storeId) return;
-    try {
-      const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', product.id);
-      await updateDoc(docRef, { isFeatured: !product.isFeatured });
-      toast({ title: !product.isFeatured ? "Producto Destacado" : "Producto ya no es destacado" });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
-  const handleDelete = async (productId: string) => {
-    if (!firestore || !userProfile?.storeId) return;
-    if (!confirm("¿Estás seguro de eliminar este producto permanentemente?")) return;
-
-    try {
-      const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', productId);
-      await deleteDoc(docRef);
-      toast({ title: "Producto eliminado" });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
-  if (authLoading || productsLoading) {
-    return (
-      <div className="container mx-auto space-y-4">
-        <PageHeader title="Cargando Inventario..." description="Preparando tus productos." />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-64 w-full" />)}
-        </div>
-      </div>
-    );
+  if (authLoading || isLoading) {
+    return <div className="flex justify-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
   return (
-    <div className="container mx-auto pb-20">
+    <div className="container max-w-3xl mx-auto space-y-6 pb-20">
       <PageHeader 
-        title="Gestión de Productos" 
-        description="Añade, edita o elimina los productos que ofreces en tu tienda."
+        title="Editar Mi Tienda" 
+        description="Gestiona la apariencia y datos de tu negocio."
       />
 
-        {/* ✅ INFORMACIÓN DE DEPURACIÓN (CAJA ROJA) */}
-       <div className="bg-red-100 border border-red-400 text-red-700 p-4 rounded-lg mb-6">
-            <div className="flex flex-col gap-2">
-                <h3 className="font-bold flex items-center gap-2 text-lg">
-                    <Bug className="h-6 w-6"/> PANEL DE DIAGNÓSTICO DE IDs
-                </h3>
-                
-                <div className="grid gap-2 md:grid-cols-2 bg-white/50 p-4 rounded">
-                    <div>
-                        <p className="text-xs uppercase font-bold">ID de TU Tienda (Donde estás editando):</p>
-                        <code className="bg-black text-white px-2 py-1 rounded block mt-1 text-sm break-all">
-                            {userProfile?.storeId}
-                        </code>
-                    </div>
-                    
-                    <div>
-                        <p className="text-xs uppercase font-bold">Instrucción:</p>
-                        <p className="text-sm mt-1">
-                            1. Haz clic en el botón ROJO de abajo "Ver Tienda Pública...".<br/>
-                            2. Esa es tu tienda real. Ahí deberías ver los cambios.<br/>
-                            3. La otra tienda (la que tiene productos viejos) es una tienda abandonada.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="flex gap-2 mt-2">
-                    <Link href={`/stores/${userProfile?.storeId}`} target="_blank">
-                        <Button variant="default" className="bg-red-600 hover:bg-red-700 text-white">
-                            <ExternalLink className="mr-2 h-4 w-4" /> Ver Tienda Pública de ESTE usuario
-                        </Button>
-                    </Link>
-                    <Button variant="ghost" size="sm" onClick={() => setShowDebug(!showDebug)}>
-                        {showDebug ? 'Ocultar Tabla Limpieza' : 'Ver Tabla Limpieza'}
-                    </Button>
-                    <Button onClick={() => openDialog()} size="sm">
-                        <Plus className="mr-2 h-4 w-4" /> Nuevo Producto
-                    </Button>
-                </div>
-            </div>
-       </div>
-
-       {/* ✅ TABLA DE LIMPIEZA (Solo visible si se activa) */}
-       {showDebug && (
-           <Card className="mb-8 border-red-200 bg-red-50/20">
-               <CardHeader>
-                   <CardTitle className="text-red-700 flex items-center gap-2"><Trash2 className="h-5 w-5"/> LISTA CRUDA DE PRODUCTOS ({products.length})</CardTitle>
-                   <CardDescription>Si ves productos aquí, BORRALOS con el botón rojo de la derecha.</CardDescription>
-               </CardHeader>
-               <CardContent>
-                   <Table>
-                       <TableHeader>
-                           <TableRow>
-                               <TableHead>ID Documento</TableHead>
-                               <TableHead>Nombre</TableHead>
-                               <TableHead>Acción</TableHead>
-                           </TableRow>
-                       </TableHeader>
-                       <TableBody>
-                           {products.length === 0 ? (
-                               <TableRow>
-                                   <TableCell colSpan={3} className="text-center text-muted-foreground">
-                                       Base de datos vacía para este ID de tienda.
-                                   </TableCell>
-                               </TableRow>
-                           ) : (
-                               products.map(p => (
-                                   <TableRow key={p.id}>
-                                       <TableCell className="font-mono text-xs">{p.id}</TableCell>
-                                       <TableCell>
-                                           {p.name ? p.name : <span className="text-red-600 font-bold">⚠️ SIN NOMBRE</span>}
-                                       </TableCell>
-                                       <TableCell>
-                                           <Button variant="destructive" size="sm" onClick={() => handleDelete(p.id)}>
-                                               BORRAR
-                                           </Button>
-                                       </TableCell>
-                                   </TableRow>
-                               ))
-                           )}
-                       </TableBody>
-                   </Table>
-               </CardContent>
-           </Card>
-       )}
-
-      <div className="mb-6 max-w-md relative">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input 
-          placeholder="Buscar producto..." 
-          className="pl-9"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      {(!filteredProducts || filteredProducts.length === 0) ? (
-        <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed">
-          <Package className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
-          <h3 className="text-lg font-medium">
-            {searchTerm ? 'No se encontraron productos' : 'Tu inventario está vacío'}
-          </h3>
-          {!searchTerm && <Button onClick={() => openDialog()} className="mt-4">Crear Primer Producto</Button>}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredProducts.map((product) => (
-            <Card key={product.id} className={`flex flex-col overflow-hidden group hover:shadow-lg transition-shadow ${!product.available ? 'opacity-75 border-dashed' : ''} ${product.isFeatured ? 'ring-2 ring-yellow-400' : ''}`}>
-              <div className="relative h-48 w-full bg-muted flex items-center justify-center overflow-hidden">
-                {product.imageUrl ? (
-                  <img 
-                    src={product.imageUrl} 
-                    alt={product.name || 'Producto'} 
-                    className={`w-full h-full object-cover transition-transform group-hover:scale-105 ${!product.available ? 'grayscale' : ''}`}
-                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400?text=Error+Imagen'; }}
-                  />
-                ) : (
-                  <ImageIcon className="h-10 w-10 text-muted-foreground" />
-                )}
-                
-                <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                    <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">{product.category || 'Sin cat.'}</span>
-                    {product.isFeatured && (
-                        <span className="bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-md font-bold flex items-center gap-1">
-                            <Star className="h-3 w-3 fill-yellow-900" /> TOP
-                        </span>
-                    )}
-                </div>
-
-                {!product.available && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
-                    <Badge variant="destructive" className="text-sm px-3 py-1 uppercase border-2"> Agotado </Badge>
-                  </div>
-                )}
-              </div>
-              
-              <CardHeader className="p-4 pb-2">
-                <div className="flex justify-between items-start">
-                  <CardTitle className={`text-lg line-clamp-1 ${!product.name ? 'text-red-500 italic' : ''}`} title={product.name}>
-                      {product.name || '⚠️ Sin Nombre'}
-                  </CardTitle>
-                  <span className="font-bold text-green-600 flex items-center">
-                    ${(product.price || 0).toFixed(2)}
-                  </span>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="p-4 pt-0 flex-1">
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {product.description || "Sin descripción"}
-                </p>
-              </CardContent>
-
-              <CardFooter className="p-4 bg-muted/30 flex gap-1 border-t justify-between">
-                <div className="flex gap-1">
-                    <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className={`h-8 w-8 ${product.available ? 'text-green-600' : 'text-muted-foreground'}`}
-                    onClick={() => toggleAvailability(product)}
-                    title={product.available ? "Marcar como Agotado" : "Marcar como Disponible"}
-                    >
-                    {product.available ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                    </Button>
-                    
-                    <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className={`h-8 w-8 ${product.isFeatured ? 'text-yellow-500' : 'text-muted-foreground'}`}
-                    onClick={() => toggleFeatured(product)}
-                    >
-                    <Star className={`h-4 w-4 ${product.isFeatured ? 'fill-current' : ''}`} />
-                    </Button>
-                </div>
-
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openDialog(product)}>
-                    <Pencil className="mr-2 h-3 w-3" /> Editar
-                    </Button>
-                    <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDelete(product.id)}>
-                    <Trash2 className="h-4 w-4" />
-                    </Button>
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</DialogTitle>
-            <DialogDescription>
-              {editingProduct ? 'Modifica los detalles del producto.' : 'Rellena la información para crear un nuevo producto.'}
-            </DialogDescription>
-          </DialogHeader>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <StoreIcon className="h-5 w-5" /> Información del Negocio
+          </CardTitle>
+          <CardDescription>
+            Esta información será visible para todos los clientes en la app.
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
           
-          <form onSubmit={handleSave} className="space-y-4 py-2">
-            
-            <div className="grid gap-2">
-                <Label>Imagen del Producto</Label>
+          {/* SECCIÓN DE IMAGEN (BANNER) */}
+          <div className="space-y-2">
+            <Label>Portada de la Tienda</Label>
+            <div className="flex justify-center">
                 <ImageUpload 
                     currentImageUrl={formData.imageUrl}
                     onImageUploaded={handleImageUploaded}
-                    folder="products"
+                    folder="store-banners"
                     variant="banner"
                 />
             </div>
+            <p className="text-[0.8rem] text-muted-foreground text-center">
+                Se recomienda una imagen horizontal de buena calidad.
+            </p>
+          </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="name">Nombre</Label>
-              <Input 
-                id="name" 
-                value={formData.name} 
-                onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                required 
-                placeholder="Ej. Pizza Especial"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="price">Precio ($)</Label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+                <Label htmlFor="name">Nombre de la Tienda</Label>
                 <Input 
-                    id="price" 
-                    type="number" 
-                    step="0.01" 
-                    value={formData.price} 
-                    onChange={(e) => setFormData({...formData, price: e.target.value})} 
-                    required 
-                    placeholder="0.00"
-                  />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="category">Categoría</Label>
-                <Select 
-                  value={formData.category} 
-                  onValueChange={(val) => setFormData({...formData, category: val})}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Comida">Comida</SelectItem>
-                    <SelectItem value="Bebidas">Bebidas</SelectItem>
-                    <SelectItem value="Ropa">Ropa</SelectItem>
-                    <SelectItem value="Electrónica">Electrónica</SelectItem>
-                    <SelectItem value="Hogar">Hogar</SelectItem>
-                    <SelectItem value="Otros">Otros</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="description">Descripción</Label>
-              <Textarea 
-                id="description" 
-                value={formData.description} 
-                onChange={(e) => setFormData({...formData, description: e.target.value})} 
-                rows={3}
-                placeholder="Ingredientes, detalles, etc."
-              />
-            </div>
-
-            <div className="flex items-center space-x-2 border p-3 rounded-md bg-muted/20">
-                <Switch 
-                    id="featured" 
-                    checked={formData.isFeatured}
-                    onCheckedChange={(checked) => setFormData({...formData, isFeatured: checked})}
+                    id="name" 
+                    name="name" 
+                    value={formData.name} 
+                    onChange={handleChange} 
+                    placeholder="Ej. Pizzería Don Mario" 
                 />
-                <div className="flex flex-col">
-                    <Label htmlFor="featured" className="cursor-pointer">Destacar producto</Label>
-                    <span className="text-xs text-muted-foreground">Aparecerá con una estrella y borde especial.</span>
-                </div>
             </div>
+            <div className="space-y-2">
+                <Label htmlFor="address">Dirección del Local</Label>
+                <Input 
+                    id="address" 
+                    name="address" 
+                    value={formData.address} 
+                    onChange={handleChange} 
+                    placeholder="Calle 123, Ciudad" 
+                />
+            </div>
+          </div>
 
-            <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={isLoadingAction}>
-                {isLoadingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {editingProduct ? 'Guardar Cambios' : 'Crear Producto'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-2">
+            <Label htmlFor="description">Descripción</Label>
+            <Textarea 
+                id="description" 
+                name="description" 
+                value={formData.description} 
+                onChange={handleChange} 
+                placeholder="Cuenta un poco sobre tu negocio..." 
+                rows={3}
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+                <Label htmlFor="deliveryTime">Tiempo de Entrega (Estimado)</Label>
+                <Input 
+                    id="deliveryTime" 
+                    name="deliveryTime" 
+                    value={formData.deliveryTime} 
+                    onChange={handleChange} 
+                    placeholder="Ej. 30-45 min" 
+                />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="minOrder">Costo de Envío ($)</Label>
+                <Input 
+                    id="minOrder" 
+                    name="minOrder" 
+                    type="number"
+                    value={formData.minOrder} 
+                    onChange={handleChange} 
+                    placeholder="0.00" 
+                />
+            </div>
+          </div>
+
+        </CardContent>
+        <CardFooter className="flex justify-between border-t px-6 py-4 bg-muted/20">
+            <Button variant="ghost" onClick={() => router.back()}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={isSaving}>
+              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> Guardar Cambios</>}
+            </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
