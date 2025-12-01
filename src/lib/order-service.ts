@@ -3,7 +3,6 @@ import {
   addDoc, 
   updateDoc, 
   doc, 
-  getDoc, 
   serverTimestamp, 
   Firestore, 
   Timestamp 
@@ -29,7 +28,6 @@ export interface OrderItem {
   imageUrl?: string;
 }
 
-// ✅ ACTUALIZADO: Incluye campos financieros y de contacto
 export interface Order {
   id: string;
   userId: string;
@@ -40,12 +38,12 @@ export interface Order {
   storeAddress?: string;
   status: OrderStatus;
   
-  // Desglose de precios
   items: OrderItem[];
-  subtotal?: number;
+  subtotal: number;
   deliveryFee: number;
-  serviceFee?: number;
+  serviceFee: number;
   total: number;
+  paymentMethod: string;
   
   createdAt: Timestamp | Date;
   
@@ -54,7 +52,7 @@ export interface Order {
     address: string;
   };
   
-  shippingAddress: { // Mantener compatibilidad si usas ambos nombres
+  shippingAddress: { 
     name: string;
     address: string;
   };
@@ -70,7 +68,6 @@ export interface Order {
   deliveryReview?: string;
 }
 
-// ✅ ACTUALIZADO: Input para crear orden con nuevos campos
 export interface CreateOrderInput {
   userId: string;
   customerName: string;
@@ -84,17 +81,35 @@ export interface CreateOrderInput {
     address: string;
   };
   
-  // Campos financieros
   subtotal: number;
   deliveryFee: number;
   serviceFee?: number;
   total: number;
+  paymentMethod: string;
 }
+
+const PLATFORM_FEE_PERCENTAGE = 0.05; 
+const DEFAULT_DELIVERY_FEE = 2000; 
+
+export const OrderService = {
+    calculateTotals: (subtotal: number) => {
+        const serviceFee = Math.round(subtotal * PLATFORM_FEE_PERCENTAGE);
+        const deliveryFee = DEFAULT_DELIVERY_FEE;
+        const total = subtotal + serviceFee + deliveryFee;
+
+        return {
+            subtotal,
+            serviceFee,
+            deliveryFee,
+            total
+        };
+    }
+};
 
 export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
   if (!db) throw new Error("Firestore instance is required");
 
-  // Coordenadas simuladas para demostración
+  // Coordenadas simuladas para demostración (Catamarca)
   const mockStoreCoords = { latitude: -28.46957, longitude: -65.77954 }; 
   const mockCustomerCoords = { 
       latitude: mockStoreCoords.latitude + (Math.random() * 0.01 - 0.005), 
@@ -112,17 +127,18 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
     
     items: input.items,
     
-    // Guardamos los valores calculados que vienen del input
     subtotal: input.subtotal,
     deliveryFee: input.deliveryFee,
     serviceFee: input.serviceFee || 0,
     total: input.total,
+    paymentMethod: input.paymentMethod,
     
     createdAt: serverTimestamp(),
     shippingAddress: input.shippingInfo,
     shippingInfo: input.shippingInfo,
     
-    deliveryPersonId: null,
+    // ✅ FIX: Casteamos el null para que TypeScript no se queje
+    deliveryPersonId: null as string | null,
     readyForPickup: false,
     
     storeCoords: mockStoreCoords,
