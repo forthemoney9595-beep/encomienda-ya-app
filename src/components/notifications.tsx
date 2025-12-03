@@ -1,153 +1,143 @@
 'use client';
 
-import { useMemo } from 'react';
-import { Bell, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, CollectionReference } from 'firebase/firestore';
-import type { Order } from '@/lib/order-service';
-import { Button } from '@/components/ui/button';
+import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { collection, query, where, limit, doc, updateDoc, writeBatch } from 'firebase/firestore'; 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import Link from 'next/link';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 
 export function Notifications() {
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const firestore = useFirestore();
+  const router = useRouter();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
 
-  // 1. TIENDA: Pedidos que requieren atención (Confirmar o Preparar)
-  const storeQuery = useMemoFirebase(() => {
-    if (!firestore || userProfile?.role !== 'store' || !userProfile.storeId) return null;
+  // Consulta simplificada
+  const notifsQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
     return query(
-      collection(firestore, 'orders'),
-      where('storeId', '==', userProfile.storeId),
-      // Ahora escuchamos DOS estados:
-      // - Pendiente de Confirmación: El cliente acaba de pedir.
-      // - En preparación: El cliente YA PAGÓ y la tienda debe cocinar.
-      where('status', 'in', ['Pendiente de Confirmación', 'En preparación'])
-    ) as CollectionReference<Order>;
-  }, [firestore, userProfile?.role, userProfile?.storeId]);
-
-  // 2. REPARTIDOR: Pedidos Listos para Recoger (En preparación y sin repartidor)
-  const deliveryQuery = useMemoFirebase(() => {
-    if (!firestore || userProfile?.role !== 'delivery' || !user) return null;
-    return query(
-      collection(firestore, 'orders'),
-      where('status', '==', 'En preparación'),
-      where('deliveryPersonId', '==', null)
-    ) as CollectionReference<Order>;
-  }, [firestore, userProfile?.role, user]);
-
-  // 3. COMPRADOR: Pedidos que requieren Acción (Pagar) o Atención (En reparto)
-  const buyerQuery = useMemoFirebase(() => {
-    if (!firestore || userProfile?.role !== 'buyer' || !user) return null;
-    return query(
-      collection(firestore, 'orders'),
+      collection(firestore, 'notifications'),
       where('userId', '==', user.uid),
-      where('status', 'in', ['Pendiente de Pago', 'En reparto']) 
-    ) as CollectionReference<Order>;
-  }, [firestore, userProfile?.role, user]);
+      limit(20)
+    );
+  }, [firestore, user?.uid]);
 
-  // Hooks de colección
-  const { data: storeNotifications, isLoading: storeLoading } = useCollection<Order>(storeQuery);
-  const { data: deliveryNotifications, isLoading: deliveryLoading } = useCollection<Order>(deliveryQuery);
-  const { data: buyerNotifications, isLoading: buyerLoading } = useCollection<Order>(buyerQuery);
-
-  const notifications = useMemo(() => {
-    // Notificaciones para TIENDA
-    if (userProfile?.role === 'store' && storeNotifications) {
-      return storeNotifications.map(order => {
-        const isPaid = order.status === 'En preparación';
-        return {
-            id: order.id,
-            // Mensaje dinámico: Nuevo vs Pagado
-            message: isPaid 
-                ? `¡Pago recibido! Preparar pedido de ${order.customerName}.` 
-                : `Nuevo pedido de ${order.customerName}.`,
-            href: `/orders/${order.id}`,
-            type: isPaid ? 'cocina' : 'pedido',
-            time: order.createdAt
-        };
-      });
-    }
-    
-    // Notificaciones para REPARTIDOR
-    if (userProfile?.role === 'delivery' && deliveryNotifications) {
-      return deliveryNotifications.map(order => ({
-        id: order.id,
-        message: `¡Pedido listo en ${order.storeName}!`,
-        href: `/orders/${order.id}`,
-        type: 'recogida',
-        time: order.createdAt
-      }));
-    }
-
-    // Notificaciones para COMPRADOR (Cliente)
-    if (userProfile?.role === 'buyer' && buyerNotifications) {
-        return buyerNotifications.map(order => {
-            const isPaymentPending = order.status === 'Pendiente de Pago';
-            return {
-                id: order.id,
-                message: isPaymentPending 
-                    ? `¡${order.storeName} aceptó tu pedido! Paga ahora.` 
-                    : `Tu pedido de ${order.storeName} está en camino.`,
-                href: `/orders/${order.id}`,
-                type: isPaymentPending ? 'pago' : 'info',
-                time: order.createdAt
-            };
-        });
-    }
-
-    return [];
-  }, [userProfile?.role, storeNotifications, deliveryNotifications, buyerNotifications]);
-
-  const notificationCount = notifications.length;
-  const isLoading = storeLoading || deliveryLoading || buyerLoading || authLoading;
-
-  if (isLoading) {
-    return <Skeleton className="h-9 w-9 rounded-full" />;
-  }
+  const { data: rawNotifications } = useCollection<any>(notifsQuery);
   
+  // Ordenamos en cliente para ver las más nuevas primero
+  const notifications = (rawNotifications || []).sort((a: any, b: any) => {
+      const dateA = a.createdAt?.seconds || 0;
+      const dateB = b.createdAt?.seconds || 0;
+      return dateB - dateA;
+  });
+  
+  const unreadCount = notifications.filter((n: any) => !n.read).length;
+
+  const handleNotificationClick = async (notification: any) => {
+    setOpen(false); 
+    
+    if (!notification.read && firestore) {
+      try {
+        await updateDoc(doc(firestore, 'notifications', notification.id), { read: true });
+      } catch (e) { console.error("Error marcando leída", e); }
+    }
+
+    if (notification.orderId) {
+        router.push(`/orders/${notification.orderId}`);
+    } else {
+        router.push('/orders');
+    }
+  };
+
+  // ✅ FUNCIÓN: Borrar todas las notificaciones visibles
+  const handleClearAll = async () => {
+      if (!firestore || notifications.length === 0) return;
+      
+      try {
+          const batch = writeBatch(firestore);
+          notifications.forEach((n: any) => {
+              const ref = doc(firestore, 'notifications', n.id);
+              batch.delete(ref);
+          });
+          await batch.commit();
+          toast({ title: "Notificaciones borradas" });
+      } catch (error) {
+          console.error("Error borrando:", error);
+      }
+  };
+
+  const getIcon = (type: string) => {
+      switch(type) {
+          case 'order_status': return <Package className="h-4 w-4 text-blue-500" />;
+          case 'success': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+          case 'alert': return <AlertCircle className="h-4 w-4 text-yellow-500" />;
+          case 'delivery': return <Truck className="h-4 w-4 text-orange-500" />;
+          default: return <Info className="h-4 w-4 text-gray-500" />;
+      }
+  }
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
-          {notificationCount > 0 && (
-            <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
-              {notificationCount}
-            </span>
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-red-600 border-2 border-background animate-pulse" />
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0 mr-4" align="end">
-        <div className="p-3 border-b bg-muted/30">
-            <h4 className="font-semibold text-sm">Notificaciones ({notificationCount})</h4>
+      <PopoverContent className="w-80 p-0" align="end">
+        <div className="p-4 border-b font-semibold flex justify-between items-center bg-muted/20">
+            <span className="text-sm">Notificaciones</span>
+            <div className="flex items-center gap-2">
+                {unreadCount > 0 && <Badge variant="secondary" className="text-[10px] h-5">{unreadCount} nuevas</Badge>}
+                {notifications.length > 0 && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500" onClick={handleClearAll} title="Borrar todas">
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                )}
+            </div>
         </div>
-        <div className="max-h-80 overflow-y-auto">
-          {notifications.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                  No tienes notificaciones nuevas.
-              </div>
+        <ScrollArea className="h-[300px]">
+          {!notifications || notifications.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              No tienes notificaciones.
+            </div>
           ) : (
-              notifications.map((notif) => (
-                <Link key={notif.id} href={notif.href} className="block p-3 hover:bg-muted/50 border-b last:border-b-0 transition-colors">
-                  <div className="flex justify-between items-start mb-1">
-                      <p className="text-sm font-medium leading-tight">{notif.message}</p>
-                      {/* Indicadores visuales de tipo de notificación */}
-                      {notif.type === 'pago' && <span className="h-2 w-2 rounded-full bg-orange-500 mt-1" />}
-                      {notif.type === 'pedido' && <span className="h-2 w-2 rounded-full bg-blue-500 mt-1" />}
-                      {notif.type === 'cocina' && <span className="h-2 w-2 rounded-full bg-green-500 mt-1" />}
+            <div className="flex flex-col">
+              {notifications.map((notif: any) => (
+                <button
+                  key={notif.id}
+                  className={`flex items-start gap-3 p-4 text-left hover:bg-muted/50 transition-colors border-b last:border-0 ${!notif.read ? 'bg-blue-50/40' : ''}`}
+                  onClick={() => handleNotificationClick(notif)}
+                >
+                  <div className="mt-1 bg-white p-2 rounded-full border shadow-sm shrink-0">
+                    {getIcon(notif.type)}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {notif.type === 'pago' ? 'Requiere pago' : 
-                     notif.type === 'cocina' ? 'Listo para preparar' : 
-                     'Actualización'}
-                  </p>
-                </Link>
-              ))
+                  <div className="space-y-1 w-full">
+                    <p className={`text-sm ${!notif.read ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                      {notif.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">
+                      {notif.message}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-1">
+                      Hace un momento
+                    </p>
+                  </div>
+                  {!notif.read && <div className="h-2 w-2 rounded-full bg-blue-500 mt-2 shrink-0" />}
+                </button>
+              ))}
+            </div>
           )}
-        </div>
+        </ScrollArea>
       </PopoverContent>
     </Popover>
   );

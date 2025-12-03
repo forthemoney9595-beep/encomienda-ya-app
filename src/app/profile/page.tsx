@@ -3,19 +3,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
-// ✅ IMPORTANTE: Importamos desde @/lib/firebase
 import { useFirestore } from '@/lib/firebase';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { updateProfile } from 'firebase/auth'; // ✅ Importamos para actualizar Auth
 import { User, Mail, MapPin, Save, Plus, X, List, Phone, Trash2, Pencil, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-// ✅ IMPORTANTE: Importamos el componente de subida de imágenes
 import { ImageUpload } from '@/components/image-upload';
 
 interface Address {
@@ -48,7 +47,6 @@ export default function ProfilePage() {
         isEditing: false 
     });
 
-    // Reemplazamos useMemoFirebase por useMemo estándar
     const userDocRef = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return doc(firestore, 'users', user.uid);
@@ -56,11 +54,10 @@ export default function ProfilePage() {
 
     useEffect(() => {
         if (userProfile) {
-            setDisplayName(userProfile.displayName || '');
-            // Buscamos profileImageUrl O photoURL
+            // Priorizamos 'name' si existe, sino 'displayName'
+            setDisplayName(userProfile.name || userProfile.displayName || '');
             const photo = (userProfile as any).profileImageUrl || (userProfile as any).photoURL || '';
             setProfileImageUrl(photo);
-            
             setPhoneNumber(userProfile.phoneNumber || ''); 
             setAddresses(userProfile.addresses as Address[] || []);
         }
@@ -72,25 +69,37 @@ export default function ProfilePage() {
         }
     }, [authLoading, user, router]);
 
-    // ✅ Callback cuando el componente ImageUpload termina de subir la foto
     const handleImageUploaded = (url: string) => {
         setProfileImageUrl(url);
-        // Opcional: Podrías guardar automáticamente aquí si quisieras, 
-        // pero dejaremos que el usuario pulse "Guardar Perfil" para confirmar todo junto.
     };
 
     // --- Lógica de Gestión de Perfil ---
     const handleSaveProfile = async () => {
-        if (!userDocRef) return;
+        if (!userDocRef || !user) return;
         setIsSavingUser(true);
         try {
+            const newName = displayName.trim();
+
+            // 1. Actualizar Firestore (Base de datos)
             await updateDoc(userDocRef, {
-                displayName: displayName.trim(),
-                profileImageUrl: profileImageUrl, // URL de Firebase Storage
-                photoURL: profileImageUrl,        // Compatibilidad
+                name: newName,        // ✅ Campo clave para pedidos
+                displayName: newName, // Campo clave para UI
+                profileImageUrl: profileImageUrl,
+                photoURL: profileImageUrl,
                 phoneNumber: phoneNumber.trim(), 
             });
+
+            // 2. Actualizar Auth (Sesión actual)
+            await updateProfile(user, {
+                displayName: newName,
+                photoURL: profileImageUrl
+            });
+
             toast({ title: '¡Éxito!', description: 'Perfil actualizado correctamente.' });
+            
+            // Forzamos un pequeño reload para que el contexto de Auth refresque todo si es necesario
+            router.refresh();
+
         } catch (error) {
             console.error('Error al guardar el perfil:', error);
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el perfil.' });
@@ -217,8 +226,6 @@ export default function ProfilePage() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="flex flex-col items-center justify-center space-y-4 pt-2">
-                            
-                            {/* ✅ Integración del componente ImageUpload */}
                             <ImageUpload 
                                 currentImageUrl={profileImageUrl}
                                 onImageUploaded={handleImageUploaded}
@@ -236,14 +243,14 @@ export default function ProfilePage() {
 
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="displayName">Nombre de Usuario</Label>
+                                <Label htmlFor="displayName">Nombre Completo</Label>
                                 <div className="relative">
                                     <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input 
                                         id="displayName" 
                                         value={displayName} 
                                         onChange={(e) => setDisplayName(e.target.value)} 
-                                        placeholder="Tu nombre público"
+                                        placeholder="Tu nombre"
                                         className="pl-9"
                                     />
                                 </div>
@@ -300,42 +307,20 @@ export default function ProfilePage() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div className="space-y-1 md:col-span-2">
                                         <Label htmlFor="street">Calle y Número</Label>
-                                        <Input 
-                                            id="street" 
-                                            name="street" 
-                                            value={newAddress.street} 
-                                            onChange={handleAddressChange} 
-                                            placeholder="Ej: Av. Principal 1234"
-                                        />
+                                        <Input id="street" name="street" value={newAddress.street} onChange={handleAddressChange} placeholder="Ej: Av. Principal 1234" />
                                     </div>
                                     <div className="space-y-1">
                                         <Label htmlFor="city">Ciudad</Label>
-                                        <Input 
-                                            id="city" 
-                                            name="city" 
-                                            value={newAddress.city} 
-                                            onChange={handleAddressChange} 
-                                            placeholder="Ej: Buenos Aires"
-                                        />
+                                        <Input id="city" name="city" value={newAddress.city} onChange={handleAddressChange} placeholder="Ej: Buenos Aires" />
                                     </div>
                                     <div className="space-y-1">
                                         <Label htmlFor="zipCode">Código Postal</Label>
-                                        <Input 
-                                            id="zipCode" 
-                                            name="zipCode" 
-                                            value={newAddress.zipCode} 
-                                            onChange={handleAddressChange} 
-                                            placeholder="Ej: 1001"
-                                        />
+                                        <Input id="zipCode" name="zipCode" value={newAddress.zipCode} onChange={handleAddressChange} placeholder="Ej: 1001" />
                                     </div>
                                 </div>
                                 <div className="flex justify-end gap-2 pt-2">
                                     {newAddress.isEditing && (
-                                        <Button 
-                                            variant="ghost" 
-                                            onClick={handleCloseForm}
-                                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                                        >
+                                        <Button variant="ghost" onClick={handleCloseForm} className="text-red-500 hover:text-red-700 hover:bg-red-50">
                                             <X className="h-4 w-4 mr-2" /> Cancelar
                                         </Button>
                                     )}

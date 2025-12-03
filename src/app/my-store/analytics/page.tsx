@@ -5,17 +5,17 @@ import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, CollectionReference, Timestamp } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { Order } from '@/lib/order-service';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DollarSign, ShoppingBag, TrendingUp, CreditCard, User } from 'lucide-react';
+import { ShoppingBag, User, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
-import Link from 'next/link'; // Importamos Link
+import Link from 'next/link';
 
-// Helper para formatear fecha
+// Helper para formatear fecha de forma segura
 const formatDate = (date: any) => {
     if (!date) return '';
     try {
@@ -35,39 +35,33 @@ export default function StoreAnalyticsPage() {
     }
   }, [authLoading, user, userProfile, router]);
 
-  const ordersQuery = useMemoFirebase(() => {
+  const analyticsQuery = useMemoFirebase(() => {
     if (!firestore || !userProfile?.storeId) return null;
     return query(
       collection(firestore, 'orders'),
-      where('storeId', '==', userProfile.storeId)
-    ) as CollectionReference<Order>;
+      where('storeId', '==', userProfile.storeId),
+      orderBy('createdAt', 'desc')
+    );
   }, [firestore, userProfile?.storeId]);
 
-  const { data: orders, isLoading: ordersLoading } = useCollection<Order>(ordersQuery);
+  const { data: orders, isLoading: ordersLoading } = useCollection<Order>(analyticsQuery);
 
   const stats = useMemo(() => {
-    if (!orders) return { totalRevenue: 0, totalOrders: 0, avgOrderValue: 0, completedOrders: 0, pendingRevenue: 0, recentOrders: [] };
+    if (!orders) return { totalRevenue: 0, totalOrders: 0, completedOrders: 0, rejectedCount: 0, recentOrders: [] };
 
+    // Filtros
     const completed = orders.filter(o => o.status === 'Entregado');
-    const active = orders.filter(o => ['Pendiente de Pago', 'En preparación', 'En reparto'].includes(o.status));
+    const rejected = orders.filter(o => o.status === 'Rechazado' || o.status === 'Cancelado');
 
-    const totalRevenue = completed.reduce((sum, order) => sum + order.total, 0);
-    const pendingRevenue = active.reduce((sum, order) => sum + order.total, 0);
+    // Cálculos Financieros (Solo de pedidos COMPLETADOS)
+    const totalRevenue = completed.reduce((sum, order) => sum + (order.subtotal || 0), 0);
     
-    // Ordenar por fecha para obtener los recientes
-    const sortedOrders = [...orders].sort((a, b) => {
-        const dateA = a.createdAt && (a.createdAt as any).toDate ? (a.createdAt as any).toDate().getTime() : new Date(a.createdAt as any).getTime();
-        const dateB = b.createdAt && (b.createdAt as any).toDate ? (b.createdAt as any).toDate().getTime() : new Date(b.createdAt as any).getTime();
-        return dateB - dateA;
-    }).slice(0, 5); // Tomamos los últimos 5
-
     return {
       totalRevenue,
       totalOrders: orders.length,
       completedOrders: completed.length,
-      pendingRevenue,
-      avgOrderValue: completed.length > 0 ? totalRevenue / completed.length : 0,
-      recentOrders: sortedOrders
+      rejectedCount: rejected.length,
+      recentOrders: orders.slice(0, 5) // Ya vienen ordenados por la query
     };
   }, [orders]);
 
@@ -83,59 +77,39 @@ export default function StoreAnalyticsPage() {
   }
 
   return (
-    <div className="container mx-auto">
+    <div className="container mx-auto pb-20">
       <PageHeader 
         title="Analíticas de Ventas" 
-        description="Resumen del rendimiento de tu negocio en tiempo real." 
+        description="Resumen financiero y operativo de tu tienda." 
       />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <Card>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        
+        {/* TOTAL VENTAS */}
+        <Card className="col-span-2 md:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">${stats.totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              +${stats.pendingRevenue.toFixed(2)} pendientes
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pedidos Totales</CardTitle>
+            <CardTitle className="text-sm font-medium">Ventas Totales</CardTitle>
             <ShoppingBag className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalOrders}</div>
+            <div className="text-2xl font-bold">${stats.totalRevenue.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.completedOrders} entregados exitosamente
+              {stats.completedOrders} pedidos completados
             </p>
           </CardContent>
         </Card>
-        <Card>
+
+        {/* RECHAZADOS */}
+        <Card className="col-span-2 md:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ticket Promedio</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Cancelados/Rech.</CardTitle>
+            <XCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.avgOrderValue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Por pedido completado</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasa de Finalización</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-                {stats.totalOrders > 0 
-                    ? `${((stats.completedOrders / stats.totalOrders) * 100).toFixed(0)}%` 
-                    : '0%'}
-            </div>
-            <p className="text-xs text-muted-foreground">Tasa de éxito</p>
+            <div className="text-2xl font-bold text-red-600">{stats.rejectedCount}</div>
+            <p className="text-xs text-muted-foreground">
+              Oportunidades perdidas
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -143,12 +117,11 @@ export default function StoreAnalyticsPage() {
       <Card className="col-span-4">
         <CardHeader>
           <CardTitle>Últimos Movimientos</CardTitle>
-          <CardDescription>Tus {stats.recentOrders.length} ventas más recientes. (Haz clic para ver el detalle)</CardDescription>
+          <CardDescription>Tus {stats.recentOrders.length} pedidos más recientes.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-8">
             {stats.recentOrders.map(order => (
-                // ✅ ENLACE AGREGADO: Toda la fila es un enlace al pedido
                 <Link key={order.id} href={`/orders/${order.id}`} className="flex items-center hover:bg-muted/50 p-2 rounded-md transition-colors cursor-pointer">
                     <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
                         <User className="h-5 w-5 text-muted-foreground" />
@@ -158,7 +131,7 @@ export default function StoreAnalyticsPage() {
                         <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="font-medium text-green-600">+${order.total.toFixed(2)}</div>
+                        <div className="font-medium text-green-600">+${order.total.toLocaleString()}</div>
                         <Badge variant="outline" className="text-[10px] px-1 py-0">{order.status}</Badge>
                     </div>
                 </Link>

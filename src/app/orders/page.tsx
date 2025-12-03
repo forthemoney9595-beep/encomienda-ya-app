@@ -1,68 +1,47 @@
 'use client';
 
-import { useAuth } from '@/context/auth-context';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import PageHeader from '@/components/page-header';
+import { useAuth } from '@/context/auth-context';
+import { Loader2 } from 'lucide-react';
+
 import BuyerOrdersView from './buyer-orders-view';
 import StoreOrdersView from './store-orders-view';
 import DeliveryOrdersView from './delivery-orders-view';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useEffect } from 'react';
 
 export default function OrdersPage() {
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const router = useRouter();
-  
+
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (!loading && !user) {
       router.push('/login');
     }
-  }, [authLoading, user, router]);
+  }, [loading, user, router]);
 
-  if (authLoading || !user || !userProfile) {
+  if (loading) {
     return (
-      <div className="container mx-auto">
-        <PageHeader title="Cargando Pedidos..." description="Por favor, espera un momento." />
-        <div className="space-y-4">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
-        </div>
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  const renderView = () => {
-    switch (userProfile.role) {
-      case 'store':
-        return <StoreOrdersView />;
-      case 'delivery':
-        return <DeliveryOrdersView />;
-      case 'buyer':
-        return <BuyerOrdersView />;
-      default:
-        return <BuyerOrdersView />;
-    }
-  };
+  if (!user || !userProfile) return null;
 
-  const getPageInfo = () => {
-    switch (userProfile.role) {
-      case 'store':
-        return { title: "Gestión de Pedidos", description: "Gestiona los pedidos de tu tienda." };
-      case 'delivery':
-        return { title: "Panel de Repartidor", description: "Gestiona los pedidos disponibles y tus entregas activas." };
-      case 'buyer':
-        return { title: "Mis Pedidos", description: "Ve tus pedidos recientes y en curso." };
-      default:
-        return { title: "Mis Pedidos", description: "Ve tus pedidos recientes y en curso." };
-    }
+  // 🚦 SEMÁFORO DE VISTAS INTELIGENTE
+  switch (userProfile.role) {
+    case 'store':
+      // Si eres tienda, vas a tu panel de pedidos entrantes
+      return <StoreOrdersView />;
+      
+    case 'delivery':
+      // Si eres repartidor, te mostramos tu historial o el dashboard
+      return <DeliveryOrdersView />; 
+      
+    case 'buyer':
+    default:
+      // Si eres cliente, vas a "Mis Pedidos"
+      return <BuyerOrdersView />;
   }
-
-  const { title, description } = getPageInfo();
-
-  return (
-    <div className="container mx-auto">
-      <PageHeader title={title} description={description} />
-      {renderView()}
-    </div>
-  );
 }

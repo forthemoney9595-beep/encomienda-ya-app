@@ -4,13 +4,14 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { useFirestore } from '@/firebase';
-import { collection, query, where, orderBy, doc, updateDoc, Timestamp, limit, startAfter, QueryDocumentSnapshot, getDocs, CollectionReference } from 'firebase/firestore';
+import { useFirestore } from '@/lib/firebase';
+import { collection, query, where, orderBy, doc, updateDoc, limit, startAfter, QueryDocumentSnapshot, getDocs, CollectionReference } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Package, Bike, CheckCircle, Navigation, Clock, DollarSign, ArrowRight, Loader2, RefreshCw, Map, ExternalLink } from 'lucide-react';
+// ✅ Importamos iconos de pago
+import { MapPin, Package, Bike, CheckCircle, Navigation, Clock, DollarSign, ArrowRight, Loader2, RefreshCw, Map, ExternalLink, Banknote, CreditCard, AlertTriangle } from 'lucide-react';
 import { Order } from '@/lib/order-service';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,8 +53,8 @@ export default function DeliveryOrdersView() {
     if (!firestore) return null;
     let baseQuery = query(
       collection(firestore, 'orders') as CollectionReference<Order>,
-      where('status', '==', 'En preparación'),
-      where('deliveryPersonId', '==', null),
+      where('status', 'in', ['En preparación', 'En reparto']), // Delivery ve lo que está cocinándose o listo
+      where('deliveryPersonId', '==', null), // Sin dueño
       orderBy('createdAt', 'desc'),
       limit(PAGE_SIZE)
     );
@@ -68,7 +69,7 @@ export default function DeliveryOrdersView() {
     let baseQuery = query(
       collection(firestore, 'orders') as CollectionReference<Order>,
       where('deliveryPersonId', '==', user.uid),
-      where('status', 'in', ['En preparación', 'En reparto']),
+      where('status', 'in', ['En preparación', 'En reparto', 'En camino']),
       orderBy('createdAt', 'desc'),
       limit(PAGE_SIZE)
     );
@@ -109,7 +110,6 @@ export default function DeliveryOrdersView() {
     try {
       const snapshot = await getDocs(currentQuery);
       
-      // Mapeo seguro de datos con cast a 'any' para evitar error TS2698
       const newOrders: Order[] = snapshot.docs.map(doc => {
         const data = doc.data() as any; 
         return { ...data, id: doc.id };
@@ -180,9 +180,9 @@ export default function DeliveryOrdersView() {
       await updateDoc(orderRef, {
         deliveryPersonId: user.uid,
         deliveryPersonName: userProfile?.displayName || 'Repartidor',
-        status: 'En reparto' // Actualizamos estado automáticamente al aceptar si ya estaba listo
+        status: 'En reparto' // Actualizamos estado automáticamente al aceptar
       });
-      toast({ title: "¡Pedido Aceptado!", description: "Ve a 'Mis Entregas' para ver los detalles." });
+      toast({ title: "¡Pedido Asignado!", description: "Ve a 'Mis Entregas' para ver los detalles." });
       
       setAvailableOrders(prev => prev.filter(o => o.id !== order.id));
       setActiveOrders(prev => [order, ...prev]);
@@ -194,11 +194,9 @@ export default function DeliveryOrdersView() {
     }
   };
   
-  // Función para abrir mapas
   const openMap = (address: string) => {
       if (!address) return;
       const encodedAddress = encodeURIComponent(address);
-      // Abre Google Maps en una nueva pestaña buscando la dirección
       window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank');
   };
 
@@ -247,14 +245,20 @@ export default function DeliveryOrdersView() {
               <CardHeader className="pb-3 bg-muted/20 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-base">{order.storeName}</CardTitle>
-                  <CardDescription className="text-xs">Pedido #{order.id.substring(0, 5)}</CardDescription>
+                  <div className="flex gap-2 mt-1">
+                    <Badge variant="outline">{order.status}</Badge>
+                    {/* ✅ BADGE DE PAGO VISIBLE ANTES DE ACEPTAR */}
+                    <Badge variant={order.paymentMethod === 'Efectivo' ? "destructive" : "secondary"} className="flex items-center gap-1">
+                        {order.paymentMethod === 'Efectivo' ? <Banknote className="h-3 w-3"/> : <CreditCard className="h-3 w-3"/>}
+                        {order.paymentMethod}
+                    </Badge>
+                  </div>
                 </div>
                 <Badge className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1">
                   Ganancia: {formatFee(order.deliveryFee)}
                 </Badge>
               </CardHeader>
               <CardContent className="pt-4 space-y-3">
-                {/* Dirección de Recogida */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <MapPin className="h-4 w-4 text-blue-500 mt-1 shrink-0" />
@@ -263,13 +267,11 @@ export default function DeliveryOrdersView() {
                         <p className="text-sm font-medium">{order.storeName}</p>
                     </div>
                   </div>
-                  {/* Botón Mapa Tienda */}
                   <Button variant="ghost" size="sm" onClick={() => openMap(order.storeName)} title="Ver en Mapa">
                       <Map className="h-4 w-4 text-muted-foreground" />
                   </Button>
                 </div>
 
-                {/* Dirección de Entrega */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <MapPin className="h-4 w-4 text-red-500 mt-1 shrink-0" />
@@ -280,8 +282,7 @@ export default function DeliveryOrdersView() {
                         </p>
                     </div>
                   </div>
-                   {/* Botón Mapa Cliente */}
-                   <Button variant="ghost" size="sm" onClick={() => openMap(order.shippingInfo?.address || order.shippingAddress?.address)} title="Ver en Mapa">
+                   <Button variant="ghost" size="sm" onClick={() => openMap(order.shippingInfo?.address || order.shippingAddress?.address || '')} title="Ver en Mapa">
                       <Map className="h-4 w-4 text-muted-foreground" />
                   </Button>
                 </div>
@@ -292,12 +293,12 @@ export default function DeliveryOrdersView() {
                   onClick={() => handleAcceptOrder(order)}
                   disabled={isUpdating === order.id}
                 >
-                  {isUpdating === order.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : "Aceptar Pedido"}
+                  {isUpdating === order.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : "Aceptar y Comenzar Viaje"}
                 </Button>
               </CardFooter>
             </Card>
           ))}
-          {/* Botón de Cargar Más Disponibles */}
+          
           {availableHasMore && availableOrders.length > 0 && (
             <Button 
               onClick={() => loadOrders(buildAvailableQuery, true, setAvailableOrders, setAvailableLastDoc, setAvailableHasMore, setIsLoadingAvailableMore, availableLastDoc)} 
@@ -329,38 +330,32 @@ export default function DeliveryOrdersView() {
         ) : (
             <>
             {activeOrders.map(order => (
-                <Card key={order.id} className="overflow-hidden border-blue-200 shadow-md">
+                <Card key={order.id} className={`overflow-hidden border shadow-md ${order.paymentMethod === 'Efectivo' ? 'border-yellow-400 ring-1 ring-yellow-400' : 'border-blue-200'}`}>
                     <CardHeader className="pb-3 bg-blue-50 flex flex-row items-center justify-between">
                         <div>
                             <CardTitle className="text-lg text-blue-900">{order.storeName}</CardTitle>
-                            <CardDescription className="text-blue-700">Entregar a {order.customerName || 'Cliente'}</CardDescription>
+                            <CardDescription>Cliente: {order.customerName}</CardDescription>
                         </div>
-                        {(order as any).readyForPickup && order.status === 'En preparación' && (
-                           <Badge variant="destructive" className="animate-pulse">¡LISTO!</Badge>
-                        )}
-                        <Badge variant="default" className="text-white text-sm px-3 py-1 bg-blue-500 hover:bg-blue-600">
-                           {order.status === 'En reparto' ? 'En Reparto' : 'En Preparación'}
-                        </Badge>
+                        <Badge className="bg-blue-500">{order.status}</Badge>
                     </CardHeader>
-                    
                     <CardContent className="pt-4 space-y-4">
-                        {/* ✅ BOTÓN DE NAVEGACIÓN GRANDE */}
-                        <div 
-                            className="p-4 bg-blue-100/50 border border-blue-200 rounded-md flex items-center justify-between cursor-pointer hover:bg-blue-100 transition-colors"
-                            onClick={() => openMap(order.shippingInfo?.address || order.shippingAddress?.address)}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="bg-blue-500 p-2 rounded-full text-white">
-                                    <Navigation className="h-5 w-5" />
-                                </div>
+                        {/* ✅ ALERTA DE COBRO EN EFECTIVO PARA EL DRIVER */}
+                        {order.paymentMethod === 'Efectivo' && (
+                            <div className="bg-yellow-100 border-l-4 border-yellow-500 p-3 rounded flex items-start gap-3">
+                                <AlertTriangle className="h-6 w-6 text-yellow-700 shrink-0" />
                                 <div>
-                                    <p className="text-xs text-blue-600 font-bold uppercase">Destino</p>
-                                    <p className="text-sm font-medium line-clamp-1">
-                                        {order.shippingInfo?.address || order.shippingAddress?.address}
-                                    </p>
+                                    <p className="font-bold text-yellow-900 uppercase">¡Cobrar en Efectivo!</p>
+                                    <p className="text-sm text-yellow-800">Debes recibir <span className="font-bold text-lg">${order.total?.toLocaleString()}</span> del cliente.</p>
                                 </div>
                             </div>
-                            <ExternalLink className="h-4 w-4 text-blue-400" />
+                        )}
+
+                        <div className="p-4 bg-white border rounded-md flex justify-between items-center cursor-pointer hover:bg-gray-50" onClick={() => openMap(order.shippingInfo?.address || '')}>
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-500 p-2 rounded-full text-white"><Navigation className="h-5 w-5"/></div>
+                                <div><p className="text-xs text-blue-600 font-bold uppercase">Ir al Destino</p><p className="text-sm font-medium">{order.shippingInfo?.address}</p></div>
+                            </div>
+                            <ExternalLink className="h-4 w-4 text-gray-400"/>
                         </div>
                         
                         <div className="flex justify-between text-sm text-muted-foreground">

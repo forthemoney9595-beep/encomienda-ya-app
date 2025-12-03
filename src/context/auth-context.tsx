@@ -2,18 +2,16 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { 
-    getAuth, 
     onAuthStateChanged, 
     User, 
-    signInAnonymously, 
     signInWithCustomToken 
 } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { doc, onSnapshot } from 'firebase/firestore';
+// ✅ Importamos las instancias compartidas desde @/lib/firebase
+import { auth, db } from '@/lib/firebase';
 
 // Definimos la interfaz del perfil
 export interface UserProfile {
-  // ✅ CORRECCIÓN 1: Agregamos 'id' como propiedad opcional para compatibilidad
   id?: string; 
   role: 'buyer' | 'store' | 'delivery' | 'admin';
   name: string;
@@ -22,7 +20,7 @@ export interface UserProfile {
   displayName?: string;
   profileImageUrl?: string;
   
-  storeId?: string;
+  storeId?: string; 
   addresses?: { 
       id: string; 
       street: string; 
@@ -38,12 +36,14 @@ interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   userProfile: null,
   loading: true,
+  isAdmin: false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -52,23 +52,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let app;
-    if (!getApps().length) {
-        // @ts-ignore
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        app = initializeApp(firebaseConfig);
-    } else {
-        app = getApp();
-    }
-    
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
     const initAuth = async () => {
         // @ts-ignore
-        const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_initial_auth_token : undefined;
+        const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined;
         if (initialToken) {
-            await signInWithCustomToken(auth, initialToken);
+            try {
+                await signInWithCustomToken(auth, initialToken);
+            } catch (e) {
+                console.error("Error con token inicial:", e);
+            }
         }
     };
     initAuth();
@@ -78,25 +70,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (currentUser) {
         const profileRef = doc(db, 'users', currentUser.uid);
+        
         const unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
           if (docSnap.exists()) {
-            // ✅ CORRECCIÓN 2: El 'id' ahora es una propiedad conocida de UserProfile
             setUserProfile({ ...docSnap.data() as UserProfile, id: docSnap.id });
           } else {
             setUserProfile({
-                id: currentUser.uid, // Aseguramos el ID aquí también
+                id: currentUser.uid,
                 role: 'buyer',
                 name: currentUser.displayName || 'Usuario',
                 email: currentUser.email || '',
                 displayName: currentUser.displayName || 'Usuario',
-                profileImageUrl: '',
+                profileImageUrl: currentUser.photoURL || '',
             });
           }
           setLoading(false);
         }, (error) => {
-            console.error("Error fetching profile:", error);
-            setLoading(false);
+           console.error("Error fetching profile:", error);
+           setLoading(false);
         });
+        
         return () => unsubscribeProfile();
       } else {
         setUserProfile(null);
@@ -107,11 +100,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  const isAdmin = userProfile?.role === 'admin';
+
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => useContext(AuthContext);
+// ✅ FIX: Agregamos el tipo de retorno explícito ': AuthContextType' para eliminar el error de inferencia
+export const useAuth = (): AuthContextType => useContext(AuthContext);

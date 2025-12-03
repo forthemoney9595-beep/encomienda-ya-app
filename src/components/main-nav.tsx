@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
 import { 
@@ -19,7 +19,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Notifications } from './notifications'; 
+// ❌ ELIMINADO: Importación de Notifications para evitar duplicidad
 
 export function MainNav({
   className,
@@ -28,8 +28,6 @@ export function MainNav({
   const pathname = usePathname();
   const { userProfile } = useAuth();
   
-  // No necesitamos handleLogout aquí porque está en el UserMenu del footer
-
   if (!userProfile) {
     return null;
   }
@@ -90,7 +88,6 @@ export function MainNav({
               Analíticas
             </Button>
           </Link>
-          {/* "Editar Tienda" se movió al menú de usuario en el footer para evitar duplicidad */}
         </div>
       </div>
     </>
@@ -125,7 +122,6 @@ export function MainNav({
           Explorar Tiendas
         </h2>
         <div className="space-y-1">
-          {/* Enlaces funcionales con filtro por URL */}
           <Link href="/?category=comida-rapida">
             <Button variant="ghost" className="w-full justify-start">
                 <Utensils className="mr-2 h-4 w-4" />
@@ -178,17 +174,13 @@ export function MainNav({
 
   return (
     <nav className={cn("pb-12 relative", className)} {...props}>
-      <div className="absolute top-2 right-2 z-50">
-          <Notifications /> 
-      </div>
+      {/* ❌ ELIMINADO: El div absoluto con la campana duplicada se ha borrado */}
 
-      <div className="space-y-4 py-4 pt-10">
+      <div className="space-y-4 py-4 pt-4"> 
         {userProfile.role === 'admin' && renderAdminLinks()}
         {userProfile.role === 'store' && renderStoreLinks()}
         {userProfile.role === 'buyer' && renderBuyerLinks()}
         {userProfile.role === 'delivery' && renderDeliveryLinks()}
-        
-        {/* Se eliminó el bloque de "Soporte" y "Cerrar Sesión" de aquí para no duplicar con el footer */}
       </div>
     </nav>
   );

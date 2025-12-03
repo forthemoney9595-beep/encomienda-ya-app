@@ -3,15 +3,19 @@ import {
   addDoc, 
   updateDoc, 
   doc, 
+  getDoc,
   serverTimestamp, 
   Firestore, 
   Timestamp 
 } from 'firebase/firestore';
 
+// 1. Definimos estrictamente el único método de pago permitido
+export type PaymentMethod = 'CARD';
+
 export type OrderStatus = 
-  | 'Pendiente de Confirmación'
-  | 'Pendiente de Pago'
-  | 'En preparación'
+  | 'Pendiente de Confirmación' // PASO 1: Tienda verifica Stock
+  | 'Pendiente de Pago'         // PASO 2: Cliente paga con Tarjeta
+  | 'En preparación'            // PASO 3: Tienda cocina/prepara
   | 'En reparto'
   | 'Entregado'
   | 'Cancelado'
@@ -43,7 +47,7 @@ export interface Order {
   deliveryFee: number;
   serviceFee: number;
   total: number;
-  paymentMethod: string;
+  paymentMethod: PaymentMethod; // Forzado a CARD
   
   createdAt: Timestamp | Date;
   
@@ -68,6 +72,7 @@ export interface Order {
   deliveryReview?: string;
 }
 
+// Eliminamos paymentMethod del input, ya que lo inyectamos nosotros
 export interface CreateOrderInput {
   userId: string;
   customerName: string;
@@ -85,7 +90,6 @@ export interface CreateOrderInput {
   deliveryFee: number;
   serviceFee?: number;
   total: number;
-  paymentMethod: string;
 }
 
 const PLATFORM_FEE_PERCENTAGE = 0.05; 
@@ -103,13 +107,30 @@ export const OrderService = {
             deliveryFee,
             total
         };
+    },
+
+    sendNotification: async (db: Firestore, userId: string, title: string, message: string, type: string, orderId?: string) => {
+        try {
+            await addDoc(collection(db, 'notifications'), {
+                userId,
+                title,
+                message,
+                type, // 'order_status' | 'info'
+                orderId,
+                read: false,
+                createdAt: serverTimestamp(),
+                icon: 'bell'
+            });
+        } catch (error) {
+            console.error("Error enviando notificación:", error);
+        }
     }
 };
 
 export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
   if (!db) throw new Error("Firestore instance is required");
 
-  // Coordenadas simuladas para demostración (Catamarca)
+  // TODO: En Fase 2 (Geolocalización), reemplazar estos mocks con datos reales del input
   const mockStoreCoords = { latitude: -28.46957, longitude: -65.77954 }; 
   const mockCustomerCoords = { 
       latitude: mockStoreCoords.latitude + (Math.random() * 0.01 - 0.005), 
@@ -123,6 +144,9 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
     storeId: input.storeId,
     storeName: input.storeName,
     storeAddress: input.storeAddress,
+    
+    // ✅ CAMBIO PARA FLUJO DE STOCK:
+    // El pedido nace esperando confirmación de la tienda.
     status: 'Pendiente de Confirmación' as OrderStatus,
     
     items: input.items,
@@ -131,13 +155,14 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
     deliveryFee: input.deliveryFee,
     serviceFee: input.serviceFee || 0,
     total: input.total,
-    paymentMethod: input.paymentMethod,
+    
+    // FORZADO: Eliminamos cualquier posibilidad de efectivo
+    paymentMethod: 'CARD' as PaymentMethod,
     
     createdAt: serverTimestamp(),
     shippingAddress: input.shippingInfo,
     shippingInfo: input.shippingInfo,
     
-    // ✅ FIX: Casteamos el null para que TypeScript no se queje
     deliveryPersonId: null as string | null,
     readyForPickup: false,
     
@@ -145,7 +170,31 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
     customerCoords: mockCustomerCoords,
   };
 
+  // 1. Crear la orden
   const docRef = await addDoc(collection(db, 'orders'), orderData);
+
+  // 2. ✅ LOGICA RESTAURADA: Notificar a la tienda para VALIDAR STOCK
+  try {
+      const storeDoc = await getDoc(doc(db, 'stores', input.storeId));
+      if (storeDoc.exists()) {
+          const storeData = storeDoc.data();
+          const ownerId = storeData.ownerId; 
+          
+          if (ownerId) {
+              await OrderService.sendNotification(
+                  db, 
+                  ownerId, 
+                  "🔔 Solicitud de Pedido", 
+                  `Nuevo pedido de ${input.customerName}. Por favor confirma stock.`, 
+                  "order_status",
+                  docRef.id
+              );
+          }
+      }
+  } catch (error) {
+      console.error("Error notificando a la tienda:", error);
+  }
+
   return { id: docRef.id, ...orderData };
 };
 

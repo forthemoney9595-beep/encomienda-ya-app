@@ -1,31 +1,29 @@
 'use client';
 
-import { useParams, useRouter, notFound } from 'next/navigation';
+import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { type Order, type OrderItem } from '@/lib/order-service';
+import { type Order } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth, UserProfile } from '@/context/auth-context'; 
-import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore'; 
+import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'; 
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, Mail, MapPin, Navigation, PackageCheck, DollarSign, BellRing } from 'lucide-react';
+import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, Mail, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent } from '@/components/ui/alert-dialog';
 import { useCart } from '@/context/cart-context';
 import { ReviewDialog } from '@/components/review-dialog'; 
-import { PaymentDialog } from '@/components/payment-dialog';
 import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
-import { updateDoc, Timestamp, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { ChatWindow } from './chat-window'; 
 
 const formatDate = (date: any) => {
@@ -61,8 +59,8 @@ function OrderPageSkeleton() {
 }
 
 const statusSteps: any = {
-  'Pendiente de Confirmación': { step: 0, label: 'Pendiente', icon: Clock, description: 'Esperando que la tienda confirme tu pedido.' },
-  'Pendiente de Pago': { step: 1, label: 'Confirmado', icon: Wallet, description: '¡La tienda confirmó! Realiza el pago para continuar.' },
+  'Pendiente de Confirmación': { step: 0, label: 'Pendiente', icon: Clock, description: 'Esperando que la tienda confirme stock.' },
+  'Pendiente de Pago': { step: 1, label: 'Por Pagar', icon: Wallet, description: 'Stock confirmado. Realiza el pago.' },
   'En preparación': { step: 2, label: 'Preparando', icon: CookingPot, description: 'La tienda está preparando tu pedido.' },
   'En reparto': { step: 3, label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
   'Entregado': { step: 4, label: 'Entregado', icon: Home, description: '¡Tu pedido ha sido entregado! Disfrútalo.' },
@@ -100,6 +98,7 @@ export default function OrderTrackingPage() {
   const params = useParams();
   const orderId = params.orderId as string;
   const router = useRouter();
+  const searchParams = useSearchParams(); // ✅ DETECTOR DE PARAMETROS DE URL
   const { toast } = useToast();
   const { user, userProfile: myUserProfile, loading: authLoading } = useAuth(); 
   const firestore = useFirestore();
@@ -109,7 +108,9 @@ export default function OrderTrackingPage() {
   const [isReorderAlertOpen, setReorderAlertOpen] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  
+  // Ref para evitar procesar el pago dos veces (efecto doble de React strict mode)
+  const processedPayment = useRef(false);
 
   const orderRef = useMemoFirebase(() => firestore ? doc(firestore, 'orders', orderId) : null, [firestore, orderId]);
   const { data: order, isLoading: orderLoading } = useDoc<Order>(orderRef);
@@ -124,6 +125,43 @@ export default function OrderTrackingPage() {
   const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { ssr: false, loading: () => <Skeleton className="h-full w-full" />, }), []);
 
   const isLoading = authLoading || orderLoading;
+
+  // ✅ EFECTO: PROCESAR RETORNO DE MERCADOPAGO
+  useEffect(() => {
+    const status = searchParams.get('status');
+    
+    if (status && order && !processedPayment.current) {
+        if (status === 'success' && order.status === 'Pendiente de Pago') {
+            processedPayment.current = true; // Marcamos como procesado
+            
+            // Actualizamos la orden a 'En preparación'
+            const confirmPayment = async () => {
+                if(!orderRef) return;
+                try {
+                    await updateDoc(orderRef, { status: 'En preparación' });
+                    toast({ 
+                        title: "¡Pago Exitoso!", 
+                        description: "Tu pedido ya se está preparando. ¡Gracias por tu compra!",
+                        className: "bg-green-50 border-green-200 text-green-900"
+                    });
+                    // Limpiamos la URL para que no vuelva a procesar si recarga
+                    router.replace(`/orders/${orderId}`);
+                } catch (e) {
+                    console.error("Error actualizando orden tras pago:", e);
+                }
+            };
+            confirmPayment();
+        } else if (status === 'failure') {
+            toast({ 
+                variant: "destructive", 
+                title: "El pago falló", 
+                description: "MercadoPago no pudo procesar tu tarjeta. Intenta nuevamente." 
+            });
+            // Limpiamos URL
+            router.replace(`/orders/${orderId}`);
+        }
+    }
+  }, [searchParams, order, orderRef, router, toast, orderId]);
 
   useEffect(() => {
     if (!isLoading && order && myUserProfile) {
@@ -169,12 +207,11 @@ export default function OrderTrackingPage() {
                 price: item.price,
                 description: item.description || '',
                 category: item.category || 'General',
-                imageUrl: item.imageUrl,
-                rating: 0,
-                reviewCount: 0
+                imageUrl: item.imageUrl || '',
             }, order.storeId);
         });
-        router.push('/checkout');
+        
+        toast({ title: "Productos agregados", description: "Revisa tu carrito para finalizar la compra." });
     };
 
     const handleReorderClick = () => {
@@ -213,18 +250,6 @@ export default function OrderTrackingPage() {
             toast({ variant: 'destructive', title: "Error", description: "No se pudo actualizar el estado." });
         } finally {
             setIsUpdatingStatus(false);
-        }
-    }
-
-    // ✅ LÓGICA DE PAGO ACTUALIZADA
-    const handlePaymentSuccess = async () => {
-        if (!orderRef) return;
-        try {
-            await updateDoc(orderRef, { status: 'En preparación' });
-            toast({ title: "¡Pago Exitoso!", description: "La tienda ha recibido tu pago." });
-        } catch (error) {
-            console.error("Error actualizando pedido tras pago:", error);
-            toast({ variant: 'destructive', title: "Error", description: "El pago se procesó pero hubo un error actualizando el pedido." });
         }
     }
 
@@ -288,23 +313,20 @@ export default function OrderTrackingPage() {
         {/* --- COLUMNA IZQUIERDA --- */}
         <div className={cn("space-y-8", showChat ? "lg:col-span-3" : "lg:col-span-5")}>
             <Card>
-                <CardHeader><CardTitle>Resumen del Pedido</CardTitle></CardHeader>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Store className="h-5 w-5 text-muted-foreground" />
+                        {order.storeName}
+                    </CardTitle>
+                    <CardDescription>
+                        {isStoreOwner && order.customerName 
+                            ? <span>Cliente: <strong>{order.customerName}</strong></span>
+                            : <span>Detalles de tu compra</span>
+                        }
+                    </CardDescription>
+                </CardHeader>
                 <CardContent className="space-y-4">
                     
-                    {/* ACCIONES CLIENTE (PAGO) */}
-                    {isBuyer && order.status === 'Pendiente de Pago' && (
-                         <div className="mb-6 bg-orange-50 border border-orange-200 rounded-xl overflow-hidden shadow-sm p-4 text-center">
-                            <h3 className="text-lg font-bold text-orange-900 mb-2">¡Pedido Confirmado!</h3>
-                            <p className="text-sm text-orange-800 mb-4">La tienda ha confirmado tu pedido. Realiza el pago para que comiencen a prepararlo.</p>
-                            <Button 
-                                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold h-12 text-lg" 
-                                onClick={() => setIsPaymentDialogOpen(true)} // ✅ Abrir diálogo
-                            >
-                                Pagar ${displayTotal.toFixed(2)}
-                            </Button>
-                        </div>
-                    )}
-
                     {/* ACCIONES REPARTIDOR */}
                     {isAvailableToAccept && (
                         <div className="mb-6 bg-green-50 border border-green-200 rounded-xl overflow-hidden shadow-sm">
@@ -430,7 +452,6 @@ export default function OrderTrackingPage() {
                         </div>
                     ))}
                     <Separator/>
-                     {/* Desglose Financiero Completo */}
                      <div className="flex justify-between text-sm"><p>Subtotal</p><p>${(order.subtotal || (displayTotal - order.deliveryFee)).toFixed(2)}</p></div>
                      <div className="flex justify-between text-sm"><p>Envío</p><p>${order.deliveryFee.toFixed(2)}</p></div>
                      {(order.serviceFee || 0) > 0 && (
@@ -458,10 +479,7 @@ export default function OrderTrackingPage() {
                      </div>
                 </CardContent>
                  
-                 {/* ✅ CORRECCIÓN CLAVE: Ocultamos el OrderStatusUpdater al cliente en estado de pago */}
-                 {(!isBuyer || order.status !== 'Pendiente de Pago') && (
-                    <OrderStatusUpdater order={order} />
-                 )}
+                 <OrderStatusUpdater order={order} />
             </Card>
              <Card><CardHeader><CardTitle>Estado del Pedido</CardTitle></CardHeader><CardContent><OrderProgress status={order.status} /></CardContent></Card>
         </div>
@@ -487,23 +505,14 @@ export default function OrderTrackingPage() {
         </div>
       </div>
        
-       {/* DIÁLOGO DE RESEÑA */}
        {reviewingItem && (
            <ReviewDialog 
-                isOpen={!!reviewingItem} 
-                setIsOpen={(isOpen) => !isOpen && setReviewingItem(null)} 
-                productName={reviewingItem.name} 
-                onSubmit={handleReviewSubmit} 
-            />
+               isOpen={!!reviewingItem} 
+               setIsOpen={(isOpen) => !isOpen && setReviewingItem(null)} 
+               productName={reviewingItem.name} 
+               onSubmit={handleReviewSubmit} 
+           />
        )}
-
-       {/* ✅ DIÁLOGO DE PAGO */}
-       <PaymentDialog 
-            isOpen={isPaymentDialogOpen}
-            setIsOpen={setIsPaymentDialogOpen}
-            totalAmount={displayTotal}
-            onPaymentSuccess={handlePaymentSuccess}
-       />
     </div>
   );
 }

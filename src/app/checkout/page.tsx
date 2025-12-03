@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { Home, Loader2, Info, Phone, AlertTriangle, ArrowLeft, Store as StoreIcon, Receipt } from 'lucide-react';
+import { Home, Loader2, Phone, AlertTriangle, ArrowLeft, Store as StoreIcon, Receipt, CreditCard, Lock } from 'lucide-react';
 import { createOrder } from '@/lib/order-service';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState, useMemo } from 'react';
@@ -21,7 +21,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { doc, getDoc } from 'firebase/firestore';
 import { useFirestore, useDoc, useMemoFirebase } from '@/firebase'; 
 
-// Definición local simple para evitar dependencias rotas
 interface StoreData {
   name: string;
   address: string;
@@ -43,12 +42,11 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clientLoaded, setClientLoaded] = useState(false);
 
-  // --- 1. LECTURA DE CONFIGURACIÓN GLOBAL (Mantenimiento y Comisión) ---
+  // --- CONFIGURACIÓN GLOBAL ---
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
-  // Leemos tanto el modo mantenimiento como la comisión
   const { data: globalConfig } = useDoc<{ maintenanceMode: boolean, serviceFee?: number }>(configRef);
 
-  // --- 2. LECTURA DE TIENDA ESPECÍFICA ---
+  // --- TIENDA ESPECÍFICA ---
   const storeRef = useMemoFirebase(() => (firestore && storeId) ? doc(firestore, 'stores', storeId) : null, [firestore, storeId]);
   const { data: storeData, isLoading: storeLoading } = useDoc<StoreData>(storeRef);
 
@@ -56,11 +54,11 @@ export default function CheckoutPage() {
     setClientLoaded(true);
   }, []);
 
-  // --- CÁLCULOS DE COSTOS ---
+  // --- CÁLCULOS ---
   const { serviceFeeAmount, shippingCost, finalTotal } = useMemo(() => {
-    const feePercentage = globalConfig?.serviceFee || 0; // Por defecto 0 si no hay config
+    const feePercentage = globalConfig?.serviceFee || 0;
     const fee = (totalPrice * feePercentage) / 100;
-    const shipping = 5.00; // Costo fijo por ahora
+    const shipping = 5.00; // Costo fijo (Hardcoded por ahora)
     const total = totalPrice + fee + shipping;
     
     return {
@@ -81,10 +79,9 @@ export default function CheckoutPage() {
   
   const addressIdValue = form.watch('addressId');
 
-  // Inicializar formulario con datos del usuario
+  // Inicializar formulario
   useEffect(() => {
     if (clientLoaded && userProfile && !authLoading) {
-        // Verificación temprana de teléfono
         if (!userProfile.phoneNumber || userProfile.phoneNumber.trim() === '') {
             toast({ variant: 'destructive', title: 'Información Faltante', description: 'Por favor, añade tu número de teléfono.' });
             router.push('/profile');
@@ -99,7 +96,7 @@ export default function CheckoutPage() {
     }
   }, [userProfile, authLoading, form, clientLoaded, router, toast]);
   
-  // Cambiar dirección al seleccionar del dropdown
+  // Lógica de dropdown de direcciones
   useEffect(() => {
     if(addressIdValue && userProfile?.addresses && addressIdValue !== 'new') {
         const selected = userProfile.addresses.find((a: any) => a.id === addressIdValue);
@@ -120,7 +117,6 @@ export default function CheckoutPage() {
   }, [clientLoaded, authLoading, totalItems, storeId, router]);
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    // Validaciones de mantenimiento
     if (globalConfig?.maintenanceMode || storeData?.maintenanceMode) {
         toast({ variant: "destructive", title: "Lo sentimos", description: "No se pueden realizar pedidos en este momento." });
         return;
@@ -128,12 +124,11 @@ export default function CheckoutPage() {
 
     if (!user || !userProfile || !storeId || !firestore) return;
 
-    // Verificación de teléfono
     if (!userProfile.phoneNumber || userProfile.phoneNumber.trim() === '') {
         toast({
             variant: 'destructive',
             title: 'Faltan datos',
-            description: 'Por favor, guarda tu número de teléfono en tu perfil antes de finalizar la compra.',
+            description: 'Por favor, guarda tu número de teléfono antes de continuar.',
         });
         router.push('/profile');
         return;
@@ -150,74 +145,60 @@ export default function CheckoutPage() {
 
       const currentStoreData = storeSnap.data() as StoreData;
 
-      // ✅ Enviar pedido con datos financieros y teléfono validado
+      // Creamos la orden con estado "Pendiente de Pago"
       const createdOrder = await createOrder(firestore, {
         userId: user.uid,
         customerName: values.name, 
-        // Usamos el operador ! porque ya validamos arriba que existe
         customerPhoneNumber: userProfile.phoneNumber!, 
         items: cart,
         shippingInfo: { name: values.name, address: values.address },
         storeId: storeId,
         storeName: currentStoreData.name || 'Tienda',
         storeAddress: currentStoreData.address || '',
-        // Guardamos los valores calculados
         subtotal: totalPrice,
         deliveryFee: shippingCost,
         serviceFee: serviceFeeAmount,
         total: finalTotal
+        // NOTA: PaymentMethod ya no se envía, el backend asume 'CARD'
       });
 
-      toast({ title: "¡Pedido Solicitado!" });
+      toast({ title: "Pedido creado", description: "Procede al pago para confirmar." });
+      
+      // Vaciamos el carrito local
       clearCart();
+      
+      // Redirigimos al detalle de la orden. 
+      // Allí detectaremos que el estado es "Pendiente de Pago" y mostraremos el botón de MP.
       router.push(`/orders/${createdOrder.id}`);
 
     } catch (error) {
       console.error(error);
-      toast({ variant: "destructive", title: "Error", description: "No se pudo procesar el pedido." });
+      toast({ variant: "destructive", title: "Error", description: "No se pudo crear el pedido." });
     } finally {
         setIsSubmitting(false);
     }
   }
 
-  // --- UI DE BLOQUEO POR MANTENIMIENTO ---
-  if (globalConfig?.maintenanceMode) {
+  // --- UI BLOQUEO MANTENIMIENTO ---
+  if (globalConfig?.maintenanceMode || storeData?.maintenanceMode) {
+    const isStore = !!storeData?.maintenanceMode;
     return (
         <div className="container mx-auto py-20 flex justify-center items-center">
-            <Card className="max-w-md w-full border-red-200 bg-red-50 shadow-lg">
+            <Card className={`max-w-md w-full border-${isStore ? 'orange' : 'red'}-200 bg-${isStore ? 'orange' : 'red'}-50 shadow-lg`}>
                 <CardHeader className="text-center pb-2">
-                    <div className="mx-auto bg-red-100 p-4 rounded-full mb-4 w-fit">
-                        <AlertTriangle className="h-10 w-10 text-red-600" />
+                    <div className={`mx-auto bg-${isStore ? 'orange' : 'red'}-100 p-4 rounded-full mb-4 w-fit`}>
+                        {isStore ? <StoreIcon className="h-10 w-10 text-orange-600" /> : <AlertTriangle className="h-10 w-10 text-red-600" />}
                     </div>
-                    <CardTitle className="text-2xl text-red-800">Plataforma en Mantenimiento</CardTitle>
-                    <CardDescription className="text-red-700">Estamos realizando mejoras técnicas.</CardDescription>
-                </CardHeader>
-                <CardFooter className="justify-center pt-4">
-                    <Button variant="outline" onClick={() => router.push('/')} className="w-full border-red-200 text-red-700 bg-white">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Volver al Inicio
-                    </Button>
-                </CardFooter>
-            </Card>
-        </div>
-    );
-  }
-
-  if (storeData?.maintenanceMode) {
-    return (
-        <div className="container mx-auto py-20 flex justify-center items-center">
-            <Card className="max-w-md w-full border-orange-200 bg-orange-50 shadow-lg">
-                <CardHeader className="text-center pb-2">
-                    <div className="mx-auto bg-orange-100 p-4 rounded-full mb-4 w-fit">
-                        <StoreIcon className="h-10 w-10 text-orange-600" />
-                    </div>
-                    <CardTitle className="text-2xl text-orange-800">{storeData.name} Cerrada</CardTitle>
-                    <CardDescription className="text-orange-700 font-medium">
-                        Esta tienda está temporalmente fuera de servicio.
+                    <CardTitle className={`text-2xl text-${isStore ? 'orange' : 'red'}-800`}>
+                        {isStore ? `${storeData?.name} Cerrada` : 'Plataforma en Mantenimiento'}
+                    </CardTitle>
+                    <CardDescription className={`text-${isStore ? 'orange' : 'red'}-700`}>
+                        {isStore ? 'Esta tienda está temporalmente fuera de servicio.' : 'Estamos realizando mejoras técnicas.'}
                     </CardDescription>
                 </CardHeader>
-                <CardFooter className="justify-center pt-0">
-                    <Button variant="outline" onClick={() => router.push('/')} className="w-full border-orange-200 text-orange-700 bg-white">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Buscar otra tienda
+                <CardFooter className="justify-center pt-4">
+                    <Button variant="outline" onClick={() => router.push('/')} className={`w-full border-${isStore ? 'orange' : 'red'}-200 bg-white`}>
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Volver al Inicio
                     </Button>
                 </CardFooter>
             </Card>
@@ -232,32 +213,32 @@ export default function CheckoutPage() {
   const hasAddresses = userProfile.addresses && userProfile.addresses.length > 0;
 
   return (
-    <div className="container mx-auto">
-      <PageHeader title="Solicitar Pedido" description="Confirma tu dirección y revisa el desglose final." />
+    <div className="container mx-auto pb-20">
+      <PageHeader title="Finalizar Compra" description="Confirma tus datos y procede al pago seguro." />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* COLUMNA IZQUIERDA: FORMULARIO */}
+        {/* FORMULARIO */}
         <div className="md:col-span-2">
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                     <Card>
-                        <CardHeader><CardTitle className="flex items-center gap-2"><Home /> Información de Envío</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="flex items-center gap-2"><Home className="h-5 w-5" /> Dirección de Entrega</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
-                             {/* Mostramos el número de teléfono del perfil */}
-                             <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                             <div className="flex items-center gap-3 p-3 bg-muted rounded-lg border">
                                 <Phone className="h-5 w-5 text-primary" />
                                 <div className="flex flex-col">
-                                    <p className="text-sm font-medium">Contacto:</p>
+                                    <p className="text-sm font-medium text-muted-foreground">Contacto Validado</p>
                                     <p className="text-lg font-bold">{userProfile.phoneNumber}</p>
                                 </div>
                             </div>
 
                              <FormField control={form.control} name="name" render={({ field }) => (
-                                <FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Nombre de quien recibe</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                              )} />
+                            
                             {hasAddresses && (
                                 <FormField control={form.control} name="addressId" render={({ field }) => (
-                                    <FormItem><FormLabel>Dirección</FormLabel>
+                                    <FormItem><FormLabel>Mis Direcciones</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                             <SelectContent>
@@ -268,9 +249,10 @@ export default function CheckoutPage() {
                                     </FormItem>
                                 )} />
                             )}
+                            
                             <FormField control={form.control} name="address" render={({ field }) => (
                                 <FormItem>
-                                    {!hasAddresses && <FormLabel>Dirección de Entrega</FormLabel>}
+                                    {!hasAddresses && <FormLabel>Dirección</FormLabel>}
                                     <FormControl>
                                         <Input 
                                             placeholder="Calle, número, ciudad" 
@@ -284,17 +266,27 @@ export default function CheckoutPage() {
                             )} />
                         </CardContent>
                     </Card>
-                     <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : `Pagar $${finalTotal.toFixed(2)}`}
+
+                     <Button type="submit" size="lg" className="w-full h-12 text-lg font-semibold shadow-md" disabled={isSubmitting}>
+                        {isSubmitting ? (
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        ) : (
+                            <span className="flex items-center gap-2">
+                                Ir a Pagar ${finalTotal.toFixed(2)}
+                            </span>
+                        )}
                     </Button>
+                    <p className="text-center text-xs text-muted-foreground flex justify-center items-center gap-1">
+                        <Lock className="h-3 w-3" /> Pagos procesados de forma segura
+                    </p>
                 </form>
             </Form>
         </div>
 
-        {/* COLUMNA DERECHA: RESUMEN DE COSTOS */}
+        {/* RESUMEN */}
         <div className="md:col-span-1">
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Resumen</CardTitle></CardHeader>
+          <Card className="sticky top-20">
+            <CardHeader><CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Tu Pedido</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {cart.map(item => (
                 <div key={item.id} className="flex justify-between text-sm">
@@ -311,7 +303,6 @@ export default function CheckoutPage() {
                 <p>Envío</p>
                 <p>${shippingCost.toFixed(2)}</p>
               </div>
-              {/* Solo mostramos la comisión si es mayor a 0 */}
               {serviceFeeAmount > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <p>Tarifa de servicio ({globalConfig?.serviceFee}%)</p>
@@ -324,12 +315,12 @@ export default function CheckoutPage() {
                 <p className="text-green-600">${finalTotal.toFixed(2)}</p>
               </div>
             </CardContent>
-             <CardFooter>
+             <CardFooter className="flex-col gap-3">
                  <Alert className="bg-blue-50 border-blue-200">
-                    <Info className="h-4 w-4 text-blue-600" />
-                    <AlertTitle className="text-blue-800">Confirmación</AlertTitle>
+                    <CreditCard className="h-4 w-4 text-blue-600" />
+                    <AlertTitle className="text-blue-800">Pago Digital</AlertTitle>
                     <AlertDescription className="text-blue-700 text-xs">
-                        La tienda revisará la disponibilidad de los productos tras tu solicitud.
+                        Serás redirigido para completar tu pago de forma segura.
                     </AlertDescription>
                 </Alert>
             </CardFooter>

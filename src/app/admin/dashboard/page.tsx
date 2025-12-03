@@ -6,11 +6,10 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth, UserProfile } from '@/context/auth-context';
-// ✅ CORRECCIÓN: Importamos desde @/lib/firebase
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/lib/firebase';
-import { collection, query, where, CollectionReference, doc, updateDoc, orderBy, limit, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, CollectionReference, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store, Bike, Check, X, Users, DollarSign, Package, Clock, Loader2, Shield, Search, MoreHorizontal, Settings, AlertTriangle, Save, Power, TrendingUp, TrendingDown, Calendar, Trash2 } from 'lucide-react';
+import { Store, Bike, Check, X, Users, DollarSign, Package, Loader2, Shield, Search, MoreHorizontal, Settings, AlertTriangle, Save, TrendingUp, Calendar, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -53,7 +52,7 @@ interface SalesData {
 }
 
 // ====================================================================
-// COMPONENTE: GRÁFICO SIMPLE DE VENTAS (Simulado)
+// COMPONENTE: GRÁFICO SIMPLE DE VENTAS
 // ====================================================================
 
 function processOrderDataForChart(allOrders: Order[] | undefined): SalesData[] {
@@ -242,13 +241,7 @@ function ActiveStoresTable({
                                                     onCheckedChange={() => onToggleMaintenance(store.id, store.maintenanceMode || false)}
                                                 />
                                             </div>
-                                            <Button 
-                                                variant="destructive" 
-                                                size="icon" 
-                                                className="h-8 w-8"
-                                                onClick={() => onDeleteStore(store.id)}
-                                                title="Eliminar Tienda"
-                                            >
+                                            <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => onDeleteStore(store.id)} title="Eliminar Tienda">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
@@ -354,37 +347,23 @@ function UserManagementTable({
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
-                                                        <span className="sr-only">Abrir menú</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48">
                                                     <DropdownMenuLabel>Cambiar Rol</DropdownMenuLabel>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'buyer')}>
-                                                        Convertir en Cliente
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'store')}>
-                                                        Convertir en Tienda
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'delivery')}>
-                                                        Convertir en Repartidor
-                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'buyer')}>Convertir en Cliente</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'store')}>Convertir en Tienda</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'delivery')}>Convertir en Repartidor</DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem className="text-purple-600 font-bold focus:text-purple-700 focus:bg-purple-50" onClick={() => onUpdateRole(user.id, 'admin')}>
                                                         <Shield className="mr-2 h-4 w-4" /> Hacer Admin
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
-                                            {/* ✅ Seguridad: No mostrar botón de eliminar si es el usuario actual */}
                                             {user.id !== currentUserId && (
-                                                <Button 
-                                                    variant="destructive" 
-                                                    size="icon" 
-                                                    className="h-8 w-8"
-                                                    onClick={() => onDeleteUser(user.id)}
-                                                    title="Eliminar Usuario"
-                                                >
+                                                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => onDeleteUser(user.id)} title="Eliminar Usuario">
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             )}
@@ -392,7 +371,7 @@ function UserManagementTable({
                                     </TableCell>
                                 </TableRow>
                             ))}
-                             {filteredUsers.length === 0 && (
+                            {filteredUsers.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</TableCell>
                                 </TableRow>
@@ -400,9 +379,7 @@ function UserManagementTable({
                         </TableBody>
                     </Table>
                 </div>
-                {filteredUsers.length > 10 && (
-                    <p className="text-xs text-center mt-4 text-muted-foreground">Mostrando los primeros 10 resultados de {filteredUsers.length}. Usa el buscador para encontrar más.</p>
-                )}
+                {filteredUsers.length > 10 && <p className="text-xs text-center mt-4 text-muted-foreground">Mostrando primeros 10 resultados.</p>}
             </CardContent>
         </Card>
     );
@@ -413,60 +390,34 @@ function UserManagementTable({
 // ====================================================================
 
 export default function AdminDashboardPage() {
-    // ✅ Agregamos 'user' para obtener el ID del admin actual
     const { user, userProfile, loading: authLoading } = useAuth();
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
     
-    // --- ESTADO GLOBAL DE CONFIGURACIÓN ---
     const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
     const { data: configData } = useDoc<PlatformConfig>(configRef);
 
     const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, maintenanceMode: false });
     const [isSavingConfig, setIsSavingConfig] = useState(false);
-
-    // Estado para el diálogo de confirmación de eliminación
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [deleteType, setDeleteType] = useState<'store' | 'user' | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
-        if (configData) {
-            setLocalConfig(configData);
-        }
+        if (configData) setLocalConfig(configData);
     }, [configData]);
 
-    // 1. Optimización de Carga
-    const usersQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'users');
-    }, [firestore]);
-
+    const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
     const { data: rawUsers, isLoading: usersLoading } = useCollection<PendingUser>(usersQuery);
     
-    // 2. Optimización de Carga
-    const allOrdersQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'orders') as CollectionReference<Order>;
-    }, [firestore]);
-
+    const allOrdersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'orders') as CollectionReference<Order> : null, [firestore]);
     const { data: allOrders, isLoading: ordersLoading } = useCollection<Order>(allOrdersQuery);
     
-    const storesQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'stores');
-    }, [firestore]);
-
+    const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') : null, [firestore]);
     const { data: rawStores, isLoading: storesLoading } = useCollection<any>(storesQuery);
 
-    const users = useMemo(() => {
-        return rawUsers?.map(user => ({
-            ...user,
-            id: (user as any).id, 
-            isApproved: user.isApproved ?? false
-        })) || [];
-    }, [rawUsers]);
+    const users = useMemo(() => rawUsers?.map(u => ({ ...u, id: (u as any).id, isApproved: u.isApproved ?? false })) || [], [rawUsers]);
     
     const pendingStores = users.filter(u => u.role === 'store' && !u.isApproved);
     const pendingDelivery = users.filter(u => u.role === 'delivery' && !u.isApproved);
@@ -475,10 +426,7 @@ export default function AdminDashboardPage() {
         if (!rawStores || !users) return [];
         return rawStores.filter((s: any) => s.isApproved).map((store: any) => {
             const owner = users.find(u => u.id === store.ownerId);
-            return {
-                ...store,
-                ownerName: owner?.displayName || owner?.name || 'Desconocido'
-            };
+            return { ...store, ownerName: owner?.displayName || owner?.name || 'Desconocido' };
         });
     }, [rawStores, users]);
     
@@ -496,25 +444,13 @@ export default function AdminDashboardPage() {
     
     const chartData = useMemo(() => processOrderDataForChart(allOrders || undefined), [allOrders]);
 
-
-    const recentOrders = useMemo(() => {
-        if (!allOrders) return [];
-        return [...allOrders]
-            .sort((a, b) => {
-                const timeA = (a.createdAt as any)?.seconds || 0;
-                const timeB = (b.createdAt as any)?.seconds || 0;
-                return timeB - timeA;
-            })
-            .slice(0, 5);
-    }, [allOrders]);
-
     useEffect(() => {
         if (!authLoading && userProfile?.role !== 'admin') {
             router.push('/'); 
         }
     }, [authLoading, userProfile, router]);
 
-    // --- ACCIONES ---
+    // --- HANDLERS ---
 
     const handleUpdateUserStatus = async (userId: string, isApproved: boolean) => {
         if (!firestore) return;
@@ -570,7 +506,6 @@ export default function AdminDashboardPage() {
         }
     };
 
-    // --- LÓGICA DE ELIMINACIÓN ---
     const confirmDelete = (id: string, type: 'store' | 'user') => {
         setDeleteId(id);
         setDeleteType(type);
@@ -598,17 +533,6 @@ export default function AdminDashboardPage() {
         return <div className="container mx-auto py-20 flex justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
 
-    const formatDate = (date: any) => {
-        if (!date) return '';
-        if (typeof date.toDate === 'function') {
-            return format(date.toDate(), 'HH:mm', { locale: es });
-        }
-        if (date instanceof Date) {
-            return format(date, 'HH:mm', { locale: es });
-        }
-        return '';
-    };
-
     return (
         <div className="container mx-auto pb-20 space-y-8">
             <PageHeader 
@@ -617,8 +541,7 @@ export default function AdminDashboardPage() {
             />
 
             {/* METRICAS PRINCIPALES */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {/* ... (Tarjetas de métricas, sin cambios) ... */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <Card className="shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos Totales</CardTitle>
@@ -629,16 +552,7 @@ export default function AdminDashboardPage() {
                         <p className="text-xs text-muted-foreground mt-1">Volumen bruto procesado</p>
                     </CardContent>
                 </Card>
-                <Card className="shadow-sm hover:shadow-md transition-shadow">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Usuarios</CardTitle>
-                        <Users className="h-4 w-4 text-blue-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-foreground">{globalStats.totalUsers}</div>
-                        <p className="text-xs text-muted-foreground mt-1">Registrados en la plataforma</p>
-                    </CardContent>
-                </Card>
+                
                 <Card className="shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Pedidos</CardTitle>
@@ -651,12 +565,12 @@ export default function AdminDashboardPage() {
                 </Card>
                 <Card className="shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Tiendas</CardTitle>
-                        <Store className="h-4 w-4 text-purple-500" />
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Usuarios</CardTitle>
+                        <Users className="h-4 w-4 text-blue-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-foreground">{globalStats.totalStores}</div>
-                        <p className="text-xs text-muted-foreground mt-1">Activas en la plataforma</p>
+                        <div className="text-2xl font-bold text-foreground">{globalStats.totalUsers}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Registrados en la plataforma</p>
                     </CardContent>
                 </Card>
             </div>
@@ -665,7 +579,7 @@ export default function AdminDashboardPage() {
             <Card className="shadow-sm">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
-                        <Calendar className="h-5 w-5 text-primary" /> Rendimiento de la Última Semana
+                        <Calendar className="h-5 w-5 text-primary" /> Rendimiento Semanal
                     </CardTitle>
                     <CardDescription>Ventas y volumen de pedidos de los últimos 7 días (basado en órdenes Entregadas).</CardDescription>
                 </CardHeader>
@@ -675,10 +589,8 @@ export default function AdminDashboardPage() {
             </Card>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-                
                 {/* COLUMNA IZQUIERDA: CONFIGURACIÓN Y PENDIENTES */}
                 <div className="lg:col-span-3 space-y-6">
-                    
                     <Card className="border-orange-200 bg-orange-50/30 shadow-sm">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-orange-900">
@@ -718,7 +630,7 @@ export default function AdminDashboardPage() {
                         <CardFooter>
                             <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white" onClick={handleSaveConfig} disabled={isSavingConfig}>
                                 {isSavingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                Guardar Configuración
+                                {isSavingConfig ? "Guardando..." : "Guardar Configuración"}
                             </Button>
                         </CardFooter>
                     </Card>
@@ -741,74 +653,35 @@ export default function AdminDashboardPage() {
                     />
                 </div>
 
-                {/* ULTIMOS PEDIDOS (Derecha, 4 cols) */}
-                <div className="lg:col-span-4">
-                    <Card className="h-full shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Clock className="h-5 w-5 text-primary" /> Actividad Reciente
-                            </CardTitle>
-                            <CardDescription>Últimos pedidos recibidos en la plataforma.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                {recentOrders.map(order => (
-                                    <div key={order.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0 hover:bg-muted/20 p-2 rounded-lg transition-colors">
-                                        <div className="flex items-start gap-3">
-                                            <div className="bg-primary/10 p-2 rounded-full mt-1 shrink-0">
-                                                <Package className="h-4 w-4 text-primary" />
-                                            </div>
-                                            <div>
-                                                <p className="font-medium text-sm text-foreground">{order.storeName}</p>
-                                                <p className="text-xs text-muted-foreground">Cliente: <span className="font-semibold">{order.customerName || 'Invitado'}</span></p>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <Badge variant="outline" className="text-[10px] h-5">{order.status}</Badge>
-                                                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                                        {formatDate(order.createdAt)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="font-bold text-sm block text-foreground">${order.total?.toFixed(2)}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                                {recentOrders.length === 0 && <p className="text-center text-muted-foreground py-8">No hay actividad reciente.</p>}
-                            </div>
-                        </CardContent>
-                    </Card>
+                {/* COLUMNA DERECHA: TIENDAS Y USUARIOS */}
+                <div className="lg:col-span-4 space-y-6">
+                    <ActiveStoresTable stores={approvedStores} onToggleMaintenance={handleToggleStoreMaintenance} onDeleteStore={(id) => confirmDelete(id, 'store')} />
+                    <UserManagementTable users={users} onUpdateRole={handleRoleChange} onDeleteUser={(id) => confirmDelete(id, 'user')} currentUserId={user?.uid} />
                 </div>
             </div>
 
-            {/* SECCIÓN: GESTIÓN DE TIENDAS ACTIVAS */}
-            <ActiveStoresTable stores={approvedStores} onToggleMaintenance={handleToggleStoreMaintenance} onDeleteStore={(id) => confirmDelete(id, 'store')} />
-
-            {/* TABLA DE GESTIÓN DE USUARIOS (Abajo, ancho completo) */}
-            <UserManagementTable users={users} onUpdateRole={handleRoleChange} onDeleteUser={(id) => confirmDelete(id, 'user')} currentUserId={user?.uid} />
-
-            {/* DIÁLOGO DE CONFIRMACIÓN */}
+            {/* DIÁLOGO DE ELIMINACIÓN */}
             <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
                 <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                    Esta acción no se puede deshacer. Se eliminará permanentemente 
-                    {deleteType === 'store' ? ' la tienda y sus productos' : ' el perfil del usuario'} de la base de datos.
-                    {deleteType === 'store' && " La tienda dejará de aparecer en el inicio inmediatamente."}
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction 
-                        onClick={(e) => { e.preventDefault(); handleDelete(); }} 
-                        className="bg-red-600 hover:bg-red-700"
-                        disabled={isDeleting}
-                    >
-                    {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                    {isDeleting ? "Eliminando..." : "Sí, eliminar"}
-                    </AlertDialogAction>
-                </AlertDialogFooter>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                        Esta acción no se puede deshacer. Se eliminará permanentemente 
+                        {deleteType === 'store' ? ' la tienda y sus productos' : ' el perfil del usuario'} de la base de datos.
+                        {deleteType === 'store' && " La tienda dejará de aparecer en el inicio inmediatamente."}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={(e) => { e.preventDefault(); handleDelete(); }} 
+                            className="bg-red-600 hover:bg-red-700"
+                            disabled={isDeleting}
+                        >
+                        {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                        {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
         </div>
