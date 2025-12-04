@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+// ✅ Importamos la nueva función para pedir permisos
+import { useCollection, useFirestore, useMemoFirebase, requestNotificationPermission } from '@/lib/firebase';
 import { collection, query, where, limit, doc, updateDoc, writeBatch } from 'firebase/firestore'; 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2 } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2, BellRing } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +19,16 @@ export function Notifications() {
   const router = useRouter();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  
+  // Estado para saber si ya tenemos permisos
+  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
+
+  // 1. Verificar estado actual de permisos al cargar
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+        setPermissionStatus(Notification.permission);
+    }
+  }, []);
 
   // Consulta simplificada
   const notifsQuery = useMemoFirebase(() => {
@@ -40,6 +51,41 @@ export function Notifications() {
   
   const unreadCount = notifications.filter((n: any) => !n.read).length;
 
+  // ✅ 2. MANEJADOR: ACTIVAR NOTIFICACIONES
+  const handleEnableNotifications = async () => {
+      const token = await requestNotificationPermission();
+      
+      if (token && user && firestore) {
+          try {
+              // Guardamos el Token en el perfil del usuario
+              // Esto es CRUCIAL: Sin esto, el servidor no sabe a quién notificar
+              await updateDoc(doc(firestore, 'users', user.uid), { 
+                  fcmToken: token,
+                  notificationsEnabled: true
+              });
+              
+              setPermissionStatus('granted');
+              toast({ 
+                  title: "¡Notificaciones Activadas!", 
+                  description: "Te avisaremos cuando haya novedades en tu pedido.",
+                  className: "bg-green-50 border-green-200 text-green-900"
+              });
+          } catch (error) {
+              console.error("Error guardando token:", error);
+              toast({ variant: 'destructive', title: "Error", description: "No pudimos guardar tu preferencia." });
+          }
+      } else {
+          // Si el usuario bloqueó los permisos anteriormente
+          if (Notification.permission === 'denied') {
+              toast({ 
+                  variant: 'destructive', 
+                  title: "Permiso denegado", 
+                  description: "Debes habilitar las notificaciones en la configuración de tu navegador." 
+              });
+          }
+      }
+  };
+
   const handleNotificationClick = async (notification: any) => {
     setOpen(false); 
     
@@ -56,7 +102,6 @@ export function Notifications() {
     }
   };
 
-  // ✅ FUNCIÓN: Borrar todas las notificaciones visibles
   const handleClearAll = async () => {
       if (!firestore || notifications.length === 0) return;
       
@@ -94,17 +139,33 @@ export function Notifications() {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="end">
-        <div className="p-4 border-b font-semibold flex justify-between items-center bg-muted/20">
-            <span className="text-sm">Notificaciones</span>
-            <div className="flex items-center gap-2">
-                {unreadCount > 0 && <Badge variant="secondary" className="text-[10px] h-5">{unreadCount} nuevas</Badge>}
-                {notifications.length > 0 && (
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500" onClick={handleClearAll} title="Borrar todas">
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
-                )}
+        <div className="p-4 border-b bg-muted/20">
+            <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-semibold">Notificaciones</span>
+                <div className="flex items-center gap-2">
+                    {unreadCount > 0 && <Badge variant="secondary" className="text-[10px] h-5">{unreadCount} nuevas</Badge>}
+                    {notifications.length > 0 && (
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500" onClick={handleClearAll} title="Borrar todas">
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
             </div>
+
+            {/* ✅ BOTÓN PARA ACTIVAR NOTIFICACIONES (Solo si no están activas) */}
+            {permissionStatus === 'default' && (
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 mt-2 h-8 text-xs"
+                    onClick={handleEnableNotifications}
+                >
+                    <BellRing className="mr-2 h-3 w-3" />
+                    Activar Avisos Push
+                </Button>
+            )}
         </div>
+
         <ScrollArea className="h-[300px]">
           {!notifications || notifications.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">

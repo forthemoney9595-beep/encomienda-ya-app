@@ -2,6 +2,8 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, onSnapshot, DocumentReference, Query, CollectionReference } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+// ✅ IMPORTAMOS MESSAGING
+import { getMessaging, getToken, Messaging } from 'firebase/messaging';
 import { useEffect, useState, useMemo } from 'react';
 
 // --- CONFIGURACIÓN ---
@@ -20,13 +22,55 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// --- INICIALIZACIÓN SEGURA DE MESSAGING (Solo Cliente) ---
+let messaging: Messaging | null = null;
+
+if (typeof window !== 'undefined') {
+  try {
+    // Solo inicializamos si estamos en el navegador
+    messaging = getMessaging(app);
+  } catch (error) {
+    console.warn("Firebase Messaging no soportado en este navegador o contexto.");
+  }
+}
+
 // Exportaciones directas de servicios
-export { app, auth, db, storage };
+export { app, auth, db, storage, messaging };
 
 // --- HOOKS SIMPLES ---
 export const useAuth = () => auth;
 export const useFirestore = () => db;
 export const useStorage = () => storage;
+
+// --- NUEVO: FUNCIÓN PARA SOLICITAR PERMISO DE NOTIFICACIONES ---
+export const requestNotificationPermission = async () => {
+  if (!messaging) return null;
+
+  try {
+    // 1. Pedir permiso al navegador
+    const permission = await Notification.requestPermission();
+    
+    if (permission === 'granted') {
+      // 2. Si acepta, obtenemos el Token usando la VAPID Key
+      const token = await getToken(messaging, {
+        vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
+      });
+      
+      if (token) {
+        return token;
+      } else {
+        console.warn('No se pudo obtener el token de registro FCM.');
+        return null;
+      }
+    } else {
+      console.warn('Permiso de notificaciones denegado.');
+      return null;
+    }
+  } catch (error) {
+    console.error('Error al solicitar permiso o token:', error);
+    return null;
+  }
+};
 
 // --- HOOKS AVANZADOS (DATA FETCHING EN TIEMPO REAL) ---
 
@@ -45,7 +89,6 @@ export function useCollection<T = any>(query: Query | CollectionReference | null
     }
 
     setIsLoading(true);
-    // onSnapshot escucha cambios en tiempo real (creación, borrado, actualización)
     const unsubscribe = onSnapshot(query, (snapshot) => {
       const items = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -88,7 +131,7 @@ export function useDoc<T = any>(docRef: DocumentReference | null) {
     }, (error) => {
       console.error("Error fetching doc:", error);
       setIsLoading(false);
-    });
+    }, );
 
     return () => unsubscribe();
   }, [docRef]);
@@ -97,16 +140,15 @@ export function useDoc<T = any>(docRef: DocumentReference | null) {
 }
 
 /**
- * Hook para memoizar referencias de Firebase y evitar re-renders infinitos.
- * Es un wrapper simple sobre useMemo para mayor claridad semántica.
+ * Hook para memoizar referencias de Firebase.
  */
 export function useMemoFirebase<T>(factory: () => T, deps: any[]): T {
   return useMemo(factory, deps);
 }
 
 /**
- * Función legacy para compatibilidad con código antiguo que pudiera usarla.
+ * Función legacy.
  */
 export function getFirebase() {
-  return { firestore: db, auth, storage, app };
+  return { firestore: db, auth, storage, app, messaging };
 }
