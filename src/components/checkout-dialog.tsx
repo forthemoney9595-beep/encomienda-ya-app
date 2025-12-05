@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, CheckCircle2, MapPin, ShoppingBag } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
-import { createOrder, OrderService } from '@/lib/order-service';
+import { OrderService } from '@/lib/order-service'; // Ya no importamos createOrder
 import { useFirestore } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore'; 
 import { useToast } from '@/hooks/use-toast';
@@ -68,29 +68,30 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     setIsProcessing(true);
 
     try {
-        await createOrder(firestore, {
-          userId: user.uid,
-          customerName: userProfile?.name || user.displayName || 'Cliente',
-          customerPhoneNumber: phone || 'Sin teléfono',
-          storeId: storeId,
-          storeName: storeName, 
-          storeAddress: storeAddress,
-          items: items.map(i => ({
-              id: i.id,
-              name: i.name,
-              price: i.price,
-              quantity: i.quantity || 1,
-              imageUrl: i.imageUrl
-          })),
-          shippingInfo: {
-              name: userProfile?.name || 'Cliente',
-              address: address
-          },
-          subtotal,
-          deliveryFee,
-          serviceFee,
-          total
+        // 🔥 CAMBIO CRÍTICO: Llamamos a la API Segura en lugar de crear la orden aquí
+        const response = await fetch('/api/orders/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: user.uid,
+                items: items.map(i => ({ id: i.id, quantity: i.quantity || 1 })), // Solo enviamos IDs y cantidad
+                storeId: storeId,
+                storeName: storeName, // Datos visuales
+                storeAddress: storeAddress,
+                shippingInfo: {
+                    name: userProfile?.name || user.displayName || 'Cliente',
+                    address: address
+                },
+                customerName: userProfile?.name || user.displayName || 'Cliente',
+                customerPhoneNumber: phone || 'Sin teléfono'
+            })
         });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Error al crear pedido");
+        }
 
         setIsSuccess(true);
         clearCart();
@@ -98,12 +99,17 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         setTimeout(() => {
             onOpenChange(false);
             setIsSuccess(false);
-            router.push('/orders'); 
+            // Redirigimos a la nueva orden creada por el servidor
+            if (result.id) {
+                router.push(`/orders/${result.id}`); 
+            } else {
+                router.push('/orders');
+            }
         }, 2500);
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error en checkout:", error);
-        toast({ variant: "destructive", title: "Error al procesar", description: "Intenta nuevamente." });
+        toast({ variant: "destructive", title: "Error al procesar", description: error.message || "Intenta nuevamente." });
     } finally {
         setIsProcessing(false);
     }
@@ -118,9 +124,9 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 </div>
                 <DialogTitle className="text-2xl font-bold text-green-700">¡Solicitud Enviada!</DialogTitle>
                 <DialogDescription>
-                    Hemos enviado tu pedido a <strong>{storeName}</strong>.
+                    Hemos enviado tu pedido a <strong>{storeName}</strong> de forma segura.
                     <br/><br/>
-                    La tienda verificará el stock. Te avisaremos en breve para que realices el pago.
+                    La tienda verificará el stock y te avisaremos para el pago.
                 </DialogDescription>
             </DialogContent>
         </Dialog>
