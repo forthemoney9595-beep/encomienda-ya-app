@@ -9,7 +9,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
         }
 
-        // 1. Buscamos el token del usuario
         const userDoc = await adminDb.collection('users').doc(userId).get();
         
         if (!userDoc.exists) {
@@ -20,28 +19,30 @@ export async function POST(request: Request) {
         const token = userData?.fcmToken;
 
         if (!token) {
-            console.log(`🔕 El usuario ${userId} no tiene token FCM.`);
-            return NextResponse.json({ message: "Usuario sin notificaciones activas" }, { status: 200 });
+            return NextResponse.json({ message: "Usuario sin token" }, { status: 200 });
         }
 
-        // 🔥 CORRECCIÓN: Construimos la URL Absoluta
-        // Usamos la variable de entorno que configuramos en Vercel
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        // 🔥 CORRECCIÓN: HARDCODEAMOS EL DOMINIO DE VERCEL
+        // Reemplaza esto con TU dominio real de Vercel si cambia en el futuro
+        const baseUrl = 'https://encomienda-ya-app.vercel.app';
         
-        // Si el link viene parcial (ej: /orders/123), le pegamos el dominio al principio.
-        // Resultado: https://tu-app.vercel.app/orders/123
+        // Construimos el link absoluto
         const finalLink = link ? `${baseUrl}${link}` : `${baseUrl}/orders`;
 
-        // 2. Enviamos el mensaje
         await adminMessaging.send({
             token: token,
             notification: {
                 title: title,
                 body: body,
             },
+            // Datos ocultos que usará el Service Worker
+            data: {
+                click_action: finalLink,
+                url: finalLink
+            },
             webpush: {
                 fcmOptions: {
-                    link: finalLink // Ahora es un link completo y seguro
+                    link: finalLink
                 },
                 notification: {
                     icon: '/icons/icon-192x192.png',
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true });
 
     } catch (error: any) {
-        console.error("❌ Error enviando Push:", error);
+        console.error("❌ Error Push:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
