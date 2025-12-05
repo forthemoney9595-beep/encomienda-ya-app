@@ -1,53 +1,60 @@
 import { NextResponse } from 'next/server';
-import MercadoPagoConfig, { Preference } from 'mercadopago';
+import { adminDb, adminMessaging } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
-    const accessToken = process.env.MP_ACCESS_TOKEN;
-    if (!accessToken) {
-        return NextResponse.json({ error: "Error de configuración interna" }, { status: 500 });
-    }
-
-    const client = new MercadoPagoConfig({ accessToken });
-
     try {
-        const body = await request.json();
-        const { orderId, items, payerEmail } = body;
+        const { userId, title, body, link } = await request.json();
 
-        if (!orderId || !items || items.length === 0) {
-            return NextResponse.json({ error: "Datos faltantes" }, { status: 400 });
+        if (!userId || !title || !body) {
+            return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
         }
 
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-
-        const preference = new Preference(client);
+        // 1. Buscamos el token del usuario
+        const userDoc = await adminDb.collection('users').doc(userId).get();
         
-        const result = await preference.create({
-            body: {
-                items: items.map((item: any) => ({
-                    id: item.id || 'item-id',
-                    title: item.name || 'Producto',
-                    quantity: Number(item.quantity),
-                    unit_price: Number(item.price),
-                    currency_id: 'ARS',
-                })),
-                external_reference: orderId,
-                payer: {
-                    email: payerEmail || 'test_user_123@testuser.com'
+        if (!userDoc.exists) {
+            return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+        }
+
+        const userData = userDoc.data();
+        const token = userData?.fcmToken;
+
+        if (!token) {
+            console.log(`🔕 El usuario ${userId} no tiene token FCM.`);
+            return NextResponse.json({ message: "Usuario sin notificaciones activas" }, { status: 200 });
+        }
+
+        // 🔥 CORRECCIÓN: Construimos la URL Absoluta
+        // Usamos la variable de entorno que configuramos en Vercel
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        
+        // Si el link viene parcial (ej: /orders/123), le pegamos el dominio al principio.
+        // Resultado: https://tu-app.vercel.app/orders/123
+        const finalLink = link ? `${baseUrl}${link}` : `${baseUrl}/orders`;
+
+        // 2. Enviamos el mensaje
+        await adminMessaging.send({
+            token: token,
+            notification: {
+                title: title,
+                body: body,
+            },
+            webpush: {
+                fcmOptions: {
+                    link: finalLink // Ahora es un link completo y seguro
                 },
-                back_urls: {
-                    success: `${baseUrl}/orders/${orderId}?status=success`,
-                    failure: `${baseUrl}/orders/${orderId}?status=failure`,
-                    pending: `${baseUrl}/orders/${orderId}?status=pending`,
-                },
-                // ❌ COMENTAMOS ESTA LÍNEA PARA EVITAR EL ERROR
-                // auto_return: 'approved', 
+                notification: {
+                    icon: '/icons/icon-192x192.png',
+                    badge: '/icons/icon-72x72.png'
+                }
             }
         });
 
-        return NextResponse.json({ url: result.init_point });
+        console.log(`🔔 Notificación enviada a ${userId} con link: ${finalLink}`);
+        return NextResponse.json({ success: true });
 
     } catch (error: any) {
-        console.error("❌ ERROR MP:", error); 
+        console.error("❌ Error enviando Push:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
