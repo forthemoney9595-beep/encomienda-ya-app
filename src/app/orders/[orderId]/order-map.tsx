@@ -1,87 +1,106 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { Store, Home } from 'lucide-react';
-import ReactDOMServer from 'react-dom/server';
-import type { Order } from '@/lib/order-service';
+import { Order } from '@/lib/order-service';
 
-// Fix para el ícono de marcador por defecto que a veces no carga
-// @ts-ignore
-delete (L.Icon.Default.prototype)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+// --- CONFIGURACIÓN DE ÍCONOS ---
+// Leaflet tiene problemas con los iconos por defecto en Next.js. 
+// Definimos iconos personalizados simples.
 
+const createCustomIcon = (color: string, emoji: string) => {
+    return L.divIcon({
+        className: 'custom-icon',
+        html: `<div style="
+            background-color: ${color};
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        ">${emoji}</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15], // Centro del icono
+        popupAnchor: [0, -15]
+    });
+};
+
+const storeIcon = createCustomIcon('#3b82f6', '🏪'); // Azul
+const customerIcon = createCustomIcon('#ef4444', '🏠'); // Rojo
+const driverIcon = createCustomIcon('#22c55e', '🛵'); // Verde (Moto)
+
+// Componente auxiliar para re-centrar el mapa cuando se mueve la moto
+// ✅ CORRECCIÓN: Agregamos el tipo de retorno ": null"
+function MapUpdater({ center }: { center: [number, number] }): null {
+    const map = useMap();
+    useEffect(() => {
+        if (center) {
+            map.flyTo(center, map.getZoom()); // Animación suave
+        }
+    }, [center, map]);
+    return null;
+}
 
 interface OrderMapProps {
     order: Order;
 }
 
-// Función para crear íconos personalizados
-const createIcon = (icon: React.ReactElement, className: string) => {
-  return L.divIcon({
-    html: ReactDOMServer.renderToString(
-        <div className={`p-2 rounded-full shadow-lg ${className}`}>
-            {icon}
-        </div>
-    ),
-    className: 'bg-transparent border-0',
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
-  });
-};
-
-const storeIcon = createIcon(<Store className="h-4 w-4 text-white" />, 'bg-primary');
-const customerIcon = createIcon(<Home className="h-4 w-4 text-white" />, 'bg-destructive');
-
-
 export default function OrderMap({ order }: OrderMapProps) {
-    const { storeCoords, customerCoords, storeName, customerName, shippingAddress, status } = order;
+    // Coordenadas base (Tienda y Cliente)
+    const storePos: [number, number] | null = order.storeCoords 
+        ? [order.storeCoords.latitude, order.storeCoords.longitude] 
+        : null;
+        
+    const customerPos: [number, number] | null = order.customerCoords 
+        ? [order.customerCoords.latitude, order.customerCoords.longitude] 
+        : null;
 
-    if (!storeCoords || !customerCoords) {
-        return <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Faltan datos de ubicación para este pedido.</div>;
+    // Coordenadas dinámicas del Repartidor
+    // Firestore puede devolver el objeto driverCoords dentro de la orden
+    const driverCoords = (order as any).driverCoords;
+    const driverPos: [number, number] | null = driverCoords 
+        ? [driverCoords.latitude, driverCoords.longitude] 
+        : null;
+
+    if (!storePos || !customerPos) {
+        return <div className="h-full w-full flex items-center justify-center bg-gray-100 text-gray-500">Faltan coordenadas</div>;
     }
 
-    // @ts-ignore - Leaflet types mismatch workaround
-    const storePosition: [number, number] = [storeCoords.latitude, storeCoords.longitude];
-    // @ts-ignore - Leaflet types mismatch workaround
-    const customerPosition: [number, number] = [customerCoords.latitude, customerCoords.longitude];
-    
-    const bounds = L.latLngBounds(storePosition, customerPosition);
-
-    const polylineOptions = { color: 'hsl(var(--primary))', weight: 5 };
+    // Centro inicial: La tienda
+    const initialCenter = storePos;
 
     return (
-        <MapContainer
-            bounds={bounds}
-            boundsOptions={{ padding: [50, 50] }}
-            scrollWheelZoom={false}
-            className="h-full w-full rounded-lg"
-        >
+        <MapContainer center={initialCenter} zoom={14} style={{ height: '100%', width: '100%' }}>
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            
-            <Marker position={storePosition} icon={storeIcon}>
-                <Popup>
-                    <strong>Tienda:</strong> {storeName}
-                </Popup>
-            </Marker>
-            
-            <Marker position={customerPosition} icon={customerIcon}>
-                <Popup>
-                    <strong>Cliente:</strong> {customerName || shippingAddress.name}
-                </Popup>
+
+            {/* MARCADOR TIENDA */}
+            <Marker position={storePos} icon={storeIcon}>
+                <Popup>Tienda: {order.storeName}</Popup>
             </Marker>
 
-            {status === 'En reparto' && (
-                <Polyline positions={[storePosition, customerPosition]} pathOptions={polylineOptions} />
+            {/* MARCADOR CLIENTE */}
+            <Marker position={customerPos} icon={customerIcon}>
+                <Popup>Entrega: {order.customerName}</Popup>
+            </Marker>
+
+            {/* MARCADOR REPARTIDOR (DINÁMICO) */}
+            {driverPos && (
+                <>
+                    <Marker position={driverPos} icon={driverIcon}>
+                        <Popup>Repartidor en camino</Popup>
+                    </Marker>
+                    {/* Si la orden está en reparto, la cámara sigue a la moto */}
+                    {order.status === 'En reparto' && <MapUpdater center={driverPos} />}
+                </>
             )}
         </MapContainer>
     );

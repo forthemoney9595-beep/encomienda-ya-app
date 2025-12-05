@@ -4,7 +4,6 @@ import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-// ✅ IMPORTACIÓN ACTUALIZADA: Agregamos OrderService
 import { type Order, OrderService } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -26,6 +25,7 @@ import { ReviewDialog } from '@/components/review-dialog';
 import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
 import { ChatWindow } from './chat-window'; 
+import { LocationTracker } from '@/components/location-tracker';
 
 const formatDate = (date: any) => {
     if (!date) return 'Fecha desconocida';
@@ -126,14 +126,11 @@ export default function OrderTrackingPage() {
 
   const isLoading = authLoading || orderLoading;
 
-  // ✅ EFECTO: PROCESAR RETORNO DE MERCADOPAGO
   useEffect(() => {
     const status = searchParams.get('status');
-    
     if (status && order && !processedPayment.current) {
         if (status === 'success' && order.status === 'Pendiente de Pago') {
             processedPayment.current = true;
-            
             const confirmPayment = async () => {
                 if(!orderRef) return;
                 try {
@@ -150,11 +147,7 @@ export default function OrderTrackingPage() {
             };
             confirmPayment();
         } else if (status === 'failure') {
-            toast({ 
-                variant: "destructive", 
-                title: "El pago falló", 
-                description: "MercadoPago no pudo procesar tu tarjeta. Intenta nuevamente." 
-            });
+            toast({ variant: "destructive", title: "El pago falló", description: "MercadoPago no pudo procesar tu tarjeta. Intenta nuevamente." });
             router.replace(`/orders/${orderId}`);
         }
     }
@@ -207,7 +200,6 @@ export default function OrderTrackingPage() {
                 imageUrl: item.imageUrl || '',
             }, order.storeId);
         });
-        
         toast({ title: "Productos agregados", description: "Revisa tu carrito para finalizar la compra." });
     };
 
@@ -250,7 +242,7 @@ export default function OrderTrackingPage() {
         }
     }
 
-    // ✅ FUNCIÓN ACTUALIZADA: Notifica al chat interno Y envía Push al Repartidor
+    // ✅ FUNCIÓN MEJORADA: Notificación Push al Repartidor
     const handleNotifyDriver = async () => {
         if (!firestore || !order || !myUserProfile || !orderRef) return;
         setIsUpdatingStatus(true);
@@ -268,14 +260,14 @@ export default function OrderTrackingPage() {
             // 2. Actualizar estado en DB
             await updateDoc(orderRef, { readyForPickup: true });
 
-            // 3. ✅ NUEVO: DISPARAR NOTIFICACIÓN PUSH AL REPARTIDOR
+            // 3. ✅ ENVIAR PUSH AL REPARTIDOR ASIGNADO
             if (order.deliveryPersonId) {
                 await OrderService.sendNotification(
                     firestore,
-                    order.deliveryPersonId, // ID del repartidor
-                    "📦 Pedido Listo",
-                    `La tienda ${order.storeName} indica que ya puedes retirar el pedido.`,
-                    "delivery", // Icono de camioncito
+                    order.deliveryPersonId,
+                    "📦 ¡Pedido Listo!",
+                    `La tienda ${order.storeName} ya tiene el pedido listo para retirar.`,
+                    "delivery",
                     order.id
                 );
             }
@@ -298,17 +290,20 @@ export default function OrderTrackingPage() {
   if (isLoading || !order) return <OrderPageSkeleton />;
   
   const displayTotal = order.total || (order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + order.deliveryFee);
-  
   const isBuyer = user?.uid === order.userId;
   const isStoreOwner = myUserProfile?.role === 'store' && myUserProfile?.storeId === order.storeId; 
-  
   const isDeliveryPerson = myUserProfile?.role === 'delivery' && user?.uid === order.deliveryPersonId;
   const isAvailableToAccept = myUserProfile?.role === 'delivery' && order.status === 'En preparación' && !order.deliveryPersonId;
-
   const showChat = isStoreOwner || isDeliveryPerson; 
 
   return (
     <div className="container mx-auto">
+      <LocationTracker 
+        orderId={order.id} 
+        isDriver={!!isDeliveryPerson} 
+        status={order.status} 
+      />
+
       <AlertDialog open={isReorderAlertOpen} onOpenChange={setReorderAlertOpen}>
           <AlertDialogContent>
               <AlertDialogHeader><AlertDialogTitleComponent>¿Vaciar carrito actual?</AlertDialogTitleComponent><AlertDialogDescriptionComponent>Tu carrito contiene productos de otra tienda.</AlertDialogDescriptionComponent></AlertDialogHeader>
@@ -340,25 +335,15 @@ export default function OrderTrackingPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    
                     {/* ACCIONES REPARTIDOR */}
                     {isAvailableToAccept && (
                         <div className="mb-6 bg-green-50 border border-green-200 rounded-xl overflow-hidden shadow-sm">
                             <div className="p-4 bg-green-100 border-b border-green-200 flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-green-900 flex items-center gap-2">
-                                    <Bike className="h-5 w-5" /> Nueva Solicitud
-                                </h3>
-                                <span className="bg-green-600 text-white px-3 py-1 rounded-full font-bold text-sm">
-                                    +${order.deliveryFee.toFixed(2)}
-                                </span>
+                                <h3 className="text-lg font-bold text-green-900 flex items-center gap-2"><Bike className="h-5 w-5" /> Nueva Solicitud</h3>
+                                <span className="bg-green-600 text-white px-3 py-1 rounded-full font-bold text-sm">+${order.deliveryFee.toFixed(2)}</span>
                             </div>
                             <div className="p-4 space-y-3">
-                                <Button 
-                                    className="w-full mt-2 bg-green-600 hover:bg-green-700 text-white shadow-md transition-all hover:scale-[1.02]" 
-                                    size="lg" 
-                                    onClick={handleAcceptOrder}
-                                    disabled={isAccepting}
-                                >
+                                <Button className="w-full mt-2 bg-green-600 hover:bg-green-700 text-white shadow-md transition-all hover:scale-[1.02]" size="lg" onClick={handleAcceptOrder} disabled={isAccepting}>
                                     {isAccepting ? "Aceptando..." : "Aceptar y Comenzar Viaje"}
                                 </Button>
                             </div>
@@ -370,13 +355,8 @@ export default function OrderTrackingPage() {
                          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
                             <h3 className="text-md font-bold text-blue-900 mb-2">Coordinación de Entrega</h3>
                             <p className="text-sm text-blue-800 mb-3">Cuando termines de preparar, avisa al repartidor con un toque.</p>
-                            <Button 
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
-                                onClick={handleNotifyDriver}
-                                disabled={isUpdatingStatus || (order as any).readyForPickup}
-                            >
-                                <BellRing className="mr-2 h-4 w-4" /> 
-                                {isUpdatingStatus ? "Enviando..." : ((order as any).readyForPickup ? "Repartidor Notificado" : "¡Pedido Listo! Avisar Repartidor")}
+                            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={handleNotifyDriver} disabled={isUpdatingStatus || (order as any).readyForPickup}>
+                                <BellRing className="mr-2 h-4 w-4" /> {isUpdatingStatus ? "Enviando..." : ((order as any).readyForPickup ? "Repartidor Notificado" : "¡Pedido Listo! Avisar Repartidor")}
                             </Button>
                         </div>
                     )}
@@ -384,60 +364,30 @@ export default function OrderTrackingPage() {
                     {/* ESTADO DE ENTREGA REPARTIDOR */}
                     {isDeliveryPerson && order.status === 'Entregado' && (
                          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col items-center text-center">
-                            <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
-                                <CheckCircle className="h-6 w-6 text-green-600" />
-                            </div>
+                            <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center mb-3"><CheckCircle className="h-6 w-6 text-green-600" /></div>
                             <h3 className="text-lg font-bold text-gray-900">¡Entrega Completada!</h3>
                             <p className="text-sm text-gray-600 mb-3">Has completado esta entrega exitosamente.</p>
-                            <div className="px-4 py-2 bg-green-600 text-white rounded-full font-bold text-lg flex items-center gap-2 shadow-sm">
-                                <DollarSign className="h-5 w-5" />
-                                Ganaste ${order.deliveryFee.toFixed(2)}
-                            </div>
+                            <div className="px-4 py-2 bg-green-600 text-white rounded-full font-bold text-lg flex items-center gap-2 shadow-sm"><DollarSign className="h-5 w-5" />Ganaste ${order.deliveryFee.toFixed(2)}</div>
                         </div>
                     )}
 
                     {isDeliveryPerson && order.status !== 'Entregado' && order.status !== 'Cancelado' && (
                         <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl overflow-hidden shadow-sm">
-                            <div className="p-4 bg-blue-100 border-b border-blue-200">
-                                <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-                                    <Navigation className="h-5 w-5" /> Tu Misión Actual
-                                </h3>
-                            </div>
+                            <div className="p-4 bg-blue-100 border-b border-blue-200"><h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><Navigation className="h-5 w-5" /> Tu Misión Actual</h3></div>
                             <div className="p-4 space-y-4">
                                 {(order as any).readyForPickup && order.status === 'En preparación' && (
-                                    <div className="p-3 bg-green-100 text-green-800 rounded-lg border border-green-300 font-semibold text-center flex items-center justify-center gap-2 animate-pulse">
-                                        <BellRing className="h-5 w-5" /> ¡La tienda marcó el pedido como LISTO!
-                                    </div>
+                                    <div className="p-3 bg-green-100 text-green-800 rounded-lg border border-green-300 font-semibold text-center flex items-center justify-center gap-2 animate-pulse"><BellRing className="h-5 w-5" /> ¡La tienda marcó el pedido como LISTO!</div>
                                 )}
-
                                 <div className="grid grid-cols-2 gap-3">
-                                    <Button variant="outline" className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" onClick={() => openGoogleMaps('Dirección Tienda')}>
-                                        <MapPin className="mr-2 h-4 w-4" /> Ir a Tienda
-                                    </Button>
-                                    <Button variant="outline" className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" onClick={() => openGoogleMaps(order.shippingInfo?.address || order.shippingAddress?.address)}>
-                                        <MapPin className="mr-2 h-4 w-4" /> Ir a Cliente
-                                    </Button>
+                                    <Button variant="outline" className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" onClick={() => openGoogleMaps('Dirección Tienda')}><MapPin className="mr-2 h-4 w-4" /> Ir a Tienda</Button>
+                                    <Button variant="outline" className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" onClick={() => openGoogleMaps(order.shippingInfo?.address || order.shippingAddress?.address)}><MapPin className="mr-2 h-4 w-4" /> Ir a Cliente</Button>
                                 </div>
                                 <Separator className="bg-blue-200"/>
                                 {order.status === 'En preparación' && (
-                                    <Button 
-                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-lg" 
-                                        onClick={() => handleUpdateStatus('En reparto')}
-                                        disabled={isUpdatingStatus}
-                                    >
-                                        <PackageCheck className="mr-2 h-5 w-5" /> 
-                                        {isUpdatingStatus ? "Actualizando..." : "Ya recogí el pedido"}
-                                    </Button>
+                                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-lg" onClick={() => handleUpdateStatus('En reparto')} disabled={isUpdatingStatus}><PackageCheck className="mr-2 h-5 w-5" /> {isUpdatingStatus ? "Actualizando..." : "Ya recogí el pedido"}</Button>
                                 )}
                                 {order.status === 'En reparto' && (
-                                    <Button 
-                                        className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg" 
-                                        onClick={() => handleUpdateStatus('Entregado')}
-                                        disabled={isUpdatingStatus}
-                                    >
-                                        <CheckCircle className="mr-2 h-5 w-5" /> 
-                                        {isUpdatingStatus ? "Finalizando..." : "Confirmar Entrega"}
-                                    </Button>
+                                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg" onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdatingStatus}><CheckCircle className="mr-2 h-5 w-5" /> {isUpdatingStatus ? "Finalizando..." : "Confirmar Entrega"}</Button>
                                 )}
                             </div>
                         </div>
@@ -445,9 +395,7 @@ export default function OrderTrackingPage() {
 
                     <CardDescription>
                         <span className="font-semibold text-primary">{order.storeName}</span> 
-                        {isStoreOwner && order.customerName && (
-                             <span className="text-muted-foreground ml-2">para **{order.customerName}**</span>
-                        )}
+                        {isStoreOwner && order.customerName && (<span className="text-muted-foreground ml-2">para **{order.customerName}**</span>)}
                         {!isStoreOwner && <span className="text-muted-foreground">Pedido a</span>}
                     </CardDescription>
 
@@ -477,14 +425,8 @@ export default function OrderTrackingPage() {
                      {isStoreOwner && customerProfile && (
                         <div className="border-t pt-4 space-y-2">
                            <h3 className="font-semibold text-lg">Contacto del Cliente</h3>
-                           <p className="text-sm text-muted-foreground flex items-center">
-                               <Phone className="h-4 w-4 mr-2" />
-                               Teléfono: {order.customerPhoneNumber || customerProfile.phoneNumber || 'No especificado'}
-                           </p>
-                           <p className="text-sm text-muted-foreground flex items-center">
-                               <Mail className="h-4 w-4 mr-2" />
-                               Email: {customerProfile.email}
-                           </p>
+                           <p className="text-sm text-muted-foreground flex items-center"><Phone className="h-4 w-4 mr-2" />Teléfono: {order.customerPhoneNumber || customerProfile.phoneNumber || 'No especificado'}</p>
+                           <p className="text-sm text-muted-foreground flex items-center"><Mail className="h-4 w-4 mr-2" />Email: {customerProfile.email}</p>
                         </div>
                      )}
                      <div>
