@@ -214,8 +214,69 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
   return { id: docRef.id, ...orderData };
 };
 
+// ✅ FUNCIÓN CORREGIDA: Ahora sí notifica al cliente
 export const updateOrderStatus = async (db: Firestore, orderId: string, status: OrderStatus) => {
   if (!db) throw new Error("Firestore instance is required");
+  
   const orderRef = doc(db, 'orders', orderId);
+  
+  // 1. Actualizamos el estado en la base de datos
   await updateDoc(orderRef, { status });
+
+  // 2. Notificamos al Cliente sobre el cambio
+  try {
+      // Leemos la orden para saber quién es el cliente
+      const orderSnap = await getDoc(orderRef);
+      
+      if (orderSnap.exists()) {
+          const orderData = orderSnap.data();
+          const userId = orderData.userId;
+          const storeName = orderData.storeName || "La Tienda";
+
+          // Definimos el mensaje según el estado
+          let title = "";
+          let message = "";
+
+          switch (status) {
+              case 'Pendiente de Pago':
+                  title = "✅ ¡Pedido Aceptado!";
+                  message = `${storeName} confirmó stock. Entra para pagar.`;
+                  break;
+              case 'En preparación':
+                  title = "👨‍🍳 Cocinando";
+                  message = `${storeName} está preparando tu pedido.`;
+                  break;
+              case 'En reparto':
+                  title = "🛵 ¡En Camino!";
+                  message = "El repartidor está yendo a tu domicilio.";
+                  break;
+              case 'Entregado':
+                  title = "🏠 ¡Llegamos!";
+                  message = "Disfruta tu pedido. No olvides calificar.";
+                  break;
+              case 'Rechazado':
+                  title = "❌ Pedido Rechazado";
+                  message = `${storeName} no puede tomar tu pedido ahora.`;
+                  break;
+              case 'Cancelado':
+                  title = "🚫 Pedido Cancelado";
+                  message = "El pedido ha sido cancelado.";
+                  break;
+          }
+
+          // Si hay mensaje y usuario, disparamos la notificación
+          if (title && userId) {
+              await OrderService.sendNotification(
+                  db,
+                  userId,
+                  title,
+                  message,
+                  "order_status",
+                  orderId
+              );
+          }
+      }
+  } catch (error) {
+      console.error("Error enviando notificación al cliente:", error);
+  }
 };
