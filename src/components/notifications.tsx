@@ -51,38 +51,40 @@ export function Notifications() {
   
   const unreadCount = notifications.filter((n: any) => !n.read).length;
 
-  // ✅ 2. MANEJADOR: ACTIVAR NOTIFICACIONES
+  // ✅ 2. MANEJADOR: ACTIVAR NOTIFICACIONES CON LOGS
   const handleEnableNotifications = async () => {
-      const token = await requestNotificationPermission();
+      console.log("🔔 Botón presionado: Iniciando proceso de activación..."); 
       
-      if (token && user && firestore) {
-          try {
-              // Guardamos el Token en el perfil del usuario
-              // Esto es CRUCIAL: Sin esto, el servidor no sabe a quién notificar
+      try {
+          const token = await requestNotificationPermission();
+          
+          if (token && user && firestore) {
+              console.log("💾 Guardando token en Firestore para usuario:", user.uid);
+              
               await updateDoc(doc(firestore, 'users', user.uid), { 
                   fcmToken: token,
                   notificationsEnabled: true
               });
               
-              setPermissionStatus('granted');
+              console.log("✅ Guardado en Firestore completado con éxito.");
+              setPermissionStatus('granted'); // Actualizamos UI para ocultar botón
+              
               toast({ 
                   title: "¡Notificaciones Activadas!", 
                   description: "Te avisaremos cuando haya novedades en tu pedido.",
                   className: "bg-green-50 border-green-200 text-green-900"
               });
-          } catch (error) {
-              console.error("Error guardando token:", error);
-              toast({ variant: 'destructive', title: "Error", description: "No pudimos guardar tu preferencia." });
+          } else {
+              console.error("❌ Fallo: No se obtuvo token o no hay usuario activo.");
+              // Si el usuario ya dio permiso pero el token falló, actualizamos la UI para que no moleste
+              if (Notification.permission === 'granted') {
+                  console.log("ℹ️ Permiso concedido, ocultando botón aunque token falló.");
+                  setPermissionStatus('granted'); 
+              }
           }
-      } else {
-          // Si el usuario bloqueó los permisos anteriormente
-          if (Notification.permission === 'denied') {
-              toast({ 
-                  variant: 'destructive', 
-                  title: "Permiso denegado", 
-                  description: "Debes habilitar las notificaciones en la configuración de tu navegador." 
-              });
-          }
+      } catch (error) {
+          console.error("❌ Error CRÍTICO en handleEnableNotifications:", error);
+          toast({ variant: 'destructive', title: "Error", description: "Revisa la consola (F12) para más detalles." });
       }
   };
 

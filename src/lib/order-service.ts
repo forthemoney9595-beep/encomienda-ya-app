@@ -109,8 +109,10 @@ export const OrderService = {
         };
     },
 
+    // ✅ VERSIÓN MEJORADA: Guarda en DB + Envía Push
     sendNotification: async (db: Firestore, userId: string, title: string, message: string, type: string, orderId?: string) => {
         try {
+            // 1. Guardar notificación interna (Campanita)
             await addDoc(collection(db, 'notifications'), {
                 userId,
                 title,
@@ -121,6 +123,20 @@ export const OrderService = {
                 createdAt: serverTimestamp(),
                 icon: 'bell'
             });
+
+            // 2. Disparar notificación Push (Celular/PC)
+            // Llamamos a nuestra propia API en segundo plano sin detener el flujo
+            fetch('/api/notify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId,
+                    title,
+                    body: message,
+                    link: orderId ? `/orders/${orderId}` : '/orders'
+                })
+            }).catch(err => console.error("Error llamando API Push:", err));
+
         } catch (error) {
             console.error("Error enviando notificación:", error);
         }

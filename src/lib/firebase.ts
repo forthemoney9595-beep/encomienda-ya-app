@@ -2,7 +2,6 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, onSnapshot, DocumentReference, Query, CollectionReference } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-// ✅ IMPORTAMOS MESSAGING
 import { getMessaging, getToken, Messaging } from 'firebase/messaging';
 import { useEffect, useState, useMemo } from 'react';
 
@@ -16,68 +15,73 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// --- INICIALIZACIÓN (SINGLETON) ---
+// --- INICIALIZACIÓN ---
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// --- INICIALIZACIÓN SEGURA DE MESSAGING (Solo Cliente) ---
+// --- MESSAGING ---
 let messaging: Messaging | null = null;
 
 if (typeof window !== 'undefined') {
   try {
-    // Solo inicializamos si estamos en el navegador
     messaging = getMessaging(app);
+    console.log("✅ Firebase Messaging inicializado correctamente.");
   } catch (error) {
-    console.warn("Firebase Messaging no soportado en este navegador o contexto.");
+    console.error("❌ Error inicializando Messaging:", error);
   }
 }
 
-// Exportaciones directas de servicios
 export { app, auth, db, storage, messaging };
 
-// --- HOOKS SIMPLES ---
+// --- HOOKS ---
 export const useAuth = () => auth;
 export const useFirestore = () => db;
 export const useStorage = () => storage;
 
-// --- NUEVO: FUNCIÓN PARA SOLICITAR PERMISO DE NOTIFICACIONES ---
+// --- SOLICITAR PERMISO (DEBUG MODE) ---
 export const requestNotificationPermission = async () => {
-  if (!messaging) return null;
+  console.log("🚀 Iniciando solicitud de permisos...");
+
+  if (!messaging) {
+    console.error("❌ Messaging es NULL. No se puede pedir token.");
+    return null;
+  }
 
   try {
-    // 1. Pedir permiso al navegador
     const permission = await Notification.requestPermission();
+    console.log("Estado del permiso:", permission);
     
     if (permission === 'granted') {
-      // 2. Si acepta, obtenemos el Token usando la VAPID Key
+      console.log("Intentando obtener token con VAPID Key...");
+      
+      // ⚠️ HARDCODE TEMPORAL PARA DESCARTAR ERRORES DE ENV
+      // Usamos tu clave directa
+      const currentVapidKey = "BIiNvdw3se4IvGtF8W-lhWqqqxcVGmG1ALI1Po9ERzp8Mr25wSc7Yg7pdP_NUpKWJ-lwMmZr3vWqbkmnbKTvFfQ";
+
       const token = await getToken(messaging, {
-        vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
+        vapidKey: currentVapidKey
       });
       
       if (token) {
+        console.log("✅ ¡TOKEN GENERADO CON ÉXITO!", token);
         return token;
       } else {
-        console.warn('No se pudo obtener el token de registro FCM.');
+        console.warn('⚠️ Se obtuvo permiso pero no hay token.');
         return null;
       }
     } else {
-      console.warn('Permiso de notificaciones denegado.');
+      console.warn('Permiso denegado por el usuario.');
       return null;
     }
   } catch (error) {
-    console.error('Error al solicitar permiso o token:', error);
+    console.error('❌ ERROR CRÍTICO AL OBTENER TOKEN:', error);
     return null;
   }
 };
 
-// --- HOOKS AVANZADOS (DATA FETCHING EN TIEMPO REAL) ---
-
-/**
- * Hook para suscribirse a una colección o query de Firestore.
- * Devuelve un array de datos que se actualiza en tiempo real.
- */
+// ... (El resto de hooks useCollection, useDoc, etc. déjalos igual que antes)
 export function useCollection<T = any>(query: Query | CollectionReference | null) {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,68 +91,33 @@ export function useCollection<T = any>(query: Query | CollectionReference | null
       setIsLoading(false);
       return;
     }
-
     setIsLoading(true);
     const unsubscribe = onSnapshot(query, (snapshot) => {
-      const items = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as T[];
+      const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as T[];
       setData(items);
       setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching collection:", error);
-      setIsLoading(false);
-    });
-
+    }, (error) => { console.error(error); setIsLoading(false); });
     return () => unsubscribe();
   }, [query]); 
-
   return { data, isLoading };
 }
 
-/**
- * Hook para suscribirse a un documento individual de Firestore.
- */
 export function useDoc<T = any>(docRef: DocumentReference | null) {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!docRef) {
-      setIsLoading(false);
-      return;
-    }
-
+    if (!docRef) { setIsLoading(false); return; }
     setIsLoading(true);
     const unsubscribe = onSnapshot(docRef, (doc) => {
-      if (doc.exists()) {
-        setData({ id: doc.id, ...doc.data() } as T);
-      } else {
-        setData(null);
-      }
+      if (doc.exists()) setData({ id: doc.id, ...doc.data() } as T);
+      else setData(null);
       setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching doc:", error);
-      setIsLoading(false);
-    }, );
-
+    }, (error) => { console.error(error); setIsLoading(false); });
     return () => unsubscribe();
   }, [docRef]);
-
   return { data, isLoading };
 }
 
-/**
- * Hook para memoizar referencias de Firebase.
- */
-export function useMemoFirebase<T>(factory: () => T, deps: any[]): T {
-  return useMemo(factory, deps);
-}
-
-/**
- * Función legacy.
- */
-export function getFirebase() {
-  return { firestore: db, auth, storage, app, messaging };
-}
+export function useMemoFirebase<T>(factory: () => T, deps: any[]): T { return useMemo(factory, deps); }
+export function getFirebase() { return { firestore: db, auth, storage, app, messaging }; }
