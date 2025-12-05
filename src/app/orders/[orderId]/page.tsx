@@ -4,7 +4,8 @@ import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { type Order } from '@/lib/order-service';
+// ✅ IMPORTACIÓN ACTUALIZADA: Agregamos OrderService
+import { type Order, OrderService } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
@@ -98,7 +99,7 @@ export default function OrderTrackingPage() {
   const params = useParams();
   const orderId = params.orderId as string;
   const router = useRouter();
-  const searchParams = useSearchParams(); // ✅ DETECTOR DE PARAMETROS DE URL
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { user, userProfile: myUserProfile, loading: authLoading } = useAuth(); 
   const firestore = useFirestore();
@@ -109,7 +110,6 @@ export default function OrderTrackingPage() {
   const [isAccepting, setIsAccepting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   
-  // Ref para evitar procesar el pago dos veces (efecto doble de React strict mode)
   const processedPayment = useRef(false);
 
   const orderRef = useMemoFirebase(() => firestore ? doc(firestore, 'orders', orderId) : null, [firestore, orderId]);
@@ -132,9 +132,8 @@ export default function OrderTrackingPage() {
     
     if (status && order && !processedPayment.current) {
         if (status === 'success' && order.status === 'Pendiente de Pago') {
-            processedPayment.current = true; // Marcamos como procesado
+            processedPayment.current = true;
             
-            // Actualizamos la orden a 'En preparación'
             const confirmPayment = async () => {
                 if(!orderRef) return;
                 try {
@@ -144,7 +143,6 @@ export default function OrderTrackingPage() {
                         description: "Tu pedido ya se está preparando. ¡Gracias por tu compra!",
                         className: "bg-green-50 border-green-200 text-green-900"
                     });
-                    // Limpiamos la URL para que no vuelva a procesar si recarga
                     router.replace(`/orders/${orderId}`);
                 } catch (e) {
                     console.error("Error actualizando orden tras pago:", e);
@@ -157,7 +155,6 @@ export default function OrderTrackingPage() {
                 title: "El pago falló", 
                 description: "MercadoPago no pudo procesar tu tarjeta. Intenta nuevamente." 
             });
-            // Limpiamos URL
             router.replace(`/orders/${orderId}`);
         }
     }
@@ -253,10 +250,12 @@ export default function OrderTrackingPage() {
         }
     }
 
+    // ✅ FUNCIÓN ACTUALIZADA: Notifica al chat interno Y envía Push al Repartidor
     const handleNotifyDriver = async () => {
         if (!firestore || !order || !myUserProfile || !orderRef) return;
         setIsUpdatingStatus(true);
         try {
+            // 1. Mensaje en el chat interno
             const messageData = {
                 senderId: user!.uid,
                 senderName: myUserProfile.displayName || 'Tienda',
@@ -265,7 +264,22 @@ export default function OrderTrackingPage() {
                 createdAt: serverTimestamp(),
             };
             await addDoc(collection(firestore, 'order_chats', order.id, 'messages'), messageData);
+            
+            // 2. Actualizar estado en DB
             await updateDoc(orderRef, { readyForPickup: true });
+
+            // 3. ✅ NUEVO: DISPARAR NOTIFICACIÓN PUSH AL REPARTIDOR
+            if (order.deliveryPersonId) {
+                await OrderService.sendNotification(
+                    firestore,
+                    order.deliveryPersonId, // ID del repartidor
+                    "📦 Pedido Listo",
+                    `La tienda ${order.storeName} indica que ya puedes retirar el pedido.`,
+                    "delivery", // Icono de camioncito
+                    order.id
+                );
+            }
+
             toast({ title: "Repartidor notificado", description: "Se ha enviado la alerta a su dispositivo." });
         } catch (error) {
             console.error(error);
