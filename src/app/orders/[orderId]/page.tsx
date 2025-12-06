@@ -8,7 +8,7 @@ import { type Order, OrderService } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth, UserProfile } from '@/context/auth-context'; 
@@ -16,7 +16,7 @@ import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'; 
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, Mail, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store, AlertTriangle } from 'lucide-react';
+import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, Mail, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent } from '@/components/ui/alert-dialog';
@@ -26,6 +26,12 @@ import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
 import { ChatWindow } from './chat-window'; 
 import { LocationTracker } from '@/components/location-tracker';
+
+// ✅ Optimización: Definimos el mapa dinámico FUERA del componente para evitar recargas
+const OrderMap = dynamic(() => import('./order-map'), { 
+    ssr: false, 
+    loading: () => <Skeleton className="h-full w-full bg-muted animate-pulse" /> 
+});
 
 const formatDate = (date: any) => {
     if (!date) return 'Fecha desconocida';
@@ -122,54 +128,40 @@ export default function OrderTrackingPage() {
 
   const { data: customerProfile } = useDoc<UserProfile>(customerProfileRef); 
 
-  const OrderMap = useMemo(() => dynamic(() => import('./order-map'), { ssr: false, loading: () => <Skeleton className="h-full w-full" />, }), []);
-
   const isLoading = authLoading || orderLoading;
 
-  // ✅ EFECTO CORREGIDO: Usa la API segura para confirmar el pago
   useEffect(() => {
     const status = searchParams.get('status');
-    
     if (status && order && !processedPayment.current) {
         if (status === 'success' && order.status === 'Pendiente de Pago') {
             processedPayment.current = true;
-            
             const confirmPayment = async () => {
+                if(!orderRef) return;
                 try {
-                    // 🔥 LLAMADA A LA API SEGURA (BACKEND)
-                    // Ya no hacemos updateDoc directo porque las reglas lo prohíben
                     const response = await fetch('/api/orders/confirm-payment', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ orderId: order.id })
                     });
-
                     if (response.ok) {
                         toast({ 
                             title: "¡Pago Exitoso!", 
-                            description: "Tu pedido ya se está preparando. ¡Gracias por tu compra!",
+                            description: "Tu pedido ya se está preparando.",
                             className: "bg-green-50 border-green-200 text-green-900"
                         });
-                        // Limpiamos URL
                         router.replace(`/orders/${orderId}`);
-                        // Recarga opcional para asegurar datos frescos
-                        // window.location.reload(); 
-                    } else {
-                        const errData = await response.json();
-                        throw new Error(errData.error || "Error en servidor");
                     }
-                } catch (e: any) {
+                } catch (e) {
                     console.error("Error confirmando pago:", e);
-                    toast({ variant: "destructive", title: "Atención", description: "El pago se realizó, pero hubo un error actualizando el estado visual. Recarga la página." });
                 }
             };
             confirmPayment();
         } else if (status === 'failure') {
-            toast({ variant: "destructive", title: "El pago falló", description: "MercadoPago no pudo procesar tu tarjeta. Intenta nuevamente." });
+            toast({ variant: "destructive", title: "El pago falló", description: "Intenta nuevamente." });
             router.replace(`/orders/${orderId}`);
         }
     }
-  }, [searchParams, order, router, toast, orderId]);
+  }, [searchParams, order, orderRef, router, toast, orderId]);
 
   useEffect(() => {
     if (!isLoading && order && myUserProfile) {
@@ -218,7 +210,6 @@ export default function OrderTrackingPage() {
                 imageUrl: item.imageUrl || '',
             }, order.storeId);
         });
-        
         toast({ title: "Productos agregados", description: "Revisa tu carrito para finalizar la compra." });
     };
 
@@ -261,12 +252,10 @@ export default function OrderTrackingPage() {
         }
     }
 
-    // ✅ FUNCIÓN ACTUALIZADA: Notifica al chat interno Y envía Push al Repartidor
     const handleNotifyDriver = async () => {
         if (!firestore || !order || !myUserProfile || !orderRef) return;
         setIsUpdatingStatus(true);
         try {
-            // 1. Mensaje en el chat interno
             const messageData = {
                 senderId: user!.uid,
                 senderName: myUserProfile.displayName || 'Tienda',
@@ -275,22 +264,17 @@ export default function OrderTrackingPage() {
                 createdAt: serverTimestamp(),
             };
             await addDoc(collection(firestore, 'order_chats', order.id, 'messages'), messageData);
-            
-            // 2. Actualizar estado en DB
             await updateDoc(orderRef, { readyForPickup: true });
-
-            // 3. ✅ ENVIAR PUSH AL REPARTIDOR ASIGNADO
             if (order.deliveryPersonId) {
                 await OrderService.sendNotification(
                     firestore,
                     order.deliveryPersonId,
-                    "📦 Pedido Listo",
-                    `La tienda ${order.storeName} indica que ya puedes retirar el pedido.`,
+                    "📦 ¡Pedido Listo!",
+                    `La tienda ${order.storeName} ya tiene el pedido listo para retirar.`,
                     "delivery",
                     order.id
                 );
             }
-
             toast({ title: "Repartidor notificado", description: "Se ha enviado la alerta a su dispositivo." });
         } catch (error) {
             console.error(error);
@@ -313,11 +297,12 @@ export default function OrderTrackingPage() {
   const isStoreOwner = myUserProfile?.role === 'store' && myUserProfile?.storeId === order.storeId; 
   const isDeliveryPerson = myUserProfile?.role === 'delivery' && user?.uid === order.deliveryPersonId;
   const isAvailableToAccept = myUserProfile?.role === 'delivery' && order.status === 'En preparación' && !order.deliveryPersonId;
-  const showChat = isStoreOwner || isDeliveryPerson; 
+  
+  // ✅ CORRECCIÓN: Ahora mostramos la columna si eres Cliente, Tienda o Repartidor
+  const showRightColumn = isStoreOwner || isDeliveryPerson || isBuyer;
 
   return (
     <div className="container mx-auto">
-      {/* ✅ COMPONENTE INVISIBLE DE RASTREO */}
       <LocationTracker 
         orderId={order.id} 
         isDriver={!!isDeliveryPerson} 
@@ -340,7 +325,7 @@ export default function OrderTrackingPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8"> 
         
         {/* --- COLUMNA IZQUIERDA --- */}
-        <div className={cn("space-y-8", showChat ? "lg:col-span-3" : "lg:col-span-5")}>
+        <div className={cn("space-y-8", showRightColumn ? "lg:col-span-3" : "lg:col-span-5")}>
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -460,8 +445,8 @@ export default function OrderTrackingPage() {
              <Card><CardHeader><CardTitle>Estado del Pedido</CardTitle></CardHeader><CardContent><OrderProgress status={order.status} /></CardContent></Card>
         </div>
 
-        {/* --- COLUMNA DERECHA --- */}
-        <div className={cn("space-y-8", showChat ? "lg:col-span-2" : "hidden")}>
+        {/* --- COLUMNA DERECHA (Ahora visible para Cliente) --- */}
+        <div className={cn("space-y-8", showRightColumn ? "lg:col-span-2" : "hidden")}>
              <Card>
                 <CardHeader><CardTitle>Mapa de Entrega</CardTitle></CardHeader>
                 <CardContent className="h-96">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent><CardFooter><p className="text-xs text-muted-foreground"> {order.status === 'En reparto' ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación." : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."}</p></CardFooter>
