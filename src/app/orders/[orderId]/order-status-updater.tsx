@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { useFirestore } from '@/firebase';
+import { useFirestore } from '@/lib/firebase';
 import type { Order, OrderStatus } from '@/lib/order-service';
 import { updateOrderStatus } from '@/lib/order-service';
 import { CardFooter, CardDescription, Card } from '@/components/ui/card';
@@ -17,15 +17,9 @@ interface OrderStatusUpdaterProps {
   order: Order;
 }
 
-// ✅ NUEVO FLUJO DE ESTADOS (Stock -> Pago -> Cocina)
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
-  // 1. Tienda confirma stock -> Habilita pago
   'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'], 
-  
-  // 2. Cliente paga -> Pasa directo a cocina (automático tras pago)
   'Pendiente de Pago': ['En preparación'], 
-  
-  // 3. Flujo normal logístico
   'En preparación': ['En reparto'],
   'En reparto': ['Entregado'],
   'Entregado': [],
@@ -67,43 +61,53 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     }
   };
 
-  // --- INTEGRACIÓN REAL MERCADOPAGO (FASE 2) ---
+  // --- INTEGRACIÓN REAL MERCADOPAGO ---
   const handleBuyerPayment = async () => {
-    if (!order) return;
+    if (!order) {
+        console.error("❌ Error: No hay objeto 'order'");
+        return;
+    }
     
+    // Validación previa
+    if (!order.id || !order.items || order.items.length === 0) {
+        console.error("❌ Error: Datos de orden incompletos", order);
+        toast({ variant: 'destructive', title: 'Error de datos', description: 'La orden está incompleta.' });
+        return;
+    }
+
     setIsUpdating(true);
     
     try {
-        // 1. Llamamos a NUESTRA API para generar la preferencia
+        console.log("📤 Enviando a Checkout:", { orderId: order.id, itemsCount: order.items.length });
+
         const response = await fetch('/api/checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 orderId: order.id,
                 items: order.items,
-                payerEmail: appUser?.email // Enviamos el mail del usuario para pre-llenar en MP
+                payerEmail: appUser?.email 
             })
         });
 
         const data = await response.json();
 
-        if (data.url) {
+        if (response.ok && data.url) {
             toast({ title: "Redirigiendo a MercadoPago..." });
-            // 2. Redirigimos al usuario a la pasarela de pago segura
             window.location.href = data.url;
         } else {
-            console.error("Respuesta MP:", data);
-            throw new Error("No se recibió URL de pago");
+            console.error("❌ Respuesta Error API:", data);
+            throw new Error(data.error || "No se recibió URL de pago");
         }
 
-    } catch(error) {
-        console.error(error);
+    } catch(error: any) {
+        console.error("❌ Error Catch:", error);
         toast({ 
             variant: 'destructive', 
             title: 'Error de conexión', 
-            description: 'No se pudo iniciar el pago. Intenta nuevamente.' 
+            description: error.message || 'No se pudo iniciar el pago.' 
         });
-        setIsUpdating(false); // Solo desbloqueamos si falló. Si redirige, dejamos cargando.
+        setIsUpdating(false);
     }
   }
 
@@ -134,11 +138,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
      );
   }
 
-  // ========================================================================
-  // 🔽 LOGICA DE NEGOCIO: STOCK -> PAGO 🔽
-  // ========================================================================
-
-  // --- ESCENARIO 1: CLIENTE ESPERANDO CONFIRMACIÓN DE STOCK ---
+  // --- ESCENARIO 1: CLIENTE ESPERANDO CONFIRMACIÓN ---
   if (isBuyer && order.status === 'Pendiente de Confirmación') {
       return (
         <CardFooter className="flex-col gap-4">
@@ -146,7 +146,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                  <Clock className="h-4 w-4 text-yellow-600" />
                  <AlertTitle className="text-yellow-800">Verificando disponibilidad</AlertTitle>
                  <AlertDescription className="text-yellow-700">
-                    La tienda está revisando si tiene stock de tus productos. Podrás pagar en cuanto confirmen.
+                    La tienda está revisando si tiene stock. Podrás pagar en cuanto confirmen.
                  </AlertDescription>
             </Alert>
             <Button disabled variant="outline" className="w-full opacity-50 cursor-not-allowed">
@@ -156,7 +156,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
       );
   }
 
-  // --- ESCENARIO 2: CLIENTE PAGA (Stock ya confirmado) ---
+  // --- ESCENARIO 2: CLIENTE PAGA ---
   if (isBuyer && order.status === 'Pendiente de Pago') {
     return (
       <CardFooter className="flex-col gap-4">
@@ -172,9 +172,8 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
             {isUpdating ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
             Pagar ${order.total.toFixed(2)} Ahora
         </Button>
-        <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            Procesado seguro vía MercadoPago
+        <p className="text-xs text-muted-foreground text-center">
+            * Procesado seguro vía MercadoPago
         </p>
       </CardFooter>
     );
@@ -229,7 +228,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     );
   }
 
-  // --- VISTA TIENDA: CONTROLES GENERALES (En preparación, etc) ---
+  // --- VISTA TIENDA: CONTROLES GENERALES ---
   if (isStoreOwner && possibleNextStatuses.length > 0) {
       return (
         <CardFooter className="flex-col items-start gap-4 pt-4 border-t">
