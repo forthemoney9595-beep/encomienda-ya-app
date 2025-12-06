@@ -4,6 +4,7 @@ import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+// ✅ IMPORTACIÓN: OrderService ya está importado correctamente
 import { type Order, OrderService } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -25,6 +26,7 @@ import { ReviewDialog } from '@/components/review-dialog';
 import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
 import { ChatWindow } from './chat-window'; 
+// ✅ IMPORTACIÓN: LocationTracker ya está importado correctamente
 import { LocationTracker } from '@/components/location-tracker';
 
 const formatDate = (date: any) => {
@@ -264,10 +266,10 @@ export default function OrderTrackingPage() {
             if (order.deliveryPersonId) {
                 await OrderService.sendNotification(
                     firestore,
-                    order.deliveryPersonId,
-                    "📦 ¡Pedido Listo!",
-                    `La tienda ${order.storeName} ya tiene el pedido listo para retirar.`,
-                    "delivery",
+                    order.deliveryPersonId, // ID del repartidor
+                    "📦 Pedido Listo",
+                    `La tienda ${order.storeName} indica que ya puedes retirar el pedido.`,
+                    "delivery", // Icono de camioncito
                     order.id
                 );
             }
@@ -298,6 +300,8 @@ export default function OrderTrackingPage() {
 
   return (
     <div className="container mx-auto">
+      {/* ✅ COMPONENTE INVISIBLE DE RASTREO */}
+      {/* Solo se activa si eres el repartidor asignado y la orden está "En reparto" */}
       <LocationTracker 
         orderId={order.id} 
         isDriver={!!isDeliveryPerson} 
