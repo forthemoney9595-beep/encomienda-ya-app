@@ -10,17 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-// ✅ Importamos iconos de pago
-import { MapPin, Package, Bike, CheckCircle, Navigation, Clock, DollarSign, ArrowRight, Loader2, RefreshCw, Map, ExternalLink, Banknote, CreditCard, AlertTriangle } from 'lucide-react';
+import { MapPin, Package, Bike, CheckCircle, Navigation, Clock, ArrowRight, Loader2, RefreshCw, Map, ExternalLink, Banknote, CreditCard, AlertTriangle, BellRing } from 'lucide-react';
 import { Order } from '@/lib/order-service';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PAGE_SIZE = 10;
-
-// ====================================================================
-// COMPONENTE PRINCIPAL
-// ====================================================================
 
 export default function DeliveryOrdersView() {
   const { user, userProfile } = useAuth();
@@ -46,15 +41,15 @@ export default function DeliveryOrdersView() {
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]); 
   const [loadingHistory, setLoadingHistory] = useState(true);
 
-
   // --- CONSULTAS ---
 
   const buildAvailableQuery = useCallback((startAfterDoc: QueryDocumentSnapshot<Order> | null) => {
     if (!firestore) return null;
+    // Consulta: Pedidos sin repartidor y que estén en preparación
     let baseQuery = query(
       collection(firestore, 'orders') as CollectionReference<Order>,
-      where('status', 'in', ['En preparación', 'En reparto']), // Delivery ve lo que está cocinándose o listo
-      where('deliveryPersonId', '==', null), // Sin dueño
+      where('status', '==', 'En preparación'), 
+      where('deliveryPersonId', '==', null), 
       orderBy('createdAt', 'desc'),
       limit(PAGE_SIZE)
     );
@@ -69,7 +64,7 @@ export default function DeliveryOrdersView() {
     let baseQuery = query(
       collection(firestore, 'orders') as CollectionReference<Order>,
       where('deliveryPersonId', '==', user.uid),
-      where('status', 'in', ['En preparación', 'En reparto', 'En camino']),
+      where('status', 'in', ['En preparación', 'En reparto']), // Quitamos 'En camino' si no se usa
       orderBy('createdAt', 'desc'),
       limit(PAGE_SIZE)
     );
@@ -91,7 +86,7 @@ export default function DeliveryOrdersView() {
   }, [firestore, user]);
 
 
-  // --- FUNCIONES DE CARGA REUTILIZABLES ---
+  // --- FUNCIONES DE CARGA ---
   
   const loadOrders = useCallback(async (
     queryBuilder: (doc: QueryDocumentSnapshot<Order> | null) => any,
@@ -105,7 +100,7 @@ export default function DeliveryOrdersView() {
     const currentQuery = queryBuilder(isLoadMore ? specificLastDoc : null);
     if (!currentQuery) return;
 
-    setLoadingState(true);
+    if (!isLoadMore) setLoadingState(true);
 
     try {
       const snapshot = await getDocs(currentQuery);
@@ -130,6 +125,8 @@ export default function DeliveryOrdersView() {
       }
     } catch (error) {
       console.error("Error al cargar pedidos:", error);
+      // Si falla por índice, suele ser un error de consola.
+      // Verifica en la consola de Firebase si necesitas crear un índice compuesto.
       setHasMore(false); 
     } finally {
       setLoadingState(false);
@@ -137,7 +134,7 @@ export default function DeliveryOrdersView() {
   }, []); 
 
 
-  // Carga del Historial (solo inicial)
+  // Carga del Historial
   useEffect(() => {
     const historyQuery = buildHistoryQuery();
     if (historyQuery) {
@@ -170,23 +167,33 @@ export default function DeliveryOrdersView() {
   }, [firestore, user, buildActiveQuery]); 
 
 
-  // --- HANDLERS DE ACCIÓN ---
+  // --- HANDLERS ---
   
   const handleAcceptOrder = async (order: Order) => {
     if (!user || !firestore) return;
     setIsUpdating(order.id);
     try {
       const orderRef = doc(firestore, 'orders', order.id);
+      
+      // Al aceptar, te asignas como repartidor, pero el estado sigue 'En preparación'
+      // hasta que TÚ decidas marcarlo como 'En reparto' (cuando lo recojas).
+      // Si prefieres que pase directo a 'En reparto', cambia status aquí.
+      // Mi recomendación: Mantener 'En preparación' hasta recoger.
+      
       await updateDoc(orderRef, {
         deliveryPersonId: user.uid,
         deliveryPersonName: userProfile?.displayName || 'Repartidor',
-        status: 'En reparto' // Actualizamos estado automáticamente al aceptar
+        // status: 'En reparto' // Descomentar si quieres cambio inmediato
       });
+      
       toast({ title: "¡Pedido Asignado!", description: "Ve a 'Mis Entregas' para ver los detalles." });
       
       setAvailableOrders(prev => prev.filter(o => o.id !== order.id));
       setActiveOrders(prev => [order, ...prev]);
       
+      // Redirigir al detalle para iniciar el viaje
+      router.push(`/orders/${order.id}`);
+
     } catch (error) {
       toast({ variant: 'destructive', title: "Error", description: "No se pudo aceptar el pedido." });
     } finally {
@@ -209,9 +216,7 @@ export default function DeliveryOrdersView() {
   
   const availableCount = availableOrders?.length || 0;
   const activeCount = activeOrders?.length || 0;
-  
   const isGlobalLoading = loadingAvailable && loadingActive;
-
 
   if (isGlobalLoading) {
     return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-48 w-full" /></div>;
@@ -241,16 +246,20 @@ export default function DeliveryOrdersView() {
         ) : (
           <>
           {availableOrders.map(order => (
-            <Card key={order.id} className="overflow-hidden border-l-4 border-l-green-500">
+            <Card key={order.id} className="overflow-hidden border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-3 bg-muted/20 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-base">{order.storeName}</CardTitle>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex flex-wrap gap-2 mt-1">
                     <Badge variant="outline">{order.status}</Badge>
-                    {/* ✅ BADGE DE PAGO VISIBLE ANTES DE ACEPTAR */}
-                    <Badge variant={order.paymentMethod === 'Efectivo' ? "destructive" : "secondary"} className="flex items-center gap-1">
-                        {order.paymentMethod === 'Efectivo' ? <Banknote className="h-3 w-3"/> : <CreditCard className="h-3 w-3"/>}
-                        {order.paymentMethod}
+                    {/* ✅ SI ESTÁ LISTO, MOSTRARLO EN ROJO LLAMATIVO */}
+                    {(order as any).readyForPickup && (
+                        <Badge variant="destructive" className="animate-pulse flex items-center gap-1">
+                            <BellRing className="h-3 w-3" /> LISTO PARA RETIRAR
+                        </Badge>
+                    )}
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                        <CreditCard className="h-3 w-3"/> Tarjeta
                     </Badge>
                   </div>
                 </div>
@@ -293,7 +302,7 @@ export default function DeliveryOrdersView() {
                   onClick={() => handleAcceptOrder(order)}
                   disabled={isUpdating === order.id}
                 >
-                  {isUpdating === order.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : "Aceptar y Comenzar Viaje"}
+                  {isUpdating === order.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : "Aceptar Pedido"}
                 </Button>
               </CardFooter>
             </Card>
@@ -330,26 +339,21 @@ export default function DeliveryOrdersView() {
         ) : (
             <>
             {activeOrders.map(order => (
-                <Card key={order.id} className={`overflow-hidden border shadow-md ${order.paymentMethod === 'Efectivo' ? 'border-yellow-400 ring-1 ring-yellow-400' : 'border-blue-200'}`}>
+                <Card key={order.id} className="overflow-hidden border shadow-md border-blue-200">
                     <CardHeader className="pb-3 bg-blue-50 flex flex-row items-center justify-between">
                         <div>
                             <CardTitle className="text-lg text-blue-900">{order.storeName}</CardTitle>
                             <CardDescription>Cliente: {order.customerName}</CardDescription>
                         </div>
-                        <Badge className="bg-blue-500">{order.status}</Badge>
+                        <div className="flex flex-col items-end gap-1">
+                             <Badge className="bg-blue-500">{order.status}</Badge>
+                             {/* Alerta de Listo para Retirar */}
+                             {(order as any).readyForPickup && order.status === 'En preparación' && (
+                                <Badge variant="destructive" className="animate-pulse">¡RETIRAR YA!</Badge>
+                             )}
+                        </div>
                     </CardHeader>
                     <CardContent className="pt-4 space-y-4">
-                        {/* ✅ ALERTA DE COBRO EN EFECTIVO PARA EL DRIVER */}
-                        {order.paymentMethod === 'Efectivo' && (
-                            <div className="bg-yellow-100 border-l-4 border-yellow-500 p-3 rounded flex items-start gap-3">
-                                <AlertTriangle className="h-6 w-6 text-yellow-700 shrink-0" />
-                                <div>
-                                    <p className="font-bold text-yellow-900 uppercase">¡Cobrar en Efectivo!</p>
-                                    <p className="text-sm text-yellow-800">Debes recibir <span className="font-bold text-lg">${order.total?.toLocaleString()}</span> del cliente.</p>
-                                </div>
-                            </div>
-                        )}
-
                         <div className="p-4 bg-white border rounded-md flex justify-between items-center cursor-pointer hover:bg-gray-50" onClick={() => openMap(order.shippingInfo?.address || '')}>
                             <div className="flex items-center gap-3">
                                 <div className="bg-blue-500 p-2 rounded-full text-white"><Navigation className="h-5 w-5"/></div>
