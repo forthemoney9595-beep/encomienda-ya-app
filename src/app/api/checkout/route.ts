@@ -1,61 +1,76 @@
 import { NextResponse } from 'next/server';
-import { adminDb, adminMessaging } from '@/lib/firebase-admin';
+import MercadoPagoConfig, { Preference } from 'mercadopago';
 
 export async function POST(request: Request) {
+    // 1. Verificar Token
+    const accessToken = process.env.MP_ACCESS_TOKEN;
+    if (!accessToken) {
+        console.error("❌ Error: MP_ACCESS_TOKEN no definido");
+        return NextResponse.json({ error: "Error de configuración del servidor (Token)" }, { status: 500 });
+    }
+
+    const client = new MercadoPagoConfig({ accessToken });
+
     try {
-        const { userId, title, body, link } = await request.json();
+        const body = await request.json();
+        console.log("📥 [Checkout API] Body recibido:", body); // Log en Vercel
 
-        if (!userId || !title || !body) {
-            return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
+        const { orderId, items, payerEmail } = body;
+
+        // 2. Validación DETALLADA
+        const missingData = [];
+        if (!orderId) missingData.push("orderId");
+        if (!items) missingData.push("items");
+        else if (!Array.isArray(items)) missingData.push("items (no es array)");
+        else if (items.length === 0) missingData.push("items (vacío)");
+
+        if (missingData.length > 0) {
+            console.error("❌ Faltan datos:", missingData);
+            // Devolvemos el error con detalles para verlo en la consola del navegador
+            return NextResponse.json({ 
+                error: "Datos incompletos", 
+                details: missingData,
+                received: body 
+            }, { status: 400 });
         }
 
-        const userDoc = await adminDb.collection('users').doc(userId).get();
+        // Definimos URL base (Producción o Local)
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+
+        // 3. Crear Preferencia
+        const preference = new Preference(client);
         
-        if (!userDoc.exists) {
-            return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-        }
-
-        const userData = userDoc.data();
-        const token = userData?.fcmToken;
-
-        if (!token) {
-            return NextResponse.json({ message: "Usuario sin token" }, { status: 200 });
-        }
-
-        // 🔥 CORRECCIÓN: HARDCODEAMOS EL DOMINIO DE VERCEL
-        // Reemplaza esto con TU dominio real de Vercel si cambia en el futuro
-        const baseUrl = 'https://encomienda-ya-app.vercel.app';
-        
-        // Construimos el link absoluto
-        const finalLink = link ? `${baseUrl}${link}` : `${baseUrl}/orders`;
-
-        await adminMessaging.send({
-            token: token,
-            notification: {
-                title: title,
-                body: body,
-            },
-            // Datos ocultos que usará el Service Worker
-            data: {
-                click_action: finalLink,
-                url: finalLink
-            },
-            webpush: {
-                fcmOptions: {
-                    link: finalLink
+        const result = await preference.create({
+            body: {
+                items: items.map((item: any) => ({
+                    id: item.id || 'item-id',
+                    title: item.name || 'Producto',
+                    quantity: Number(item.quantity),
+                    unit_price: Number(item.price),
+                    currency_id: 'ARS',
+                })),
+                external_reference: orderId,
+                payer: {
+                    email: payerEmail || 'test_user_123@testuser.com'
                 },
-                notification: {
-                    icon: '/icons/icon-192x192.png',
-                    badge: '/icons/icon-72x72.png'
-                }
+                back_urls: {
+                    success: `${baseUrl}/orders/${orderId}?status=success`,
+                    failure: `${baseUrl}/orders/${orderId}?status=failure`,
+                    pending: `${baseUrl}/orders/${orderId}?status=pending`,
+                },
+                // auto_return desactivado para evitar errores de validación estricta de MP
+                // auto_return: 'approved', 
             }
         });
 
-        console.log(`🔔 Notificación enviada a ${userId} con link: ${finalLink}`);
-        return NextResponse.json({ success: true });
+        console.log("✅ [Checkout API] Preferencia creada:", result.init_point);
+        return NextResponse.json({ url: result.init_point });
 
     } catch (error: any) {
-        console.error("❌ Error Push:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("❌ [Checkout API] Error Catch:", error);
+        return NextResponse.json({ 
+            error: "Error interno al procesar pago", 
+            message: error.message 
+        }, { status: 500 });
     }
 }
