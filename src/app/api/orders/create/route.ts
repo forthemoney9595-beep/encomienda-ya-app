@@ -1,67 +1,104 @@
 import { NextResponse } from 'next/server';
-import MercadoPagoConfig, { Preference } from 'mercadopago';
+import { adminDb, adminMessaging } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
+
+const PLATFORM_FEE_PERCENTAGE = 0.05; 
+const DEFAULT_DELIVERY_FEE = 2000; 
 
 export async function POST(request: Request) {
-    // 1. Verificar Token
-    const accessToken = process.env.MP_ACCESS_TOKEN;
-    if (!accessToken) {
-        console.error("❌ Error: MP_ACCESS_TOKEN no definido");
-        return NextResponse.json({ error: "Error de configuración del servidor" }, { status: 500 });
-    }
-
-    const client = new MercadoPagoConfig({ accessToken });
-
     try {
         const body = await request.json();
-        
-        // --- LOGS DE DIAGNÓSTICO ---
-        console.log("📥 [Checkout API] Recibido:", JSON.stringify(body, null, 2));
-        // ---------------------------
+        const { userId, items, storeId, shippingInfo, customerName, customerPhoneNumber } = body;
 
-        const { orderId, items, payerEmail } = body;
-
-        // 2. Validación Estricta
-        if (!orderId) {
-            return NextResponse.json({ error: "Falta el ID de la orden (orderId)" }, { status: 400 });
-        }
-        if (!items || !Array.isArray(items) || items.length === 0) {
-            return NextResponse.json({ error: "Faltan los productos (items)" }, { status: 400 });
+        // Validación correcta para CREAR (No pide orderId)
+        if (!userId || !items || !storeId) {
+            return NextResponse.json({ error: "Datos incompletos para crear orden" }, { status: 400 });
         }
 
-        // Definimos URL base (Producción o Local)
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+        // 1. Calcular Precios Reales
+        let calculatedSubtotal = 0;
+        const verifiedItems = [];
 
-        // 3. Crear Preferencia
-        const preference = new Preference(client);
-        
-        const result = await preference.create({
-            body: {
-                items: items.map((item: any) => ({
-                    id: item.id || 'item-id',
-                    title: item.name || 'Producto',
-                    quantity: Number(item.quantity),
-                    unit_price: Number(item.price),
-                    currency_id: 'ARS',
-                })),
-                external_reference: orderId,
-                payer: {
-                    email: payerEmail || 'test_user_123@testuser.com'
-                },
-                back_urls: {
-                    success: `${baseUrl}/orders/${orderId}?status=success`,
-                    failure: `${baseUrl}/orders/${orderId}?status=failure`,
-                    pending: `${baseUrl}/orders/${orderId}?status=pending`,
-                },
-                // auto_return desactivado para evitar errores de localhost
-                // auto_return: 'approved',
+        for (const item of items) {
+            let productDoc = await adminDb.collection('stores').doc(storeId).collection('products').doc(item.id).get();
+            
+            if (!productDoc.exists) {
+                 // Fallback a 'items' si usas esa colección
+                 productDoc = await adminDb.collection('stores').doc(storeId).collection('items').doc(item.id).get();
             }
-        });
 
-        console.log("✅ [Checkout API] Preferencia creada:", result.init_point);
-        return NextResponse.json({ url: result.init_point });
+            if (!productDoc.exists) {
+                console.warn(`Producto ${item.id} no encontrado. Usando precio front.`);
+                calculatedSubtotal += (Number(item.price || 0) * Number(item.quantity));
+                verifiedItems.push(item);
+            } else {
+                const data = productDoc.data();
+                const realPrice = Number(data?.price || 0);
+                calculatedSubtotal += (realPrice * Number(item.quantity));
+                verifiedItems.push({ ...item, price: realPrice, name: data?.name || item.name });
+            }
+        }
+
+        if (isNaN(calculatedSubtotal)) throw new Error("Error: Subtotal NaN");
+
+        const serviceFee = Math.round(calculatedSubtotal * PLATFORM_FEE_PERCENTAGE);
+        const deliveryFee = DEFAULT_DELIVERY_FEE;
+        const total = calculatedSubtotal + serviceFee + deliveryFee;
+
+        // 2. Crear Documento
+        const newOrderRef = adminDb.collection('orders').doc();
+        
+        const orderData = {
+            id: newOrderRef.id,
+            userId,
+            customerName,
+            customerPhoneNumber,
+            storeId,
+            storeName: body.storeName || 'Tienda',
+            storeAddress: body.storeAddress || '',
+            status: 'Pendiente de Confirmación',
+            items: verifiedItems,
+            subtotal: calculatedSubtotal,
+            deliveryFee,
+            serviceFee,
+            total,
+            paymentMethod: 'CARD',
+            shippingInfo,
+            shippingAddress: shippingInfo,
+            createdAt: FieldValue.serverTimestamp(),
+            
+            // ✅ CORRECCIÓN AQUÍ: Tipado explícito
+            deliveryPersonId: null as string | null,
+            
+            readyForPickup: false,
+            // Coordenadas dummy (hasta tener geo real)
+            storeCoords: { latitude: -28.46957, longitude: -65.77954 },
+            customerCoords: { latitude: -28.46957, longitude: -65.77954 }
+        };
+
+        await newOrderRef.set(orderData);
+
+        // 3. Notificar Dueño
+        try {
+            const storeDoc = await adminDb.collection('stores').doc(storeId).get();
+            const ownerId = storeDoc.data()?.ownerId;
+            if(ownerId) {
+                const userDoc = await adminDb.collection('users').doc(ownerId).get();
+                const token = userDoc.data()?.fcmToken;
+                if(token) {
+                    await adminMessaging.send({
+                        token,
+                        notification: { title: "🔔 Nuevo Pedido", body: `Nuevo pedido de $${total}` },
+                        data: { url: `https://encomienda-ya-app.vercel.app/orders/${newOrderRef.id}` }
+                    });
+                }
+            }
+        } catch(e) { console.error("Error notificando:", e); }
+
+        return NextResponse.json({ id: newOrderRef.id, success: true });
 
     } catch (error: any) {
-        console.error("❌ [Checkout API] Error:", error);
-        return NextResponse.json({ error: error.message || "Error desconocido" }, { status: 500 });
+        console.error("Error Create Order:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
