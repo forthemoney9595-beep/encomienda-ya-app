@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, CheckCircle2, MapPin, ShoppingBag } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
-import { OrderService } from '@/lib/order-service'; // Ya no importamos createOrder
+import { OrderService } from '@/lib/order-service';
 import { useFirestore } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore'; 
 import { useToast } from '@/hooks/use-toast';
@@ -34,7 +34,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const { subtotal, serviceFee, deliveryFee, total } = OrderService.calculateTotals(cartSubtotal);
+  const { total } = OrderService.calculateTotals(cartSubtotal);
 
   useEffect(() => {
     const fetchStoreDetails = async () => {
@@ -68,15 +68,15 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     setIsProcessing(true);
 
     try {
-        // 🔥 CAMBIO CRÍTICO: Llamamos a la API Segura en lugar de crear la orden aquí
+        // Llamada a la API Segura
         const response = await fetch('/api/orders/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userId: user.uid,
-                items: items.map(i => ({ id: i.id, quantity: i.quantity || 1 })), // Solo enviamos IDs y cantidad
+                items: items.map(i => ({ id: i.id, quantity: i.quantity || 1 })),
                 storeId: storeId,
-                storeName: storeName, // Datos visuales
+                storeName: storeName,
                 storeAddress: storeAddress,
                 shippingInfo: {
                     name: userProfile?.name || user.displayName || 'Cliente',
@@ -99,17 +99,16 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         setTimeout(() => {
             onOpenChange(false);
             setIsSuccess(false);
-            // Redirigimos a la nueva orden creada por el servidor
             if (result.id) {
                 router.push(`/orders/${result.id}`); 
             } else {
                 router.push('/orders');
             }
-        }, 2500);
+        }, 2000);
 
     } catch (error: any) {
         console.error("Error en checkout:", error);
-        toast({ variant: "destructive", title: "Error al procesar", description: error.message || "Intenta nuevamente." });
+        toast({ variant: "destructive", title: "Error al procesar", description: error.message });
     } finally {
         setIsProcessing(false);
     }
@@ -124,9 +123,9 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 </div>
                 <DialogTitle className="text-2xl font-bold text-green-700">¡Solicitud Enviada!</DialogTitle>
                 <DialogDescription>
-                    Hemos enviado tu pedido a <strong>{storeName}</strong> de forma segura.
-                    <br/><br/>
-                    La tienda verificará el stock y te avisaremos para el pago.
+                    Pedido enviado a <strong>{storeName}</strong>.
+                    <br/>
+                    Esperando confirmación de stock.
                 </DialogDescription>
             </DialogContent>
         </Dialog>
@@ -139,15 +138,15 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         <DialogHeader>
           <DialogTitle>Solicitar Disponibilidad</DialogTitle>
           <DialogDescription>
-            Estás pidiendo a <span className="font-semibold text-primary">{storeName}</span>
+            Confirmar stock con <span className="font-semibold text-primary">{storeName}</span>
           </DialogDescription>
         </DialogHeader>
         
         <div className="grid gap-6 py-2">
           <div className="space-y-3">
-            <h4 className="font-semibold text-sm flex items-center gap-2"><MapPin className="h-4 w-4"/> ¿Dónde te lo enviamos?</h4>
+            <h4 className="font-semibold text-sm flex items-center gap-2"><MapPin className="h-4 w-4"/> Dirección de Entrega</h4>
             <Input placeholder="Dirección exacta" value={address} onChange={(e) => setAddress(e.target.value)} className="bg-muted/30" />
-            <Input placeholder="Teléfono de contacto" value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-muted/30" />
+            <Input placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-muted/30" />
           </div>
 
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 flex items-start gap-3">
@@ -155,8 +154,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
               <div>
                   <p className="font-bold text-blue-900 text-sm">Primero confirmamos Stock</p>
                   <p className="text-xs text-blue-700 mt-1">
-                      Al solicitar el pedido, la tienda verificará si tiene los productos. 
-                      Una vez confirmado, podrás realizar el pago de forma segura.
+                      Al solicitar, la tienda verificará si tiene los productos. Luego podrás pagar.
                   </p>
               </div>
           </div>
