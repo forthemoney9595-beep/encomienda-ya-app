@@ -4,7 +4,6 @@ import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-// ✅ IMPORTACIÓN: OrderService ya está importado correctamente
 import { type Order, OrderService } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -26,7 +25,6 @@ import { ReviewDialog } from '@/components/review-dialog';
 import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
 import { ChatWindow } from './chat-window'; 
-// ✅ IMPORTACIÓN: LocationTracker ya está importado correctamente
 import { LocationTracker } from '@/components/location-tracker';
 
 const formatDate = (date: any) => {
@@ -128,23 +126,41 @@ export default function OrderTrackingPage() {
 
   const isLoading = authLoading || orderLoading;
 
+  // ✅ EFECTO CORREGIDO: Usa la API segura para confirmar el pago
   useEffect(() => {
     const status = searchParams.get('status');
+    
     if (status && order && !processedPayment.current) {
         if (status === 'success' && order.status === 'Pendiente de Pago') {
             processedPayment.current = true;
+            
             const confirmPayment = async () => {
-                if(!orderRef) return;
                 try {
-                    await updateDoc(orderRef, { status: 'En preparación' });
-                    toast({ 
-                        title: "¡Pago Exitoso!", 
-                        description: "Tu pedido ya se está preparando. ¡Gracias por tu compra!",
-                        className: "bg-green-50 border-green-200 text-green-900"
+                    // 🔥 LLAMADA A LA API SEGURA (BACKEND)
+                    // Ya no hacemos updateDoc directo porque las reglas lo prohíben
+                    const response = await fetch('/api/orders/confirm-payment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ orderId: order.id })
                     });
-                    router.replace(`/orders/${orderId}`);
-                } catch (e) {
-                    console.error("Error actualizando orden tras pago:", e);
+
+                    if (response.ok) {
+                        toast({ 
+                            title: "¡Pago Exitoso!", 
+                            description: "Tu pedido ya se está preparando. ¡Gracias por tu compra!",
+                            className: "bg-green-50 border-green-200 text-green-900"
+                        });
+                        // Limpiamos URL
+                        router.replace(`/orders/${orderId}`);
+                        // Recarga opcional para asegurar datos frescos
+                        // window.location.reload(); 
+                    } else {
+                        const errData = await response.json();
+                        throw new Error(errData.error || "Error en servidor");
+                    }
+                } catch (e: any) {
+                    console.error("Error confirmando pago:", e);
+                    toast({ variant: "destructive", title: "Atención", description: "El pago se realizó, pero hubo un error actualizando el estado visual. Recarga la página." });
                 }
             };
             confirmPayment();
@@ -153,7 +169,7 @@ export default function OrderTrackingPage() {
             router.replace(`/orders/${orderId}`);
         }
     }
-  }, [searchParams, order, orderRef, router, toast, orderId]);
+  }, [searchParams, order, router, toast, orderId]);
 
   useEffect(() => {
     if (!isLoading && order && myUserProfile) {
@@ -202,6 +218,7 @@ export default function OrderTrackingPage() {
                 imageUrl: item.imageUrl || '',
             }, order.storeId);
         });
+        
         toast({ title: "Productos agregados", description: "Revisa tu carrito para finalizar la compra." });
     };
 
@@ -244,7 +261,7 @@ export default function OrderTrackingPage() {
         }
     }
 
-    // ✅ FUNCIÓN MEJORADA: Notificación Push al Repartidor
+    // ✅ FUNCIÓN ACTUALIZADA: Notifica al chat interno Y envía Push al Repartidor
     const handleNotifyDriver = async () => {
         if (!firestore || !order || !myUserProfile || !orderRef) return;
         setIsUpdatingStatus(true);
@@ -266,10 +283,10 @@ export default function OrderTrackingPage() {
             if (order.deliveryPersonId) {
                 await OrderService.sendNotification(
                     firestore,
-                    order.deliveryPersonId, // ID del repartidor
+                    order.deliveryPersonId,
                     "📦 Pedido Listo",
                     `La tienda ${order.storeName} indica que ya puedes retirar el pedido.`,
-                    "delivery", // Icono de camioncito
+                    "delivery",
                     order.id
                 );
             }
@@ -301,7 +318,6 @@ export default function OrderTrackingPage() {
   return (
     <div className="container mx-auto">
       {/* ✅ COMPONENTE INVISIBLE DE RASTREO */}
-      {/* Solo se activa si eres el repartidor asignado y la orden está "En reparto" */}
       <LocationTracker 
         orderId={order.id} 
         isDriver={!!isDeliveryPerson} 
