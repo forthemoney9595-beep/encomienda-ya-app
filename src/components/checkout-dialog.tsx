@@ -34,6 +34,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // Calculamos total estimado solo visualmente
   const { total } = OrderService.calculateTotals(cartSubtotal);
 
   useEffect(() => {
@@ -68,13 +69,13 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     setIsProcessing(true);
 
     try {
-        // Llamada a la API Segura
+        // 🔥 LLAMADA A LA API SEGURA (BACKEND)
         const response = await fetch('/api/orders/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userId: user.uid,
-                items: items.map(i => ({ id: i.id, quantity: i.quantity || 1 })),
+                items: items.map(i => ({ id: i.id, quantity: i.quantity || 1 })), // Solo enviamos IDs
                 storeId: storeId,
                 storeName: storeName,
                 storeAddress: storeAddress,
@@ -104,7 +105,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             } else {
                 router.push('/orders');
             }
-        }, 2000);
+        }, 2500);
 
     } catch (error: any) {
         console.error("Error en checkout:", error);
