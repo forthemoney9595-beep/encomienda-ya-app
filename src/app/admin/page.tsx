@@ -2,30 +2,36 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Store, Truck, ClipboardList, Users, DollarSign, PackageCheck } from 'lucide-react';
-import { useAuth } from '@/context/auth-context';
+import { Users, DollarSign, PackageCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
-import type { UserProfile } from '@/lib/user-service';
-import { collection, query, where, CollectionReference } from 'firebase/firestore';
-import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { collection, query, where, CollectionReference, Timestamp } from 'firebase/firestore';
+import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Legend, Cell } from 'recharts';
 import { subDays, format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import type { OrderStatus } from '@/lib/order-service';
 import AdminAuthGuard from './admin-auth-guard';
-
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
-const getStatusVariant = (status: OrderStatus) => {
+// Helper seguro para obtener Date desde Timestamp o String
+const getDate = (date: any): Date => {
+    if (!date) return new Date();
+    if (date instanceof Timestamp || (typeof date === 'object' && typeof date.toDate === 'function')) {
+        return date.toDate();
+    }
+    return new Date(date);
+};
+
+// Usamos 'any' en el status para evitar conflictos con tipos estrictos viejos
+const getStatusVariant = (status: any) => {
     switch (status) {
       case 'Entregado': return 'secondary';
       case 'En reparto': return 'default';
@@ -37,8 +43,7 @@ const getStatusVariant = (status: OrderStatus) => {
       case 'Rechazado': return 'destructive';
       default: return 'outline';
     }
-  };
-
+};
 
 function AdminDashboard() {
   const firestore = useFirestore();
@@ -46,11 +51,12 @@ function AdminDashboard() {
 
   const ordersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'orders') as CollectionReference<OrderType> : null, [firestore]);
   const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<StoreType> : null, [firestore]);
-  const usersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) as CollectionReference<UserProfile> : null, [firestore]);
+  // Usamos 'any' para usersQuery para evitar errores de importación de tipos
+  const usersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) : null, [firestore]);
 
   const { data: orders, isLoading: ordersLoading } = useCollection<OrderType>(ordersQuery);
   const { data: stores, isLoading: storesLoading } = useCollection<StoreType>(storesQuery);
-  const { data: users, isLoading: usersLoading } = useCollection<UserProfile>(usersQuery);
+  const { data: users, isLoading: usersLoading } = useCollection<any>(usersQuery);
   
   const dashboardLoading = ordersLoading || storesLoading || usersLoading;
 
@@ -76,7 +82,7 @@ function AdminDashboard() {
     return last7Days.map(day => {
         const dayString = format(day, 'yyyy-MM-dd');
         const salesForDay = completedOrders
-            .filter(order => format(new Date(order.createdAt), 'yyyy-MM-dd') === dayString)
+            .filter(order => format(getDate(order.createdAt), 'yyyy-MM-dd') === dayString)
             .reduce((sum, order) => sum + order.total, 0);
 
         return {
@@ -99,7 +105,7 @@ function AdminDashboard() {
 
   const allOrdersSorted = useMemo(() => {
     if (!orders) return [];
-    return [...orders].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return [...orders].sort((a,b) => getDate(b.createdAt).getTime() - getDate(a.createdAt).getTime());
   }, [orders]);
 
   

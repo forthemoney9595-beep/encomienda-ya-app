@@ -3,15 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-// ✅ Importamos la nueva función para pedir permisos
 import { useCollection, useFirestore, useMemoFirebase, requestNotificationPermission } from '@/lib/firebase';
-import { collection, query, where, limit, doc, updateDoc, writeBatch } from 'firebase/firestore'; 
+import { collection, query, where, limit, doc, updateDoc, writeBatch, orderBy, onSnapshot } from 'firebase/firestore'; 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2, BellRing } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2, BellRing, DollarSign } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export function Notifications() {
   const { user } = useAuth();
@@ -19,72 +20,64 @@ export function Notifications() {
   const router = useRouter();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  
-  // Estado para saber si ya tenemos permisos
+  const [localNotifications, setLocalNotifications] = useState<any[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
 
-  // 1. Verificar estado actual de permisos al cargar
+  // 1. Estado de Permisos
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
         setPermissionStatus(Notification.permission);
     }
   }, []);
 
-  // Consulta simplificada
-  const notifsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
-    return query(
-      collection(firestore, 'notifications'),
-      where('userId', '==', user.uid),
-      limit(20)
+  // 2. LISTENER EN TIEMPO REAL MANUAL (Más robusto que useCollection para este caso)
+  useEffect(() => {
+    if (!firestore || !user?.uid) return;
+
+    // Creamos la query
+    const q = query(
+        collection(firestore, 'notifications'),
+        where('userId', '==', user.uid),
+        // orderBy('createdAt', 'desc'), // A veces falla si falta índice, lo ordenamos en cliente mejor
+        limit(20)
     );
+
+    console.log("🔔 [Notificaciones] Iniciando escucha para usuario:", user.uid);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Ordenamiento en cliente (Más seguro sin índices compuestos)
+        notifs.sort((a: any, b: any) => {
+            const dateA = a.createdAt?.seconds || 0;
+            const dateB = b.createdAt?.seconds || 0;
+            return dateB - dateA; // Más nuevo primero
+        });
+
+        console.log("🔔 [Notificaciones] Recibidas:", notifs.length);
+        setLocalNotifications(notifs);
+    }, (error) => {
+        console.error("❌ [Notificaciones] Error escuchando:", error);
+    });
+
+    return () => unsubscribe();
   }, [firestore, user?.uid]);
-
-  const { data: rawNotifications } = useCollection<any>(notifsQuery);
   
-  // Ordenamos en cliente para ver las más nuevas primero
-  const notifications = (rawNotifications || []).sort((a: any, b: any) => {
-      const dateA = a.createdAt?.seconds || 0;
-      const dateB = b.createdAt?.seconds || 0;
-      return dateB - dateA;
-  });
-  
-  const unreadCount = notifications.filter((n: any) => !n.read).length;
+  const unreadCount = localNotifications.filter((n: any) => !n.read).length;
 
-  // ✅ 2. MANEJADOR: ACTIVAR NOTIFICACIONES CON LOGS
   const handleEnableNotifications = async () => {
-      console.log("🔔 Botón presionado: Iniciando proceso de activación..."); 
-      
       try {
           const token = await requestNotificationPermission();
-          
           if (token && user && firestore) {
-              console.log("💾 Guardando token en Firestore para usuario:", user.uid);
-              
               await updateDoc(doc(firestore, 'users', user.uid), { 
                   fcmToken: token,
                   notificationsEnabled: true
               });
-              
-              console.log("✅ Guardado en Firestore completado con éxito.");
-              setPermissionStatus('granted'); // Actualizamos UI para ocultar botón
-              
-              toast({ 
-                  title: "¡Notificaciones Activadas!", 
-                  description: "Te avisaremos cuando haya novedades en tu pedido.",
-                  className: "bg-green-50 border-green-200 text-green-900"
-              });
-          } else {
-              console.error("❌ Fallo: No se obtuvo token o no hay usuario activo.");
-              // Si el usuario ya dio permiso pero el token falló, actualizamos la UI para que no moleste
-              if (Notification.permission === 'granted') {
-                  console.log("ℹ️ Permiso concedido, ocultando botón aunque token falló.");
-                  setPermissionStatus('granted'); 
-              }
+              setPermissionStatus('granted');
+              toast({ title: "¡Notificaciones Activadas!", className: "bg-green-50 text-green-900" });
           }
       } catch (error) {
-          console.error("❌ Error CRÍTICO en handleEnableNotifications:", error);
-          toast({ variant: 'destructive', title: "Error", description: "Revisa la consola (F12) para más detalles." });
+          console.error("Error activando notificaciones:", error);
       }
   };
 
@@ -94,34 +87,31 @@ export function Notifications() {
     if (!notification.read && firestore) {
       try {
         await updateDoc(doc(firestore, 'notifications', notification.id), { read: true });
-      } catch (e) { console.error("Error marcando leída", e); }
+      } catch (e) { console.error(e); }
     }
 
     if (notification.orderId) {
         router.push(`/orders/${notification.orderId}`);
-    } else {
-        router.push('/orders');
     }
   };
 
   const handleClearAll = async () => {
-      if (!firestore || notifications.length === 0) return;
-      
+      if (!firestore || localNotifications.length === 0) return;
       try {
           const batch = writeBatch(firestore);
-          notifications.forEach((n: any) => {
+          localNotifications.forEach((n: any) => {
               const ref = doc(firestore, 'notifications', n.id);
               batch.delete(ref);
           });
           await batch.commit();
           toast({ title: "Notificaciones borradas" });
-      } catch (error) {
-          console.error("Error borrando:", error);
-      }
+      } catch (error) { console.error(error); }
   };
 
   const getIcon = (type: string) => {
       switch(type) {
+          case 'order_paid': 
+          case 'payment_success': return <DollarSign className="h-4 w-4 text-green-600" />;
           case 'order_status': return <Package className="h-4 w-4 text-blue-500" />;
           case 'success': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
           case 'alert': return <AlertCircle className="h-4 w-4 text-yellow-500" />;
@@ -130,13 +120,23 @@ export function Notifications() {
       }
   }
 
+  const getTimeAgo = (timestamp: any) => {
+      if (!timestamp) return '';
+      try {
+          const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+          return formatDistanceToNow(date, { addSuffix: true, locale: es });
+      } catch (e) { return ''; }
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-red-600 border-2 border-background animate-pulse" />
+            <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-600 text-[10px] text-white font-bold animate-pulse">
+                {unreadCount}
+            </span>
           )}
         </Button>
       </PopoverTrigger>
@@ -146,7 +146,7 @@ export function Notifications() {
                 <span className="text-sm font-semibold">Notificaciones</span>
                 <div className="flex items-center gap-2">
                     {unreadCount > 0 && <Badge variant="secondary" className="text-[10px] h-5">{unreadCount} nuevas</Badge>}
-                    {notifications.length > 0 && (
+                    {localNotifications.length > 0 && (
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500" onClick={handleClearAll} title="Borrar todas">
                             <Trash2 className="h-4 w-4" />
                         </Button>
@@ -154,28 +154,25 @@ export function Notifications() {
                 </div>
             </div>
 
-            {/* ✅ BOTÓN PARA ACTIVAR NOTIFICACIONES (Solo si no están activas) */}
             {permissionStatus === 'default' && (
                 <Button 
-                    variant="outline" 
-                    size="sm" 
+                    variant="outline" size="sm" 
                     className="w-full bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 mt-2 h-8 text-xs"
                     onClick={handleEnableNotifications}
                 >
-                    <BellRing className="mr-2 h-3 w-3" />
-                    Activar Avisos Push
+                    <BellRing className="mr-2 h-3 w-3" /> Activar Avisos Push
                 </Button>
             )}
         </div>
 
         <ScrollArea className="h-[300px]">
-          {!notifications || notifications.length === 0 ? (
+          {!localNotifications || localNotifications.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
               No tienes notificaciones.
             </div>
           ) : (
             <div className="flex flex-col">
-              {notifications.map((notif: any) => (
+              {localNotifications.map((notif: any) => (
                 <button
                   key={notif.id}
                   className={`flex items-start gap-3 p-4 text-left hover:bg-muted/50 transition-colors border-b last:border-0 ${!notif.read ? 'bg-blue-50/40' : ''}`}
@@ -189,10 +186,10 @@ export function Notifications() {
                       {notif.title}
                     </p>
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">
-                      {notif.message}
+                      {notif.body || notif.message}
                     </p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">
-                      Hace un momento
+                    <p className="text-[10px] text-muted-foreground/60 mt-1 first-letter:uppercase">
+                      {getTimeAgo(notif.createdAt)}
                     </p>
                   </div>
                   {!notif.read && <div className="h-2 w-2 rounded-full bg-blue-500 mt-2 shrink-0" />}

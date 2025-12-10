@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/context/auth-context';
 import type { Store } from '@/lib/placeholder-data';
 
 interface ManageStoreDialogProps {
@@ -28,6 +29,7 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageStoreDialogProps) {
+  const { user } = useAuth();
   const isEditing = store !== null;
 
   const form = useForm<FormData>({
@@ -40,22 +42,43 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
   });
 
   useEffect(() => {
-    if (isOpen && store) {
-      form.reset({
-        name: store.name,
-        address: store.address,
-        status: store.status,
-      });
+    if (isOpen) {
+        if (store) {
+            // Modo Edición: Cargar datos existentes
+            form.reset({
+                name: store.name,
+                address: store.address,
+                // 🛠️ CORRECCIÓN TS: Usamos 'as any' porque 'status' es nuevo en la BD
+                status: (store as any).status || 'Pendiente',
+            });
+        } else {
+            // Modo Creación: Limpiar formulario
+            form.reset({
+                name: '',
+                address: '',
+                status: 'Pendiente',
+            });
+        }
     }
   }, [isOpen, store, form]);
 
   const handleSubmit = (values: FormData) => {
-    if (!store) return;
-    
-    const storeData: Store = {
-      ...store,
-      ...values,
+    if (!user) {
+        console.error("No se puede crear tienda sin usuario autenticado");
+        return;
+    }
+
+    const baseData = store || {}; 
+
+    // 🛠️ CORRECCIÓN TS: Definimos storeData como 'any' para poder agregar userId sin errores
+    const storeData: any = {
+      ...baseData, 
+      ...values,   
+      
+      // 🛠️ CORRECCIÓN TS: Accedemos a userId con 'as any'
+      userId: (store as any)?.userId || user.uid,
     };
+    
     onSave(storeData);
   };
 
@@ -65,7 +88,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Tienda' : 'Nueva Tienda'}</DialogTitle>
           <DialogDescription>
-            Modifica los detalles de la tienda.
+            {isEditing ? 'Modifica los detalles de la tienda.' : 'Registra un nuevo comercio y vinculalo a tu cuenta.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -99,7 +122,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
                   <FormItem>
                     <FormLabel>Estado</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                       <FormControl>
+                        <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecciona un estado" />
                           </SelectTrigger>
@@ -118,7 +141,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar Cambios
+                {isEditing ? 'Guardar Cambios' : 'Crear Tienda'}
               </Button>
             </DialogFooter>
           </form>

@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-// ✅ CORRECCIÓN: Agregado 'Truck' a las importaciones
 import { MapPin, Package, Clock, Navigation, CheckCircle2, DollarSign, AlertTriangle, Truck, CreditCard, Wallet } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -55,16 +54,18 @@ export default function DeliveryDashboardPage() {
     }
   }, [authLoading, user, userProfile, router]);
 
-  // 2. Query: Pedidos Disponibles (Sin repartidor asignado)
+  // 2. Query: Pedidos Disponibles (CORREGIDO PARA EL WEBHOOK)
+  // Ahora buscamos también 'pending' (que es como el Webhook guarda las órdenes pagadas)
   const availableQuery = query(
     collection(firestore || null as any, 'orders'), 
     where('deliveryPersonId', '==', null),
-    where('status', 'in', ['Pendiente', 'Pendiente de Confirmación', 'En preparación']) 
+    // Agregamos 'pending' a la lista de estados válidos para retiro
+    where('status', 'in', ['pending', 'Pendiente', 'Pendiente de Confirmación', 'En preparación']) 
   );
 
   const { data: availableOrders } = useCollection<Order>(firestore ? availableQuery : null);
 
-  // 3. Query: Mis Pedidos Activos (Asignados a mí y no entregados)
+  // 3. Query: Mis Pedidos Activos
   const myActiveQuery = user ? query(
     collection(firestore, 'orders'),
     where('deliveryPersonId', '==', user.uid),
@@ -152,7 +153,7 @@ export default function DeliveryDashboardPage() {
                         <div className="flex gap-2">
                             <Badge variant="outline" className="text-xs font-normal flex items-center gap-1">
                                 {order.paymentMethod === 'Efectivo' ? <Wallet className="h-3 w-3" /> : <CreditCard className="h-3 w-3" />}
-                                {order.paymentMethod}
+                                {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : order.paymentMethod}
                             </Badge>
                             <span className="text-xs text-muted-foreground self-center">
                                 #{order.id.substring(0,6)} • {format(order.createdAt?.toDate() || new Date(), 'HH:mm')}
@@ -217,7 +218,7 @@ export default function DeliveryDashboardPage() {
                                 <div className="text-right">
                                     <span className="font-bold text-lg block">${order.total}</span>
                                     <Badge variant="outline" className={`text-xs ${order.paymentMethod === 'Efectivo' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : ''}`}>
-                                        {order.paymentMethod}
+                                        {order.paymentMethod === 'mercadopago' ? 'Pagado Online' : order.paymentMethod}
                                     </Badge>
                                 </div>
                             </div>
@@ -243,6 +244,16 @@ export default function DeliveryDashboardPage() {
                                             Debes recibir <span className="text-lg font-bold">${order.total}</span> en efectivo.
                                         </p>
                                     </div>
+                                </div>
+                            )}
+
+                             {/* AVISO DE PAGO ONLINE */}
+                             {order.paymentMethod === 'mercadopago' && (
+                                <div className="p-3 bg-green-50 rounded-lg border border-green-200 flex items-center gap-3">
+                                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                    <p className="text-sm text-green-800 font-medium">
+                                        Pedido ya pagado online. <strong>Solo entregar.</strong>
+                                    </p>
                                 </div>
                             )}
                         </CardContent>
@@ -280,6 +291,16 @@ export default function DeliveryDashboardPage() {
                     <p className="text-sm text-yellow-800">
                         No entregues el pedido hasta recibir el pago.
                     </p>
+                </div>
+            )}
+
+             {confirmDeliveryOrder?.paymentMethod === 'mercadopago' && (
+                <div className="bg-green-100 p-4 rounded-lg border border-green-300 flex items-center gap-3 my-2">
+                    <CheckCircle2 className="h-6 w-6 text-green-700" />
+                    <div>
+                        <p className="font-bold text-green-900">Pago Digital Confirmado</p>
+                        <p className="text-sm text-green-800">No cobrar nada al cliente.</p>
+                    </div>
                 </div>
             )}
 

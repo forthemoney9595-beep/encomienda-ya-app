@@ -6,62 +6,59 @@ import PageHeader from '@/components/page-header';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/context/auth-context';
-// ✅ Usamos la librería centralizada
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
-import { Package, Clock, Truck, CheckCircle2, ChevronRight, DollarSign } from 'lucide-react';
+// ✅ AGREGADO: Importamos 'ChefHat' para darle un ícono bonito al estado "En preparación"
+import { Package, Clock, Truck, CheckCircle2, ChevronRight, DollarSign, ChefHat, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { OrderStatus } from '@/lib/order-service';
 
 export default function BuyerOrdersView() {
   const { user } = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
 
-  // ✅ QUERY PROFESIONAL: Usamos 'orderBy'
-  // NOTA: Si esto falla o no muestra nada, abre la consola del navegador (F12).
-  // Verás un link de Firebase para "Crear Índice Compuesto". Haz clic ahí.
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collection(firestore, 'orders'),
       where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc') // Esto requiere el índice
+      orderBy('createdAt', 'desc')
     );
   }, [firestore, user?.uid]);
 
-  // Usamos el hook de tiempo real. Si cambia el estado, se actualiza solo.
+  // useCollection ya escucha cambios en tiempo real (onSnapshot)
   const { data: orders, isLoading } = useCollection<any>(ordersQuery);
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Cargando tus pedidos...</div>;
 
+  // 🎨 MEJORA VISUAL: Adaptado a los estados del Webhook
   const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Entregado': return <CheckCircle2 className="h-5 w-5 text-green-500" />;
-      case 'En reparto':
-      case 'En camino': return <Truck className="h-5 w-5 text-blue-500" />;
-      case 'Cancelado': 
-      case 'Rechazado': return <Package className="h-5 w-5 text-red-500" />;
-      default: return <Clock className="h-5 w-5 text-orange-500" />;
-    }
+    // Normalizamos a minúsculas para evitar errores de tipeo
+    const s = status?.toLowerCase() || '';
+
+    if (s.includes('entregado')) return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+    if (s.includes('reparto') || s.includes('camino')) return <Truck className="h-5 w-5 text-blue-500" />;
+    // Nuevo estado del Webhook:
+    if (s.includes('preparación') || s.includes('cocina')) return <ChefHat className="h-5 w-5 text-orange-500" />;
+    if (s.includes('cancelado') || s.includes('rechazado')) return <AlertCircle className="h-5 w-5 text-red-500" />;
+    
+    // Default (Pendiente)
+    return <Clock className="h-5 w-5 text-slate-400" />;
   };
 
   const getBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'Entregado': return 'secondary';
-      case 'En reparto': return 'default';
-      case 'Cancelado':
-      case 'Rechazado': return 'destructive';
-      default: return 'outline';
-    }
+    const s = status?.toLowerCase() || '';
+    if (s.includes('entregado')) return 'secondary'; // Verde/Gris suave
+    if (s.includes('reparto') || s.includes('preparación')) return 'default'; // Negro/Azul sólido (Activo)
+    if (s.includes('cancelado')) return 'destructive'; // Rojo
+    return 'outline'; // Pendiente
   };
   
   const formatDate = (date: any) => {
     if (!date) return 'Fecha desconocida';
     try {
-        // Manejo robusto de fechas (Timestamp o Date)
         let dateObj: Date;
         if (typeof date === 'object' && typeof date.toDate === 'function') {
              dateObj = date.toDate();
@@ -90,11 +87,14 @@ export default function BuyerOrdersView() {
         ) : (
             orders.map(order => {
                 const displayTotal = order.total || 0;
+                // Detectamos si fue pagado por MP
+                const isPaid = order.paymentStatus === 'paid'; 
                 
                 return (
                     <Card 
                         key={order.id} 
-                        className="cursor-pointer hover:shadow-md transition-all border-l-4 border-l-primary group"
+                        // Si está pagado, borde verde. Si no, borde primario (negro/azul)
+                        className={`cursor-pointer hover:shadow-md transition-all border-l-4 group ${isPaid ? 'border-l-green-500' : 'border-l-slate-300'}`}
                         onClick={() => router.push(`/orders/${order.id}`)}
                     >
                         <div className="p-4 flex items-center justify-between">
@@ -107,13 +107,16 @@ export default function BuyerOrdersView() {
                                     <p className="text-xs text-muted-foreground">
                                         {formatDate(order.createdAt)}
                                     </p>
-                                    <div className="mt-2 flex gap-2">
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {/* Badge de Estado del Pedido */}
                                         <Badge variant={getBadgeVariant(order.status)} className="text-[10px]">
                                             {order.status}
                                         </Badge>
-                                        <Badge variant="outline" className="text-[10px] flex items-center gap-1">
-                                            <DollarSign className="h-3 w-3" />
-                                            {order.paymentMethod}
+
+                                        {/* Badge de Método de Pago */}
+                                        <Badge variant="outline" className={`text-[10px] flex items-center gap-1 ${isPaid ? 'bg-green-50 text-green-700 border-green-200' : ''}`}>
+                                            {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : order.paymentMethod}
+                                            {isPaid && <CheckCircle2 className="h-3 w-3 ml-1" />}
                                         </Badge>
                                     </div>
                                 </div>

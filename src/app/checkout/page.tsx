@@ -25,6 +25,7 @@ interface StoreData {
   name: string;
   address: string;
   maintenanceMode?: boolean;
+  userId: string; // ✅ AGREGADO: El ID del dueño de la tienda
 }
 
 const formSchema = z.object({
@@ -58,7 +59,7 @@ export default function CheckoutPage() {
   const { serviceFeeAmount, shippingCost, finalTotal } = useMemo(() => {
     const feePercentage = globalConfig?.serviceFee || 0;
     const fee = (totalPrice * feePercentage) / 100;
-    const shipping = 5.00; // Costo fijo (Hardcoded por ahora)
+    const shipping = 5.00; 
     const total = totalPrice + fee + shipping;
     
     return {
@@ -145,7 +146,13 @@ export default function CheckoutPage() {
 
       const currentStoreData = storeSnap.data() as StoreData;
 
-      // Creamos la orden con estado "Pendiente de Pago"
+      // ✅ VALIDACIÓN DE SEGURIDAD: Aseguramos que la tienda tenga dueño
+      if (!currentStoreData.userId) {
+         console.warn("⚠️ La tienda no tiene userId asignado. La notificación podría fallar.");
+         // No detenemos el proceso, pero queda el aviso en consola
+      }
+
+      // 1. Creamos la orden en Firebase
       const createdOrder = await createOrder(firestore, {
         userId: user.uid,
         customerName: values.name, 
@@ -158,24 +165,41 @@ export default function CheckoutPage() {
         subtotal: totalPrice,
         deliveryFee: shippingCost,
         serviceFee: serviceFeeAmount,
-        total: finalTotal
-        // NOTA: PaymentMethod ya no se envía, el backend asume 'CARD'
+        total: finalTotal,
       });
 
-      toast({ title: "Pedido creado", description: "Procede al pago para confirmar." });
+      console.log("📦 Orden creada en local:", createdOrder.id);
+
+      // 2. GENERAR LINK DE PAGO (Conectando con tu API V3)
+      const paymentResponse = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            items: cart,
+            orderId: createdOrder.id,
+            userId: user.uid, 
+            storeId: storeId,
+            storeOwnerId: currentStoreData.userId, // ✅ AGREGADO: Enviamos el ID del dueño real
+            payerEmail: user.email || 'guest@encomiendaya.com',
+        })
+      });
+
+      const paymentData = await paymentResponse.json();
+
+      if (!paymentResponse.ok) {
+        throw new Error(paymentData.error || "Error al generar pago");
+      }
+
+      // 3. LIMPIEZA Y REDIRECCIÓN
+      clearCart(); 
+      toast({ title: "Redirigiendo a MercadoPago...", description: "No cierres esta ventana." });
       
-      // Vaciamos el carrito local
-      clearCart();
-      
-      // Redirigimos al detalle de la orden. 
-      // Allí detectaremos que el estado es "Pendiente de Pago" y mostraremos el botón de MP.
-      router.push(`/orders/${createdOrder.id}`);
+      window.location.href = paymentData.url;
 
     } catch (error) {
       console.error(error);
-      toast({ variant: "destructive", title: "Error", description: "No se pudo crear el pedido." });
-    } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false); 
+      toast({ variant: "destructive", title: "Error", description: "No se pudo iniciar el pago. Intenta nuevamente." });
     }
   }
 
@@ -269,10 +293,13 @@ export default function CheckoutPage() {
 
                      <Button type="submit" size="lg" className="w-full h-12 text-lg font-semibold shadow-md" disabled={isSubmitting}>
                         {isSubmitting ? (
-                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            <span className="flex items-center gap-2">
+                                <Loader2 className="h-5 w-5 animate-spin" /> Procesando...
+                            </span>
                         ) : (
                             <span className="flex items-center gap-2">
-                                Ir a Pagar ${finalTotal.toFixed(2)}
+                                <CreditCard className="h-5 w-5" />
+                                Pagar ${finalTotal.toFixed(2)} con MercadoPago
                             </span>
                         )}
                     </Button>
@@ -315,15 +342,6 @@ export default function CheckoutPage() {
                 <p className="text-green-600">${finalTotal.toFixed(2)}</p>
               </div>
             </CardContent>
-             <CardFooter className="flex-col gap-3">
-                 <Alert className="bg-blue-50 border-blue-200">
-                    <CreditCard className="h-4 w-4 text-blue-600" />
-                    <AlertTitle className="text-blue-800">Pago Digital</AlertTitle>
-                    <AlertDescription className="text-blue-700 text-xs">
-                        Serás redirigido para completar tu pago de forma segura.
-                    </AlertDescription>
-                </Alert>
-            </CardFooter>
           </Card>
         </div>
       </div>
