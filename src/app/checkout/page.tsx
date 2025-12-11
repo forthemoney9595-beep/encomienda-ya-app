@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Home, Loader2, Phone, AlertTriangle, ArrowLeft, Store as StoreIcon, Receipt, CreditCard, Lock } from 'lucide-react';
-import { createOrder } from '@/lib/order-service';
+// createOrder se importa pero ya no se usa directamente para escribir en BD
+import { createOrder } from '@/lib/order-service'; 
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState, useMemo } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -25,7 +26,7 @@ interface StoreData {
   name: string;
   address: string;
   maintenanceMode?: boolean;
-  userId: string; // ✅ AGREGADO: El ID del dueño de la tienda
+  userId: string; // ✅ El ID del dueño de la tienda
 }
 
 const formSchema = z.object({
@@ -137,49 +138,79 @@ export default function CheckoutPage() {
 
     setIsSubmitting(true);
     try {
+      // 1. Datos de Tienda y Seguridad
       const storeRef = doc(firestore, 'stores', storeId);
       const storeSnap = await getDoc(storeRef);
 
       if (!storeSnap.exists()) {
         throw new Error("La tienda para este pedido no existe.");
       }
-
       const currentStoreData = storeSnap.data() as StoreData;
 
-      // ✅ VALIDACIÓN DE SEGURIDAD: Aseguramos que la tienda tenga dueño
       if (!currentStoreData.userId) {
          console.warn("⚠️ La tienda no tiene userId asignado. La notificación podría fallar.");
-         // No detenemos el proceso, pero queda el aviso en consola
       }
 
-      // 1. Creamos la orden en Firebase
-      const createdOrder = await createOrder(firestore, {
-        userId: user.uid,
-        customerName: values.name, 
-        customerPhoneNumber: userProfile.phoneNumber!, 
-        items: cart,
-        shippingInfo: { name: values.name, address: values.address },
-        storeId: storeId,
-        storeName: currentStoreData.name || 'Tienda',
-        storeAddress: currentStoreData.address || '',
-        subtotal: totalPrice,
-        deliveryFee: shippingCost,
-        serviceFee: serviceFeeAmount,
-        total: finalTotal,
+      // ⚠️ 2. SANITIZACIÓN DE ITEMS (IMPORTANTE)
+      // Limpiamos los datos del carrito para asegurar que el API reciba 'price' numérico
+      console.log("🛒 [Checkout] Contenido Crudo del Carrito:", cart);
+
+      const cleanItems = cart.map((item: any) => {
+          // Buscamos el precio en cualquier variable posible
+          const rawPrice = item.price || item.unit_price || item.unitPrice || item.product?.price || 0;
+          const parsedPrice = Number(rawPrice);
+
+          return {
+            id: item.id,
+            title: item.name || item.title || item.productName || 'Producto',
+            // Si el precio no es un número válido, forzamos 0
+            price: isNaN(parsedPrice) ? 0 : parsedPrice,
+            quantity: Number(item.quantity || 1)
+          };
       });
 
-      console.log("📦 Orden creada en local:", createdOrder.id);
+      console.log("📤 [Checkout] Items limpios enviados a API:", cleanItems);
 
-      // 2. GENERAR LINK DE PAGO (Conectando con tu API V3)
+      // Verificación de seguridad local
+      if (cleanItems.some((i: any) => i.price <= 0)) {
+          console.error("❌ ERROR: Se detectaron productos con precio 0 o inválido.");
+          toast({ variant: "destructive", title: "Error en el Carrito", description: "Hay productos con precio inválido. Por favor, vacía el carrito e intenta de nuevo." });
+          setIsSubmitting(false);
+          return;
+      }
+
+      // 3. CREAR ORDEN VÍA API SEGURA (BACKEND)
+      const createResponse = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              userId: user.uid,
+              items: cleanItems, // Enviamos los items limpios
+              storeId: storeId,
+              shippingInfo: { name: values.name, address: values.address },
+              paymentMethod: 'mercadopago' 
+          })
+      });
+
+      const orderDataResult = await createResponse.json();
+
+      if (!createResponse.ok) {
+          throw new Error(orderDataResult.error || "Error creando orden segura");
+      }
+
+      const newOrderId = orderDataResult.orderId;
+      console.log("📦 Orden Segura Creada (Server-Side):", newOrderId);
+
+      // 4. GENERAR LINK DE PAGO
       const paymentResponse = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            items: cart,
-            orderId: createdOrder.id,
+            items: cleanItems, // Usamos items limpios también aquí
+            orderId: newOrderId,
             userId: user.uid, 
             storeId: storeId,
-            storeOwnerId: currentStoreData.userId, // ✅ AGREGADO: Enviamos el ID del dueño real
+            storeOwnerId: currentStoreData.userId, 
             payerEmail: user.email || 'guest@encomiendaya.com',
         })
       });
@@ -190,16 +221,16 @@ export default function CheckoutPage() {
         throw new Error(paymentData.error || "Error al generar pago");
       }
 
-      // 3. LIMPIEZA Y REDIRECCIÓN
+      // 5. LIMPIEZA Y REDIRECCIÓN
       clearCart(); 
       toast({ title: "Redirigiendo a MercadoPago...", description: "No cierres esta ventana." });
       
       window.location.href = paymentData.url;
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
       setIsSubmitting(false); 
-      toast({ variant: "destructive", title: "Error", description: "No se pudo iniciar el pago. Intenta nuevamente." });
+      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo iniciar el pago." });
     }
   }
 

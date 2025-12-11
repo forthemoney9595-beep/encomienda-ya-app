@@ -34,7 +34,6 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Calculamos total estimado solo visualmente
   const { total } = OrderService.calculateTotals(cartSubtotal);
 
   useEffect(() => {
@@ -69,13 +68,25 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     setIsProcessing(true);
 
     try {
-        // 🔥 LLAMADA A LA API SEGURA (BACKEND)
+        // ✅ CORRECCIÓN: Enviamos items con PRECIO y NOMBRE
+        const cleanItems = items.map((i: any) => ({
+            id: i.id,
+            title: i.name || i.title || 'Producto',
+            // Buscamos el precio numérico
+            price: Number(i.price || i.unit_price || 0), 
+            quantity: Number(i.quantity || 1)
+        }));
+
+        if (cleanItems.some(i => i.price <= 0)) {
+            throw new Error("Hay productos con precio inválido (0). Revisa tu carrito.");
+        }
+
         const response = await fetch('/api/orders/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userId: user.uid,
-                items: items.map(i => ({ id: i.id, quantity: i.quantity || 1 })), // Solo enviamos IDs
+                items: cleanItems, // Enviamos items completos
                 storeId: storeId,
                 storeName: storeName,
                 storeAddress: storeAddress,
@@ -100,8 +111,8 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         setTimeout(() => {
             onOpenChange(false);
             setIsSuccess(false);
-            if (result.id) {
-                router.push(`/orders/${result.id}`); 
+            if (result.orderId) {
+                router.push(`/orders/${result.orderId}`); 
             } else {
                 router.push('/orders');
             }

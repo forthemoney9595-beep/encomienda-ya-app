@@ -5,11 +5,12 @@ import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
 import type { Order, OrderStatus } from '@/lib/order-service';
 import { updateOrderStatus } from '@/lib/order-service';
-import { CardFooter, CardDescription, Card } from '@/components/ui/card';
+import { CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
+// ✅ CORRECCIÓN: Agregado 'Clock' a los imports
 import { Loader2, CreditCard, AlertTriangle, CheckCircle2, XCircle, Clock, ShoppingBag } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -61,7 +62,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     }
   };
 
-  // --- INTEGRACIÓN REAL MERCADOPAGO ---
+  // --- INTEGRACIÓN REAL MERCADOPAGO (Con Limpieza de Datos) ---
   const handleBuyerPayment = async () => {
     if (!order) {
         console.error("❌ Error: No hay objeto 'order'");
@@ -78,14 +79,34 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     setIsUpdating(true);
     
     try {
-        console.log("📤 Enviando a Checkout:", { orderId: order.id, itemsCount: order.items.length });
+        // ⚠️ LIMPIEZA DE ITEMS (Igual que en Checkout)
+        const cleanItems = order.items.map((item: any) => {
+            const rawPrice = item.price || item.unit_price || item.unitPrice || item.product?.price || 0;
+            const price = Number(rawPrice);
+            
+            return {
+                id: item.id,
+                title: item.name || item.title || item.product?.name || 'Producto',
+                price: isNaN(price) ? 0 : price,
+                quantity: Number(item.quantity || 1)
+            };
+        });
+
+        if (cleanItems.some((i: any) => i.price <= 0)) {
+             throw new Error("El precio de los productos no es válido (0). Contacta a soporte.");
+        }
+
+        console.log("📤 Enviando a Checkout (Limpio):", { orderId: order.id, items: cleanItems });
 
         const response = await fetch('/api/checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 orderId: order.id,
-                items: order.items,
+                items: cleanItems, 
+                userId: appUser?.uid, 
+                storeId: order.storeId, 
+                storeOwnerId: null, 
                 payerEmail: appUser?.email 
             })
         });

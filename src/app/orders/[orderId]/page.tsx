@@ -1,5 +1,6 @@
 'use client';
 
+// ... (Imports iguales al anterior) ...
 import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -27,12 +28,12 @@ import { DeliveryReviewCard } from './delivery-review-card';
 import { ChatWindow } from './chat-window'; 
 import { LocationTracker } from '@/components/location-tracker';
 
-// ✅ Optimización: Definimos el mapa dinámico FUERA del componente para evitar recargas
 const OrderMap = dynamic(() => import('./order-map'), { 
     ssr: false, 
     loading: () => <Skeleton className="h-full w-full bg-muted animate-pulse" /> 
 });
 
+// ... (Funciones auxiliares formatDate, OrderPageSkeleton, statusSteps, OrderProgress IGUALES) ...
 const formatDate = (date: any) => {
     if (!date) return 'Fecha desconocida';
     try {
@@ -42,9 +43,9 @@ const formatDate = (date: any) => {
         } else if (typeof date === 'string' || typeof date === 'number') {
              dateObj = new Date(date);
         } else if (date instanceof Date) {
-            dateObj = date;
+             dateObj = date;
         } else {
-            return 'Fecha inválida';
+             return 'Fecha inválida';
         }
         if (isNaN(dateObj.getTime())) return 'Fecha inválida';
         return format(dateObj, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es });
@@ -169,15 +170,20 @@ export default function OrderTrackingPage() {
       const isBuyer = user?.uid === order.userId;
       const isAssignedDriver = user?.uid === order.deliveryPersonId;
       const isAdmin = myUserProfile.role === 'admin';
-      const isAvailableForDelivery = myUserProfile.role === 'delivery' && order.status === 'En preparación' && !order.deliveryPersonId;
+      
+      // ✅ CORRECCIÓN SEGURIDAD: El repartidor puede entrar si el pedido está libre
+      const isDelivery = myUserProfile.role === 'delivery';
+      // Permitimos ver si no hay repartidor O si es mi pedido
+      const canAccessAsDriver = isDelivery && (!order.deliveryPersonId || order.deliveryPersonId === user?.uid);
 
-      if (!isOwner && !isBuyer && !isAssignedDriver && !isAdmin && !isAvailableForDelivery) {
+      if (!isOwner && !isBuyer && !isAdmin && !canAccessAsDriver) {
+          console.warn("⛔ Acceso denegado a pedido:", orderId);
           router.push('/orders'); 
       }
     } else if (!isLoading && !order && !orderLoading) {
         notFound();
     }
-  }, [order, isLoading, user, myUserProfile, router, orderLoading]);
+  }, [order, isLoading, user, myUserProfile, router, orderLoading, orderId]);
   
     const handleReviewSubmit = async (rating: number, review: string) => {
         if (!reviewingItem || !order || !firestore) return;
@@ -287,7 +293,7 @@ export default function OrderTrackingPage() {
     const openGoogleMaps = (address: string | undefined) => {
         if (!address) return;
         const encoded = encodeURIComponent(address);
-        window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
+        window.open(`http://googleusercontent.com/maps.google.com/?q=${encoded}`, '_blank');
     }
 
   if (isLoading || !order) return <OrderPageSkeleton />;
@@ -296,10 +302,13 @@ export default function OrderTrackingPage() {
   const isBuyer = user?.uid === order.userId;
   const isStoreOwner = myUserProfile?.role === 'store' && myUserProfile?.storeId === order.storeId; 
   const isDeliveryPerson = myUserProfile?.role === 'delivery' && user?.uid === order.deliveryPersonId;
-  const isAvailableToAccept = myUserProfile?.role === 'delivery' && order.status === 'En preparación' && !order.deliveryPersonId;
   
-  // ✅ CORRECCIÓN: Ahora mostramos la columna si eres Cliente, Tienda o Repartidor
-  const showRightColumn = isStoreOwner || isDeliveryPerson || isBuyer;
+  // Lógica de Disponibilidad para Aceptar (Igual a la lista)
+  const isDelivery = myUserProfile?.role === 'delivery';
+  const isAvailableToAccept = isDelivery && !order.deliveryPersonId && order.status === 'En preparación';
+  
+  // Permitir ver si eres store, delivery (asignado o libre), o buyer
+  const showRightColumn = isStoreOwner || isDelivery || isBuyer;
 
   return (
     <div className="container mx-auto">
@@ -340,16 +349,17 @@ export default function OrderTrackingPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* ACCIONES REPARTIDOR */}
+                    {/* BOTÓN GIGANTE DE ACEPTAR PARA REPARTIDOR */}
                     {isAvailableToAccept && (
-                        <div className="mb-6 bg-green-50 border border-green-200 rounded-xl overflow-hidden shadow-sm">
+                        <div className="mb-6 bg-green-50 border border-green-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in zoom-in duration-300">
                             <div className="p-4 bg-green-100 border-b border-green-200 flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-green-900 flex items-center gap-2"><Bike className="h-5 w-5" /> Nueva Solicitud</h3>
+                                <h3 className="text-lg font-bold text-green-900 flex items-center gap-2"><Bike className="h-5 w-5" /> Solicitud de Entrega</h3>
                                 <span className="bg-green-600 text-white px-3 py-1 rounded-full font-bold text-sm">+${order.deliveryFee.toFixed(2)}</span>
                             </div>
-                            <div className="p-4 space-y-3">
-                                <Button className="w-full mt-2 bg-green-600 hover:bg-green-700 text-white shadow-md transition-all hover:scale-[1.02]" size="lg" onClick={handleAcceptOrder} disabled={isAccepting}>
-                                    {isAccepting ? "Aceptando..." : "Aceptar y Comenzar Viaje"}
+                            <div className="p-4 space-y-3 text-center">
+                                <p className="text-green-800 mb-2">Este pedido está listo o preparándose. ¿Quieres llevarlo?</p>
+                                <Button className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md transition-all hover:scale-[1.02]" size="lg" onClick={handleAcceptOrder} disabled={isAccepting}>
+                                    {isAccepting ? "Aceptando..." : "✅ Aceptar y Asignarme este Pedido"}
                                 </Button>
                             </div>
                         </div>
@@ -445,7 +455,7 @@ export default function OrderTrackingPage() {
              <Card><CardHeader><CardTitle>Estado del Pedido</CardTitle></CardHeader><CardContent><OrderProgress status={order.status} /></CardContent></Card>
         </div>
 
-        {/* --- COLUMNA DERECHA (Ahora visible para Cliente) --- */}
+        {/* --- COLUMNA DERECHA --- */}
         <div className={cn("space-y-8", showRightColumn ? "lg:col-span-2" : "hidden")}>
              <Card>
                 <CardHeader><CardTitle>Mapa de Entrega</CardTitle></CardHeader>

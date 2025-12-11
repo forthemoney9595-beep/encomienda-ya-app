@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { OrderService } from '@/lib/order-service';
-import { Clock, CheckCircle2, DollarSign, BellRing, Megaphone, Utensils, CreditCard } from 'lucide-react';
+import { Clock, CheckCircle2, Megaphone, Utensils, CreditCard, Bike, XCircle, ShoppingBag } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,7 +19,6 @@ export default function StoreOrdersView() {
   const firestore = useFirestore();
   const { toast } = useToast();
   
-  // Query: Pedidos de MI tienda
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !userProfile?.storeId) return null;
     return query(
@@ -30,20 +29,14 @@ export default function StoreOrdersView() {
 
   const { data: allOrders, isLoading } = useCollection<any>(ordersQuery);
 
-  // Ordenar en cliente para asegurar el orden correcto
   const sortedOrders = (allOrders || []).sort((a, b) => {
       const dateA = a.createdAt?.seconds || 0;
       const dateB = b.createdAt?.seconds || 0;
       return dateB - dateA;
   });
 
-  // ESTADO 1: PENDIENTES DE CONFIRMACIÓN (Stock)
   const pendingOrders = sortedOrders.filter(o => o.status === 'Pendiente de Confirmación');
-  
-  // ESTADO 2: ACTIVOS (Ya pagados, en cocina o reparto) + Pendiente de Pago (Esperando al cliente)
   const activeOrders = sortedOrders.filter(o => ['Pendiente de Pago', 'En preparación', 'En reparto', 'En camino'].includes(o.status));
-  
-  // ESTADO 3: HISTORIAL
   const historyOrders = sortedOrders.filter(o => ['Entregado', 'Cancelado', 'Rechazado'].includes(o.status));
 
   // --- FUNCIÓN DE BROADCAST (Difusión a repartidores) ---
@@ -53,7 +46,10 @@ export default function StoreOrdersView() {
           const driversQuery = query(collection(firestore, 'users'), where('role', '==', 'delivery'));
           const driversSnap = await getDocs(driversQuery);
           
-          if (driversSnap.empty) return;
+          if (driversSnap.empty) {
+              toast({ variant: "destructive", title: "No hay repartidores", description: "No se encontraron repartidores registrados en la zona." });
+              return;
+          }
 
           const batch = writeBatch(firestore);
           
@@ -62,8 +58,8 @@ export default function StoreOrdersView() {
               batch.set(notifRef, {
                   userId: driverDoc.id,
                   title: "📦 Nuevo Pedido Disponible",
-                  message: `La tienda ${storeName} tiene un pedido listo. ¡Aceptalo rápido!`,
-                  type: "delivery",
+                  body: `La tienda ${storeName} tiene un pedido listo. ¡Aceptalo rápido!`,
+                  type: "delivery_request",
                   orderId: orderId,
                   read: false,
                   createdAt: serverTimestamp(),
@@ -72,21 +68,20 @@ export default function StoreOrdersView() {
           });
 
           await batch.commit();
+          toast({ title: "📢 Alerta Masiva Enviada", description: `Se notificó a ${driversSnap.size} repartidores.` });
+
       } catch (e) {
           console.error("Error en broadcast:", e);
+          toast({ variant: "destructive", title: "Error al notificar" });
       }
   };
 
-  // ✅ CONFIRMAR STOCK (Paso 1 -> Paso 2)
   const handleConfirmStock = async (order: any) => {
       if (!firestore) return;
       try {
-          // Cambiamos estado a 'Pendiente de Pago' para que el cliente pueda pagar
           await updateDoc(doc(firestore, 'orders', order.id), { status: 'Pendiente de Pago' });
           
           const msg = "La tienda ha confirmado el stock. ¡Puedes proceder al pago!";
-
-          // Notificar Cliente
           await OrderService.sendNotification(firestore, order.userId, "✅ Stock Confirmado", msg, "order_status", order.id);
           
           toast({ title: "Stock Confirmado", description: "El cliente ha sido notificado para pagar." });
@@ -94,20 +89,6 @@ export default function StoreOrdersView() {
           toast({ variant: "destructive", title: "Error al confirmar stock" });
       }
   };
-
-  // ✅ COMENZAR PREPARACIÓN (Paso 2 -> Paso 3, esto ocurre AUTOMÁTICAMENTE tras el pago, pero dejamos botón manual por seguridad)
-  // Nota: Idealmente, el Webhook de MercadoPago hace esto. Pero si falla, la tienda puede forzarlo.
-  const handleStartCooking = async (order: any) => {
-      if (!firestore) return;
-      try {
-           await updateDoc(doc(firestore, 'orders', order.id), { status: 'En preparación' });
-           // Aquí podríamos notificar a repartidores si queremos que lleguen mientras se cocina
-           // Pero según tu flujo, se les avisa cuando está LISTO ("readyForPickup")
-           toast({ title: "En preparación", description: "Comienza a cocinar." });
-      } catch (error) {
-           toast({ variant: "destructive", title: "Error" });
-      }
-  }
 
   const handleRejectOrder = async (order: any) => {
       if (!firestore) return;
@@ -119,14 +100,16 @@ export default function StoreOrdersView() {
       } catch (error) { toast({ variant: "destructive", title: "Error" }); }
   };
 
-  // ✅ AVISAR REPARTIDOR (Cuando la comida está lista)
+  // ✅ AVISAR REPARTIDOR
   const handleNotifyDriver = async (order: any) => {
       if (!firestore) return;
       try {
-        await updateDoc(doc(firestore, 'orders', order.id), { readyForPickup: true });
+        await updateDoc(doc(firestore, 'orders', order.id), { 
+            readyForPickup: true,
+            lastDriverNotification: serverTimestamp()
+        });
         
         if (order.deliveryPersonId) {
-            // Si YA tiene dueño (raro en este modelo broadcast, pero posible), le avisamos
             await OrderService.sendNotification(
                 firestore, 
                 order.deliveryPersonId, 
@@ -137,9 +120,8 @@ export default function StoreOrdersView() {
             );
             toast({ title: "Repartidor avisado", description: "Se notificó al conductor asignado." });
         } else {
-            // BROADCAST: Avisar a TODOS los repartidores disponibles
+            // BROADCAST
             await notifyAllDrivers(order.id, userProfile?.displayName || 'Tienda');
-            toast({ title: "Alerta Masiva Enviada", description: "Se avisó a todos los repartidores disponibles." });
         }
       } catch (e) { console.error(e); }
   };
@@ -150,7 +132,7 @@ export default function StoreOrdersView() {
     <div className="container mx-auto pb-20">
       <PageHeader title="Gestión de Pedidos" description="Administra los pedidos entrantes." />
 
-      <Tabs defaultValue="pending" className="w-full">
+      <Tabs defaultValue="active" className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="pending" className="relative">
              Nuevos
@@ -172,12 +154,13 @@ export default function StoreOrdersView() {
                     <OrderCard 
                         key={order.id} 
                         order={order} 
-                        // En la pestaña "Pendientes", la acción principal es Confirmar Stock
                         onAction={() => handleConfirmStock(order)}
                         onReject={() => handleRejectOrder(order)} 
                         actionLabel="Confirmar Stock"
                         actionIcon={CheckCircle2}
                         statusColor="border-l-orange-500"
+                        statusLabel="Solicitud Nueva"
+                        statusBadgeColor="bg-orange-100 text-orange-800 border-orange-200"
                     />
                 ))
             )}
@@ -185,23 +168,35 @@ export default function StoreOrdersView() {
 
         <TabsContent value="active" className="space-y-4">
             {activeOrders.map(order => {
-                // Lógica dinámica de botones según el estado
                 let action = null;
                 let label = "";
                 let icon = null;
                 let isDisabled = false;
+                let badgeColor = "bg-blue-100 text-blue-800 border-blue-200"; 
 
                 if (order.status === 'Pendiente de Pago') {
-                    // Esperando al cliente
-                    label = "Esperando Pago...";
+                    label = "Esperando Pago del Cliente...";
                     icon = Clock;
                     isDisabled = true;
+                    badgeColor = "bg-yellow-100 text-yellow-800 border-yellow-200";
                 } else if (order.status === 'En preparación') {
-                    // Cocinando -> Avisar Repartidor
                     action = () => handleNotifyDriver(order);
-                    label = order.readyForPickup ? "Repartidores Avisados" : "¡Listo! Llamar Repartidor";
-                    icon = order.readyForPickup ? CheckCircle2 : Megaphone;
-                    isDisabled = !!order.readyForPickup;
+                    
+                    if (order.readyForPickup) {
+                        label = "📢 Reenviar Alerta a Repartidores"; 
+                        icon = Megaphone;
+                        isDisabled = false; // ✅ Habilitado para reenviar
+                    } else {
+                        label = "✅ ¡Pedido Listo! Llamar Repartidor";
+                        icon = Utensils;
+                        isDisabled = false;
+                    }
+                    badgeColor = "bg-orange-100 text-orange-800 border-orange-200"; // Naranja visible
+                } else if (order.status === 'En reparto') {
+                    label = "En camino con Repartidor";
+                    icon = Bike;
+                    isDisabled = true;
+                    badgeColor = "bg-blue-100 text-blue-800 border-blue-200";
                 }
 
                 return (
@@ -213,6 +208,8 @@ export default function StoreOrdersView() {
                         actionIcon={icon}
                         isDisabled={isDisabled}
                         statusColor="border-l-blue-500"
+                        statusLabel={order.status}
+                        statusBadgeColor={badgeColor}
                     />
                 );
             })}
@@ -228,8 +225,10 @@ export default function StoreOrdersView() {
                 <OrderCard 
                     key={order.id} 
                     order={order} 
-                    isDisabled={true} // Historial solo lectura
+                    isDisabled={true} 
                     statusColor="border-l-gray-400"
+                    statusLabel={order.status}
+                    statusBadgeColor="bg-gray-100 text-gray-800 border-gray-200"
                 />
             ))}
         </TabsContent>
@@ -238,26 +237,27 @@ export default function StoreOrdersView() {
   );
 }
 
-// Componente Reutilizable de Tarjeta
-function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, isDisabled, statusColor }: any) {
+// Componente Tarjeta Mejorado
+function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, isDisabled, statusColor, statusLabel, statusBadgeColor }: any) {
     return (
-        <Card className={`border-l-4 ${statusColor} shadow-sm`}>
+        <Card className={`border-l-4 ${statusColor} shadow-sm overflow-hidden`}>
             <CardHeader className="bg-muted/10 pb-3 pt-3">
                 <div className="flex justify-between items-start">
                     <div>
-                        <CardTitle className="text-base flex items-center gap-2">
-                            Pedido #{order.id.substring(0, 6)}
-                            <Badge variant="outline" className="text-xs font-normal bg-white">
-                                {order.status}
+                        <div className="flex items-center gap-2 mb-1">
+                            <CardTitle className="text-base">Pedido #{order.id.substring(0, 6)}</CardTitle>
+                            {/* BADGE MEJORADO */}
+                            <Badge className={`${statusBadgeColor || 'bg-gray-100 text-gray-800'} border px-2 py-0.5 font-medium`}>
+                                {statusLabel || order.status}
                             </Badge>
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground mt-1">
+                        </div>
+                        <p className="text-xs text-muted-foreground">
                             {format(order.createdAt?.toDate ? order.createdAt.toDate() : new Date(), "d MMM, HH:mm", { locale: es })}
                         </p>
                     </div>
-                    {/* Indicador visual de pago */}
-                    {order.status !== 'Pendiente de Pago' && order.status !== 'Pendiente de Confirmación' && order.status !== 'Rechazado' && (
-                         <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">
+                    
+                    {order.paymentStatus === 'paid' && (
+                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                             <CreditCard className="h-3 w-3 mr-1" /> Pagado
                          </Badge>
                     )}
@@ -272,14 +272,21 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                 <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2 border">
                     {order.items?.map((item: any, i: number) => (
                         <div key={i} className="flex justify-between items-start">
-                            <span className="font-medium text-gray-700">{item.quantity}x {item.name}</span>
+                            <span className="font-medium text-gray-700">{item.quantity}x {item.title || item.name}</span>
                             <span className="text-gray-500">${(item.price * item.quantity).toLocaleString()}</span>
                         </div>
                     ))}
                 </div>
+                
+                {/* Si ya se avisó al repartidor */}
+                {order.readyForPickup && order.status === 'En preparación' && (
+                    <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-100">
+                        <Megaphone className="h-3 w-3 animate-pulse" />
+                        <span>Buscando repartidor... (Alerta enviada)</span>
+                    </div>
+                )}
             </CardContent>
             
-            {/* Footer de Acciones solo si hay acciones disponibles */}
             {(onAction || onReject) && (
                 <CardFooter className="bg-gray-50/50 flex gap-2 justify-end border-t p-3">
                     {onReject && (
@@ -291,9 +298,10 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                     {onAction && actionLabel && (
                         <Button 
                             size="sm" 
-                            className={`${isDisabled ? 'bg-muted text-muted-foreground' : 'bg-green-600 hover:bg-green-700 text-white'}`} 
+                            className={`${isDisabled ? 'bg-muted text-muted-foreground opacity-80' : 'bg-green-600 hover:bg-green-700 text-white shadow-sm'}`} 
                             onClick={onAction}
-                            disabled={isDisabled}
+                            // Habilitamos el botón si la acción es Reenviar, incluso si isDisabled era true por defecto
+                            disabled={isDisabled && !actionLabel.includes("Reenviar")} 
                         >
                             {Icon && <Icon className="mr-2 h-4 w-4" />}
                             {actionLabel}
