@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, CheckCircle2, MapPin, ShoppingBag } from 'lucide-react';
+import { Loader2, CheckCircle2, MapPin, ShoppingBag, LocateFixed } from 'lucide-react'; // Agregamos LocateFixed
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
 import { OrderService } from '@/lib/order-service';
@@ -25,12 +25,19 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const { toast } = useToast();
   const router = useRouter();
 
+  // Estados de Formulario
   const [address, setAddress] = useState(''); 
   const [phone, setPhone] = useState(userProfile?.phoneNumber || '');
   
+  // ✅ NUEVO: Estado para guardar coordenadas GPS
+  const [locationCoords, setLocationCoords] = useState<{latitude: number, longitude: number} | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  // Estados de Tienda
   const [storeName, setStoreName] = useState('Tienda');
   const [storeAddress, setStoreAddress] = useState('Dirección de la tienda');
 
+  // Estados de UI
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -55,6 +62,33 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     if (open) fetchStoreDetails();
   }, [storeId, firestore, open]);
 
+  // ✅ NUEVA FUNCION: Obtener GPS del navegador
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+        toast({ variant: "destructive", title: "Error", description: "Tu navegador no soporta geolocalización." });
+        return;
+    }
+
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const { latitude, longitude } = position.coords;
+            setLocationCoords({ latitude, longitude });
+            // Rellenamos el input visualmente para que el usuario sepa que funcionó
+            setAddress("📍 Ubicación GPS Actual"); 
+            setIsLocating(false);
+            toast({ title: "Ubicación detectada", description: "Coordenadas guardadas correctamente." });
+        },
+        (error) => {
+            console.error("Error GPS:", error);
+            setIsLocating(false);
+            toast({ variant: "destructive", title: "Error GPS", description: "No pudimos obtener tu ubicación. Escríbela manualmente." });
+        },
+        { enableHighAccuracy: true }
+    );
+  };
+
   const handleRequestOrder = async () => {
     if (!user || !storeId || !firestore) {
         toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión." });
@@ -68,11 +102,10 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     setIsProcessing(true);
 
     try {
-        // ✅ CORRECCIÓN: Enviamos items con PRECIO y NOMBRE
+        // ⚠️ MANTENEMOS LA LIMPIEZA DE PRECIOS (NO TOCAR)
         const cleanItems = items.map((i: any) => ({
             id: i.id,
             title: i.name || i.title || 'Producto',
-            // Buscamos el precio numérico
             price: Number(i.price || i.unit_price || 0), 
             quantity: Number(i.quantity || 1)
         }));
@@ -81,19 +114,23 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             throw new Error("Hay productos con precio inválido (0). Revisa tu carrito.");
         }
 
+        // Enviamos a la API
         const response = await fetch('/api/orders/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userId: user.uid,
-                items: cleanItems, // Enviamos items completos
+                items: cleanItems,
                 storeId: storeId,
                 storeName: storeName,
                 storeAddress: storeAddress,
                 shippingInfo: {
                     name: userProfile?.name || user.displayName || 'Cliente',
-                    address: address
+                    address: address // Texto visual
                 },
+                // ✅ ENVIAMOS LAS COORDENADAS (Esto activa el mapa)
+                customerCoords: locationCoords, 
+                
                 customerName: userProfile?.name || user.displayName || 'Cliente',
                 customerPhoneNumber: phone || 'Sin teléfono'
             })
@@ -111,6 +148,10 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         setTimeout(() => {
             onOpenChange(false);
             setIsSuccess(false);
+            // Limpiamos estados locales
+            setAddress('');
+            setLocationCoords(null);
+            
             if (result.orderId) {
                 router.push(`/orders/${result.orderId}`); 
             } else {
@@ -157,7 +198,28 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         <div className="grid gap-6 py-2">
           <div className="space-y-3">
             <h4 className="font-semibold text-sm flex items-center gap-2"><MapPin className="h-4 w-4"/> Dirección de Entrega</h4>
-            <Input placeholder="Dirección exacta" value={address} onChange={(e) => setAddress(e.target.value)} className="bg-muted/30" />
+            
+            {/* Input con Botón de GPS integrado */}
+            <div className="flex gap-2">
+                <Input 
+                    placeholder="Dirección exacta" 
+                    value={address} 
+                    onChange={(e) => setAddress(e.target.value)} 
+                    className="bg-muted/30 flex-1" 
+                />
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={handleGetLocation} 
+                    disabled={isLocating}
+                    title="Usar mi ubicación actual"
+                    className="shrink-0"
+                >
+                    {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4 text-blue-600" />}
+                </Button>
+            </div>
+            {locationCoords && <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3"/> Coordenadas GPS listas para el mapa</p>}
+
             <Input placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-muted/30" />
           </div>
 

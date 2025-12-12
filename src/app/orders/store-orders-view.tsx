@@ -9,10 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { OrderService } from '@/lib/order-service';
-import { Clock, CheckCircle2, Megaphone, Utensils, CreditCard, Bike, XCircle, ShoppingBag } from 'lucide-react';
+import { Clock, CheckCircle2, Megaphone, Utensils, CreditCard, Bike, Eye } from 'lucide-react'; // ✅ Agregamos Eye
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Link from 'next/link'; // ✅ Importamos Link
 
 export default function StoreOrdersView() {
   const { userProfile } = useAuth();
@@ -185,13 +186,13 @@ export default function StoreOrdersView() {
                     if (order.readyForPickup) {
                         label = "📢 Reenviar Alerta a Repartidores"; 
                         icon = Megaphone;
-                        isDisabled = false; // ✅ Habilitado para reenviar
+                        isDisabled = false; 
                     } else {
                         label = "✅ ¡Pedido Listo! Llamar Repartidor";
                         icon = Utensils;
                         isDisabled = false;
                     }
-                    badgeColor = "bg-orange-100 text-orange-800 border-orange-200"; // Naranja visible
+                    badgeColor = "bg-orange-100 text-orange-800 border-orange-200"; 
                 } else if (order.status === 'En reparto') {
                     label = "En camino con Repartidor";
                     icon = Bike;
@@ -237,7 +238,7 @@ export default function StoreOrdersView() {
   );
 }
 
-// Componente Tarjeta Mejorado
+// ✅ COMPONENTE TARJETA MEJORADO (Con botón de Navegación)
 function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, isDisabled, statusColor, statusLabel, statusBadgeColor }: any) {
     return (
         <Card className={`border-l-4 ${statusColor} shadow-sm overflow-hidden`}>
@@ -246,7 +247,6 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <CardTitle className="text-base">Pedido #{order.id.substring(0, 6)}</CardTitle>
-                            {/* BADGE MEJORADO */}
                             <Badge className={`${statusBadgeColor || 'bg-gray-100 text-gray-800'} border px-2 py-0.5 font-medium`}>
                                 {statusLabel || order.status}
                             </Badge>
@@ -278,7 +278,6 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                     ))}
                 </div>
                 
-                {/* Si ya se avisó al repartidor */}
                 {order.readyForPickup && order.status === 'En preparación' && (
                     <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-100">
                         <Megaphone className="h-3 w-3 animate-pulse" />
@@ -287,28 +286,36 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                 )}
             </CardContent>
             
-            {(onAction || onReject) && (
-                <CardFooter className="bg-gray-50/50 flex gap-2 justify-end border-t p-3">
-                    {onReject && (
-                        <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50 border-red-200" onClick={onReject}>
-                            Rechazar
-                        </Button>
-                    )}
-                    
-                    {onAction && actionLabel && (
-                        <Button 
-                            size="sm" 
-                            className={`${isDisabled ? 'bg-muted text-muted-foreground opacity-80' : 'bg-green-600 hover:bg-green-700 text-white shadow-sm'}`} 
-                            onClick={onAction}
-                            // Habilitamos el botón si la acción es Reenviar, incluso si isDisabled era true por defecto
-                            disabled={isDisabled && !actionLabel.includes("Reenviar")} 
-                        >
-                            {Icon && <Icon className="mr-2 h-4 w-4" />}
-                            {actionLabel}
-                        </Button>
-                    )}
-                </CardFooter>
-            )}
+            {/* ✅ FOOTER SIEMPRE VISIBLE PARA NAVEGACIÓN */}
+            <CardFooter className="bg-gray-50/50 flex flex-wrap gap-2 justify-end border-t p-3">
+                
+                {/* 1. Botón Universal: Ver Detalles / Chat */}
+                <Link href={`/orders/${order.id}`} className="flex-1 sm:flex-none">
+                    <Button variant="secondary" size="sm" className="w-full bg-white border border-gray-200 hover:bg-gray-100 text-gray-700">
+                        <Eye className="mr-2 h-4 w-4" /> Ver Detalles / Chat
+                    </Button>
+                </Link>
+
+                {/* 2. Botón Rechazar */}
+                {onReject && (
+                    <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50 border-red-200 flex-1 sm:flex-none" onClick={onReject}>
+                        Rechazar
+                    </Button>
+                )}
+                
+                {/* 3. Botón Acción Principal (Confirmar / Llamar Delivery) */}
+                {onAction && actionLabel && (
+                    <Button 
+                        size="sm" 
+                        className={`${isDisabled ? 'bg-muted text-muted-foreground opacity-80' : 'bg-green-600 hover:bg-green-700 text-white shadow-sm'} flex-1 sm:flex-none`} 
+                        onClick={onAction}
+                        disabled={isDisabled && !actionLabel.includes("Reenviar")} 
+                    >
+                        {Icon && <Icon className="mr-2 h-4 w-4" />}
+                        {actionLabel}
+                    </Button>
+                )}
+            </CardFooter>
         </Card>
     );
 }

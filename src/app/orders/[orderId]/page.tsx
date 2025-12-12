@@ -1,6 +1,5 @@
 'use client';
 
-// ... (Imports iguales al anterior) ...
 import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -17,7 +16,7 @@ import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'; 
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, Mail, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store } from 'lucide-react';
+import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, Mail, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent } from '@/components/ui/alert-dialog';
@@ -33,7 +32,6 @@ const OrderMap = dynamic(() => import('./order-map'), {
     loading: () => <Skeleton className="h-full w-full bg-muted animate-pulse" /> 
 });
 
-// ... (Funciones auxiliares formatDate, OrderPageSkeleton, statusSteps, OrderProgress IGUALES) ...
 const formatDate = (date: any) => {
     if (!date) return 'Fecha desconocida';
     try {
@@ -171,9 +169,8 @@ export default function OrderTrackingPage() {
       const isAssignedDriver = user?.uid === order.deliveryPersonId;
       const isAdmin = myUserProfile.role === 'admin';
       
-      // ✅ CORRECCIÓN SEGURIDAD: El repartidor puede entrar si el pedido está libre
       const isDelivery = myUserProfile.role === 'delivery';
-      // Permitimos ver si no hay repartidor O si es mi pedido
+      // Permitimos ver si eres delivery y (es tu pedido O no tiene dueño y está listo)
       const canAccessAsDriver = isDelivery && (!order.deliveryPersonId || order.deliveryPersonId === user?.uid);
 
       if (!isOwner && !isBuyer && !isAdmin && !canAccessAsDriver) {
@@ -290,10 +287,16 @@ export default function OrderTrackingPage() {
         }
     }
 
-    const openGoogleMaps = (address: string | undefined) => {
-        if (!address) return;
-        const encoded = encodeURIComponent(address);
-        window.open(`http://googleusercontent.com/maps.google.com/?q=${encoded}`, '_blank');
+    // Función de Navegación Inteligente
+    const startNavigation = (lat: number | undefined, lng: number | undefined, addressFallback: string | undefined) => {
+        if (lat && lng) {
+            window.open(`http://googleusercontent.com/maps.google.com/?q=${lat},${lng}`, '_blank');
+        } else if (addressFallback) {
+            const encoded = encodeURIComponent(addressFallback);
+            window.open(`http://googleusercontent.com/maps.google.com/?q=${encoded}`, '_blank');
+        } else {
+            toast({ variant: "destructive", title: "Sin datos", description: "No hay ubicación disponible para navegar." });
+        }
     }
 
   if (isLoading || !order) return <OrderPageSkeleton />;
@@ -302,12 +305,10 @@ export default function OrderTrackingPage() {
   const isBuyer = user?.uid === order.userId;
   const isStoreOwner = myUserProfile?.role === 'store' && myUserProfile?.storeId === order.storeId; 
   const isDeliveryPerson = myUserProfile?.role === 'delivery' && user?.uid === order.deliveryPersonId;
-  
-  // Lógica de Disponibilidad para Aceptar (Igual a la lista)
   const isDelivery = myUserProfile?.role === 'delivery';
   const isAvailableToAccept = isDelivery && !order.deliveryPersonId && order.status === 'En preparación';
   
-  // Permitir ver si eres store, delivery (asignado o libre), o buyer
+  // ✅ CORRECCIÓN CLAVE: El cliente (isBuyer) también debe ver la columna derecha donde está el chat
   const showRightColumn = isStoreOwner || isDelivery || isBuyer;
 
   return (
@@ -333,7 +334,6 @@ export default function OrderTrackingPage() {
       </PageHeader>
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8"> 
         
-        {/* --- COLUMNA IZQUIERDA --- */}
         <div className={cn("space-y-8", showRightColumn ? "lg:col-span-3" : "lg:col-span-5")}>
             <Card>
                 <CardHeader>
@@ -349,7 +349,7 @@ export default function OrderTrackingPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* BOTÓN GIGANTE DE ACEPTAR PARA REPARTIDOR */}
+                    {/* ACCIONES REPARTIDOR */}
                     {isAvailableToAccept && (
                         <div className="mb-6 bg-green-50 border border-green-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in zoom-in duration-300">
                             <div className="p-4 bg-green-100 border-b border-green-200 flex justify-between items-center">
@@ -394,8 +394,20 @@ export default function OrderTrackingPage() {
                                     <div className="p-3 bg-green-100 text-green-800 rounded-lg border border-green-300 font-semibold text-center flex items-center justify-center gap-2 animate-pulse"><BellRing className="h-5 w-5" /> ¡La tienda marcó el pedido como LISTO!</div>
                                 )}
                                 <div className="grid grid-cols-2 gap-3">
-                                    <Button variant="outline" className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" onClick={() => openGoogleMaps('Dirección Tienda')}><MapPin className="mr-2 h-4 w-4" /> Ir a Tienda</Button>
-                                    <Button variant="outline" className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" onClick={() => openGoogleMaps(order.shippingInfo?.address || order.shippingAddress?.address)}><MapPin className="mr-2 h-4 w-4" /> Ir a Cliente</Button>
+                                    <Button 
+                                        variant="outline" 
+                                        className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" 
+                                        onClick={() => startNavigation(order.storeCoords?.latitude, order.storeCoords?.longitude, "Dirección Tienda")}
+                                    >
+                                        <MapPin className="mr-2 h-4 w-4" /> Ir a Tienda
+                                    </Button>
+                                    <Button 
+                                        variant="outline" 
+                                        className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" 
+                                        onClick={() => startNavigation(order.customerCoords?.latitude, order.customerCoords?.longitude, order.shippingInfo?.address || order.shippingAddress?.address)}
+                                    >
+                                        <Navigation className="mr-2 h-4 w-4" /> Ir a Cliente
+                                    </Button>
                                 </div>
                                 <Separator className="bg-blue-200"/>
                                 {order.status === 'En preparación' && (
@@ -462,7 +474,8 @@ export default function OrderTrackingPage() {
                 <CardContent className="h-96">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent><CardFooter><p className="text-xs text-muted-foreground"> {order.status === 'En reparto' ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación." : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."}</p></CardFooter>
             </Card>
             
-            {(isStoreOwner || isDeliveryPerson) && (
+            {/* ✅ CORRECCIÓN CLAVE: El cliente (isBuyer) ahora ve el chat */}
+            {(isStoreOwner || isDeliveryPerson || isBuyer) && (
                 <ChatWindow order={order} />
             )}
 

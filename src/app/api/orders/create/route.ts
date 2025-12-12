@@ -5,7 +5,7 @@ import { Timestamp } from "firebase-admin/firestore";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { userId, items, shippingInfo, storeId, paymentMethod } = body;
+    const { userId, items, shippingInfo, storeId, paymentMethod, customerCoords } = body; // ✅ Agregamos customerCoords
 
     if (!userId || !items || !storeId) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
@@ -63,6 +63,13 @@ export async function POST(request: Request) {
     // 4. Crear la Orden en Firestore
     const newOrderRef = adminDb.collection("orders").doc();
     
+    // ✅ LÓGICA GPS: Intentamos obtener coordenadas
+    // A) Tienda: Sacamos las coordenadas del perfil de la tienda (si existen)
+    const storeCoords = storeData?.coords || storeData?.location || null;
+    
+    // B) Cliente: Usamos las que envió el front o null (El mapa necesita ambas para trazar ruta)
+    // Si no hay coordenadas de cliente, el mapa mostrará error o solo la tienda.
+    
     const orderData = {
         id: newOrderRef.id,
         userId,
@@ -74,10 +81,11 @@ export async function POST(request: Request) {
         storeAddress: storeData?.address || "",
         storeOwnerId: storeData?.userId || null, 
         
-        // ⚠️ CORRECCIÓN DE TYPESCRIPT AQUÍ:
-        // Le decimos explícitamente que esto puede ser string o null
-        deliveryPersonId: null as string | null, 
+        // 📍 COORDENADAS PARA EL MAPA
+        storeCoords: storeCoords, 
+        customerCoords: customerCoords || null, // Recibido del body
         
+        deliveryPersonId: null as string | null, 
         readyForPickup: false, 
 
         subtotal: calculatedSubtotal,
@@ -92,12 +100,12 @@ export async function POST(request: Request) {
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
         
-        createdVia: "secure_api_v2"
+        createdVia: "secure_api_v3"
     };
 
     await newOrderRef.set(orderData);
 
-    console.log(`✅ [API Éxito] Orden ${newOrderRef.id} creada.`);
+    console.log(`✅ [API Éxito] Orden ${newOrderRef.id} creada con GPS.`);
 
     return NextResponse.json({ orderId: newOrderRef.id, total: finalTotal });
 

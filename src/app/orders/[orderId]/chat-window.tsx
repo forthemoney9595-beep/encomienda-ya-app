@@ -4,21 +4,21 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Send, Loader2 } from 'lucide-react';
+import { MessageSquare, Send, Loader2, User, Store, Bike, Bell } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, addDoc, serverTimestamp, CollectionReference, Timestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
-import type { Order } from '@/lib/order-service';
+import { type Order, OrderService } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Badge } from '@/components/ui/badge'; // ✅ Importamos Badge para los chips
+import { Badge } from '@/components/ui/badge';
 
 interface ChatMessage {
     id: string;
     senderId: string;
     senderName: string;
-    senderRole: 'store' | 'delivery';
+    senderRole: 'store' | 'delivery' | 'buyer';
     text: string;
     createdAt: Timestamp;
 }
@@ -27,21 +27,10 @@ interface ChatWindowProps {
     order: Order;
 }
 
-// ✅ CONFIGURACIÓN: Respuestas Rápidas por Rol
 const QUICK_REPLIES = {
-    store: [
-      "¡El pedido está listo!",
-      "Sale en 5 minutos",
-      "¿Ya llegaste?",
-      "Gracias por esperar"
-    ],
-    delivery: [
-      "Estoy en camino",
-      "Llegué al local",
-      "Llegué al domicilio",
-      "No encuentro la dirección",
-      "Estoy demorado en el tráfico"
-    ]
+    store: ["¡El pedido está listo!", "Sale en 5 minutos", "¿Alguna preferencia?", "Gracias por su compra"],
+    delivery: ["Estoy en camino", "Llegué al local", "Estoy afuera", "No encuentro el timbre", "Tráfico pesado"],
+    buyer: ["¿Cuánto falta?", "Estoy en la puerta", "El timbre no funciona", "Gracias!", "¿Por dónde vienes?", "Faltan cubiertos"]
 };
 
 export function ChatWindow({ order }: ChatWindowProps) {
@@ -62,35 +51,70 @@ export function ChatWindow({ order }: ChatWindowProps) {
 
     const { data: messages, isLoading: loadingMessages } = useCollection<ChatMessage>(chatQuery);
     
-    const myRole = userProfile?.role as 'store' | 'delivery' | undefined;
-    const isAllowed = myRole === 'store' || myRole === 'delivery';
+    const myRole = userProfile?.role as 'store' | 'delivery' | 'buyer' | undefined;
+    
+    // Validación de permisos
+    const isAllowed = 
+        (myRole === 'store' && order.storeId === userProfile?.storeId) ||
+        (myRole === 'delivery' && order.deliveryPersonId === myUser?.uid) ||
+        (myUser?.uid === order.userId); 
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    // ✅ ACTUALIZADO: Ahora acepta un texto opcional para las respuestas rápidas
+    // --- LÓGICA DE DESTINATARIO Y NOTIFICACIÓN ---
+    const getRecipientInfo = () => {
+        // 1. Si soy CLIENTE:
+        if (myUser?.uid === order.userId) {
+            // Si hay delivery asignado y está en camino -> Hablo con Delivery
+            if (order.deliveryPersonId && ['En reparto', 'En camino'].includes(order.status)) {
+                return { id: order.deliveryPersonId, role: 'delivery' as const, name: 'Repartidor' };
+            }
+            // Si no, hablo con la Tienda (Owner)
+            // ✅ CORRECCIÓN AQUÍ: Usamos (order as any) para evitar el error de TypeScript
+            return { id: (order as any).storeOwnerId, role: 'store' as const, name: order.storeName };
+        }
+        
+        // 2. Si soy TIENDA o DELIVERY -> Hablo con el Cliente
+        return { id: order.userId, role: 'buyer' as const, name: order.customerName };
+    };
+
     const handleSend = async (e?: React.FormEvent, textToSend?: string) => {
         if (e) e.preventDefault();
-        
         const text = textToSend || newMessage;
 
         if (!myUser || !userProfile || !text.trim() || !isAllowed || isSending || !firestore) return;
         
         setIsSending(true);
-        
         try {
+            // A. Guardar mensaje en Firestore
             const messageData = {
                 senderId: myUser.uid,
                 senderName: userProfile.displayName || userProfile.name || 'Usuario',
-                senderRole: myRole,
+                senderRole: myRole || 'buyer', 
                 text: text.trim(),
                 createdAt: serverTimestamp(),
             };
             
             await addDoc(collection(firestore, 'order_chats', order.id, 'messages'), messageData);
-            setNewMessage('');
+
+            // B. ENVIAR NOTIFICACIÓN (La Campanita 🔔)
+            const recipient = getRecipientInfo();
             
+            // Solo notificamos si encontramos un ID válido
+            if (recipient.id) { 
+                await OrderService.sendNotification(
+                    firestore,
+                    recipient.id,
+                    `💬 Nuevo mensaje de ${messageData.senderName}`,
+                    text.trim(), 
+                    recipient.role,
+                    order.id
+                );
+            }
+
+            setNewMessage('');
         } catch (error) {
             console.error("Error al enviar mensaje:", error);
         } finally {
@@ -98,89 +122,130 @@ export function ChatWindow({ order }: ChatWindowProps) {
         }
     };
 
-    if (!isAllowed) {
-        return <Card><CardContent className="p-4 text-center text-muted-foreground"><MessageSquare className="mx-auto h-6 w-6 mb-2" />Chat no disponible para tu rol.</CardContent></Card>;
+    if (!isAllowed) return null;
+
+    // --- TÍTULOS DINÁMICOS ---
+    let chatTitle = "Chat del Pedido";
+    let ChatIcon = MessageSquare;
+    let chatSubtitle = "";
+
+    if (myRole === 'store') {
+        chatTitle = `Chat con Cliente: ${order.customerName}`;
+        ChatIcon = User;
+        chatSubtitle = "Responde dudas sobre el pedido";
+    } else if (myRole === 'delivery') {
+        chatTitle = `Chat con Cliente: ${order.customerName}`;
+        ChatIcon = User;
+        chatSubtitle = "Coordina la entrega";
+    } else {
+        // Soy Cliente
+        const recipient = getRecipientInfo();
+        if (recipient.role === 'delivery') {
+            chatTitle = "Chat con Repartidor";
+            ChatIcon = Bike;
+            chatSubtitle = "Tu pedido está en camino";
+        } else {
+            chatTitle = `Chat con ${order.storeName}`;
+            ChatIcon = Store;
+            chatSubtitle = "Consulta sobre tu pedido";
+        }
     }
 
     const MessageBubble = ({ message }: { message: ChatMessage }) => {
         const isMine = message.senderId === myUser?.uid;
         
+        let roleColor = "text-gray-600";
+        let roleLabel = "Usuario";
+        
+        if (message.senderRole === 'store') { roleColor = "text-blue-700 font-bold"; roleLabel = "Tienda"; }
+        else if (message.senderRole === 'delivery') { roleColor = "text-green-700 font-bold"; roleLabel = "Repartidor"; }
+        else if (message.senderRole === 'buyer') { roleColor = "text-orange-700 font-bold"; roleLabel = "Cliente"; }
+
         return (
             <div className={cn("flex w-full", isMine ? "justify-end" : "justify-start")}>
                 <div 
                     className={cn(
-                        "max-w-[75%] p-3 rounded-xl shadow-md",
-                        isMine ? "bg-primary text-primary-foreground rounded-br-none" : "bg-muted rounded-bl-none"
+                        "max-w-[85%] p-3 rounded-xl shadow-sm border text-sm",
+                        isMine 
+                            ? "bg-blue-600 text-white rounded-br-none border-blue-700" 
+                            : "bg-white text-slate-900 rounded-bl-none border-gray-200"
                     )}
                 >
                     {!isMine && (
-                         <p className={cn("text-xs font-bold mb-1", message.senderRole === 'store' ? "text-red-500" : "text-blue-500")}>
-                            {message.senderName} ({message.senderRole === 'store' ? 'Tienda' : 'Repartidor'})
+                         <p className={cn("text-[10px] uppercase mb-1 flex items-center gap-1", roleColor)}>
+                            {message.senderRole === 'store' && <Store className="h-3 w-3"/>}
+                            {message.senderRole === 'delivery' && <Bike className="h-3 w-3"/>}
+                            {message.senderRole === 'buyer' && <User className="h-3 w-3"/>}
+                            {roleLabel}
                         </p>
                     )}
-                    <p className="text-sm break-words">{message.text}</p>
-                    <p className={cn("text-[10px] mt-1 opacity-70", isMine ? "text-right" : "text-left")}>
+                    <p className="break-words leading-relaxed">{message.text}</p>
+                    <p className={cn("text-[9px] mt-1 opacity-70", isMine ? "text-blue-100 text-right" : "text-gray-400 text-left")}>
                         {message.createdAt && typeof (message.createdAt as any).toDate === 'function' 
                             ? format((message.createdAt as any).toDate(), 'HH:mm', { locale: es })
-                            : 'Cargando...'}
+                            : '...'}
                     </p>
                 </div>
             </div>
         );
     };
 
-    // Seleccionamos las respuestas según el rol
-    const currentReplies = myRole && QUICK_REPLIES[myRole] ? QUICK_REPLIES[myRole] : [];
+    const currentReplies = myRole && QUICK_REPLIES[myRole] ? QUICK_REPLIES[myRole] : QUICK_REPLIES['buyer'];
 
     return (
-        <Card className="h-[500px] flex flex-col">
-            <CardHeader className="p-4 pb-2 border-b">
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
-                    Chat de Coordinación
+        <Card className="h-[500px] flex flex-col shadow-md border-t-4 border-t-primary bg-card text-card-foreground">
+            <CardHeader className="p-3 border-b bg-muted/20">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <ChatIcon className="h-5 w-5 text-primary" />
+                    {chatTitle}
                 </CardTitle>
-                <CardDescription>Pedido #{order.id.substring(0, 7)}</CardDescription>
+                <CardDescription className="text-xs">
+                    {chatSubtitle}
+                </CardDescription>
             </CardHeader>
 
-            <CardContent className="flex-1 overflow-y-auto p-4 space-y-3">
+            <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-100 dark:bg-slate-900">
                 {loadingMessages ? (
                     <div className="text-center py-10">
-                        <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                        <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
                 ) : (
                     messages?.map(msg => <MessageBubble key={msg.id} message={msg} />)
                 )}
+                {messages?.length === 0 && (
+                    <div className="text-center py-10 text-muted-foreground text-sm italic">
+                        <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-20"/>
+                        <p>Inicia la conversación</p>
+                        <p className="text-xs opacity-70">Los mensajes enviarán una notificación 🔔</p>
+                    </div>
+                )}
                 <div ref={messagesEndRef} />
             </CardContent>
 
-            {/* ✅ SECCIÓN DE INPUT MEJORADA CON CHIPS */}
-            <CardFooter className="p-4 border-t flex-col gap-3 items-start">
-                
-                {/* Lista de Respuestas Rápidas */}
-                {currentReplies.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-1">
-                        {currentReplies.map((reply, index) => (
-                            <Badge 
-                                key={index} 
-                                variant="secondary" 
-                                className="cursor-pointer hover:bg-primary/20 transition-colors py-1 px-3 border border-transparent hover:border-primary/30 text-xs font-normal"
-                                onClick={() => handleSend(undefined, reply)}
-                            >
-                                {reply}
-                            </Badge>
-                        ))}
-                    </div>
-                )}
+            <CardFooter className="p-3 border-t bg-background flex-col gap-2 items-start">
+                <div className="flex flex-wrap gap-2 w-full overflow-x-auto pb-1 no-scrollbar">
+                    {currentReplies.map((reply, index) => (
+                        <Badge 
+                            key={index} 
+                            variant="outline" 
+                            className="cursor-pointer hover:bg-primary hover:text-white transition-colors py-1 px-2 text-[10px] font-normal shrink-0 border-primary/20"
+                            onClick={() => handleSend(undefined, reply)}
+                        >
+                            {reply}
+                        </Badge>
+                    ))}
+                </div>
 
                 <form onSubmit={handleSend} className="flex w-full space-x-2">
                     <Input
+                        className="flex-1 h-9 text-sm bg-background text-foreground"
                         type="text"
-                        placeholder="Escribe un mensaje..."
+                        placeholder="Escribe aquí..."
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         disabled={isSending}
                     />
-                    <Button type="submit" size="icon" disabled={isSending}>
+                    <Button type="submit" size="icon" className="h-9 w-9" disabled={isSending}>
                         {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </Button>
                 </form>

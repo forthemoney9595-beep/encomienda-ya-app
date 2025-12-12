@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-// ✅ Importamos desde @/lib/firebase para consistencia
 import { useFirestore } from '@/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Store as StoreIcon } from 'lucide-react';
+import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2 } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
 import { useRouter } from 'next/navigation';
@@ -25,7 +24,9 @@ export default function MyStorePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Estado del formulario
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -33,7 +34,7 @@ export default function MyStorePage() {
     address: '',
     imageUrl: '', 
     deliveryTime: '',
-    minOrder: ''
+    // minOrder eliminado de la vista, lo mantenemos interno si es necesario o lo ignoramos
   });
 
   // 1. Cargar datos de la tienda
@@ -54,8 +55,11 @@ export default function MyStorePage() {
             address: data.address || '',
             imageUrl: data.imageUrl || '',
             deliveryTime: data.deliveryTime || '',
-            minOrder: data.minOrder ? String(data.minOrder) : ''
           });
+          
+          if (data.coords) {
+              setCoords(data.coords);
+          }
         }
       } catch (error) {
         console.error("Error cargando tienda:", error);
@@ -74,25 +78,50 @@ export default function MyStorePage() {
     }
   }, [user, userProfile, firestore, authLoading, router, toast]);
 
-  // 2. Manejar cambios en inputs de texto
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // 3. Callback para actualizar la imagen cuando se sube
   const handleImageUploaded = (url: string) => {
     setFormData(prev => ({ ...prev, imageUrl: url }));
   };
 
-  // 4. Guardar cambios en Firestore
+  // Función GPS
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+        toast({ variant: "destructive", title: "Error", description: "Tu navegador no soporta geolocalización." });
+        return;
+    }
+
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const { latitude, longitude } = position.coords;
+            setCoords({ latitude, longitude });
+            if(!formData.address) {
+                setFormData(prev => ({ ...prev, address: `Ubicación GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})` }));
+            }
+            setIsLocating(false);
+            toast({ title: "¡Ubicación Detectada!", description: "Coordenadas de tu tienda guardadas." });
+        },
+        (error) => {
+            console.error("Error GPS:", error);
+            setIsLocating(false);
+            toast({ variant: "destructive", title: "Error GPS", description: "No pudimos obtener tu ubicación. Asegúrate de permitir el acceso." });
+        },
+        { enableHighAccuracy: true }
+    );
+  };
+
+  // 4. Guardar cambios
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !userProfile?.storeId || !user) return;
 
     setIsSaving(true);
     try {
-      // A. Actualizar documento de la TIENDA
       const storeRef = doc(firestore, 'stores', userProfile.storeId);
       await updateDoc(storeRef, {
         name: formData.name,
@@ -100,12 +129,12 @@ export default function MyStorePage() {
         address: formData.address,
         imageUrl: formData.imageUrl,
         deliveryTime: formData.deliveryTime,
-        minOrder: parseFloat(formData.minOrder) || 0,
+        // Eliminamos la actualización de minOrder desde aquí
+        
+        coords: coords, 
         updatedAt: new Date()
       });
 
-      // B. ✅ ACTUALIZAR TAMBIÉN EL USUARIO (Para que cambie el avatar de la izquierda)
-      // Si cambias la foto de la tienda, asumimos que quieres que sea tu avatar
       if (formData.imageUrl) {
           const userRef = doc(firestore, 'users', user.uid);
           await updateDoc(userRef, {
@@ -116,7 +145,7 @@ export default function MyStorePage() {
 
       toast({
         title: "Tienda actualizada",
-        description: "La información y tu foto de perfil se han actualizado.",
+        description: "La información y ubicación se han guardado.",
       });
     } catch (error) {
       console.error("Error actualizando tienda:", error);
@@ -153,7 +182,7 @@ export default function MyStorePage() {
         
         <CardContent className="space-y-6">
           
-          {/* SECCIÓN DE IMAGEN (BANNER) */}
+          {/* SECCIÓN DE IMAGEN */}
           <div className="space-y-2">
             <Label>Portada de la Tienda</Label>
             <div className="flex justify-center">
@@ -180,15 +209,39 @@ export default function MyStorePage() {
                     placeholder="Ej. Pizzería Don Mario" 
                 />
             </div>
+            
+            {/* INPUT DIRECCIÓN CON BOTÓN GPS */}
             <div className="space-y-2">
                 <Label htmlFor="address">Dirección del Local</Label>
-                <Input 
-                    id="address" 
-                    name="address" 
-                    value={formData.address} 
-                    onChange={handleChange} 
-                    placeholder="Calle 123, Ciudad" 
-                />
+                <div className="flex gap-2">
+                    <Input 
+                        id="address" 
+                        name="address" 
+                        value={formData.address} 
+                        onChange={handleChange} 
+                        placeholder="Calle 123, Ciudad" 
+                        className="flex-1"
+                    />
+                    <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="icon"
+                        onClick={handleGetLocation}
+                        disabled={isLocating}
+                        title="Detectar mi ubicación actual (GPS)"
+                    >
+                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4 text-blue-600" />}
+                    </Button>
+                </div>
+                {coords ? (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3"/> Ubicación GPS guardada (Lat: {coords.latitude.toFixed(4)})
+                    </p>
+                ) : (
+                    <p className="text-xs text-muted-foreground">
+                        Recomendado: Usa el botón GPS para que el mapa de entregas funcione.
+                    </p>
+                )}
             </div>
           </div>
 
@@ -204,8 +257,8 @@ export default function MyStorePage() {
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+          {/* SOLO TIEMPO DE ENTREGA (Sin costo de envío) */}
+          <div className="space-y-2">
                 <Label htmlFor="deliveryTime">Tiempo de Entrega (Estimado)</Label>
                 <Input 
                     id="deliveryTime" 
@@ -214,18 +267,6 @@ export default function MyStorePage() {
                     onChange={handleChange} 
                     placeholder="Ej. 30-45 min" 
                 />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="minOrder">Costo de Envío ($)</Label>
-                <Input 
-                    id="minOrder" 
-                    name="minOrder" 
-                    type="number"
-                    value={formData.minOrder} 
-                    onChange={handleChange} 
-                    placeholder="0.00" 
-                />
-            </div>
           </div>
 
         </CardContent>
