@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+// ✅ Importamos adminMessaging para poder enviar Push
+import { adminDb, adminMessaging } from "@/lib/firebase-admin"; 
 import { Timestamp } from "firebase-admin/firestore";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { userId, items, shippingInfo, storeId, paymentMethod, customerCoords } = body; // ✅ Agregamos customerCoords
+    const { userId, items, shippingInfo, storeId, paymentMethod, customerCoords } = body;
 
     if (!userId || !items || !storeId) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
@@ -63,13 +64,10 @@ export async function POST(request: Request) {
     // 4. Crear la Orden en Firestore
     const newOrderRef = adminDb.collection("orders").doc();
     
-    // ✅ LÓGICA GPS: Intentamos obtener coordenadas
-    // A) Tienda: Sacamos las coordenadas del perfil de la tienda (si existen)
     const storeCoords = storeData?.coords || storeData?.location || null;
-    
-    // B) Cliente: Usamos las que envió el front o null (El mapa necesita ambas para trazar ruta)
-    // Si no hay coordenadas de cliente, el mapa mostrará error o solo la tienda.
-    
+    // Buscamos el ID del dueño para notificarle
+    const ownerId = storeData?.ownerId || storeData?.userId; 
+
     const orderData = {
         id: newOrderRef.id,
         userId,
@@ -79,11 +77,10 @@ export async function POST(request: Request) {
         storeId,
         storeName: storeData?.name || "Tienda",
         storeAddress: storeData?.address || "",
-        storeOwnerId: storeData?.userId || null, 
+        storeOwnerId: ownerId || null, 
         
-        // 📍 COORDENADAS PARA EL MAPA
         storeCoords: storeCoords, 
-        customerCoords: customerCoords || null, // Recibido del body
+        customerCoords: customerCoords || null, 
         
         deliveryPersonId: null as string | null, 
         readyForPickup: false, 
@@ -105,7 +102,60 @@ export async function POST(request: Request) {
 
     await newOrderRef.set(orderData);
 
-    console.log(`✅ [API Éxito] Orden ${newOrderRef.id} creada con GPS.`);
+    // 5. ✅ NOTIFICAR A LA TIENDA (Campana + Push)
+    // ESTA ES LA PARTE QUE FALTABA EN TU ARCHIVO ANTERIOR
+    if (ownerId) {
+        const notifTitle = "🔔 Nueva Solicitud";
+        const notifBody = `Tienes un pedido nuevo de ${shippingInfo.name} ($${finalTotal}). Revisa el stock.`;
+
+        // A. Escribir en Firestore (Para la Campanita dentro de la App)
+        await adminDb.collection("notifications").add({
+            userId: ownerId,
+            title: notifTitle,
+            body: notifBody,
+            type: "order_request",
+            orderId: newOrderRef.id,
+            read: false,
+            createdAt: Timestamp.now(),
+            icon: "store"
+        });
+
+        // B. Enviar Push al Celular (Si tiene token)
+        try {
+            // Buscamos tokens del dueño
+            const ownerUserDoc = await adminDb.collection("users").doc(ownerId).get();
+            const ownerUserData = ownerUserDoc.data();
+            
+            // Recopilar tokens (string o array)
+            let tokens: string[] = [];
+            if (ownerUserData?.fcmToken && typeof ownerUserData.fcmToken === 'string') tokens.push(ownerUserData.fcmToken);
+            if (ownerUserData?.fcmTokens && Array.isArray(ownerUserData.fcmTokens)) tokens.push(...ownerUserData.fcmTokens);
+            tokens = [...new Set(tokens)]; // Únicos
+
+            if (tokens.length > 0) {
+                await adminMessaging.sendEachForMulticast({
+                    tokens: tokens,
+                    notification: {
+                        title: notifTitle,
+                        body: notifBody,
+                    },
+                    webpush: {
+                        fcmOptions: { link: '/orders' }
+                    },
+                    data: {
+                        url: '/orders',
+                        orderId: newOrderRef.id
+                    }
+                });
+                console.log(`🔔 Push de nuevo pedido enviado al dueño ${ownerId}`);
+            }
+        } catch (pushError) {
+            console.error("Error enviando push al dueño:", pushError);
+            // No fallamos la request si el push falla, solo lo logueamos
+        }
+    }
+
+    console.log(`✅ [API Éxito] Orden ${newOrderRef.id} creada y notificada.`);
 
     return NextResponse.json({ orderId: newOrderRef.id, total: finalTotal });
 

@@ -6,9 +6,10 @@ import {
     User, 
     signInWithCustomToken 
 } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-// ✅ Importamos las instancias compartidas desde @/lib/firebase
-import { auth, db } from '@/lib/firebase';
+import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore'; // ✅ Agregamos updateDoc y arrayUnion
+import { getToken } from 'firebase/messaging'; // ✅ Importamos getToken
+// ✅ Importamos messaging también
+import { auth, db, messaging } from '@/lib/firebase';
 
 // Definimos la interfaz del perfil
 export interface UserProfile {
@@ -51,6 +52,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ FUNCIÓN NUEVA: Solicitar permiso y guardar Token
+  const registerPushNotifications = async (uid: string) => {
+    try {
+        // 1. Verificar si el navegador soporta notificaciones y si messaging está inicializado
+        if (!('serviceWorker' in navigator) || !messaging) {
+            console.log("🔕 Este navegador no soporta notificaciones Push.");
+            return;
+        }
+
+        // 2. Pedir permiso al usuario
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            console.log("🔕 Permiso de notificaciones denegado.");
+            return;
+        }
+
+        // 3. Obtener el Token (Identificador del celular/PC)
+        // IMPORTANTE: Lo ideal es tener un VAPID Key en .env, pero a veces funciona sin él en desarrollo.
+        const currentToken = await getToken(messaging, {
+            vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY 
+        });
+
+        if (currentToken) {
+            console.log("🔔 Token FCM Obtenido:", currentToken);
+            
+            // 4. Guardar en la base de datos del usuario
+            const userRef = doc(db, 'users', uid);
+            await updateDoc(userRef, {
+                fcmToken: currentToken,          // Para compatibilidad simple
+                fcmTokens: arrayUnion(currentToken) // Para soporte multi-dispositivo
+            });
+        }
+    } catch (error) {
+        console.error("❌ Error configurando notificaciones:", error);
+    }
+  };
+
   useEffect(() => {
     const initAuth = async () => {
         // @ts-ignore
@@ -69,6 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(currentUser);
 
       if (currentUser) {
+        // ✅ Apenas detectamos usuario, intentamos registrar notificaciones
+        registerPushNotifications(currentUser.uid);
+
         const profileRef = doc(db, 'users', currentUser.uid);
         
         const unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
@@ -109,5 +150,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ✅ FIX: Agregamos el tipo de retorno explícito ': AuthContextType' para eliminar el error de inferencia
+// ✅ FIX: Agregamos el tipo de retorno explícito ': AuthContextType'
 export const useAuth = (): AuthContextType => useContext(AuthContext);
