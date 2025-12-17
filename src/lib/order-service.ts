@@ -9,13 +9,12 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 
-// 1. Definimos estrictamente el único método de pago permitido
 export type PaymentMethod = 'CARD';
 
 export type OrderStatus = 
-  | 'Pendiente de Confirmación' // PASO 1: Tienda verifica Stock
-  | 'Pendiente de Pago'         // PASO 2: Cliente paga con Tarjeta
-  | 'En preparación'            // PASO 3: Tienda cocina/prepara
+  | 'Pendiente de Confirmación'
+  | 'Pendiente de Pago'
+  | 'En preparación'
   | 'En reparto'
   | 'Entregado'
   | 'Cancelado'
@@ -41,38 +40,24 @@ export interface Order {
   storeName: string;
   storeAddress?: string;
   status: OrderStatus;
-  
   items: OrderItem[];
   subtotal: number;
   deliveryFee: number;
   serviceFee: number;
   total: number;
-  paymentMethod: PaymentMethod; // Forzado a CARD
-  
+  paymentMethod: PaymentMethod;
   createdAt: Timestamp | Date;
-  
-  shippingInfo?: {
-    name: string;
-    address: string;
-  };
-  
-  shippingAddress: { 
-    name: string;
-    address: string;
-  };
-
+  shippingInfo?: { name: string; address: string; };
+  shippingAddress: { name: string; address: string; };
   deliveryPersonId?: string | null;
   deliveryPersonName?: string | null;
   readyForPickup?: boolean;
-  
   storeCoords?: { latitude: number; longitude: number };
   customerCoords?: { latitude: number; longitude: number };
-  
   deliveryRating?: number;
   deliveryReview?: string;
 }
 
-// Eliminamos paymentMethod del input, ya que lo inyectamos nosotros
 export interface CreateOrderInput {
   userId: string;
   customerName: string;
@@ -81,51 +66,44 @@ export interface CreateOrderInput {
   storeName: string;
   storeAddress: string;
   items: any[];
-  shippingInfo: {
-    name: string;
-    address: string;
-  };
-  
-  subtotal: number;
-  deliveryFee: number;
-  serviceFee?: number;
-  total: number;
+  shippingInfo: { name: string; address: string; };
+  subtotal: number; // Solo referencial, la API recalcula
+  deliveryFee: number; // Solo referencial
+  serviceFee?: number; // Solo referencial
+  total: number; // Solo referencial
+  // ✅ Nuevo: Pasamos coordenadas si existen
+  customerCoords?: { latitude: number; longitude: number };
 }
 
 const PLATFORM_FEE_PERCENTAGE = 0.05; 
 const DEFAULT_DELIVERY_FEE = 2000; 
 
 export const OrderService = {
+    // Calculadora visual para el carrito (Cliente)
     calculateTotals: (subtotal: number) => {
         const serviceFee = Math.round(subtotal * PLATFORM_FEE_PERCENTAGE);
         const deliveryFee = DEFAULT_DELIVERY_FEE;
         const total = subtotal + serviceFee + deliveryFee;
-
-        return {
-            subtotal,
-            serviceFee,
-            deliveryFee,
-            total
-        };
+        return { subtotal, serviceFee, deliveryFee, total };
     },
 
-    // ✅ VERSIÓN MEJORADA: Guarda en DB + Envía Push
+    // Notificaciones Genéricas (Campanita)
+    // ✅ Esto es SEGURO porque tus reglas permiten 'create' en 'notifications'
     sendNotification: async (db: Firestore, userId: string, title: string, message: string, type: string, orderId?: string) => {
         try {
-            // 1. Guardar notificación interna (Campanita)
+            // 1. Guardar notificación interna
             await addDoc(collection(db, 'notifications'), {
                 userId,
                 title,
                 message,
-                type, // 'order_status' | 'info'
+                type,
                 orderId,
                 read: false,
                 createdAt: serverTimestamp(),
                 icon: 'bell'
             });
 
-            // 2. Disparar notificación Push (Celular/PC)
-            // Llamamos a nuestra propia API en segundo plano sin detener el flujo
+            // 2. Disparar notificación Push
             fetch('/api/notify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -135,7 +113,7 @@ export const OrderService = {
                     body: message,
                     link: orderId ? `/orders/${orderId}` : '/orders'
                 })
-            }).catch(err => console.error("Error llamando API Push:", err));
+            }).catch(err => console.error("Error API Push:", err));
 
         } catch (error) {
             console.error("Error enviando notificación:", error);
@@ -143,97 +121,68 @@ export const OrderService = {
     }
 };
 
+// 🚨 REFACTORIZADO: Ahora llama a la API Segura
 export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
-  if (!db) throw new Error("Firestore instance is required");
+  // Nota: 'db' ya no se usa aquí, pero lo dejamos para no romper compatibilidad con quien llame a la función
+  
+  console.log("🚀 Enviando pedido a API Segura...");
 
-  // TODO: En Fase 2 (Geolocalización), reemplazar estos mocks con datos reales del input
-  const mockStoreCoords = { latitude: -28.46957, longitude: -65.77954 }; 
-  const mockCustomerCoords = { 
-      latitude: mockStoreCoords.latitude + (Math.random() * 0.01 - 0.005), 
-      longitude: mockStoreCoords.longitude + (Math.random() * 0.01 - 0.005) 
-  };
-
-  const orderData = {
-    userId: input.userId,
-    customerName: input.customerName,
-    customerPhoneNumber: input.customerPhoneNumber, 
-    storeId: input.storeId,
-    storeName: input.storeName,
-    storeAddress: input.storeAddress,
-    
-    // ✅ CAMBIO PARA FLUJO DE STOCK:
-    // El pedido nace esperando confirmación de la tienda.
-    status: 'Pendiente de Confirmación' as OrderStatus,
-    
-    items: input.items,
-    
-    subtotal: input.subtotal,
-    deliveryFee: input.deliveryFee,
-    serviceFee: input.serviceFee || 0,
-    total: input.total,
-    
-    // FORZADO: Eliminamos cualquier posibilidad de efectivo
-    paymentMethod: 'CARD' as PaymentMethod,
-    
-    createdAt: serverTimestamp(),
-    shippingAddress: input.shippingInfo,
-    shippingInfo: input.shippingInfo,
-    
-    deliveryPersonId: null as string | null,
-    readyForPickup: false,
-    
-    storeCoords: mockStoreCoords,
-    customerCoords: mockCustomerCoords,
-  };
-
-  // 1. Crear la orden
-  const docRef = await addDoc(collection(db, 'orders'), orderData);
-
-  // 2. ✅ LOGICA RESTAURADA: Notificar a la tienda para VALIDAR STOCK
   try {
-      const storeDoc = await getDoc(doc(db, 'stores', input.storeId));
-      if (storeDoc.exists()) {
-          const storeData = storeDoc.data();
-          const ownerId = storeData.ownerId; 
-          
-          if (ownerId) {
-              await OrderService.sendNotification(
-                  db, 
-                  ownerId, 
-                  "🔔 Solicitud de Pedido", 
-                  `Nuevo pedido de ${input.customerName}. Por favor confirma stock.`, 
-                  "order_status",
-                  docRef.id
-              );
-          }
-      }
-  } catch (error) {
-      console.error("Error notificando a la tienda:", error);
-  }
+      const response = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+              userId: input.userId,
+              items: input.items,
+              shippingInfo: input.shippingInfo,
+              storeId: input.storeId,
+              paymentMethod: 'CARD', // Forzado
+              customerCoords: input.customerCoords // Pasamos GPS si existe
+          }),
+      });
 
-  return { id: docRef.id, ...orderData };
+      const data = await response.json();
+
+      if (!response.ok) {
+          throw new Error(data.error || 'Error al procesar el pedido en el servidor.');
+      }
+
+      console.log("✅ Pedido creado vía API:", data.orderId);
+
+      // Devolvemos un objeto similar al esperado por el frontend para que no rompa
+      return { 
+          id: data.orderId, 
+          total: data.total, 
+          status: 'Pendiente de Confirmación',
+          // Rellenamos el resto con lo que envió el cliente para que la UI actualice rápido
+          ...input 
+      };
+
+  } catch (error) {
+      console.error("❌ Error creando orden:", error);
+      throw error;
+  }
 };
 
-// ✅ FUNCIÓN CORREGIDA: Ahora sí notifica al cliente
+// ✅ Esta función se mantiene igual porque tus reglas permiten UPDATE bajo ciertas condiciones
 export const updateOrderStatus = async (db: Firestore, orderId: string, status: OrderStatus) => {
   if (!db) throw new Error("Firestore instance is required");
   
   const orderRef = doc(db, 'orders', orderId);
   
-  // 1. Actualizamos el estado en la base de datos
+  // 1. Actualizamos el estado
   await updateDoc(orderRef, { status });
 
-  // 2. Notificamos al Cliente sobre el cambio
+  // 2. Notificamos al Cliente (Solo Push/Campana, no lógica de negocio)
   try {
-      // Leemos la orden para saber quién es el cliente
       const orderSnap = await getDoc(orderRef);
-      
       if (orderSnap.exists()) {
           const orderData = orderSnap.data();
           const userId = orderData.userId;
           const storeName = orderData.storeName || "La Tienda";
 
-          // Definimos el mensaje según el estado
           let title = "";
           let message = "";
 
@@ -264,7 +213,6 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
                   break;
           }
 
-          // Si hay mensaje y usuario, disparamos la notificación
           if (title && userId) {
               await OrderService.sendNotification(
                   db,
@@ -277,6 +225,6 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
           }
       }
   } catch (error) {
-      console.error("Error enviando notificación al cliente:", error);
+      console.error("Error notificación cliente:", error);
   }
 };
