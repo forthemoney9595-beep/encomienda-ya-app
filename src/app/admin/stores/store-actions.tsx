@@ -21,7 +21,6 @@ export function StoreActions({ store, onStatusUpdate, onEdit, onDelete }: StoreA
   const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
     setIsUpdating(true);
     // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
     onStatusUpdate(storeId, status);
     setIsUpdating(false);
   };

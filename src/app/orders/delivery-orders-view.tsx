@@ -1,417 +1,405 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { useFirestore } from '@/lib/firebase';
-import { collection, query, where, orderBy, doc, updateDoc, limit, startAfter, QueryDocumentSnapshot, getDocs, CollectionReference } from 'firebase/firestore';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { useFirestore, useCollection } from '@/lib/firebase';
+import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Package, Bike, CheckCircle, Navigation, Clock, ArrowRight, Loader2, RefreshCw, Map, ExternalLink, Banknote, CreditCard, AlertTriangle, BellRing } from 'lucide-react';
-import { Order } from '@/lib/order-service';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
+import { MapPin, Package, Navigation, CheckCircle2, DollarSign, Truck, CreditCard, Wallet, Clock } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-const PAGE_SIZE = 10;
+// Definimos la interfaz localmente
+interface Order {
+  id: string;
+  storeName: string;
+  storeAddress?: string;
+  customerName: string;
+  shippingInfo?: { address: string };
+  status: string;
+  total: number;
+  paymentMethod: string;
+  deliveryFee: number;
+  items: any[];
+  createdAt: any;
+  deliveryPersonId?: string;
+  deliveryPayoutStatus?: 'pending' | 'paid';
+  payoutDate?: any;
+}
 
 export default function DeliveryOrdersView() {
   const { user, userProfile } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  // 1. PESTAÑA ACTIVA: Lee la URL por si venimos de una notificación (?tab=wallet)
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'available');
+  const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
 
-  // --- ESTADOS DE PAGINACIÓN ---
-  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
-  const [availableLastDoc, setAvailableLastDoc] = useState<QueryDocumentSnapshot<Order> | null>(null);
-  const [availableHasMore, setAvailableHasMore] = useState(true);
-  const [loadingAvailable, setLoadingAvailable] = useState(true);
-  const [isLoadingAvailableMore, setIsLoadingAvailableMore] = useState(false);
-
-  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  const [activeLastDoc, setActiveLastDoc] = useState<QueryDocumentSnapshot<Order> | null>(null);
-  const [activeHasMore, setActiveHasMore] = useState(true);
-  const [loadingActive, setLoadingActive] = useState(true);
-  const [isLoadingActiveMore, setIsLoadingActiveMore] = useState(false);
-  
-  const [historyOrders, setHistoryOrders] = useState<Order[]>([]); 
-  const [loadingHistory, setLoadingHistory] = useState(true);
-
-  // --- CONSULTAS ---
-
-  const buildAvailableQuery = useCallback((startAfterDoc: QueryDocumentSnapshot<Order> | null) => {
-    if (!firestore) return null;
-    
-    // ✅ CORRECCIÓN CLAVE: Filtramos por readyForPickup == true
-    // Solo mostramos pedidos donde la tienda explícitamente llamó al repartidor.
-    let baseQuery = query(
-      collection(firestore, 'orders') as CollectionReference<Order>,
-      where('status', '==', 'En preparación'), 
-      where('deliveryPersonId', '==', null),
-      // IMPORTANTE: Si esto falla, revisa la consola para crear el índice
-      where('readyForPickup', '==', true), 
-      orderBy('createdAt', 'desc'),
-      limit(PAGE_SIZE)
-    );
-
-    if (startAfterDoc) {
-      baseQuery = query(baseQuery, startAfter(startAfterDoc));
-    }
-    return baseQuery;
+  // 2. Query: Pedidos Disponibles (Sin asignar)
+  const availableQuery = useMemo(() => {
+     if (!firestore) return null;
+     return query(
+        collection(firestore, 'orders'), 
+        where('deliveryPersonId', '==', null),
+        where('status', 'in', ['pending', 'Pendiente', 'Pendiente de Confirmación', 'En preparación']) 
+     );
   }, [firestore]);
 
-  const buildActiveQuery = useCallback((startAfterDoc: QueryDocumentSnapshot<Order> | null) => {
-    if (!firestore || !user) return null;
-    let baseQuery = query(
-      collection(firestore, 'orders') as CollectionReference<Order>,
-      where('deliveryPersonId', '==', user.uid),
-      where('status', 'in', ['En preparación', 'En reparto']), 
-      orderBy('createdAt', 'desc'),
-      limit(PAGE_SIZE)
-    );
-    if (startAfterDoc) {
-      baseQuery = query(baseQuery, startAfter(startAfterDoc));
-    }
-    return baseQuery;
-  }, [firestore, user]);
-  
-  const buildHistoryQuery = useCallback(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'orders') as CollectionReference<Order>,
-      where('deliveryPersonId', '==', user.uid),
-      where('status', '==', 'Entregado'),
-      orderBy('createdAt', 'desc'),
-      limit(5)
-    );
+  const { data: availableOrders } = useCollection<Order>(availableQuery);
+
+  // 3. Query: MIS Pedidos (Todos: Activos + Historial para la Billetera)
+  const myOrdersQuery = useMemo(() => {
+      if (!firestore || !user) return null;
+      return query(
+        collection(firestore, 'orders'),
+        where('deliveryPersonId', '==', user.uid)
+      );
   }, [firestore, user]);
 
+  const { data: allMyOrders } = useCollection<Order>(myOrdersQuery);
 
-  // --- FUNCIONES DE CARGA ---
-  
-  const loadOrders = useCallback(async (
-    queryBuilder: (doc: QueryDocumentSnapshot<Order> | null) => any,
-    isLoadMore: boolean,
-    setState: React.Dispatch<React.SetStateAction<Order[]>>,
-    setLastDoc: React.Dispatch<React.SetStateAction<QueryDocumentSnapshot<Order> | null>>,
-    setHasMore: React.Dispatch<React.SetStateAction<boolean>>,
-    setLoadingState: React.Dispatch<React.SetStateAction<boolean>>,
-    specificLastDoc: QueryDocumentSnapshot<Order> | null 
-  ) => {
-    const currentQuery = queryBuilder(isLoadMore ? specificLastDoc : null);
-    if (!currentQuery) return;
+  // 4. FILTROS EN MEMORIA
+  const myActiveOrders = useMemo(() => {
+      return allMyOrders?.filter(o => ['En camino', 'En reparto', 'En preparación'].includes(o.status)) || [];
+  }, [allMyOrders]);
 
-    if (!isLoadMore) setLoadingState(true);
+  // 5. 💰 CÁLCULOS FINANCIEROS (BILLETERA)
+  const financeStats = useMemo(() => {
+    const emptyStats: { 
+        pendingBalance: number; 
+        lastPayoutDate: Date | null; 
+        totalPaid: number; 
+        unpaidOrders: Order[] 
+    } = { 
+        pendingBalance: 0, 
+        lastPayoutDate: null, 
+        totalPaid: 0, 
+        unpaidOrders: [] 
+    };
 
-    try {
-      const snapshot = await getDocs(currentQuery);
-      
-      const newOrders: Order[] = snapshot.docs.map(doc => {
-        const data = doc.data() as any; 
-        return { ...data, id: doc.id };
-      });
-      
-      if (newOrders.length === 0 || newOrders.length < PAGE_SIZE) {
-        setHasMore(false);
-      }
-      
-      // @ts-ignore
-      setState((prev: Order[]) => { 
-          const safePrev = Array.isArray(prev) ? prev : []; 
-          return isLoadMore ? safePrev.concat(newOrders) : newOrders;
-      });
+    if (!allMyOrders) return emptyStats;
 
-      if (snapshot.docs.length > 0) {
-        setLastDoc(snapshot.docs[snapshot.docs.length - 1] as QueryDocumentSnapshot<Order>);
-      }
-    } catch (error) {
-      console.error("Error al cargar pedidos:", error);
-      // 🔥 LOG DE AYUDA: Si falta índice, esto aparecerá en la consola
-      toast({ variant: "destructive", title: "Error de carga", description: "Revisa la consola por errores de índice de Firebase." });
-      setHasMore(false); 
-    } finally {
-      setLoadingState(false);
-    }
-  }, [toast]); 
+    // A. Saldo Pendiente: Entregados Y NO pagados al repartidor
+    const unpaidOrders = allMyOrders.filter(o => o.status === 'Entregado' && o.deliveryPayoutStatus !== 'paid');
+    const pendingBalance = unpaidOrders.reduce((acc, order) => acc + (order.deliveryFee || 0), 0);
 
-
-  // Carga del Historial
-  useEffect(() => {
-    const historyQuery = buildHistoryQuery();
-    if (historyQuery) {
-        setLoadingHistory(true);
-        getDocs(historyQuery).then(snapshot => {
-            const historyData = snapshot.docs.map(doc => {
-                const data = doc.data() as any;
-                return { ...data, id: doc.id };
-            }) as Order[];
-            setHistoryOrders(historyData);
-            setLoadingHistory(false);
+    // B. Historial de Pagos
+    const paidOrders = allMyOrders.filter(o => o.deliveryPayoutStatus === 'paid');
+    const totalPaid = paidOrders.reduce((acc, order) => acc + (order.deliveryFee || 0), 0);
+    
+    // Buscar la fecha más reciente
+    let lastPayoutDate: Date | null = null;
+    if (paidOrders.length > 0) {
+        const sortedPaid = [...paidOrders].sort((a, b) => {
+           const dateA = a.payoutDate?.seconds || a.createdAt?.seconds || 0;
+           const dateB = b.payoutDate?.seconds || b.createdAt?.seconds || 0;
+           return dateB - dateA;
         });
+        const lastOrder = sortedPaid[0];
+        lastPayoutDate = lastOrder.payoutDate ? lastOrder.payoutDate.toDate() : (lastOrder.createdAt?.toDate ? lastOrder.createdAt.toDate() : new Date());
     }
-  }, [buildHistoryQuery]);
 
+    return { pendingBalance, lastPayoutDate, totalPaid, unpaidOrders };
+  }, [allMyOrders]);
 
-  // Carga Inicial
-  useEffect(() => {
-    if (firestore && user) {
-      loadOrders(buildAvailableQuery, false, setAvailableOrders, setAvailableLastDoc, setAvailableHasMore, setLoadingAvailable, availableLastDoc);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, user, buildAvailableQuery]); 
+  // --- ACCIONES ---
 
-  useEffect(() => {
-    if (firestore && user) {
-      loadOrders(buildActiveQuery, false, setActiveOrders, setActiveLastDoc, setActiveHasMore, setLoadingActive, activeLastDoc);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, user, buildActiveQuery]); 
-
-
-  // --- HANDLERS ---
-  
-  const handleAcceptOrder = async (order: Order) => {
+  const handleTakeOrder = async (orderId: string) => {
     if (!user || !firestore) return;
-    setIsUpdating(order.id);
     try {
-      const orderRef = doc(firestore, 'orders', order.id);
-      
-      // Al aceptar, te asignas como repartidor
+      const orderRef = doc(firestore, 'orders', orderId);
       await updateDoc(orderRef, {
         deliveryPersonId: user.uid,
-        deliveryPersonName: userProfile?.displayName || 'Repartidor',
+        deliveryPersonName: userProfile?.name || user.displayName || 'Repartidor',
+        status: 'En reparto', 
+        takenAt: serverTimestamp()
       });
-      
-      toast({ title: "¡Pedido Asignado!", description: "Ve a 'Mis Entregas' para ver los detalles." });
-      
-      setAvailableOrders(prev => prev.filter(o => o.id !== order.id));
-      setActiveOrders(prev => [order, ...prev]);
-      
-      // Redirigir al detalle para iniciar el viaje
-      router.push(`/orders/${order.id}`);
-
+      toast({ title: "¡Pedido Asignado!", description: "Ve a la pestaña 'En Curso'." });
+      setActiveTab('active');
     } catch (error) {
-      toast({ variant: 'destructive', title: "Error", description: "No se pudo aceptar el pedido." });
-    } finally {
-      setIsUpdating(null);
+      console.error(error);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo tomar el pedido." });
     }
   };
-  
-  const openMap = (address: string) => {
-      if (!address) return;
-      const encodedAddress = encodeURIComponent(address);
-      window.open(`http://googleusercontent.com/maps.google.com/?q=${encodedAddress}`, '_blank');
+
+  const handleFinishDeliveryClick = (order: Order) => {
+    setConfirmDeliveryOrder(order);
   };
 
-  const formatFee = (fee: number | undefined) => {
-    return fee ? `$${fee.toFixed(2)}` : '$500.00'; // Valor base si no viene
-  }
-
-
-  // --- RENDERIZADO ---
-  
-  const availableCount = availableOrders?.length || 0;
-  const activeCount = activeOrders?.length || 0;
-  const isGlobalLoading = loadingAvailable && loadingActive;
-
-  if (isGlobalLoading) {
-    return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-48 w-full" /></div>;
-  }
+  const confirmFinishDelivery = async () => {
+    if (!confirmDeliveryOrder || !firestore) return;
+    try {
+      const orderRef = doc(firestore, 'orders', confirmDeliveryOrder.id);
+      await updateDoc(orderRef, {
+        status: 'Entregado',
+        deliveredAt: serverTimestamp()
+      });
+      toast({ title: "¡Entrega Completada!", description: "Ganancia registrada en tu Billetera." });
+      setConfirmDeliveryOrder(null);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo finalizar." });
+    }
+  };
 
   return (
-    <div className="container mx-auto pb-20">
-      <Tabs defaultValue={activeCount > 0 ? "active" : "available"} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+    <div className="container mx-auto pb-24">
+      {/* Eliminé el PageHeader porque probablemente OrdersPage ya tiene layout, si no, puedes descomentarlo */}
+      {/* <PageHeader title="Panel de Repartidor" description="Gestiona entregas y ganancias." /> */}
+      
+      <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold tracking-tight">Panel de Repartidor</h2>
+          <Badge variant="outline" className="hidden sm:flex">Zona Activa</Badge>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="available">
-            Disponibles {availableHasMore && availableCount > 0 && <Badge variant="secondary" className="ml-2">{availableCount}</Badge>}
+            Disponibles ({availableOrders?.length || 0})
           </TabsTrigger>
           <TabsTrigger value="active">
-            Mis Entregas {activeCount > 0 && <Badge variant="secondary" className="ml-2">{activeCount}</Badge>}
+            En Curso ({myActiveOrders?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="wallet" className="text-orange-700 font-semibold data-[state=active]:bg-orange-50 data-[state=active]:text-orange-800">
+             <Wallet className="h-4 w-4 mr-2"/> Billetera
           </TabsTrigger>
         </TabsList>
 
-        {/* --- PESTAÑA: DISPONIBLES --- */}
+        {/* --- PESTAÑA: PEDIDOS DISPONIBLES --- */}
         <TabsContent value="available" className="space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Package className="h-5 w-5" /> Pedidos esperando repartidor
-          </h3>
-          
-          {availableCount === 0 && !loadingAvailable ? (
-            <div className="text-center py-10 text-muted-foreground border rounded-lg bg-muted/10">
-              <p>No hay pedidos disponibles en este momento.</p>
+          {availableOrders?.length === 0 ? (
+            <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed">
+                <Truck className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
+                <h3 className="text-lg font-medium">No hay pedidos disponibles</h3>
+                <p className="text-sm text-muted-foreground">Mantente atento a nuevas alertas.</p>
             </div>
           ) : (
-            <>
-            {availableOrders.map(order => (
-              <Card key={order.id} className="overflow-hidden border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3 bg-muted/20 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base">{order.storeName}</CardTitle>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {/* BADGE DE ALERTA ROJA */}
-                      <Badge variant="destructive" className="animate-pulse flex items-center gap-1">
-                          <BellRing className="h-3 w-3" /> LISTO PARA RETIRAR
-                      </Badge>
-                      <Badge variant="secondary" className="flex items-center gap-1">
-                          <CreditCard className="h-3 w-3"/> Tarjeta
-                      </Badge>
+            availableOrders?.map(order => (
+              <Card key={order.id} className="overflow-hidden hover:shadow-md transition-shadow border-l-4 border-l-primary">
+                <CardHeader className="pb-3 bg-muted/10">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            {order.storeName}
+                        </CardTitle>
+                        <div className="flex gap-2">
+                            <Badge variant="outline" className="text-xs font-normal flex items-center gap-1">
+                                {order.paymentMethod === 'Efectivo' ? <Wallet className="h-3 w-3" /> : <CreditCard className="h-3 w-3" />}
+                                {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : order.paymentMethod}
+                            </Badge>
+                        </div>
                     </div>
+                    <Badge className="bg-green-600 hover:bg-green-700">
+                        +${order.deliveryFee}
+                    </Badge>
                   </div>
-                  <Badge className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1">
-                    Ganancia: {formatFee(order.deliveryFee)}
-                  </Badge>
                 </CardHeader>
-                <CardContent className="pt-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
+                <CardContent className="py-4 space-y-3">
                     <div className="flex items-start gap-3">
-                      <MapPin className="h-4 w-4 text-blue-500 mt-1 shrink-0" />
-                      <div>
-                          <p className="text-xs font-bold text-muted-foreground uppercase">Recoger en Tienda</p>
-                          <p className="text-sm font-medium">{order.storeName}</p>
-                      </div>
+                        <MapPin className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-xs font-bold uppercase text-muted-foreground">Retirar en:</p>
+                            <p className="text-sm">{order.storeAddress || 'Dirección de tienda'}</p>
+                        </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => openMap(order.storeName)} title="Ver en Mapa">
-                        <Map className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </div>
-
-                  <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <MapPin className="h-4 w-4 text-red-500 mt-1 shrink-0" />
-                      <div>
-                          <p className="text-xs font-bold text-muted-foreground uppercase">Entregar a Cliente</p>
-                          <p className="text-sm text-muted-foreground line-clamp-1">
-                          {order.shippingInfo?.address || order.shippingAddress?.address || 'Dirección del cliente'}
-                          </p>
-                      </div>
+                        <Navigation className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-xs font-bold uppercase text-muted-foreground">Entregar a:</p>
+                            <p className="text-sm">{order.shippingInfo?.address}</p>
+                        </div>
                     </div>
-                      <Button variant="ghost" size="sm" onClick={() => openMap(order.shippingInfo?.address || order.shippingAddress?.address || '')} title="Ver en Mapa">
-                        <Map className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </div>
                 </CardContent>
-                <CardFooter className="bg-muted/10 pt-4">
-                  <Button 
-                    className="w-full bg-green-600 hover:bg-green-700 text-white" 
-                    onClick={() => handleAcceptOrder(order)}
-                    disabled={isUpdating === order.id}
-                  >
-                    {isUpdating === order.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : "Aceptar Pedido"}
-                  </Button>
+                <CardFooter>
+                    <Button className="w-full" size="lg" onClick={() => handleTakeOrder(order.id)}>
+                        Tomar Pedido
+                    </Button>
                 </CardFooter>
               </Card>
-            ))}
-            
-            {availableHasMore && availableOrders.length > 0 && (
-              <Button 
-                onClick={() => loadOrders(buildAvailableQuery, true, setAvailableOrders, setAvailableLastDoc, setAvailableHasMore, setIsLoadingAvailableMore, availableLastDoc)} 
-                disabled={isLoadingAvailableMore}
-                variant="secondary"
-                className="w-full mt-4"
-              >
-                {isLoadingAvailableMore ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                {isLoadingAvailableMore ? "Cargando..." : "Cargar más disponibles..."}
-              </Button>
-            )}
-            </>
+            ))
           )}
         </TabsContent>
 
-        {/* --- PESTAÑA: MIS ENTREGAS ACTIVAS --- */}
+        {/* --- PESTAÑA: PEDIDOS EN CURSO --- */}
         <TabsContent value="active" className="space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2 text-blue-600">
-            <Bike className="h-5 w-5" /> En Curso
-          </h3>
+            {myActiveOrders?.length === 0 ? (
+                <div className="text-center py-12 bg-muted/20 rounded-xl">
+                    <CheckCircle2 className="mx-auto h-12 w-12 text-green-500 mb-3" />
+                    <h3 className="text-lg font-medium">Estás libre</h3>
+                    <p className="text-sm text-muted-foreground">Ve a la pestaña "Disponibles" para tomar un viaje.</p>
+                </div>
+            ) : (
+                myActiveOrders?.map(order => (
+                    <Card key={order.id} className={`border-l-4 shadow-md ${order.paymentMethod === 'Efectivo' ? 'border-l-yellow-500 ring-2 ring-yellow-500/20' : 'border-l-blue-500'}`}>
+                        <CardHeader className="pb-2">
+                            <div className="flex justify-between items-start">
+                                <div className="space-y-1">
+                                    <Badge variant="secondary" className="animate-pulse bg-blue-100 text-blue-700">
+                                        EN CURSO
+                                    </Badge>
+                                    <CardTitle className="mt-1 text-lg">{order.storeName}</CardTitle>
+                                </div>
+                                <div className="text-right">
+                                    <span className="font-bold text-lg block">${order.total}</span>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pb-2 space-y-4">
+                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 space-y-2">
+                                <p className="text-sm font-semibold flex items-center gap-2 text-blue-800">
+                                    <Navigation className="h-4 w-4" /> Destino:
+                                </p>
+                                <p className="text-lg font-bold">{order.shippingInfo?.address}</p>
+                                <p className="text-sm text-muted-foreground">Cliente: {order.customerName}</p>
+                            </div>
+                            
+                            {/* ALERTA DE COBRO EN EFECTIVO */}
+                            {order.paymentMethod === 'Efectivo' && (
+                                <div className="p-4 bg-yellow-50 rounded-lg border-2 border-yellow-400 flex items-start gap-3 animate-in fade-in zoom-in">
+                                    <div className="bg-yellow-100 p-2 rounded-full">
+                                        <DollarSign className="h-6 w-6 text-yellow-700" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-yellow-900 uppercase text-sm">¡COBRAR AL CLIENTE!</p>
+                                        <p className="text-sm text-yellow-800 font-medium">
+                                            Debes recibir <span className="text-lg font-bold">${order.total}</span> en efectivo.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
-          {activeCount === 0 && !loadingActive ? (
-            <div className="text-center py-10 text-muted-foreground border rounded-lg bg-muted/10">
-              <p>No tienes entregas activas.</p>
-              <Button variant="link" onClick={() => document.querySelector<HTMLElement>('[data-value="available"]')?.click()}>
-                Buscar pedidos disponibles
-              </Button>
-            </div>
-          ) : (
-              <>
-              {activeOrders.map(order => (
-                  <Card key={order.id} className="overflow-hidden border shadow-md border-blue-200">
-                      <CardHeader className="pb-3 bg-blue-50 flex flex-row items-center justify-between">
-                          <div>
-                              <CardTitle className="text-lg text-blue-900">{order.storeName}</CardTitle>
-                              <CardDescription>Cliente: {order.customerName}</CardDescription>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                               <Badge className="bg-blue-500">{order.status}</Badge>
-                               {/* Alerta de Listo para Retirar */}
-                               {(order as any).readyForPickup && order.status === 'En preparación' && (
-                                  <Badge variant="destructive" className="animate-pulse">¡RETIRAR YA!</Badge>
-                               )}
-                          </div>
-                      </CardHeader>
-                      <CardContent className="pt-4 space-y-4">
-                          <div className="p-4 bg-white border rounded-md flex justify-between items-center cursor-pointer hover:bg-gray-50" onClick={() => openMap(order.shippingInfo?.address || '')}>
-                              <div className="flex items-center gap-3">
-                                  <div className="bg-blue-500 p-2 rounded-full text-white"><Navigation className="h-5 w-5"/></div>
-                                  <div><p className="text-xs text-blue-600 font-bold uppercase">Ir al Destino</p><p className="text-sm font-medium">{order.shippingInfo?.address}</p></div>
-                              </div>
-                              <ExternalLink className="h-4 w-4 text-gray-400"/>
-                          </div>
-                          
-                          <div className="flex justify-between text-sm text-muted-foreground">
-                              <span>Ganancia: <span className="font-semibold text-green-600">{formatFee(order.deliveryFee)}</span></span>
-                          </div>
-                      </CardContent>
+                             {/* AVISO DE PAGO ONLINE */}
+                             {order.paymentMethod === 'mercadopago' && (
+                                <div className="p-3 bg-green-50 rounded-lg border border-green-200 flex items-center gap-3">
+                                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                    <p className="text-sm text-green-800 font-medium">
+                                        Pedido pagado online. <strong>Solo entregar.</strong>
+                                    </p>
+                                </div>
+                            )}
+                        </CardContent>
+                        <CardFooter>
+                            <Button className={`w-full text-lg h-12 ${order.paymentMethod === 'Efectivo' ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : 'bg-green-600 hover:bg-green-700'}`} onClick={() => handleFinishDeliveryClick(order)}>
+                                <CheckCircle2 className="mr-2 h-5 w-5" /> 
+                                {order.paymentMethod === 'Efectivo' ? 'Ya cobré y Entregué' : 'Confirmar Entrega'}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                ))
+            )}
+        </TabsContent>
 
-                      <CardFooter className="grid grid-cols-1 gap-3 pt-2">
-                          <Link href={`/orders/${order.id}`} className="w-full">
-                              <Button className="w-full h-12 text-lg" variant="default">
-                                  Ver Detalles y Chat <ArrowRight className="ml-2 h-5 w-5" />
-                              </Button>
-                          </Link>
-                      </CardFooter>
-                  </Card>
-              ))}
-              {activeHasMore && activeOrders.length > 0 && (
-                  <Button 
-                    onClick={() => loadOrders(buildActiveQuery, true, setActiveOrders, setActiveLastDoc, setActiveHasMore, setIsLoadingActiveMore, activeLastDoc)} 
-                    disabled={isLoadingActiveMore}
-                    variant="secondary"
-                    className="w-full mt-4"
-                  >
-                    {isLoadingActiveMore ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                    {isLoadingActiveMore ? "Cargando..." : "Cargar más entregas activas..."}
-                  </Button>
-              )}
-              </>
-          )}
+        {/* --- ✅ PESTAÑA: BILLETERA --- */}
+        <TabsContent value="wallet" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+             <div className="grid gap-4 md:grid-cols-2">
+                <Card className="border-l-4 border-l-orange-600 shadow-md">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <Clock className="h-4 w-4" /> Saldo Pendiente de Cobro
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-orange-700">${financeStats.pendingBalance.toLocaleString()}</div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Ganancias por envíos entregados (no pagados).
+                        </p>
+                    </CardContent>
+                </Card>
 
-          {/* HISTORIAL RÁPIDO */}
-          {loadingHistory ? (
-               <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
-          ) : historyOrders && historyOrders.length > 0 && (
-              <>
-                  <div className="my-6 border-t" />
-                  <h3 className="text-lg font-semibold flex items-center gap-2 text-muted-foreground">
-                      <CheckCircle className="h-5 w-5" /> Completados Recientemente
-                  </h3>
-                  <div className="space-y-2 opacity-70">
-                      {historyOrders.map(order => (
-                          <Card key={order.id} className="p-3 bg-muted rounded-lg border flex justify-between items-center hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
-                              <div>
-                                  <p className="font-medium text-sm">{order.storeName}</p>
-                                  <p className="text-xs text-green-600 font-bold">Ganancia: {formatFee(order.deliveryFee)}</p>
-                              </div>
-                              <Badge variant="outline">Completado</Badge>
-                          </Card>
-                      ))}
-                  </div>
-              </>
-          )}
+                <Card className="border-l-4 border-l-green-600 shadow-sm bg-green-50/30">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" /> Último Pago Recibido
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {financeStats.lastPayoutDate ? (
+                            <>
+                                <div className="text-xl font-bold text-green-800">
+                                    {format(financeStats.lastPayoutDate, "d 'de' MMMM", { locale: es })}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Total histórico ganado: <strong>${financeStats.totalPaid.toLocaleString()}</strong>
+                                </p>
+                            </>
+                        ) : (
+                            <div className="text-sm text-muted-foreground italic">Aún no has recibido pagos.</div>
+                        )}
+                    </CardContent>
+                </Card>
+             </div>
+
+             <Card>
+                <CardHeader>
+                    <CardTitle>Historial Reciente</CardTitle>
+                    <CardDescription>Detalle de tus ganancias por entrega.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {financeStats.unpaidOrders.length === 0 && financeStats.totalPaid === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <Wallet className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                            <p>No tienes movimientos aún.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {/* Mostrar primero los pendientes */}
+                            {financeStats.unpaidOrders.map((order: any) => (
+                                <div key={order.id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                                    <div>
+                                        <p className="font-medium text-sm">Pedido #{order.id.substring(0,6)}</p>
+                                        <Badge variant="outline" className="text-[10px] border-orange-200 text-orange-700">Pendiente</Badge>
+                                    </div>
+                                    <div className="font-bold text-orange-600">
+                                        +${(order.deliveryFee || 0).toLocaleString()}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+             </Card>
         </TabsContent>
       </Tabs>
+
+      {/* --- MODAL CONFIRMACIÓN --- */}
+      <Dialog open={!!confirmDeliveryOrder} onOpenChange={(open) => !open && setConfirmDeliveryOrder(null)}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Confirmar Entrega</DialogTitle>
+                <DialogDescription>
+                    ¿Entregaste el pedido a {confirmDeliveryOrder?.customerName}?
+                </DialogDescription>
+            </DialogHeader>
+
+            {confirmDeliveryOrder?.paymentMethod === 'Efectivo' && (
+                <div className="bg-yellow-100 p-4 rounded-lg border border-yellow-400 text-center my-2">
+                    <p className="font-bold text-yellow-900 uppercase">¡COBRAR AL CLIENTE!</p>
+                    <h3 className="font-black text-2xl text-yellow-900">${confirmDeliveryOrder.total}</h3>
+                </div>
+            )}
+
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmDeliveryOrder(null)}>Cancelar</Button>
+                <Button className="bg-green-600 hover:bg-green-700" onClick={confirmFinishDelivery}>
+                    Sí, Entregado
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

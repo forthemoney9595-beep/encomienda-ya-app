@@ -1,22 +1,23 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-// ✅ CORRECCIÓN: Importamos desde @/lib/firebase para tener los hooks con onSnapshot (tiempo real)
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/lib/firebase';
 import { doc, collection, query } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store as StoreIcon, MapPin, Star, Plus, Package } from 'lucide-react';
+import { Store as StoreIcon, MapPin, Star, Plus, Package, Clock, Info } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { useMemo } from 'react';
+import { Badge } from '@/components/ui/badge';
 
 interface StoreData {
   name: string;
   description?: string;
   address?: string;
   imageUrl?: string;
+  schedule?: { open: string; close: string };
 }
 
 interface Product {
@@ -33,6 +34,7 @@ interface Product {
 
 export default function StorePublicPage() {
   const params = useParams();
+  // Manejo seguro del storeId (por si viene como array)
   const storeId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   
   const firestore = useFirestore();
@@ -47,33 +49,58 @@ export default function StorePublicPage() {
   
   const { data: store, isLoading: storeLoading } = useDoc<StoreData>(storeRef);
 
-  // 2. Obtener PRODUCTOS de la tienda (Tiempo Real)
+  // 2. Obtener PRODUCTOS
   const productsQuery = useMemoFirebase(() => {
     if (!firestore || !storeId) return null;
-    // Escuchamos la colección completa. Si eliminas algo en el admin, desaparecerá aquí.
     return query(collection(firestore, 'stores', storeId, 'items'));
   }, [firestore, storeId]);
 
   const { data: rawProducts, isLoading: productsLoading } = useCollection<Product>(productsQuery);
 
-  // 3. Filtrar y Ordenar en el Cliente
+  // 3. Filtrar y Ordenar
   const products = useMemo(() => {
     if (!rawProducts) return [];
-    
     return rawProducts
-      // Solo mostramos productos que tengan available en true
       .filter(p => p.available === true)
-      // Ordenamos por fecha: los más nuevos primero
-      .sort((a, b) => {
-        const dateA = a.createdAt?.seconds || 0;
-        const dateB = b.createdAt?.seconds || 0;
-        return dateB - dateA;
-      });
+      .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   }, [rawProducts]);
+
+  // 4. Estado de Apertura 🕒
+  const storeStatus = useMemo(() => {
+      if (!store?.schedule) return { isOpen: true, label: 'Abierto' }; 
+      
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      
+      const [openHour, openMin] = store.schedule.open.split(':').map(Number);
+      const [closeHour, closeMin] = store.schedule.close.split(':').map(Number);
+      
+      const openMinutes = openHour * 60 + openMin;
+      const closeMinutes = closeHour * 60 + closeMin;
+      
+      const isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+      
+      return {
+          isOpen,
+          label: isOpen ? 'Abierto' : 'Cerrado',
+          timeRange: `${store.schedule.open} - ${store.schedule.close}`
+      };
+  }, [store]);
 
   const handleAddToCart = (product: Product) => {
     if (!storeId) return;
     
+    // Bloqueo visual si está cerrado
+    if (!storeStatus.isOpen) {
+        toast({
+            variant: "destructive",
+            title: "Tienda Cerrada",
+            description: `El local abre a las ${store?.schedule?.open}. No se aceptan pedidos ahora.`
+        });
+        return;
+    }
+    
+    // ✅ CORREGIDO: Quitamos 'rating' y 'reviewCount' para evitar error TS2353
     addToCart({
       id: product.id,
       name: product.name,
@@ -81,8 +108,6 @@ export default function StorePublicPage() {
       description: product.description,
       category: product.category,
       imageUrl: product.imageUrl,
-      rating: 0, 
-      reviewCount: 0 
     }, storeId); 
     
     toast({
@@ -91,31 +116,8 @@ export default function StorePublicPage() {
     });
   };
 
-  if (storeLoading || productsLoading) {
-    return (
-      <div className="container mx-auto space-y-8 py-8">
-        <div className="flex items-center gap-4">
-            <Skeleton className="h-20 w-20 rounded-full" />
-            <div className="space-y-2">
-                <Skeleton className="h-8 w-64" />
-                <Skeleton className="h-4 w-48" />
-            </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64 w-full" />)}
-        </div>
-      </div>
-    );
-  }
-
-  if (!store) {
-    return (
-        <div className="container mx-auto py-20 text-center">
-            <h2 className="text-2xl font-bold text-muted-foreground">Tienda no encontrada</h2>
-            <Button variant="link" onClick={() => router.push('/')}>Volver al inicio</Button>
-        </div>
-    );
-  }
+  if (storeLoading || productsLoading) return <LoadingSkeleton />;
+  if (!store) return <StoreNotFound router={router} />;
 
   const featuredProducts = products.filter(p => p.isFeatured);
   const regularProducts = products.filter(p => !p.isFeatured);
@@ -133,16 +135,38 @@ export default function StorePublicPage() {
                 )}
             </div>
             <div className="text-center md:text-left space-y-2 flex-1">
-                <h1 className="text-3xl font-bold tracking-tight">{store.name}</h1>
+                <div className="flex flex-col md:flex-row items-center gap-2">
+                    <h1 className="text-3xl font-bold tracking-tight">{store.name}</h1>
+                    <Badge variant={storeStatus.isOpen ? "default" : "destructive"} className={`gap-1 ${storeStatus.isOpen ? 'bg-green-600 hover:bg-green-700' : ''}`}>
+                        {storeStatus.isOpen ? <Clock className="h-3 w-3" /> : <Info className="h-3 w-3" />}
+                        {storeStatus.label}
+                    </Badge>
+                </div>
+                
                 <p className="text-muted-foreground max-w-2xl">{store.description || 'Sin descripción disponible.'}</p>
-                {store.address && (
-                    <div className="flex items-center justify-center md:justify-start gap-1 text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4" /> {store.address}
-                    </div>
-                )}
+                
+                <div className="flex flex-col md:flex-row items-center gap-4 text-sm text-muted-foreground mt-2">
+                     {store.address && (
+                        <div className="flex items-center gap-1">
+                            <MapPin className="h-4 w-4" /> {store.address}
+                        </div>
+                    )}
+                    {store.schedule && (
+                         <div className="flex items-center gap-1 font-medium text-foreground">
+                            <Clock className="h-4 w-4 text-primary" /> {storeStatus.timeRange} hs
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
       </div>
+      
+      {!storeStatus.isOpen && (
+          <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
+              <p className="font-semibold">🔴 Este local se encuentra cerrado en este momento.</p>
+              <p className="text-sm">Puedes ver el menú, pero no podrás realizar pedidos hasta que abra.</p>
+          </div>
+      )}
 
       {/* DESTACADOS */}
       {featuredProducts.length > 0 && (
@@ -152,7 +176,7 @@ export default function StorePublicPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {featuredProducts.map(product => (
-                    <ProductCard key={product.id} product={product} onAdd={handleAddToCart} isFeatured />
+                    <ProductCard key={product.id} product={product} onAdd={handleAddToCart} isFeatured isDisabled={!storeStatus.isOpen} />
                 ))}
             </div>
         </div>
@@ -163,7 +187,7 @@ export default function StorePublicPage() {
       {products.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {regularProducts.map(product => (
-                <ProductCard key={product.id} product={product} onAdd={handleAddToCart} />
+                <ProductCard key={product.id} product={product} onAdd={handleAddToCart} isDisabled={!storeStatus.isOpen} />
             ))}
         </div>
       ) : (
@@ -175,9 +199,35 @@ export default function StorePublicPage() {
   );
 }
 
-function ProductCard({ product, onAdd, isFeatured }: { product: Product, onAdd: (p: Product) => void, isFeatured?: boolean }) {
+function LoadingSkeleton() {
     return (
-        <Card className={`flex flex-col overflow-hidden border hover:shadow-md transition-all ${isFeatured ? 'border-yellow-200 bg-yellow-50/30' : ''}`}>
+      <div className="container mx-auto space-y-8 py-8">
+        <div className="flex items-center gap-4">
+            <Skeleton className="h-20 w-20 rounded-full" />
+            <div className="space-y-2">
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-4 w-48" />
+            </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64 w-full" />)}
+        </div>
+      </div>
+    );
+}
+
+function StoreNotFound({ router }: { router: any }) {
+    return (
+        <div className="container mx-auto py-20 text-center">
+            <h2 className="text-2xl font-bold text-muted-foreground">Tienda no encontrada</h2>
+            <Button variant="link" onClick={() => router.push('/')}>Volver al inicio</Button>
+        </div>
+    );
+}
+
+function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Product, onAdd: (p: Product) => void, isFeatured?: boolean, isDisabled?: boolean }) {
+    return (
+        <Card className={`flex flex-col overflow-hidden border hover:shadow-md transition-all ${isFeatured ? 'border-yellow-200 bg-yellow-50/30' : ''} ${isDisabled ? 'opacity-70 grayscale' : ''}`}>
             <div className="relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden">
                 {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
@@ -198,8 +248,8 @@ function ProductCard({ product, onAdd, isFeatured }: { product: Product, onAdd: 
                 <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
             </CardHeader>
             <CardFooter className="p-4 mt-auto">
-                <Button onClick={() => onAdd(product)} className="w-full" size="sm">
-                    <Plus className="h-4 w-4 mr-1" /> Agregar
+                <Button onClick={() => onAdd(product)} className="w-full" size="sm" disabled={isDisabled}>
+                    {isDisabled ? 'Cerrado' : <><Plus className="h-4 w-4 mr-1" /> Agregar</>}
                 </Button>
             </CardFooter>
         </Card>

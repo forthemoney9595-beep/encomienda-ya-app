@@ -9,28 +9,24 @@ import { useAuth, UserProfile } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/lib/firebase';
 import { collection, CollectionReference, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store, Bike, Check, X, Users, DollarSign, Package, Loader2, Shield, Search, MoreHorizontal, Settings, AlertTriangle, Save, TrendingUp, Calendar, Trash2 } from 'lucide-react';
+import { Store, Bike, Check, X, Users, DollarSign, Package, Loader2, Shield, Settings, AlertTriangle, Save, TrendingUp, Calendar, Trash2, Eye, Car, FileText, Phone, Mail, Clock, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import type { Order } from '@/lib/order-service'; 
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FinanceView } from './finance-view';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // --- TIPOS LOCALES ---
 interface PendingUser extends UserProfile {
@@ -38,6 +34,13 @@ interface PendingUser extends UserProfile {
     isApproved?: boolean;
     photoURL?: string;
     profileImageUrl?: string;
+    // Campos extra para mostrar detalles
+    vehicle?: any;
+    licenseUrl?: string;
+    imageUrl?: string; // Para tiendas
+    description?: string; // Para tiendas
+    address?: string; // Para tiendas
+    schedule?: any; // Para tiendas
 }
 
 interface PlatformConfig {
@@ -122,7 +125,7 @@ const SalesChart = ({ data }: { data: SalesData[] }) => {
 }
 
 // ====================================================================
-// COMPONENTE: LISTA DE PENDIENTES
+// COMPONENTE: LISTA DE PENDIENTES (CON MODAL INTELIGENTE)
 // ====================================================================
 interface PendingListProps {
     title: string;
@@ -134,15 +137,20 @@ interface PendingListProps {
 }
 
 function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading }: PendingListProps) {
+    const [selectedUser, setSelectedUser] = useState<PendingUser | null>(null);
+
     if (isLoading) return <Skeleton className="h-48 w-full" />;
     
     return (
-        <Card className="h-fit">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <>
+        <Card className="h-fit shadow-md border-l-4 border-l-yellow-400">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 bg-muted/10">
                 <CardTitle className="text-lg font-medium">{title}</CardTitle>
-                <Icon className="h-5 w-5 text-muted-foreground" />
+                <div className="bg-white p-2 rounded-full shadow-sm">
+                    <Icon className="h-5 w-5 text-yellow-600" />
+                </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
                 {users.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-lg bg-muted/5">
                         <Check className="mx-auto h-6 w-6 mb-2 text-green-500/50" />
@@ -163,6 +171,11 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
                                     </div>
                                 </div>
                                 <div className="flex space-x-1 shrink-0">
+                                    {/* 👁️ BOTÓN VER DETALLES */}
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50" onClick={() => setSelectedUser(user)}>
+                                        <Eye className="h-4 w-4" />
+                                    </Button>
+
                                     <Button size="icon" variant="outline" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200" onClick={() => onApprove(user.id, user.name || 'Usuario')}>
                                         <Check className="h-4 w-4" />
                                     </Button>
@@ -176,212 +189,89 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
                 )}
             </CardContent>
         </Card>
-    );
-}
 
-// ====================================================================
-// COMPONENTE: TABLA DE TIENDAS ACTIVAS
-// ====================================================================
-function ActiveStoresTable({ 
-    stores, 
-    onToggleMaintenance,
-    onDeleteStore 
-}: { 
-    stores: any[], 
-    onToggleMaintenance: (id: string, currentStatus: boolean) => void,
-    onDeleteStore: (id: string) => void
-}) {
-    return (
-        <Card className="col-span-full shadow-sm">
-            <CardHeader>
-                <CardTitle>Gestión de Tiendas Activas</CardTitle>
-                <CardDescription>Controla el estado operativo de cada tienda individualmente.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="rounded-md border overflow-hidden">
-                    <Table>
-                        <TableHeader className="bg-muted/50">
-                            <TableRow>
-                                <TableHead>Tienda</TableHead>
-                                <TableHead>Dueño</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {stores.map((store) => (
-                                <TableRow key={store.id}>
-                                    <TableCell className="font-medium">
-                                        <div className="flex items-center gap-2">
-                                            <Store className="h-4 w-4 text-blue-500" />
-                                            {store.name}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">{store.ownerName || 'Desconocido'}</TableCell>
-                                    <TableCell>
-                                        {store.maintenanceMode ? (
-                                            <Badge variant="destructive" className="flex w-fit gap-1 items-center text-[10px]">
-                                                <AlertTriangle className="h-3 w-3" /> En Mantenimiento
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-200 flex w-fit gap-1 items-center text-[10px]">
-                                                <Check className="h-3 w-3" /> Operativa
-                                            </Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end items-center gap-4">
-                                            <div className="flex items-center gap-2">
-                                                <Label htmlFor={`maint-${store.id}`} className="text-xs text-muted-foreground hidden sm:block cursor-pointer">
-                                                    {store.maintenanceMode ? 'Desactivar' : 'Activar'}
-                                                </Label>
-                                                <Switch 
-                                                    id={`maint-${store.id}`}
-                                                    checked={store.maintenanceMode || false}
-                                                    onCheckedChange={() => onToggleMaintenance(store.id, store.maintenanceMode || false)}
-                                                />
-                                            </div>
-                                            <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => onDeleteStore(store.id)} title="Eliminar Tienda">
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {stores.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No hay tiendas aprobadas aún.</TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
+        {/* 🕵️‍♂️ MODAL DE INSPECCIÓN (ADAPTABLE) */}
+        <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                            <AvatarImage src={selectedUser?.profileImageUrl || selectedUser?.photoURL} />
+                            <AvatarFallback>{selectedUser?.displayName?.[0]}</AvatarFallback>
+                        </Avatar>
+                        {selectedUser?.displayName || selectedUser?.name}
+                    </DialogTitle>
+                    <DialogDescription>
+                        Solicitud de: {selectedUser?.role === 'delivery' ? 'Repartidor' : 'Tienda'}
+                    </DialogDescription>
+                </DialogHeader>
 
-// ====================================================================
-// COMPONENTE: TABLA DE GESTIÓN DE USUARIOS
-// ====================================================================
-function UserManagementTable({ 
-    users, 
-    onUpdateRole,
-    onDeleteUser,
-    currentUserId
-}: { 
-    users: PendingUser[], 
-    onUpdateRole: (id: string, role: string) => void,
-    onDeleteUser: (id: string) => void,
-    currentUserId?: string
-}) {
-    const [search, setSearch] = useState('');
-    
-    const filteredUsers = users.filter(u => 
-        u.email?.toLowerCase().includes(search.toLowerCase()) || 
-        u.displayName?.toLowerCase().includes(search.toLowerCase())
-    );
+                <div className="space-y-4 py-2">
+                    {/* SI ES REPARTIDOR */}
+                    {selectedUser?.role === 'delivery' && (
+                        <>
+                            <div className="bg-muted/30 p-3 rounded-lg border">
+                                <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                                    <Car className="h-4 w-4 text-orange-600" /> Vehículo
+                                </h4>
+                                {selectedUser.vehicle ? (
+                                    <div className="text-sm space-y-1">
+                                        <p>Tipo: {selectedUser.vehicle.type || 'N/A'}</p>
+                                        <p>Patente: <span className="font-mono bg-white px-1 border rounded">{selectedUser.vehicle.plate || 'N/A'}</span></p>
+                                        <p>Modelo: {selectedUser.vehicle.model || 'N/A'}</p>
+                                    </div>
+                                ) : <p className="text-sm text-muted-foreground">Sin datos de vehículo.</p>}
+                            </div>
 
-    return (
-        <Card className="col-span-full shadow-sm">
-            <CardHeader>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <CardTitle>Gestión de Usuarios</CardTitle>
-                        <CardDescription>Administra roles y permisos de todos los usuarios registrados.</CardDescription>
-                    </div>
-                    <div className="relative w-full sm:w-64">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Buscar por nombre o email..." 
-                            className="pl-8" 
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
+                            <div className="bg-muted/30 p-3 rounded-lg border">
+                                <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                                    <FileText className="h-4 w-4 text-blue-600" /> Licencia
+                                </h4>
+                                {selectedUser.licenseUrl ? (
+                                    <div className="relative h-32 w-full rounded-md overflow-hidden border bg-white">
+                                        <img src={selectedUser.licenseUrl} alt="Licencia" className="h-full w-full object-contain" />
+                                    </div>
+                                ) : <p className="text-sm text-red-500">⚠️ No subió foto de licencia.</p>}
+                            </div>
+                        </>
+                    )}
+
+                    {/* SI ES TIENDA */}
+                    {selectedUser?.role === 'store' && (
+                         <>
+                            <div className="relative w-full h-32 rounded-lg overflow-hidden bg-muted">
+                                {selectedUser.imageUrl ? (
+                                    <img src={selectedUser.imageUrl} alt="Portada" className="w-full h-full object-cover" />
+                                ) : <div className="flex items-center justify-center h-full text-muted-foreground">Sin Portada</div>}
+                            </div>
+                            <div className="grid gap-2 text-sm">
+                                <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-red-500"/> {selectedUser.address || 'Sin dirección'}</div>
+                                <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-green-500"/> 
+                                    {selectedUser.schedule ? `${selectedUser.schedule.open} - ${selectedUser.schedule.close}` : 'Horario no definido'}
+                                </div>
+                            </div>
+                         </>
+                    )}
+
+                    {/* BOTONES DE ACCIÓN EN EL MODAL */}
+                    <div className="flex gap-2 pt-2">
+                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => {
+                            if (selectedUser) onApprove(selectedUser.id, selectedUser.name || 'Usuario');
+                            setSelectedUser(null);
+                        }}>
+                            Aprobar
+                        </Button>
+                        <Button variant="destructive" className="w-full" onClick={() => {
+                             if (selectedUser) onReject(selectedUser.id, selectedUser.name || 'Usuario');
+                             setSelectedUser(null);
+                        }}>
+                            Rechazar
+                        </Button>
                     </div>
                 </div>
-            </CardHeader>
-            <CardContent>
-                <div className="rounded-md border overflow-hidden">
-                    <Table>
-                        <TableHeader className="bg-muted/50">
-                            <TableRow>
-                                <TableHead>Usuario</TableHead>
-                                <TableHead>Rol Actual</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredUsers.slice(0, 10).map((user) => (
-                                <TableRow key={user.id}>
-                                    <TableCell className="flex items-center gap-3">
-                                        <Avatar className="h-8 w-8 border">
-                                            <AvatarImage src={user.photoURL || user.profileImageUrl} />
-                                            <AvatarFallback>{user.displayName?.charAt(0) || 'U'}</AvatarFallback>
-                                        </Avatar>
-                                        <div>
-                                            <div className="font-medium text-sm">{user.displayName || 'Sin Nombre'}</div>
-                                            <div className="text-xs text-muted-foreground">{user.email}</div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className={
-                                            user.role === 'admin' ? 'border-purple-500 text-purple-600 bg-purple-50' :
-                                            user.role === 'store' ? 'border-blue-500 text-blue-600 bg-blue-50' :
-                                            user.role === 'delivery' ? 'border-orange-500 text-orange-600 bg-orange-50' : 
-                                            'bg-gray-100 text-gray-600 border-gray-200'
-                                        }>
-                                            {user.role === 'buyer' ? 'Cliente' : user.role === 'store' ? 'Tienda' : user.role === 'delivery' ? 'Repartidor' : 'Admin'}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        {user.role === 'store' || user.role === 'delivery' ? (
-                                            <Badge variant={user.isApproved ? 'default' : 'destructive'} className="text-[10px]">
-                                                {user.isApproved ? 'Aprobado' : 'Pendiente'}
-                                            </Badge>
-                                        ) : <span className="text-xs text-muted-foreground">-</span>}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-48">
-                                                    <DropdownMenuLabel>Cambiar Rol</DropdownMenuLabel>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'buyer')}>Convertir en Cliente</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'store')}>Convertir en Tienda</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => onUpdateRole(user.id, 'delivery')}>Convertir en Repartidor</DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem className="text-purple-600 font-bold focus:text-purple-700 focus:bg-purple-50" onClick={() => onUpdateRole(user.id, 'admin')}>
-                                                        <Shield className="mr-2 h-4 w-4" /> Hacer Admin
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                            {user.id !== currentUserId && (
-                                                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => onDeleteUser(user.id)} title="Eliminar Usuario">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {filteredUsers.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-                {filteredUsers.length > 10 && <p className="text-xs text-center mt-4 text-muted-foreground">Mostrando primeros 10 resultados.</p>}
-            </CardContent>
-        </Card>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }
 
@@ -400,9 +290,6 @@ export default function AdminDashboardPage() {
 
     const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, maintenanceMode: false });
     const [isSavingConfig, setIsSavingConfig] = useState(false);
-    const [deleteId, setDeleteId] = useState<string | null>(null);
-    const [deleteType, setDeleteType] = useState<'store' | 'user' | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         if (configData) setLocalConfig(configData);
@@ -419,16 +306,17 @@ export default function AdminDashboardPage() {
 
     const users = useMemo(() => rawUsers?.map(u => ({ ...u, id: (u as any).id, isApproved: u.isApproved ?? false })) || [], [rawUsers]);
     
-    const pendingStores = users.filter(u => u.role === 'store' && !u.isApproved);
+    // Filtramos los pendientes
+    const pendingStores = useMemo(() => {
+        return users.filter(u => u.role === 'store' && !u.isApproved).map(u => {
+            const storeData = rawStores?.find((s: any) => s.ownerId === u.id);
+            return { ...u, ...storeData }; 
+        });
+    }, [users, rawStores]);
+
     const pendingDelivery = users.filter(u => u.role === 'delivery' && !u.isApproved);
 
-    const approvedStores = useMemo(() => {
-        if (!rawStores || !users) return [];
-        return rawStores.filter((s: any) => s.isApproved).map((store: any) => {
-            const owner = users.find(u => u.id === store.ownerId);
-            return { ...store, ownerName: owner?.displayName || owner?.name || 'Desconocido' };
-        });
-    }, [rawStores, users]);
+    const approvedStoresCount = rawStores?.filter((s: any) => s.isApproved).length || 0;
     
     const globalStats = useMemo(() => {
         const completedOrders = allOrders?.filter(o => o.status === 'Entregado') || [];
@@ -436,11 +324,11 @@ export default function AdminDashboardPage() {
         
         return {
             totalUsers: users.length,
-            totalStores: approvedStores.length, 
+            totalStores: approvedStoresCount, 
             totalOrders: allOrders?.length || 0,
             totalRevenue: totalRevenue
         };
-    }, [allOrders, approvedStores, users]);
+    }, [allOrders, approvedStoresCount, users]);
     
     const chartData = useMemo(() => processOrderDataForChart(allOrders || undefined), [allOrders]);
 
@@ -467,31 +355,6 @@ export default function AdminDashboardPage() {
         }
     };
 
-    const handleToggleStoreMaintenance = async (storeId: string, currentStatus: boolean) => {
-        if (!firestore) return;
-        try {
-            await updateDoc(doc(firestore, 'stores', storeId), { maintenanceMode: !currentStatus });
-            toast({ 
-                title: !currentStatus ? 'Tienda en Mantenimiento' : 'Tienda Activada',
-                description: `El estado de la tienda se ha actualizado.` 
-            });
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error al cambiar estado' });
-        }
-    };
-
-    const handleRoleChange = async (userId: string, newRole: string) => {
-        if (!firestore) return;
-        if (!confirm(`¿Estás seguro de cambiar el rol de este usuario a ${newRole}?`)) return;
-        
-        try {
-            await updateDoc(doc(firestore, 'users', userId), { role: newRole });
-            toast({ title: 'Rol actualizado', description: `El usuario ahora es ${newRole}.` });
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error al cambiar rol' });
-        }
-    }
-
     const handleSaveConfig = async () => {
         if (!firestore) return;
         setIsSavingConfig(true);
@@ -503,29 +366,6 @@ export default function AdminDashboardPage() {
             toast({ variant: 'destructive', title: 'Error al guardar', description: 'Verifica los permisos de la colección config.' });
         } finally {
             setIsSavingConfig(false);
-        }
-    };
-
-    const confirmDelete = (id: string, type: 'store' | 'user') => {
-        setDeleteId(id);
-        setDeleteType(type);
-    };
-
-    const handleDelete = async () => {
-        if (!firestore || !deleteId || !deleteType) return;
-        setIsDeleting(true);
-        try {
-            const collectionName = deleteType === 'store' ? 'stores' : 'users';
-            await deleteDoc(doc(firestore, collectionName, deleteId));
-            
-            toast({ title: `${deleteType === 'store' ? 'Tienda' : 'Usuario'} eliminado permanentemente` });
-        } catch (error) {
-            console.error(error);
-            toast({ variant: "destructive", title: "Error al eliminar" });
-        } finally {
-            setIsDeleting(false);
-            setDeleteId(null);
-            setDeleteType(null);
         }
     };
 
@@ -575,115 +415,108 @@ export default function AdminDashboardPage() {
                 </Card>
             </div>
 
-            {/* SECCIÓN GRÁFICOS */}
-            <Card className="shadow-sm">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                        <Calendar className="h-5 w-5 text-primary" /> Rendimiento Semanal
-                    </CardTitle>
-                    <CardDescription>Ventas y volumen de pedidos de los últimos 7 días (basado en órdenes Entregadas).</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <SalesChart data={chartData} />
-                </CardContent>
-            </Card>
+            {/* PESTAÑAS PRINCIPALES */}
+            <Tabs defaultValue="overview" className="w-full">
+                <TabsList className="mb-4">
+                    <TabsTrigger value="overview">Visión General</TabsTrigger>
+                    <TabsTrigger value="finances" className="text-green-700 font-semibold flex gap-2">
+                        <DollarSign className="h-4 w-4" /> Finanzas y Pagos
+                    </TabsTrigger>
+                </TabsList>
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-                {/* COLUMNA IZQUIERDA: CONFIGURACIÓN Y PENDIENTES */}
-                <div className="lg:col-span-3 space-y-6">
-                    <Card className="border-orange-200 bg-orange-50/30 shadow-sm">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-orange-900">
-                                <Settings className="h-5 w-5" /> Configuración de Plataforma
+                {/* CONTENIDO 1: VISIÓN GENERAL */}
+                <TabsContent value="overview" className="space-y-6">
+                    {/* SECCIÓN GRÁFICOS */}
+                    <Card className="shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                                <Calendar className="h-5 w-5 text-primary" /> Rendimiento Semanal
                             </CardTitle>
+                            <CardDescription>Ventas y volumen de pedidos de los últimos 7 días (basado en órdenes Entregadas).</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="fee" className="text-sm font-semibold">Comisión de Servicio (%)</Label>
-                                <div className="relative">
-                                    <Input 
-                                        id="fee"
-                                        type="number" 
-                                        value={localConfig.serviceFee}
-                                        onChange={(e) => setLocalConfig({...localConfig, serviceFee: Number(e.target.value)})}
-                                        className="pl-8 bg-white text-black border-orange-200 focus-visible:ring-orange-500" 
-                                    />
-                                    <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
-                                </div>
-                                <p className="text-[10px] text-muted-foreground">Esta comisión se aplicará a los futuros pedidos.</p>
-                            </div>
-
-                            <div className="flex items-center justify-between border border-orange-200 p-3 rounded-lg bg-white/80 backdrop-blur-sm">
-                                <div className="space-y-0.5">
-                                    <Label className="text-base font-bold text-red-600 flex items-center gap-2">
-                                        <AlertTriangle className="h-4 w-4" /> Modo Mantenimiento
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground">Impide crear nuevos pedidos.</p>
-                                </div>
-                                <Switch 
-                                    checked={localConfig.maintenanceMode}
-                                    onCheckedChange={(checked) => setLocalConfig({...localConfig, maintenanceMode: checked})}
-                                    className="data-[state=checked]:bg-red-600"
-                                />
-                            </div>
+                        <CardContent>
+                            <SalesChart data={chartData} />
                         </CardContent>
-                        <CardFooter>
-                            <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white" onClick={handleSaveConfig} disabled={isSavingConfig}>
-                                {isSavingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                {isSavingConfig ? "Guardando..." : "Guardar Configuración"}
-                            </Button>
-                        </CardFooter>
                     </Card>
 
-                    <PendingList 
-                        title="Tiendas por Aprobar" 
-                        icon={Store} 
-                        users={pendingStores} 
-                        isLoading={usersLoading}
-                        onApprove={(id) => handleUpdateUserStatus(id, true)}
-                        onReject={(id) => handleUpdateUserStatus(id, false)}
-                    />
-                    <PendingList 
-                        title="Repartidores por Aprobar" 
-                        icon={Bike} 
-                        users={pendingDelivery} 
-                        isLoading={usersLoading}
-                        onApprove={(id) => handleUpdateUserStatus(id, true)}
-                        onReject={(id) => handleUpdateUserStatus(id, false)}
-                    />
-                </div>
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+                        {/* COLUMNA IZQUIERDA: CONFIGURACIÓN Y ALERTAS */}
+                        <div className="lg:col-span-3 space-y-6">
+                            <Card className="border-orange-200 bg-orange-50/30 shadow-sm">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg font-bold flex items-center gap-2 text-orange-900">
+                                        <Settings className="h-5 w-5" /> Configuración de Plataforma
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="fee" className="text-sm font-semibold">Tarifa de Servicio al Cliente (%)</Label>
+                                        <div className="relative">
+                                            <Input 
+                                                id="fee"
+                                                type="number" 
+                                                value={localConfig.serviceFee}
+                                                onChange={(e) => setLocalConfig({...localConfig, serviceFee: Number(e.target.value)})}
+                                                className="pl-8 bg-white text-black border-orange-200 focus-visible:ring-orange-500" 
+                                            />
+                                            <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
+                                        </div>
+                                    </div>
 
-                {/* COLUMNA DERECHA: TIENDAS Y USUARIOS */}
-                <div className="lg:col-span-4 space-y-6">
-                    <ActiveStoresTable stores={approvedStores} onToggleMaintenance={handleToggleStoreMaintenance} onDeleteStore={(id) => confirmDelete(id, 'store')} />
-                    <UserManagementTable users={users} onUpdateRole={handleRoleChange} onDeleteUser={(id) => confirmDelete(id, 'user')} currentUserId={user?.uid} />
-                </div>
-            </div>
+                                    <div className="flex items-center justify-between border border-orange-200 p-3 rounded-lg bg-white/80 backdrop-blur-sm">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-base font-bold text-red-600 flex items-center gap-2">
+                                                <AlertTriangle className="h-4 w-4" /> Modo Mantenimiento
+                                            </Label>
+                                            <p className="text-xs text-muted-foreground">Impide crear nuevos pedidos.</p>
+                                        </div>
+                                        <Switch 
+                                            checked={localConfig.maintenanceMode}
+                                            onCheckedChange={(checked) => setLocalConfig({...localConfig, maintenanceMode: checked})}
+                                            className="data-[state=checked]:bg-red-600"
+                                        />
+                                    </div>
+                                </CardContent>
+                                <CardFooter>
+                                    <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white" onClick={handleSaveConfig} disabled={isSavingConfig}>
+                                        {isSavingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                        {isSavingConfig ? "Guardando..." : "Guardar Configuración"}
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        </div>
 
-            {/* DIÁLOGO DE ELIMINACIÓN */}
-            <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                        Esta acción no se puede deshacer. Se eliminará permanentemente 
-                        {deleteType === 'store' ? ' la tienda y sus productos' : ' el perfil del usuario'} de la base de datos.
-                        {deleteType === 'store' && " La tienda dejará de aparecer en el inicio inmediatamente."}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction 
-                            onClick={(e) => { e.preventDefault(); handleDelete(); }} 
-                            className="bg-red-600 hover:bg-red-700"
-                            disabled={isDeleting}
-                        >
-                        {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                        {isDeleting ? "Eliminando..." : "Sí, eliminar"}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                        {/* COLUMNA DERECHA: SOLO PENDIENTES (LO IMPORTANTE AHORA) */}
+                        <div className="lg:col-span-4 space-y-6">
+                            <PendingList 
+                                title="Solicitudes: Tiendas" 
+                                icon={Store} 
+                                users={pendingStores} 
+                                isLoading={usersLoading}
+                                onApprove={(id) => handleUpdateUserStatus(id, true)}
+                                onReject={(id) => handleUpdateUserStatus(id, false)}
+                            />
+                            <PendingList 
+                                title="Solicitudes: Repartidores" 
+                                icon={Bike} 
+                                users={pendingDelivery} 
+                                isLoading={usersLoading}
+                                onApprove={(id) => handleUpdateUserStatus(id, true)}
+                                onReject={(id) => handleUpdateUserStatus(id, false)}
+                            />
+                        </div>
+                    </div>
+                </TabsContent>
+
+                {/* CONTENIDO 2: FINANZAS */}
+                <TabsContent value="finances">
+                    <FinanceView 
+                        orders={allOrders as any[] || []} 
+                        stores={rawStores || []} 
+                        users={users || []} 
+                    />
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

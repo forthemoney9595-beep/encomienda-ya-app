@@ -26,8 +26,45 @@ export interface Store {
   ownerId?: string;
   horario?: string;
   
-  // ✅ CORRECCIÓN CLAVE: Agregamos isApproved para resolver el error en page.tsx
+  // ✅ Estado de aprobación
   isApproved?: boolean; 
+  status?: string;          
+  maintenanceMode?: boolean; 
+  ownerName?: string;       
+
+  // ✅ NUEVO: Comisión que la plataforma le cobra a ESTA tienda (ej: 10)
+  commissionRate?: number; 
+}
+
+export interface Order {
+  id: string;
+  userId: string;
+  customerName: string;
+  customerPhoneNumber?: string; 
+  storeId: string;
+  storeName: string;
+  storeAddress?: string;
+  status: any; // OrderStatus
+  items: any[];
+  subtotal: number;
+  deliveryFee: number;
+  serviceFee: number;
+  total: number;
+  paymentMethod: 'CARD';
+  createdAt: Timestamp | Date;
+  shippingInfo?: { name: string; address: string; };
+  shippingAddress: { name: string; address: string; };
+  deliveryPersonId?: string | null;
+  deliveryPersonName?: string | null;
+  readyForPickup?: boolean;
+  storeCoords?: { latitude: number; longitude: number };
+  customerCoords?: { latitude: number; longitude: number };
+  deliveryRating?: number;
+  deliveryReview?: string;
+
+  // ✅ NUEVOS CAMPOS PARA FINANZAS
+  payoutStatus?: 'pending' | 'paid'; 
+  payoutDate?: any; 
 }
 
 export interface Address {
@@ -60,6 +97,9 @@ export const stores: Store[] = [
           reviewCount: 120
       }
     ],
-    isApproved: true, // Agregado para consistencia
+    isApproved: true,
+    status: 'Aprobado',
+    maintenanceMode: false,
+    commissionRate: 0 // Default
   }
 ];

@@ -1,121 +1,161 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import PageHeader from '@/components/page-header';
-import { useAuth, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import type { Store } from '@/lib/placeholder-data';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/hooks/use-toast';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { StoresList } from './stores-list';
-import { ManageStoreDialog } from './manage-store-dialog';
-import AdminAuthGuard from '../admin-auth-guard';
-import { collection, CollectionReference, doc, updateDoc } from 'firebase/firestore';
-import { updateStoreStatus } from '@/lib/data-service';
+import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { Store, Loader2, Plus, Search, MapPin, AlertTriangle, Check, Trash2, Edit } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useToast } from '@/hooks/use-toast';
+import { ManageStoreDialog } from './manage-store-dialog'; // Asegúrate de que la ruta sea correcta
 
-function AdminStoresPage() {
-  const { user, loading: authLoading } = useAuth();
+export default function AdminStoresPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const [search, setSearch] = useState('');
   
-  const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<Store> : null, [firestore]);
-  const { data: stores, isLoading: storesLoading } = useCollection<Store>(storesQuery);
-  
-  const [isManageDialogOpen, setManageDialogOpen] = useState(false);
-  const [editingStore, setEditingStore] = useState<Store | null>(null);
+  // Estados para el Modal
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedStore, setSelectedStore] = useState<any | null>(null);
 
-  const handleStatusUpdate = async (storeId: string, status: 'Aprobado' | 'Rechazado') => {
-    if (!firestore) return;
-    
-    try {
-        await updateStoreStatus(firestore, storeId, status);
-        toast({
-            title: '¡Éxito!',
-            description: `La tienda ha sido ${status === 'Aprobado' ? 'aprobada' : 'rechazada'}.`,
-        });
-    } catch (error) {
-        console.error("Error updating store status: ", error);
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: 'No se pudo actualizar el estado de la tienda.',
-        });
-    }
+  // 1. Cargar Tiendas
+  const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') : null, [firestore]);
+  const { data: stores, isLoading } = useCollection<any>(storesQuery);
+
+  // 2. Filtrar
+  const filteredStores = stores?.filter(s => 
+    s.name?.toLowerCase().includes(search.toLowerCase())
+  ) || [];
+
+  // 3. Manejar Guardado (AQUÍ ESTABA EL ERROR)
+  const handleSaveStore = async (storeData: any) => {
+      if (!firestore) return;
+
+      try {
+          if (selectedStore) {
+              // --- MODO EDICIÓN ---
+              const storeRef = doc(firestore, 'stores', selectedStore.id);
+              
+              // ✅ CORRECCIÓN: Aseguramos que commissionRate se guarde
+              await updateDoc(storeRef, {
+                  name: storeData.name,
+                  address: storeData.address,
+                  status: storeData.status,
+                  isApproved: storeData.isApproved, // Derivado de status === 'Aprobado'
+                  commissionRate: Number(storeData.commissionRate), // 👈 ESTO FALTABA
+                  updatedAt: serverTimestamp()
+              });
+              toast({ title: "Tienda actualizada", description: "Los cambios se han guardado." });
+          } else {
+              // --- MODO CREACIÓN --- (Opcional, si creas tiendas manuales)
+              await addDoc(collection(firestore, 'stores'), {
+                  ...storeData,
+                  commissionRate: Number(storeData.commissionRate),
+                  createdAt: serverTimestamp()
+              });
+              toast({ title: "Tienda creada" });
+          }
+          setIsDialogOpen(false);
+          setSelectedStore(null);
+      } catch (error) {
+          console.error(error);
+          toast({ variant: "destructive", title: "Error al guardar" });
+      }
   };
 
-  const handleSaveChanges = async (storeData: Store) => {
-    if (!firestore) return;
-    try {
-        const storeRef = doc(firestore, 'stores', storeData.id);
-        await updateDoc(storeRef, {
-            name: storeData.name,
-            address: storeData.address,
-            status: storeData.status,
-        });
-        toast({
-        title: 'Tienda Actualizada',
-        description: `Los datos de ${storeData.name} han sido guardados.`,
-        });
-        setManageDialogOpen(false);
-    } catch (error) {
-         console.error("Error saving store changes: ", error);
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: 'No se pudieron guardar los cambios de la tienda.',
-        });
-    }
+  // 4. Manejar Borrado
+  const handleDelete = async (id: string) => {
+      if (!firestore || !confirm("¿Seguro que quieres eliminar esta tienda?")) return;
+      try {
+          await deleteDoc(doc(firestore, 'stores', id));
+          toast({ title: "Tienda eliminada" });
+      } catch (error) {
+          toast({ variant: "destructive", title: "Error al eliminar" });
+      }
   };
 
-  const handleDeleteStore = (storeId: string) => {
-    // Implement delete logic if needed
-    console.log("Deleting store:", storeId);
-    toast({
-      title: 'Función no implementada',
-      description: 'La eliminación de tiendas aún no está conectada.',
-      variant: 'destructive',
-    });
-  };
-  
-  const openDialogForEdit = (store: Store) => {
-    setEditingStore(store);
-    setManageDialogOpen(true);
-  };
+  if (isLoading) return <div className="flex justify-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
-    <div className="container mx-auto">
-      <ManageStoreDialog
-        isOpen={isManageDialogOpen}
-        setIsOpen={setManageDialogOpen}
-        onSave={handleSaveChanges}
-        store={editingStore}
-      />
-      <PageHeader title="Gestión de Tiendas" description="Administra las tiendas registradas en la plataforma." />
-      
-      {authLoading || storesLoading ? (
-         <div className="border rounded-lg p-4">
-            <Skeleton className="h-8 w-1/4 mb-4" />
-            <div className="space-y-2">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
+    <div className="container mx-auto space-y-6">
+      <PageHeader title="Gestión de Tiendas" description="Administra comisiones y estados." />
+
+      <Card>
+        <CardHeader>
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+                <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Buscar tienda..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                {/* Botón opcional para crear tiendas manuales */}
+                <Button onClick={() => { setSelectedStore(null); setIsDialogOpen(true); }}>
+                    <Plus className="mr-2 h-4 w-4" /> Nueva Tienda
+                </Button>
             </div>
-        </div>
-      ) : (
-        <StoresList
-          stores={stores || []}
-          onStatusUpdate={handleStatusUpdate}
-          onEdit={openDialogForEdit}
-          onDelete={handleDeleteStore}
-        />
-      )}
+        </CardHeader>
+        <CardContent>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Tienda</TableHead>
+                        <TableHead>Dirección</TableHead>
+                        <TableHead>Comisión</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {filteredStores.map((store) => (
+                        <TableRow key={store.id}>
+                            <TableCell className="font-medium flex items-center gap-3">
+                                <Avatar className="h-8 w-8 rounded-md">
+                                    <AvatarImage src={store.imageUrl} />
+                                    <AvatarFallback><Store className="h-4 w-4" /></AvatarFallback>
+                                </Avatar>
+                                {store.name}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {store.address}</div>
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
+                                    {store.commissionRate || 0}%
+                                </Badge>
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-[10px]">
+                                    {store.isApproved ? 'Aprobado' : 'Pendiente/Rechazado'}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                    <Button size="sm" variant="ghost" onClick={() => { setSelectedStore(store); setIsDialogOpen(true); }}>
+                                        <Edit className="h-4 w-4 text-blue-600" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={() => handleDelete(store.id)}>
+                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </CardContent>
+      </Card>
+
+      {/* MODAL DE EDICIÓN */}
+      <ManageStoreDialog 
+        isOpen={isDialogOpen} 
+        setIsOpen={setIsDialogOpen} 
+        store={selectedStore} 
+        onSave={handleSaveStore} 
+      />
     </div>
   );
-}
-
-export default function GuardedAdminStoresPage() {
-    return (
-        <AdminAuthGuard>
-            <AdminStoresPage />
-        </AdminAuthGuard>
-    )
 }

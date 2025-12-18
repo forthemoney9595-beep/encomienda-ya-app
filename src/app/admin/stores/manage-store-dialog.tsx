@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from 'react-hook-form';
@@ -24,6 +24,8 @@ const formSchema = z.object({
   name: z.string().min(3, 'El nombre debe tener al menos 3 caracteres.'),
   address: z.string().min(5, 'La dirección es obligatoria.'),
   status: z.enum(['Aprobado', 'Pendiente', 'Rechazado']),
+  // ✅ Validación estricta: fuerza a ser número y valida rango
+  commissionRate: z.coerce.number().min(0).max(100),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -38,48 +40,47 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
       name: '',
       address: '',
       status: 'Pendiente',
+      commissionRate: 0,
     },
   });
 
   useEffect(() => {
     if (isOpen) {
         if (store) {
-            // Modo Edición: Cargar datos existentes
             form.reset({
                 name: store.name,
                 address: store.address,
-                // 🛠️ CORRECCIÓN TS: Usamos 'as any' porque 'status' es nuevo en la BD
-                status: (store as any).status || 'Pendiente',
+                status: (store.status as "Aprobado" | "Pendiente" | "Rechazado") || 'Pendiente',
+                // Aseguramos que sea número al cargar
+                commissionRate: Number(store.commissionRate) || 0,
             });
         } else {
-            // Modo Creación: Limpiar formulario
             form.reset({
                 name: '',
                 address: '',
                 status: 'Pendiente',
+                commissionRate: 0,
             });
         }
     }
   }, [isOpen, store, form]);
 
   const handleSubmit = (values: FormData) => {
-    if (!user) {
-        console.error("No se puede crear tienda sin usuario autenticado");
-        return;
-    }
+    if (!user) return;
 
     const baseData = store || {}; 
+    const isApprovedDerived = values.status === 'Aprobado';
 
-    // 🛠️ CORRECCIÓN TS: Definimos storeData como 'any' para poder agregar userId sin errores
     const storeData: any = {
-      ...baseData, 
-      ...values,   
-      
-      // 🛠️ CORRECCIÓN TS: Accedemos a userId con 'as any'
+      ...baseData,         
+      ...values,           
+      isApproved: isApprovedDerived, 
+      commissionRate: Number(values.commissionRate), // Forzamos número antes de guardar
       userId: (store as any)?.userId || user.uid,
     };
     
     onSave(storeData);
+    // No cerramos setIsOpen aquí, dejamos que el padre lo haga tras guardar
   };
 
   return (
@@ -88,7 +89,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Tienda' : 'Nueva Tienda'}</DialogTitle>
           <DialogDescription>
-            {isEditing ? 'Modifica los detalles de la tienda.' : 'Registra un nuevo comercio y vinculalo a tu cuenta.'}
+            Configura los datos operativos y comerciales de la tienda.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -115,28 +116,50 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
                 </FormItem>
               )}
             />
-             <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Estado</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Estado</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecciona" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            <SelectItem value="Aprobado">Aprobado</SelectItem>
+                            <SelectItem value="Pendiente">Pendiente</SelectItem>
+                            <SelectItem value="Rechazado">Rechazado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+
+                {/* CAMPO COMISIÓN */}
+                <FormField
+                    control={form.control}
+                    name="commissionRate"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Comisión (%)</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un estado" />
-                          </SelectTrigger>
+                            <Input type="number" min="0" max="100" step="0.1" {...field} />
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Aprobado">Aprobado</SelectItem>
-                          <SelectItem value="Pendiente">Pendiente</SelectItem>
-                          <SelectItem value="Rechazado">Rechazado</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-            />
+                        <FormDescription className="text-[10px]">
+                           Lo que retiene la app.
+                        </FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>

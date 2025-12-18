@@ -7,7 +7,7 @@ import { useCollection, useFirestore, useMemoFirebase, requestNotificationPermis
 import { collection, query, where, limit, doc, updateDoc, writeBatch, orderBy, onSnapshot } from 'firebase/firestore'; 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2, BellRing, DollarSign } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2, BellRing, DollarSign, Wallet } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -15,7 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export function Notifications() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth(); // Agregamos userProfile para saber el rol
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
@@ -30,15 +30,13 @@ export function Notifications() {
     }
   }, []);
 
-  // 2. LISTENER EN TIEMPO REAL MANUAL (Más robusto que useCollection para este caso)
+  // 2. LISTENER EN TIEMPO REAL MANUAL
   useEffect(() => {
     if (!firestore || !user?.uid) return;
 
-    // Creamos la query
     const q = query(
         collection(firestore, 'notifications'),
         where('userId', '==', user.uid),
-        // orderBy('createdAt', 'desc'), // A veces falla si falta índice, lo ordenamos en cliente mejor
         limit(20)
     );
 
@@ -47,11 +45,10 @@ export function Notifications() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // Ordenamiento en cliente (Más seguro sin índices compuestos)
         notifs.sort((a: any, b: any) => {
             const dateA = a.createdAt?.seconds || 0;
             const dateB = b.createdAt?.seconds || 0;
-            return dateB - dateA; // Más nuevo primero
+            return dateB - dateA; 
         });
 
         console.log("🔔 [Notificaciones] Recibidas:", notifs.length);
@@ -84,14 +81,29 @@ export function Notifications() {
   const handleNotificationClick = async (notification: any) => {
     setOpen(false); 
     
+    // 1. Marcar como leída
     if (!notification.read && firestore) {
       try {
         await updateDoc(doc(firestore, 'notifications', notification.id), { read: true });
       } catch (e) { console.error(e); }
     }
 
+    // 2. LÓGICA DE REDIRECCIÓN INTELIGENTE 🧠
+    // Si es un aviso de pago, vamos a la billetera según el rol
+    if (notification.type === 'payout_received') {
+        if (userProfile?.role === 'store') {
+            router.push('/orders?tab=wallet'); // Ruta para tiendas
+        } else if (userProfile?.role === 'delivery') {
+            router.push('/orders?tab=wallet'); // Ruta para repartidores (unificamos en /orders)
+        }
+        return;
+    }
+
+    // Si tiene un ID de orden, vamos al detalle
     if (notification.orderId) {
         router.push(`/orders/${notification.orderId}`);
+    } else if (notification.link) {
+        router.push(notification.link);
     }
   };
 
@@ -110,6 +122,7 @@ export function Notifications() {
 
   const getIcon = (type: string) => {
       switch(type) {
+          case 'payout_received': return <Wallet className="h-4 w-4 text-green-600" />;
           case 'order_paid': 
           case 'payment_success': return <DollarSign className="h-4 w-4 text-green-600" />;
           case 'order_status': return <Package className="h-4 w-4 text-blue-500" />;

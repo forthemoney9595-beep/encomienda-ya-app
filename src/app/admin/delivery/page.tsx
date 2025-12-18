@@ -1,19 +1,28 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import PageHeader from '@/components/page-header';
-import { updateDeliveryPersonnelStatus } from '@/lib/data-service';
-import { DeliveryPersonnelList } from './delivery-personnel-list';
-import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import type { DeliveryPersonnel, UserProfile } from '@/lib/placeholder-data';
+// ✅ Importamos la interfaz desde el archivo vecino que acabamos de arreglar
+import { DeliveryPersonnelList, type DeliveryPersonnel } from './delivery-personnel-list';
+// ✅ Import correcto del contexto de Auth
+import { useAuth } from '@/context/auth-context'; 
+import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 import { ManageDriverDialog } from './manage-driver-dialog';
 import AdminAuthGuard from '../admin-auth-guard';
-import { collection, CollectionReference, query, where, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { createUserProfile, updateUserProfile } from '@/lib/user-service';
+import { collection, query, where, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+
+// Definición local para evitar dependencias rotas
+interface UserProfile {
+    uid: string;
+    email: string;
+    name: string;
+    role: 'delivery';
+    [key: string]: any;
+}
 
 function AdminDeliveryPage() {
   const { user, loading: authLoading } = useAuth();
@@ -23,33 +32,44 @@ function AdminDeliveryPage() {
   const [isManageDialogOpen, setManageDialogOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<DeliveryPersonnel | null>(null);
 
-  const personnelQuery = useMemoFirebase(() => 
-    firestore ? query(collection(firestore, 'users'), where('role', '==', 'delivery')) as CollectionReference<DeliveryPersonnel> : null, 
-    [firestore]
-  );
+  // Consulta de Repartidores
+  const personnelQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'users'), where('role', '==', 'delivery'));
+  }, [firestore]);
+
   const { data: personnel, isLoading: personnelLoading } = useCollection<DeliveryPersonnel>(personnelQuery);
 
+  // Aprobar / Rechazar
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
     if (!firestore) return;
 
     try {
         const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
-        await updateDeliveryPersonnelStatus(firestore, personnelId, newStatus);
+        const userRef = doc(firestore, 'users', personnelId);
+        
+        await updateDoc(userRef, { 
+            status: newStatus,
+            updatedAt: serverTimestamp() 
+        });
         
         toast({
-            title: '¡Éxito!',
-            description: `El repartidor ha sido ${status === 'approved' ? 'aprobado' : 'rechazado'}.`,
+            title: 'Estado Actualizado',
+            description: `El repartidor ha sido marcado como ${newStatus}.`,
+            className: status === 'approved' ? "bg-green-50 text-green-900" : "bg-red-50 text-red-900"
         });
 
     } catch (error) {
+       console.error(error);
        toast({
             variant: 'destructive',
             title: 'Error',
-            description: 'No se pudo actualizar el estado del repartidor.',
+            description: 'No se pudo actualizar el estado.',
         });
     }
   };
 
+  // Guardar / Editar (Desde el Modal de Gestión)
   const handleSaveDriver = async (driverData: DeliveryPersonnel) => {
     if(!firestore) return;
     
@@ -57,25 +77,34 @@ function AdminDeliveryPage() {
 
     try {
       if (isEditing) {
-        updateUserProfile(firestore, driverData.id, driverData as Partial<UserProfile>);
+        // Editar existente
+        const userRef = doc(firestore, 'users', driverData.id);
+        await updateDoc(userRef, {
+            ...driverData,
+            updatedAt: serverTimestamp()
+        });
       } else {
-        // This is a simplified creation flow for admins. In a real app, you'd create a Firebase Auth user first.
-        // For this prototype, we're just creating the Firestore user document.
+        // Crear nuevo (Simulado para Admin)
         const newDriverId = driverData.id || `driver-${Date.now()}`;
         const profileToCreate: UserProfile = {
-            ...driverData,
             uid: newDriverId,
+            email: driverData.email,
+            name: driverData.name,
             role: 'delivery',
-        }
+            status: 'Activo',
+            vehicle: driverData.vehicle,
+            createdAt: serverTimestamp()
+        };
         await setDoc(doc(firestore, "users", newDriverId), profileToCreate);
       }
        
       toast({
-        title: editingDriver ? 'Repartidor Actualizado' : 'Repartidor Añadido',
+        title: isEditing ? 'Repartidor Actualizado' : 'Repartidor Añadido',
         description: `Los datos de ${driverData.name} han sido guardados.`,
       });
 
     } catch(error) {
+       console.error(error);
        toast({
             variant: 'destructive',
             title: 'Error',
@@ -86,10 +115,12 @@ function AdminDeliveryPage() {
     }
   };
 
-  const handleDeleteDriver = (driverId: string) => {
+  const handleDeleteDriver = async (driverId: string) => {
+    if(!confirm("¿Estás seguro de eliminar este usuario?")) return;
+    // Aquí iría la lógica de borrado (normalmente soft-delete o cloud function)
     toast({
-      title: 'Repartidor Eliminado',
-      description: `Función no implementada para eliminar ${driverId}`,
+      title: 'Acción no disponible',
+      description: `Por seguridad, la eliminación directa no está habilitada en esta demo.`,
       variant: 'destructive',
     });
   };
@@ -105,23 +136,29 @@ function AdminDeliveryPage() {
   };
 
   return (
-    <div className="container mx-auto">
+    <div className="container mx-auto space-y-6">
       <ManageDriverDialog
         isOpen={isManageDialogOpen}
         setIsOpen={setManageDialogOpen}
         onSave={handleSaveDriver}
         driver={editingDriver}
       />
-      <PageHeader title="Gestión de Repartidores" description="Administra las cuentas de tu personal de reparto.">
+      
+      <PageHeader title="Gestión de Repartidores" description="Administra las cuentas y aprobaciones de tu flota.">
          <Button onClick={openDialogForCreate}>
            <PlusCircle className="mr-2 h-4 w-4" />
-           Agregar Nuevo Conductor
+           Agregar Manualmente
          </Button>
       </PageHeader>
+
       {authLoading || personnelLoading ? (
-         <div className="border rounded-lg p-4">
-            <Skeleton className="h-8 w-1/4 mb-4" />
+         <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex justify-between">
+                <Skeleton className="h-8 w-1/4" />
+                <Skeleton className="h-8 w-24" />
+            </div>
             <div className="space-y-2">
+                <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
             </div>
@@ -137,7 +174,6 @@ function AdminDeliveryPage() {
     </div>
   );
 }
-
 
 export default function GuardedAdminDeliveryPage() {
     return (

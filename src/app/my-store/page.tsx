@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2 } from 'lucide-react';
+import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
 import { useRouter } from 'next/navigation';
@@ -27,6 +27,9 @@ export default function MyStorePage() {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
+  // Estado para Horarios (Nuevo)
+  const [schedule, setSchedule] = useState({ open: '09:00', close: '22:00' });
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -34,7 +37,6 @@ export default function MyStorePage() {
     address: '',
     imageUrl: '', 
     deliveryTime: '',
-    // minOrder eliminado de la vista, lo mantenemos interno si es necesario o lo ignoramos
   });
 
   // 1. Cargar datos de la tienda
@@ -59,6 +61,11 @@ export default function MyStorePage() {
           
           if (data.coords) {
               setCoords(data.coords);
+          }
+
+          // Cargar Horarios si existen
+          if (data.schedule) {
+              setSchedule(data.schedule);
           }
         }
       } catch (error) {
@@ -129,12 +136,14 @@ export default function MyStorePage() {
         address: formData.address,
         imageUrl: formData.imageUrl,
         deliveryTime: formData.deliveryTime,
-        // Eliminamos la actualización de minOrder desde aquí
         
+        schedule: schedule, // ✅ Guardamos el horario
         coords: coords, 
+        
         updatedAt: new Date()
       });
 
+      // Sincronizar foto con perfil de usuario (opcional, pero visualmente útil)
       if (formData.imageUrl) {
           const userRef = doc(firestore, 'users', user.uid);
           await updateDoc(userRef, {
@@ -145,7 +154,7 @@ export default function MyStorePage() {
 
       toast({
         title: "Tienda actualizada",
-        description: "La información y ubicación se han guardado.",
+        description: "La información, horarios y ubicación se han guardado.",
       });
     } catch (error) {
       console.error("Error actualizando tienda:", error);
@@ -235,7 +244,7 @@ export default function MyStorePage() {
                 </div>
                 {coords ? (
                     <p className="text-xs text-green-600 flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3"/> Ubicación GPS guardada (Lat: {coords.latitude.toFixed(4)})
+                        <CheckCircle2 className="h-3 w-3"/> Ubicación GPS guardada
                     </p>
                 ) : (
                     <p className="text-xs text-muted-foreground">
@@ -243,6 +252,33 @@ export default function MyStorePage() {
                     </p>
                 )}
             </div>
+          </div>
+
+          {/* ✅ NUEVA SECCIÓN DE HORARIOS */}
+          <div className="grid gap-4 md:grid-cols-2 border p-4 rounded-lg bg-muted/20">
+             <div className="md:col-span-2">
+                <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                    <Clock className="h-4 w-4 text-primary" /> Horarios de Atención
+                </h4>
+             </div>
+             <div className="space-y-2">
+                <Label htmlFor="openTime">Apertura</Label>
+                <Input 
+                    id="openTime" 
+                    type="time" 
+                    value={schedule.open} 
+                    onChange={(e) => setSchedule({...schedule, open: e.target.value})} 
+                />
+             </div>
+             <div className="space-y-2">
+                <Label htmlFor="closeTime">Cierre</Label>
+                <Input 
+                    id="closeTime" 
+                    type="time" 
+                    value={schedule.close} 
+                    onChange={(e) => setSchedule({...schedule, close: e.target.value})} 
+                />
+             </div>
           </div>
 
           <div className="space-y-2">
@@ -257,7 +293,6 @@ export default function MyStorePage() {
             />
           </div>
 
-          {/* SOLO TIEMPO DE ENTREGA (Sin costo de envío) */}
           <div className="space-y-2">
                 <Label htmlFor="deliveryTime">Tiempo de Entrega (Estimado)</Label>
                 <Input 

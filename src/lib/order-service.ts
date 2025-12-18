@@ -56,6 +56,13 @@ export interface Order {
   customerCoords?: { latitude: number; longitude: number };
   deliveryRating?: number;
   deliveryReview?: string;
+
+  // ✅ NUEVOS CAMPOS FINANCIEROS (SEPARADOS)
+  // Permiten saber si ya le pagaste a la tienda y al repartidor por separado.
+  storePayoutStatus?: 'pending' | 'paid'; 
+  deliveryPayoutStatus?: 'pending' | 'paid'; 
+  
+  payoutDate?: any; 
 }
 
 export interface CreateOrderInput {
@@ -67,11 +74,10 @@ export interface CreateOrderInput {
   storeAddress: string;
   items: any[];
   shippingInfo: { name: string; address: string; };
-  subtotal: number; // Solo referencial, la API recalcula
-  deliveryFee: number; // Solo referencial
-  serviceFee?: number; // Solo referencial
-  total: number; // Solo referencial
-  // ✅ Nuevo: Pasamos coordenadas si existen
+  subtotal: number; 
+  deliveryFee: number; 
+  serviceFee?: number; 
+  total: number; 
   customerCoords?: { latitude: number; longitude: number };
 }
 
@@ -88,10 +94,8 @@ export const OrderService = {
     },
 
     // Notificaciones Genéricas (Campanita)
-    // ✅ Esto es SEGURO porque tus reglas permiten 'create' en 'notifications'
     sendNotification: async (db: Firestore, userId: string, title: string, message: string, type: string, orderId?: string) => {
         try {
-            // 1. Guardar notificación interna
             await addDoc(collection(db, 'notifications'), {
                 userId,
                 title,
@@ -103,7 +107,7 @@ export const OrderService = {
                 icon: 'bell'
             });
 
-            // 2. Disparar notificación Push
+            // Disparar notificación Push (opcional si tienes configurado el API route)
             fetch('/api/notify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -121,10 +125,8 @@ export const OrderService = {
     }
 };
 
-// 🚨 REFACTORIZADO: Ahora llama a la API Segura
+// Crea la orden llamando a la API Segura
 export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
-  // Nota: 'db' ya no se usa aquí, pero lo dejamos para no romper compatibilidad con quien llame a la función
-  
   console.log("🚀 Enviando pedido a API Segura...");
 
   try {
@@ -138,8 +140,8 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
               items: input.items,
               shippingInfo: input.shippingInfo,
               storeId: input.storeId,
-              paymentMethod: 'CARD', // Forzado
-              customerCoords: input.customerCoords // Pasamos GPS si existe
+              paymentMethod: 'CARD', 
+              customerCoords: input.customerCoords 
           }),
       });
 
@@ -151,12 +153,10 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
 
       console.log("✅ Pedido creado vía API:", data.orderId);
 
-      // Devolvemos un objeto similar al esperado por el frontend para que no rompa
       return { 
           id: data.orderId, 
           total: data.total, 
           status: 'Pendiente de Confirmación',
-          // Rellenamos el resto con lo que envió el cliente para que la UI actualice rápido
           ...input 
       };
 
@@ -166,16 +166,13 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
   }
 };
 
-// ✅ Esta función se mantiene igual porque tus reglas permiten UPDATE bajo ciertas condiciones
 export const updateOrderStatus = async (db: Firestore, orderId: string, status: OrderStatus) => {
   if (!db) throw new Error("Firestore instance is required");
   
   const orderRef = doc(db, 'orders', orderId);
   
-  // 1. Actualizamos el estado
   await updateDoc(orderRef, { status });
 
-  // 2. Notificamos al Cliente (Solo Push/Campana, no lógica de negocio)
   try {
       const orderSnap = await getDoc(orderRef);
       if (orderSnap.exists()) {

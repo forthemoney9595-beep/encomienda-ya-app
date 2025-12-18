@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { MapPin, Package, Clock, Navigation, CheckCircle2, DollarSign, AlertTriangle, Truck, CreditCard, Wallet } from 'lucide-react';
+import { MapPin, Package, Clock, Navigation, CheckCircle2, DollarSign, AlertTriangle, Truck, CreditCard, Wallet, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
@@ -36,6 +36,9 @@ interface Order {
   deliveryFee: number;
   items: any[];
   createdAt: any;
+  deliveryPersonId?: string;
+  deliveryPayoutStatus?: 'pending' | 'paid';
+  payoutDate?: any;
 }
 
 export default function DeliveryDashboardPage() {
@@ -54,25 +57,77 @@ export default function DeliveryDashboardPage() {
     }
   }, [authLoading, user, userProfile, router]);
 
-  // 2. Query: Pedidos Disponibles (CORREGIDO PARA EL WEBHOOK)
-  // Ahora buscamos también 'pending' (que es como el Webhook guarda las órdenes pagadas)
-  const availableQuery = query(
-    collection(firestore || null as any, 'orders'), 
-    where('deliveryPersonId', '==', null),
-    // Agregamos 'pending' a la lista de estados válidos para retiro
-    where('status', 'in', ['pending', 'Pendiente', 'Pendiente de Confirmación', 'En preparación']) 
-  );
+  // 2. Query: Pedidos Disponibles (Sin asignar)
+  const availableQuery = useMemo(() => {
+     if (!firestore) return null;
+     return query(
+        collection(firestore, 'orders'), 
+        where('deliveryPersonId', '==', null),
+        where('status', 'in', ['pending', 'Pendiente', 'Pendiente de Confirmación', 'En preparación']) 
+     );
+  }, [firestore]);
 
-  const { data: availableOrders } = useCollection<Order>(firestore ? availableQuery : null);
+  const { data: availableOrders } = useCollection<Order>(availableQuery);
 
-  // 3. Query: Mis Pedidos Activos
-  const myActiveQuery = user ? query(
-    collection(firestore, 'orders'),
-    where('deliveryPersonId', '==', user.uid),
-    where('status', 'in', ['En camino', 'En reparto', 'En preparación'])
-  ) : null;
+  // 3. Query: MIS Pedidos (Todos: Activos + Historial para la Billetera)
+  const myOrdersQuery = useMemo(() => {
+      if (!firestore || !user) return null;
+      return query(
+        collection(firestore, 'orders'),
+        where('deliveryPersonId', '==', user.uid)
+      );
+  }, [firestore, user]);
 
-  const { data: myOrders } = useCollection<Order>(myActiveQuery);
+  const { data: allMyOrders } = useCollection<Order>(myOrdersQuery);
+
+  // 4. FILTROS EN MEMORIA
+  const myActiveOrders = useMemo(() => {
+      return allMyOrders?.filter(o => ['En camino', 'En reparto', 'En preparación'].includes(o.status)) || [];
+  }, [allMyOrders]);
+
+  // 5. 💰 CÁLCULOS FINANCIEROS (BILLETERA)
+  const financeStats = useMemo(() => {
+    // 🛠️ CORRECCIÓN TS: Definimos el objeto por defecto con tipos explícitos
+    const emptyStats: { 
+        pendingBalance: number; 
+        lastPayoutDate: Date | null; 
+        totalPaid: number; 
+        unpaidOrders: Order[] 
+    } = { 
+        pendingBalance: 0, 
+        lastPayoutDate: null, 
+        totalPaid: 0, 
+        unpaidOrders: [] 
+    };
+
+    if (!allMyOrders) return emptyStats;
+
+    // A. Saldo Pendiente: Entregados Y NO pagados al repartidor
+    const unpaidOrders = allMyOrders.filter(o => o.status === 'Entregado' && o.deliveryPayoutStatus !== 'paid');
+    
+    // Sumamos solo los deliveryFee (Tu ganancia)
+    const pendingBalance = unpaidOrders.reduce((acc, order) => acc + (order.deliveryFee || 0), 0);
+
+    // B. Historial de Pagos
+    const paidOrders = allMyOrders.filter(o => o.deliveryPayoutStatus === 'paid');
+    const totalPaid = paidOrders.reduce((acc, order) => acc + (order.deliveryFee || 0), 0);
+    
+    // Buscar la fecha más reciente
+    let lastPayoutDate: Date | null = null;
+    
+    if (paidOrders.length > 0) {
+        const sortedPaid = [...paidOrders].sort((a, b) => {
+           const dateA = a.payoutDate?.seconds || a.createdAt?.seconds || 0;
+           const dateB = b.payoutDate?.seconds || b.createdAt?.seconds || 0;
+           return dateB - dateA;
+        });
+        const lastOrder = sortedPaid[0];
+        lastPayoutDate = lastOrder.payoutDate ? lastOrder.payoutDate.toDate() : (lastOrder.createdAt?.toDate ? lastOrder.createdAt.toDate() : new Date());
+    }
+
+    return { pendingBalance, lastPayoutDate, totalPaid, unpaidOrders };
+  }, [allMyOrders]);
+
 
   // ACCIÓN: Tomar Pedido
   const handleTakeOrder = async (orderId: string) => {
@@ -124,12 +179,15 @@ export default function DeliveryDashboardPage() {
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
+        <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="available">
             Disponibles ({availableOrders?.length || 0})
           </TabsTrigger>
           <TabsTrigger value="active">
-            En Curso ({myOrders?.length || 0})
+            En Curso ({myActiveOrders?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="wallet" className="text-orange-700 font-semibold">
+             <Wallet className="h-4 w-4 mr-2"/> Billetera
           </TabsTrigger>
         </TabsList>
 
@@ -156,7 +214,7 @@ export default function DeliveryDashboardPage() {
                                 {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : order.paymentMethod}
                             </Badge>
                             <span className="text-xs text-muted-foreground self-center">
-                                #{order.id.substring(0,6)} • {format(order.createdAt?.toDate() || new Date(), 'HH:mm')}
+                                #{order.id.substring(0,6)} • {format(order.createdAt?.toDate ? order.createdAt.toDate() : new Date(), 'HH:mm')}
                             </span>
                         </div>
                     </div>
@@ -198,14 +256,14 @@ export default function DeliveryDashboardPage() {
 
         {/* --- PESTAÑA: PEDIDOS EN CURSO --- */}
         <TabsContent value="active" className="space-y-4">
-            {myOrders?.length === 0 ? (
+            {myActiveOrders?.length === 0 ? (
                 <div className="text-center py-12 bg-muted/20 rounded-xl">
                     <CheckCircle2 className="mx-auto h-12 w-12 text-green-500 mb-3" />
                     <h3 className="text-lg font-medium">Estás libre</h3>
                     <p className="text-sm text-muted-foreground">Ve a la pestaña "Disponibles" para tomar un viaje.</p>
                 </div>
             ) : (
-                myOrders?.map(order => (
+                myActiveOrders?.map(order => (
                     <Card key={order.id} className={`border-l-4 shadow-md ${order.paymentMethod === 'Efectivo' ? 'border-l-yellow-500 ring-2 ring-yellow-500/20' : 'border-l-blue-500'}`}>
                         <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
@@ -267,6 +325,77 @@ export default function DeliveryDashboardPage() {
                 ))
             )}
         </TabsContent>
+
+        {/* --- ✅ NUEVA PESTAÑA: BILLETERA --- */}
+        <TabsContent value="wallet" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+             <div className="grid gap-4 md:grid-cols-2">
+                <Card className="border-l-4 border-l-orange-600 shadow-md">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <Clock className="h-4 w-4" /> Saldo Pendiente de Cobro
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-orange-700">${financeStats.pendingBalance.toLocaleString()}</div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Ganancias por envíos entregados que aún no te han pagado.
+                        </p>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-l-4 border-l-green-600 shadow-sm bg-green-50/30">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" /> Último Pago Recibido
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {financeStats.lastPayoutDate ? (
+                            <>
+                                <div className="text-xl font-bold text-green-800">
+                                    {format(financeStats.lastPayoutDate, "d 'de' MMMM", { locale: es })}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Total histórico ganado: <strong>${financeStats.totalPaid.toLocaleString()}</strong>
+                                </p>
+                            </>
+                        ) : (
+                            <div className="text-sm text-muted-foreground italic">Aún no has recibido pagos.</div>
+                        )}
+                    </CardContent>
+                </Card>
+             </div>
+
+             <Card>
+                <CardHeader>
+                    <CardTitle>Detalle de Envíos Pendientes de Cobro</CardTitle>
+                    <CardDescription>Estos son los envíos que has completado y suman a tu saldo actual.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {financeStats.pendingBalance === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <CheckCircle2 className="mx-auto h-8 w-8 text-green-500 mb-2" />
+                            <p>¡Todo al día! No tienes ganancias pendientes de cobro.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {financeStats.unpaidOrders.map((order: any) => (
+                                <div key={order.id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                                    <div>
+                                        <p className="font-medium text-sm">Pedido #{order.id.substring(0,6)}</p>
+                                        <p className="text-xs text-muted-foreground">{format(order.createdAt?.toDate ? order.createdAt.toDate() : new Date(), "d MMM, HH:mm", { locale: es })}</p>
+                                    </div>
+                                    <div className="font-bold text-orange-600">
+                                        +${(order.deliveryFee || 0).toLocaleString()}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+             </Card>
+        </TabsContent>
+
       </Tabs>
 
       {/* --- MODAL DE CONFIRMACIÓN DE ENTREGA --- */}
