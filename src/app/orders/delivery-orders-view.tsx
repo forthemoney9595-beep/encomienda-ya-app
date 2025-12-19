@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -9,7 +9,18 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { MapPin, Package, Navigation, CheckCircle2, DollarSign, Truck, CreditCard, Wallet, Clock } from 'lucide-react';
+import { 
+  MapPin, 
+  Navigation, 
+  CheckCircle2, 
+  DollarSign, 
+  Truck, 
+  CreditCard, 
+  Wallet, 
+  Clock, 
+  Map as MapIcon, 
+  PackageCheck 
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -44,25 +55,36 @@ export default function DeliveryOrdersView() {
   const { user, userProfile } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const router = useRouter(); 
   const searchParams = useSearchParams();
 
-  // 1. PESTAÑA ACTIVA: Lee la URL por si venimos de una notificación (?tab=wallet)
+  // 1. PESTAÑA ACTIVA
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'available');
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
 
-  // 2. Query: Pedidos Disponibles (Sin asignar)
+  // 2. QUERY: PEDIDOS DISPONIBLES (CORREGIDO PARA SINCRONIZACIÓN)
   const availableQuery = useMemo(() => {
      if (!firestore) return null;
      return query(
-        collection(firestore, 'orders'), 
-        where('deliveryPersonId', '==', null),
-        where('status', 'in', ['pending', 'Pendiente', 'Pendiente de Confirmación', 'En preparación']) 
+       collection(firestore, 'orders'), 
+       // Que no tengan repartidor asignado
+       where('deliveryPersonId', '==', null),
+       // ✅ FIX CRÍTICO: Ampliamos la lista de estados para que no se pierda ninguno
+       // Ahora escucha también "Aceptado" y "Listo para recoger"
+       where('status', 'in', [
+           'pending', 
+           'Pendiente', 
+           'Pendiente de Confirmación', 
+           'En preparación', 
+           'Aceptado', 
+           'Listo para recoger'
+       ]) 
      );
   }, [firestore]);
 
   const { data: availableOrders } = useCollection<Order>(availableQuery);
 
-  // 3. Query: MIS Pedidos (Todos: Activos + Historial para la Billetera)
+  // 3. QUERY: MIS PEDIDOS (Para En Curso y Billetera)
   const myOrdersQuery = useMemo(() => {
       if (!firestore || !user) return null;
       return query(
@@ -75,34 +97,29 @@ export default function DeliveryOrdersView() {
 
   // 4. FILTROS EN MEMORIA
   const myActiveOrders = useMemo(() => {
-      return allMyOrders?.filter(o => ['En camino', 'En reparto', 'En preparación'].includes(o.status)) || [];
+      // Filtramos los que están activos en mi posesión
+      return allMyOrders?.filter(o => ['En camino', 'En reparto', 'En preparación', 'Listo para recoger'].includes(o.status)) || [];
   }, [allMyOrders]);
 
   // 5. 💰 CÁLCULOS FINANCIEROS (BILLETERA)
   const financeStats = useMemo(() => {
-    const emptyStats: { 
-        pendingBalance: number; 
-        lastPayoutDate: Date | null; 
-        totalPaid: number; 
-        unpaidOrders: Order[] 
-    } = { 
+    const emptyStats = { 
         pendingBalance: 0, 
-        lastPayoutDate: null, 
+        lastPayoutDate: null as Date | null, 
         totalPaid: 0, 
-        unpaidOrders: [] 
+        unpaidOrders: [] as Order[] 
     };
 
     if (!allMyOrders) return emptyStats;
 
-    // A. Saldo Pendiente: Entregados Y NO pagados al repartidor
+    // A. Saldo Pendiente: Entregados Y NO pagados
     const unpaidOrders = allMyOrders.filter(o => o.status === 'Entregado' && o.deliveryPayoutStatus !== 'paid');
-    const pendingBalance = unpaidOrders.reduce((acc, order) => acc + (order.deliveryFee || 0), 0);
+    const pendingBalance = unpaidOrders.reduce((acc, order) => acc + (Number(order.deliveryFee) || 0), 0);
 
     // B. Historial de Pagos
     const paidOrders = allMyOrders.filter(o => o.deliveryPayoutStatus === 'paid');
-    const totalPaid = paidOrders.reduce((acc, order) => acc + (order.deliveryFee || 0), 0);
+    const totalPaid = paidOrders.reduce((acc, order) => acc + (Number(order.deliveryFee) || 0), 0);
     
-    // Buscar la fecha más reciente
     let lastPayoutDate: Date | null = null;
     if (paidOrders.length > 0) {
         const sortedPaid = [...paidOrders].sort((a, b) => {
@@ -117,8 +134,9 @@ export default function DeliveryOrdersView() {
     return { pendingBalance, lastPayoutDate, totalPaid, unpaidOrders };
   }, [allMyOrders]);
 
-  // --- ACCIONES ---
+  // --- ACCIONES DEL PROCESO ---
 
+  // A. TOMAR PEDIDO -> Pasa a 'En camino'
   const handleTakeOrder = async (orderId: string) => {
     if (!user || !firestore) return;
     try {
@@ -126,10 +144,10 @@ export default function DeliveryOrdersView() {
       await updateDoc(orderRef, {
         deliveryPersonId: user.uid,
         deliveryPersonName: userProfile?.name || user.displayName || 'Repartidor',
-        status: 'En reparto', 
+        status: 'En camino', 
         takenAt: serverTimestamp()
       });
-      toast({ title: "¡Pedido Asignado!", description: "Ve a la pestaña 'En Curso'." });
+      toast({ title: "¡Pedido Asignado!", description: "Ve a la tienda a retirarlo." });
       setActiveTab('active');
     } catch (error) {
       console.error(error);
@@ -137,10 +155,26 @@ export default function DeliveryOrdersView() {
     }
   };
 
+  // B. CONFIRMAR RETIRO -> Pasa a 'En reparto'
+  const handlePickupOrder = async (orderId: string) => {
+    if (!firestore) return;
+    try {
+        const orderRef = doc(firestore, 'orders', orderId);
+        await updateDoc(orderRef, {
+            status: 'En reparto',
+            pickedUpAt: serverTimestamp()
+        });
+        toast({ title: "¡Pedido Retirado!", description: "Inicia la ruta hacia el cliente." });
+    } catch (error) {
+        toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar." });
+    }
+  };
+
   const handleFinishDeliveryClick = (order: Order) => {
     setConfirmDeliveryOrder(order);
   };
 
+  // C. FINALIZAR -> Pasa a 'Entregado'
   const confirmFinishDelivery = async () => {
     if (!confirmDeliveryOrder || !firestore) return;
     try {
@@ -156,10 +190,13 @@ export default function DeliveryOrdersView() {
     }
   };
 
+  // NAVEGACIÓN AL DETALLE (GPS/CHAT)
+  const goToDetails = (orderId: string) => {
+      router.push(`/orders/${orderId}`);
+  };
+
   return (
     <div className="container mx-auto pb-24">
-      {/* Eliminé el PageHeader porque probablemente OrdersPage ya tiene layout, si no, puedes descomentarlo */}
-      {/* <PageHeader title="Panel de Repartidor" description="Gestiona entregas y ganancias." /> */}
       
       <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold tracking-tight">Panel de Repartidor</h2>
@@ -248,8 +285,8 @@ export default function DeliveryOrdersView() {
                         <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
                                 <div className="space-y-1">
-                                    <Badge variant="secondary" className="animate-pulse bg-blue-100 text-blue-700">
-                                        EN CURSO
+                                    <Badge variant="secondary" className="animate-pulse bg-blue-100 text-blue-700 uppercase">
+                                        {order.status}
                                     </Badge>
                                     <CardTitle className="mt-1 text-lg">{order.storeName}</CardTitle>
                                 </div>
@@ -259,16 +296,29 @@ export default function DeliveryOrdersView() {
                             </div>
                         </CardHeader>
                         <CardContent className="pb-2 space-y-4">
-                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 space-y-2">
-                                <p className="text-sm font-semibold flex items-center gap-2 text-blue-800">
-                                    <Navigation className="h-4 w-4" /> Destino:
-                                </p>
-                                <p className="text-lg font-bold">{order.shippingInfo?.address}</p>
-                                <p className="text-sm text-muted-foreground">Cliente: {order.customerName}</p>
+                            
+                            {/* Mensajes de Estado */}
+                            {(order.status === 'En camino' || order.status === 'Aceptado' || order.status === 'Listo para recoger') && (
+                                <div className="p-3 bg-blue-50 text-blue-800 rounded-lg text-sm flex items-center gap-2 border border-blue-100">
+                                    <MapPin className="h-4 w-4"/> 
+                                    <strong>Paso 1:</strong> Dirígete a la tienda para retirar.
+                                </div>
+                            )}
+                            {order.status === 'En reparto' && (
+                                <div className="p-3 bg-orange-50 text-orange-800 rounded-lg text-sm flex items-center gap-2 border border-orange-100">
+                                    <Navigation className="h-4 w-4"/> 
+                                    <strong>Paso 2:</strong> Estás llevando el pedido al cliente.
+                                </div>
+                            )}
+
+                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-1">
+                                <p className="text-xs text-muted-foreground uppercase font-bold">Destino Final:</p>
+                                <p className="text-sm font-medium">{order.shippingInfo?.address}</p>
+                                <p className="text-xs text-muted-foreground">Cliente: {order.customerName}</p>
                             </div>
                             
                             {/* ALERTA DE COBRO EN EFECTIVO */}
-                            {order.paymentMethod === 'Efectivo' && (
+                            {order.paymentMethod === 'Efectivo' && order.status === 'En reparto' && (
                                 <div className="p-4 bg-yellow-50 rounded-lg border-2 border-yellow-400 flex items-start gap-3 animate-in fade-in zoom-in">
                                     <div className="bg-yellow-100 p-2 rounded-full">
                                         <DollarSign className="h-6 w-6 text-yellow-700" />
@@ -292,18 +342,30 @@ export default function DeliveryOrdersView() {
                                 </div>
                             )}
                         </CardContent>
-                        <CardFooter>
-                            <Button className={`w-full text-lg h-12 ${order.paymentMethod === 'Efectivo' ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : 'bg-green-600 hover:bg-green-700'}`} onClick={() => handleFinishDeliveryClick(order)}>
-                                <CheckCircle2 className="mr-2 h-5 w-5" /> 
-                                {order.paymentMethod === 'Efectivo' ? 'Ya cobré y Entregué' : 'Confirmar Entrega'}
+                        <CardFooter className="flex flex-col gap-2">
+                            {/* ✅ BOTÓN DE NAVEGACIÓN */}
+                            <Button variant="secondary" className="w-full h-10 border-blue-200 text-blue-700 hover:bg-blue-100" onClick={() => goToDetails(order.id)}>
+                                <MapIcon className="mr-2 h-4 w-4" /> Ver Detalles / Mapa / Chat
                             </Button>
+
+                            {/* ✅ BOTONES DE FLUJO */}
+                            {(order.status === 'En camino' || order.status === 'Aceptado' || order.status === 'Listo para recoger') ? (
+                                <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700" onClick={() => handlePickupOrder(order.id)}>
+                                    <PackageCheck className="mr-2 h-5 w-5" /> Ya retiré el pedido
+                                </Button>
+                            ) : (
+                                <Button className={`w-full text-lg h-12 ${order.paymentMethod === 'Efectivo' ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : 'bg-green-600 hover:bg-green-700'}`} onClick={() => handleFinishDeliveryClick(order)}>
+                                    <CheckCircle2 className="mr-2 h-5 w-5" /> 
+                                    {order.paymentMethod === 'Efectivo' ? 'Ya cobré y Entregué' : 'Confirmar Entrega'}
+                                </Button>
+                            )}
                         </CardFooter>
                     </Card>
                 ))
             )}
         </TabsContent>
 
-        {/* --- ✅ PESTAÑA: BILLETERA --- */}
+        {/* --- PESTAÑA: BILLETERA --- */}
         <TabsContent value="wallet" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
              <div className="grid gap-4 md:grid-cols-2">
                 <Card className="border-l-4 border-l-orange-600 shadow-md">
@@ -356,7 +418,6 @@ export default function DeliveryOrdersView() {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {/* Mostrar primero los pendientes */}
                             {financeStats.unpaidOrders.map((order: any) => (
                                 <div key={order.id} className="flex justify-between items-center border-b pb-2 last:border-0">
                                     <div>
@@ -375,7 +436,6 @@ export default function DeliveryOrdersView() {
         </TabsContent>
       </Tabs>
 
-      {/* --- MODAL CONFIRMACIÓN --- */}
       <Dialog open={!!confirmDeliveryOrder} onOpenChange={(open) => !open && setConfirmDeliveryOrder(null)}>
         <DialogContent className="sm:max-w-md">
             <DialogHeader>

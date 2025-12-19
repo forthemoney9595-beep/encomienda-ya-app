@@ -65,7 +65,7 @@ export default function StorePublicPage() {
       .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   }, [rawProducts]);
 
-  // 4. Estado de Apertura 🕒
+  // 4. Estado de Apertura 🕒 (LÓGICA CORREGIDA PARA HORARIO NOCTURNO)
   const storeStatus = useMemo(() => {
       if (!store?.schedule) return { isOpen: true, label: 'Abierto' }; 
       
@@ -78,7 +78,17 @@ export default function StorePublicPage() {
       const openMinutes = openHour * 60 + openMin;
       const closeMinutes = closeHour * 60 + closeMin;
       
-      const isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+      let isOpen = false;
+
+      if (closeMinutes < openMinutes) {
+          // 🌙 Caso Turno Nocturno (ej: Abre 18:00, Cierra 02:00)
+          // Está abierto si es más tarde que la apertura (19:00, 23:00...)
+          // O si es más temprano que el cierre (00:30, 01:59...)
+          isOpen = currentMinutes >= openMinutes || currentMinutes < closeMinutes;
+      } else {
+          // ☀️ Caso Turno Normal (ej: Abre 09:00, Cierra 17:00)
+          isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+      }
       
       return {
           isOpen,
@@ -100,7 +110,6 @@ export default function StorePublicPage() {
         return;
     }
     
-    // ✅ CORREGIDO: Quitamos 'rating' y 'reviewCount' para evitar error TS2353
     addToCart({
       id: product.id,
       name: product.name,
