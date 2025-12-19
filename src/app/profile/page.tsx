@@ -10,14 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
-import { doc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth'; 
-import { User, Mail, MapPin, Save, Plus, X, Phone, Trash2, Pencil, Loader2, Store, Bike, Clock, FileText, Car, AlertCircle } from 'lucide-react';
+// ✅ CORREGIDO: Agregamos 'Save' y 'Clock' que faltaban
+import { User, Phone, Trash2, Loader2, Store, Bike, FileText, Car, Plus, MapPin, LocateFixed, CheckCircle2, Save, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { ImageUpload } from '@/components/image-upload';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Address {
@@ -26,6 +26,7 @@ interface Address {
     city: string;
     zipCode: string;
     label?: string;
+    coords?: { latitude: number; longitude: number };
 }
 
 export default function ProfilePage() {
@@ -43,9 +44,13 @@ export default function ProfilePage() {
     // Estados Direcciones (Solo Clientes)
     const [isAddingAddress, setIsAddingAddress] = useState(false);
     const [addresses, setAddresses] = useState<Address[]>([]);
+    
+    // Estado de dirección temporal con GPS
     const [newAddress, setNewAddress] = useState<Omit<Address, 'id'> & { isEditing: boolean, id: string }>({ 
         id: '', street: '', city: '', zipCode: '', isEditing: false 
     });
+    const [tempCoords, setTempCoords] = useState<{ latitude: number; longitude: number } | undefined>(undefined);
+    const [isLocating, setIsLocating] = useState(false);
 
     // Estados Tienda (Solo Stores)
     const [storeSchedule, setStoreSchedule] = useState({ open: "09:00", close: "22:00" });
@@ -66,11 +71,9 @@ export default function ProfilePage() {
             setDisplayName(userProfile.name || userProfile.displayName || '');
             setPhoneNumber(userProfile.phoneNumber || ''); 
             
-            // 🛠️ CORRECCIÓN 1: Usamos 'as any' para evitar el error de photoURL si no está en la interfaz
             const photo = (userProfile as any).photoURL || userProfile.profileImageUrl || '';
             setProfileImageUrl(photo);
             
-            // Cargar datos específicos según rol
             if (userProfile.role === 'buyer') {
                 setAddresses(userProfile.addresses as Address[] || []);
             }
@@ -99,11 +102,10 @@ export default function ProfilePage() {
                 name: newName,
                 displayName: newName,
                 photoURL: profileImageUrl,
-                profileImageUrl: profileImageUrl, // Compatibilidad
+                profileImageUrl: profileImageUrl, 
                 phoneNumber: phoneNumber.trim(),
             };
 
-            // Datos Extra según Rol
             let extraData = {};
             if (userProfile?.role === 'store') {
                 extraData = { schedule: storeSchedule, description: storeDescription };
@@ -130,26 +132,64 @@ export default function ProfilePage() {
         setNewAddress(prev => ({ ...prev, [name]: value }));
     };
 
+    // Función para detectar GPS
+    const handleGetLocation = () => {
+        if (!navigator.geolocation) {
+            toast({ variant: "destructive", title: "Error", description: "Navegador sin soporte GPS." });
+            return;
+        }
+        setIsLocating(true);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                setTempCoords({ latitude, longitude });
+                setIsLocating(false);
+                toast({ title: "Ubicación detectada", description: "Coordenadas listas para guardar." });
+            },
+            (error) => {
+                console.error("Error GPS:", error);
+                setIsLocating(false);
+                toast({ variant: "destructive", title: "Error GPS", description: "Activa tu ubicación." });
+            },
+            { enableHighAccuracy: true }
+        );
+    };
+
     const handleAddAddress = async () => {
-        if (!userDocRef || !newAddress.street) return;
-        const addressToSave = {
+        if (!userDocRef || !newAddress.street) {
+            toast({ variant: "destructive", title: "Falta calle", description: "Escribe la dirección." });
+            return;
+        }
+        
+        // Objeto de dirección final
+        const addressToSave: Address = {
             id: newAddress.id || Math.random().toString(36).substring(2, 9),
             street: newAddress.street.trim(),
             city: newAddress.city.trim(),
             zipCode: newAddress.zipCode.trim(),
             label: `${newAddress.street.trim()}`,
+            coords: tempCoords 
         };
         
         try {
+            // Si editamos, borramos la vieja primero
             if (newAddress.isEditing) {
                 const oldAddress = addresses.find(a => a.id === newAddress.id);
                 if (oldAddress) await updateDoc(userDocRef, { addresses: arrayRemove(oldAddress) });
             }
+            
+            // Guardamos la nueva
             await updateDoc(userDocRef, { addresses: arrayUnion(addressToSave) });
-            toast({ title: 'Dirección Guardada' });
+            
+            toast({ title: 'Dirección Guardada', description: tempCoords ? 'Incluye ubicación GPS precisa.' : 'Dirección de texto guardada.' });
+            
+            // Reset
             setNewAddress({ id: '', street: '', city: '', zipCode: '', isEditing: false });
+            setTempCoords(undefined);
             setIsAddingAddress(false);
-        } catch(e) { toast({ variant: 'destructive', title: 'Error' }); }
+        } catch(e) { 
+            toast({ variant: 'destructive', title: 'Error al guardar' }); 
+        }
     };
 
     const handleDeleteAddress = async (address: Address) => {
@@ -259,6 +299,7 @@ export default function ProfilePage() {
                                         </div>
                                         <Button size="sm" onClick={() => {
                                             setNewAddress({ id: '', street: '', city: '', zipCode: '', isEditing: false });
+                                            setTempCoords(undefined);
                                             setIsAddingAddress(true);
                                         }} disabled={isAddingAddress}>
                                             <Plus className="h-4 w-4 mr-2" /> Nueva
@@ -268,12 +309,38 @@ export default function ProfilePage() {
                                         {isAddingAddress && (
                                             <div className="bg-muted/30 p-4 rounded-lg border border-primary/20 space-y-3 animate-in fade-in zoom-in-95">
                                                 <h4 className="font-semibold text-sm">{newAddress.isEditing ? 'Editar' : 'Nueva'} Dirección</h4>
+                                                
+                                                {/* CAMPO DE DIRECCIÓN */}
+                                                <div className="space-y-2">
+                                                    <Label>Dirección Exacta</Label>
+                                                    <Input name="street" placeholder="Ej: Calle San Martín 500 (Casa blanca)" value={newAddress.street} onChange={handleAddressChange} />
+                                                </div>
+
                                                 <div className="grid gap-3 sm:grid-cols-2">
-                                                    <Input name="street" placeholder="Calle y Altura" value={newAddress.street} onChange={handleAddressChange} />
                                                     <Input name="city" placeholder="Ciudad / Barrio" value={newAddress.city} onChange={handleAddressChange} />
                                                     <Input name="zipCode" placeholder="C.P." value={newAddress.zipCode} onChange={handleAddressChange} />
                                                 </div>
-                                                <div className="flex justify-end gap-2">
+
+                                                {/* BOTÓN GPS */}
+                                                <div className="flex items-center justify-between bg-white p-2 rounded border">
+                                                    <span className="text-sm text-muted-foreground ml-2">
+                                                        {tempCoords ? "✅ GPS detectado" : "📍 Ubicación exacta (Recomendado)"}
+                                                    </span>
+                                                    <Button 
+                                                        type="button" 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        onClick={handleGetLocation} 
+                                                        disabled={isLocating}
+                                                        className={tempCoords ? "text-green-600 border-green-200 bg-green-50" : ""}
+                                                    >
+                                                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin"/> : 
+                                                         tempCoords ? <CheckCircle2 className="h-4 w-4"/> : <LocateFixed className="h-4 w-4"/>}
+                                                        {tempCoords ? "Actualizar" : "Detectar"}
+                                                    </Button>
+                                                </div>
+
+                                                <div className="flex justify-end gap-2 pt-2">
                                                     <Button variant="ghost" size="sm" onClick={() => setIsAddingAddress(false)}>Cancelar</Button>
                                                     <Button size="sm" onClick={handleAddAddress}>Guardar</Button>
                                                 </div>
@@ -289,10 +356,12 @@ export default function ProfilePage() {
                                             addresses.map(addr => (
                                                 <div key={addr.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="bg-blue-50 p-2 rounded-full text-blue-600"><MapPin className="h-4 w-4"/></div>
+                                                        <div className={`p-2 rounded-full ${addr.coords ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+                                                            <MapPin className="h-4 w-4"/>
+                                                        </div>
                                                         <div>
                                                             <p className="font-medium text-sm">{addr.street}</p>
-                                                            <p className="text-xs text-muted-foreground">{addr.city}, {addr.zipCode}</p>
+                                                            <p className="text-xs text-muted-foreground">{addr.city} {addr.coords && '• GPS Activo'}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex gap-1">
@@ -392,7 +461,7 @@ export default function ProfilePage() {
                                                     <div className="relative w-full h-40">
                                                         <img src={licenseUrl} alt="Licencia" className="w-full h-full object-contain rounded-md" />
                                                         <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6" onClick={() => setLicenseUrl('')}>
-                                                            <X className="h-3 w-3" />
+                                                            <Trash2 className="h-3 w-3" />
                                                         </Button>
                                                     </div>
                                                 ) : (

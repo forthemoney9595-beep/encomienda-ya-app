@@ -32,9 +32,17 @@ interface Product {
   createdAt?: any;
 }
 
+// ✅ FUNCIÓN DE LIMPIEZA VISUAL (NUEVO)
+const cleanAddress = (rawAddress: string | undefined) => {
+    if (!rawAddress) return 'Ubicación no disponible';
+    if (rawAddress.includes('Ubicación GPS') || rawAddress.includes('lat:') || rawAddress.includes('(-28.')) {
+        return 'Ver ubicación en mapa'; // Texto amigable si es coordenada fea
+    }
+    return rawAddress;
+};
+
 export default function StorePublicPage() {
   const params = useParams();
-  // Manejo seguro del storeId (por si viene como array)
   const storeId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   
   const firestore = useFirestore();
@@ -65,7 +73,7 @@ export default function StorePublicPage() {
       .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   }, [rawProducts]);
 
-  // 4. Estado de Apertura 🕒 (LÓGICA CORREGIDA PARA HORARIO NOCTURNO)
+  // 4. Estado de Apertura
   const storeStatus = useMemo(() => {
       if (!store?.schedule) return { isOpen: true, label: 'Abierto' }; 
       
@@ -81,12 +89,10 @@ export default function StorePublicPage() {
       let isOpen = false;
 
       if (closeMinutes < openMinutes) {
-          // 🌙 Caso Turno Nocturno (ej: Abre 18:00, Cierra 02:00)
-          // Está abierto si es más tarde que la apertura (19:00, 23:00...)
-          // O si es más temprano que el cierre (00:30, 01:59...)
+          // Turno Nocturno
           isOpen = currentMinutes >= openMinutes || currentMinutes < closeMinutes;
       } else {
-          // ☀️ Caso Turno Normal (ej: Abre 09:00, Cierra 17:00)
+          // Turno Normal
           isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
       }
       
@@ -100,7 +106,6 @@ export default function StorePublicPage() {
   const handleAddToCart = (product: Product) => {
     if (!storeId) return;
     
-    // Bloqueo visual si está cerrado
     if (!storeStatus.isOpen) {
         toast({
             variant: "destructive",
@@ -155,9 +160,11 @@ export default function StorePublicPage() {
                 <p className="text-muted-foreground max-w-2xl">{store.description || 'Sin descripción disponible.'}</p>
                 
                 <div className="flex flex-col md:flex-row items-center gap-4 text-sm text-muted-foreground mt-2">
-                     {store.address && (
+                      {store.address && (
                         <div className="flex items-center gap-1">
-                            <MapPin className="h-4 w-4" /> {store.address}
+                            <MapPin className="h-4 w-4" /> 
+                            {/* ✅ AQUI APLICAMOS LA LIMPIEZA */}
+                            {cleanAddress(store.address)}
                         </div>
                     )}
                     {store.schedule && (

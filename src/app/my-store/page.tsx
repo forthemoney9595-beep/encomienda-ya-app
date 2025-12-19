@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock } from 'lucide-react';
+import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
 import { useRouter } from 'next/navigation';
@@ -27,7 +27,7 @@ export default function MyStorePage() {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
-  // Estado para Horarios (Nuevo)
+  // Estado para Horarios
   const [schedule, setSchedule] = useState({ open: '09:00', close: '22:00' });
 
   const [formData, setFormData] = useState({
@@ -94,7 +94,7 @@ export default function MyStorePage() {
     setFormData(prev => ({ ...prev, imageUrl: url }));
   };
 
-  // Función GPS
+  // ✅ FUNCIÓN GPS CORREGIDA (NO INSERTA TEXTO FEO)
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
         toast({ variant: "destructive", title: "Error", description: "Tu navegador no soporta geolocalización." });
@@ -107,16 +107,14 @@ export default function MyStorePage() {
         (position) => {
             const { latitude, longitude } = position.coords;
             setCoords({ latitude, longitude });
-            if(!formData.address) {
-                setFormData(prev => ({ ...prev, address: `Ubicación GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})` }));
-            }
+            // 🚫 ELIMINADO: Ya no sobreescribimos el address con coordenadas feas
             setIsLocating(false);
-            toast({ title: "¡Ubicación Detectada!", description: "Coordenadas de tu tienda guardadas." });
+            toast({ title: "¡Ubicación Detectada!", description: "Coordenadas guardadas internamente." });
         },
         (error) => {
             console.error("Error GPS:", error);
             setIsLocating(false);
-            toast({ variant: "destructive", title: "Error GPS", description: "No pudimos obtener tu ubicación. Asegúrate de permitir el acceso." });
+            toast({ variant: "destructive", title: "Error GPS", description: "Asegúrate de permitir el acceso a tu ubicación." });
         },
         { enableHighAccuracy: true }
     );
@@ -127,23 +125,32 @@ export default function MyStorePage() {
     e.preventDefault();
     if (!firestore || !userProfile?.storeId || !user) return;
 
+    // VALIDACIÓN: Si hay GPS pero no hay dirección escrita, avisar
+    if (coords && (!formData.address || formData.address.trim() === '' || formData.address.includes('Ubicación GPS'))) {
+        toast({ 
+            variant: "destructive", 
+            title: "Falta Dirección Escrita", 
+            description: "Por favor escribe la calle y número (ej: San Martín 500) para que los clientes te encuentren fácil." 
+        });
+        return;
+    }
+
     setIsSaving(true);
     try {
       const storeRef = doc(firestore, 'stores', userProfile.storeId);
       await updateDoc(storeRef, {
         name: formData.name,
         description: formData.description,
-        address: formData.address,
+        address: formData.address, // Guardamos lo que escribió el usuario
         imageUrl: formData.imageUrl,
         deliveryTime: formData.deliveryTime,
         
-        schedule: schedule, // ✅ Guardamos el horario
+        schedule: schedule, 
         coords: coords, 
         
         updatedAt: new Date()
       });
 
-      // Sincronizar foto con perfil de usuario (opcional, pero visualmente útil)
       if (formData.imageUrl) {
           const userRef = doc(firestore, 'users', user.uid);
           await updateDoc(userRef, {
@@ -154,7 +161,7 @@ export default function MyStorePage() {
 
       toast({
         title: "Tienda actualizada",
-        description: "La información, horarios y ubicación se han guardado.",
+        description: "Tu información está lista para recibir pedidos.",
       });
     } catch (error) {
       console.error("Error actualizando tienda:", error);
@@ -219,7 +226,7 @@ export default function MyStorePage() {
                 />
             </div>
             
-            {/* INPUT DIRECCIÓN CON BOTÓN GPS */}
+            {/* SECCIÓN DIRECCIÓN MEJORADA */}
             <div className="space-y-2">
                 <Label htmlFor="address">Dirección del Local</Label>
                 <div className="flex gap-2">
@@ -228,33 +235,43 @@ export default function MyStorePage() {
                         name="address" 
                         value={formData.address} 
                         onChange={handleChange} 
-                        placeholder="Calle 123, Ciudad" 
+                        // Placeholder educativo
+                        placeholder="Calle, Número y Barrio (Texto visible)" 
                         className="flex-1"
                     />
                     <Button 
                         type="button" 
-                        variant="outline" 
+                        variant={coords ? "default" : "outline"} // Verde si ya tiene GPS
                         size="icon"
                         onClick={handleGetLocation}
                         disabled={isLocating}
-                        title="Detectar mi ubicación actual (GPS)"
+                        title="Actualizar ubicación GPS del mapa"
+                        className={coords ? "bg-green-600 hover:bg-green-700 text-white" : ""}
                     >
-                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4 text-blue-600" />}
+                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : 
+                         coords ? <CheckCircle2 className="h-4 w-4" /> : <LocateFixed className="h-4 w-4 text-blue-600" />}
                     </Button>
                 </div>
+                
+                {/* Feedback Visual Claro */}
                 {coords ? (
-                    <p className="text-xs text-green-600 flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3"/> Ubicación GPS guardada
-                    </p>
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="text-green-600 flex items-center gap-1 font-medium">
+                            <MapPin className="h-3 w-3"/> Mapa configurado correctamente
+                        </span>
+                        <span className="text-muted-foreground text-[10px]">
+                            Lat: {coords.latitude.toFixed(4)}, Lng: {coords.longitude.toFixed(4)}
+                        </span>
+                    </div>
                 ) : (
-                    <p className="text-xs text-muted-foreground">
-                        Recomendado: Usa el botón GPS para que el mapa de entregas funcione.
+                    <p className="text-xs text-amber-600 flex items-center gap-1 font-medium">
+                        <AlertTriangle className="h-3 w-3"/> Importante: Presiona el botón GPS para activar el mapa.
                     </p>
                 )}
             </div>
           </div>
 
-          {/* ✅ NUEVA SECCIÓN DE HORARIOS */}
+          {/* SECCIÓN DE HORARIOS */}
           <div className="grid gap-4 md:grid-cols-2 border p-4 rounded-lg bg-muted/20">
              <div className="md:col-span-2">
                 <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">

@@ -62,15 +62,14 @@ export default function DeliveryOrdersView() {
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'available');
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
 
-  // 2. QUERY: PEDIDOS DISPONIBLES (CORREGIDO PARA SINCRONIZACIÓN)
+  // 2. QUERY: PEDIDOS DISPONIBLES
   const availableQuery = useMemo(() => {
      if (!firestore) return null;
      return query(
        collection(firestore, 'orders'), 
        // Que no tengan repartidor asignado
        where('deliveryPersonId', '==', null),
-       // ✅ FIX CRÍTICO: Ampliamos la lista de estados para que no se pierda ninguno
-       // Ahora escucha también "Aceptado" y "Listo para recoger"
+       // Ampliamos la lista de estados para que no se pierda ninguno
        where('status', 'in', [
            'pending', 
            'Pendiente', 
@@ -195,6 +194,15 @@ export default function DeliveryOrdersView() {
       router.push(`/orders/${orderId}`);
   };
 
+  // ✅ FUNCIÓN DE LIMPIEZA VISUAL (NUEVO)
+  const cleanAddress = (rawAddress: string | undefined) => {
+      if (!rawAddress) return 'Dirección de tienda';
+      if (rawAddress.includes('Ubicación GPS') || rawAddress.includes('lat:') || rawAddress.includes('(-28.')) {
+          return 'Ver ubicación en mapa'; // Texto amigable si es coordenada fea
+      }
+      return rawAddress;
+  };
+
   return (
     <div className="container mx-auto pb-24">
       
@@ -250,7 +258,8 @@ export default function DeliveryOrdersView() {
                         <MapPin className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
                         <div>
                             <p className="text-xs font-bold uppercase text-muted-foreground">Retirar en:</p>
-                            <p className="text-sm">{order.storeAddress || 'Dirección de tienda'}</p>
+                            {/* ✅ USAMOS LA FUNCIÓN DE LIMPIEZA */}
+                            <p className="text-sm">{cleanAddress(order.storeAddress)}</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-3">

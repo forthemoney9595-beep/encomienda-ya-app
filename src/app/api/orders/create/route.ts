@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin"; 
 import { Timestamp } from "firebase-admin/firestore";
 
+// ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
+const FIXED_SHIPPING_COST = 2000; 
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -57,7 +60,9 @@ export async function POST(request: Request) {
     }
 
     // 3. Cálculos Finales
-    const shippingCost = 5.00; 
+    // ✅ CORRECCIÓN APLICADA: Usamos el costo real ($2000) en lugar de $5
+    const shippingCost = FIXED_SHIPPING_COST; 
+    
     const serviceFeeAmount = (calculatedSubtotal * serviceFeePercent) / 100;
     const finalTotal = calculatedSubtotal + shippingCost + serviceFeeAmount;
 
@@ -103,7 +108,6 @@ export async function POST(request: Request) {
     await newOrderRef.set(orderData);
 
     // 5. ✅ NOTIFICAR A LA TIENDA (Campana + Push)
-    // ESTA ES LA PARTE QUE FALTABA EN TU ARCHIVO ANTERIOR
     if (ownerId) {
         const notifTitle = "🔔 Nueva Solicitud";
         const notifBody = `Tienes un pedido nuevo de ${shippingInfo.name} ($${finalTotal}). Revisa el stock.`;

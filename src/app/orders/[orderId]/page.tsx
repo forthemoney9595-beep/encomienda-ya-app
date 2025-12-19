@@ -170,7 +170,6 @@ export default function OrderTrackingPage() {
       const isAdmin = myUserProfile.role === 'admin';
       
       const isDelivery = myUserProfile.role === 'delivery';
-      // Permitimos ver si eres delivery y (es tu pedido O no tiene dueño y está listo)
       const canAccessAsDriver = isDelivery && (!order.deliveryPersonId || order.deliveryPersonId === user?.uid);
 
       if (!isOwner && !isBuyer && !isAdmin && !canAccessAsDriver) {
@@ -231,9 +230,10 @@ export default function OrderTrackingPage() {
         try {
             await updateDoc(orderRef, { 
                 deliveryPersonId: user.uid,
-                deliveryPersonName: myUserProfile?.displayName || 'Repartidor'
+                deliveryPersonName: myUserProfile?.displayName || 'Repartidor',
+                status: 'En camino'
             });
-            toast({ title: "¡Pedido Aceptado!", description: "Ahora puedes ver los detalles y chatear con la tienda." });
+            toast({ title: "¡Pedido Aceptado!", description: "Ve a la tienda a retirarlo." });
         } catch (error) {
             console.error(error);
             toast({ variant: 'destructive', title: "Error", description: "No se pudo aceptar el pedido." });
@@ -287,18 +287,6 @@ export default function OrderTrackingPage() {
         }
     }
 
-    // Función de Navegación Inteligente
-    const startNavigation = (lat: number | undefined, lng: number | undefined, addressFallback: string | undefined) => {
-        if (lat && lng) {
-            window.open(`http://googleusercontent.com/maps.google.com/?q=${lat},${lng}`, '_blank');
-        } else if (addressFallback) {
-            const encoded = encodeURIComponent(addressFallback);
-            window.open(`http://googleusercontent.com/maps.google.com/?q=${encoded}`, '_blank');
-        } else {
-            toast({ variant: "destructive", title: "Sin datos", description: "No hay ubicación disponible para navegar." });
-        }
-    }
-
   if (isLoading || !order) return <OrderPageSkeleton />;
   
   const displayTotal = order.total || (order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + order.deliveryFee);
@@ -306,10 +294,10 @@ export default function OrderTrackingPage() {
   const isStoreOwner = myUserProfile?.role === 'store' && myUserProfile?.storeId === order.storeId; 
   const isDeliveryPerson = myUserProfile?.role === 'delivery' && user?.uid === order.deliveryPersonId;
   const isDelivery = myUserProfile?.role === 'delivery';
-  const isAvailableToAccept = isDelivery && !order.deliveryPersonId && order.status === 'En preparación';
   
-  // ✅ CORRECCIÓN CLAVE: El cliente (isBuyer) también debe ver la columna derecha donde está el chat
+  const isAvailableToAccept = isDelivery && !order.deliveryPersonId && (order.status === 'En preparación' || order.status === 'Listo para recoger');
   const showRightColumn = isStoreOwner || isDelivery || isBuyer;
+  const phoneToCall = isDeliveryPerson ? (order.customerPhoneNumber || customerProfile?.phoneNumber) : undefined;
 
   return (
     <div className="container mx-auto">
@@ -377,46 +365,66 @@ export default function OrderTrackingPage() {
                     )}
 
                     {/* ESTADO DE ENTREGA REPARTIDOR */}
+                    {isDeliveryPerson && order.status !== 'Entregado' && order.status !== 'Cancelado' && (
+                        <div className="mb-6 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            <div className="p-4 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Navigation className="h-5 w-5" /> Tu Misión</h3>
+                                <div className="text-xs font-mono bg-white px-2 py-1 rounded border">
+                                    {(order.status === 'En camino' || order.status === 'En preparación' || order.status === 'Listo para recoger') ? 'FASE 1: TIENDA' : 'FASE 2: CLIENTE'}
+                                </div>
+                            </div>
+                            
+                            <div className="p-4 space-y-4">
+                                {(order as any).readyForPickup && (order.status === 'En preparación' || order.status === 'En camino') && (
+                                    <div className="p-3 bg-green-100 text-green-800 rounded-lg border border-green-300 font-semibold text-center flex items-center justify-center gap-2 animate-pulse"><BellRing className="h-5 w-5" /> ¡Pedido LISTO para recoger!</div>
+                                )}
+
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div className="flex items-start gap-3">
+                                        <div className="bg-white p-2 rounded-full border shadow-sm mt-1">
+                                            {order.status === 'En reparto' ? <Home className="h-5 w-5 text-orange-600"/> : <Store className="h-5 w-5 text-blue-600"/>}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-bold">Destino Actual:</p>
+                                            <p className="text-lg font-medium leading-tight">
+                                                {order.status === 'En reparto' 
+                                                    ? (order.shippingInfo?.address || order.shippingAddress?.address) 
+                                                    : order.storeAddress
+                                                }
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {order.status === 'En reparto' && phoneToCall && (
+                                        <a href={`tel:${phoneToCall}`} className="w-full">
+                                            <Button variant="outline" className="w-full border-green-200 text-green-700 bg-green-50 hover:bg-green-100">
+                                                <Phone className="mr-2 h-4 w-4" /> Llamar al Cliente ({phoneToCall})
+                                            </Button>
+                                        </a>
+                                    )}
+                                </div>
+
+                                <Separator />
+                                
+                                {(order.status === 'En camino' || order.status === 'En preparación' || order.status === 'Listo para recoger') && (
+                                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-14 text-xl shadow-md" onClick={() => handleUpdateStatus('En reparto')} disabled={isUpdatingStatus}>
+                                        <PackageCheck className="mr-2 h-6 w-6" /> {isUpdatingStatus ? "..." : "Ya recogí el pedido"}
+                                    </Button>
+                                )}
+                                {order.status === 'En reparto' && (
+                                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white h-14 text-xl shadow-md" onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdatingStatus}>
+                                        <CheckCircle className="mr-2 h-6 w-6" /> {isUpdatingStatus ? "..." : "Confirmar Entrega"}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {isDeliveryPerson && order.status === 'Entregado' && (
                          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col items-center text-center">
                             <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center mb-3"><CheckCircle className="h-6 w-6 text-green-600" /></div>
                             <h3 className="text-lg font-bold text-gray-900">¡Entrega Completada!</h3>
-                            <p className="text-sm text-gray-600 mb-3">Has completado esta entrega exitosamente.</p>
-                            <div className="px-4 py-2 bg-green-600 text-white rounded-full font-bold text-lg flex items-center gap-2 shadow-sm"><DollarSign className="h-5 w-5" />Ganaste ${order.deliveryFee.toFixed(2)}</div>
-                        </div>
-                    )}
-
-                    {isDeliveryPerson && order.status !== 'Entregado' && order.status !== 'Cancelado' && (
-                        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl overflow-hidden shadow-sm">
-                            <div className="p-4 bg-blue-100 border-b border-blue-200"><h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><Navigation className="h-5 w-5" /> Tu Misión Actual</h3></div>
-                            <div className="p-4 space-y-4">
-                                {(order as any).readyForPickup && order.status === 'En preparación' && (
-                                    <div className="p-3 bg-green-100 text-green-800 rounded-lg border border-green-300 font-semibold text-center flex items-center justify-center gap-2 animate-pulse"><BellRing className="h-5 w-5" /> ¡La tienda marcó el pedido como LISTO!</div>
-                                )}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Button 
-                                        variant="outline" 
-                                        className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" 
-                                        onClick={() => startNavigation(order.storeCoords?.latitude, order.storeCoords?.longitude, "Dirección Tienda")}
-                                    >
-                                        <MapPin className="mr-2 h-4 w-4" /> Ir a Tienda
-                                    </Button>
-                                    <Button 
-                                        variant="outline" 
-                                        className="bg-white hover:bg-gray-50 border-blue-200 text-blue-700" 
-                                        onClick={() => startNavigation(order.customerCoords?.latitude, order.customerCoords?.longitude, order.shippingInfo?.address || order.shippingAddress?.address)}
-                                    >
-                                        <Navigation className="mr-2 h-4 w-4" /> Ir a Cliente
-                                    </Button>
-                                </div>
-                                <Separator className="bg-blue-200"/>
-                                {order.status === 'En preparación' && (
-                                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-lg" onClick={() => handleUpdateStatus('En reparto')} disabled={isUpdatingStatus}><PackageCheck className="mr-2 h-5 w-5" /> {isUpdatingStatus ? "Actualizando..." : "Ya recogí el pedido"}</Button>
-                                )}
-                                {order.status === 'En reparto' && (
-                                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg" onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdatingStatus}><CheckCircle className="mr-2 h-5 w-5" /> {isUpdatingStatus ? "Finalizando..." : "Confirmar Entrega"}</Button>
-                                )}
-                            </div>
+                            <div className="mt-2 px-4 py-2 bg-green-600 text-white rounded-full font-bold text-lg flex items-center gap-2 shadow-sm"><DollarSign className="h-5 w-5" />Ganaste ${order.deliveryFee.toFixed(2)}</div>
                         </div>
                     )}
 
@@ -430,7 +438,11 @@ export default function OrderTrackingPage() {
                     <Separator/>
                     {order.items.map(item => (
                         <div key={item.id} className="flex justify-between items-center">
-                            <div><p className="font-semibold">{item.name}</p><p className="text-sm text-muted-foreground">Cantidad: {item.quantity}</p></div>
+                            <div>
+                                {/* ✅ FIX: Buscamos 'name' o 'title' */}
+                                <p className="font-semibold">{item.name || (item as any).title || "Producto sin nombre"}</p>
+                                <p className="text-sm text-muted-foreground">Cantidad: {item.quantity}</p>
+                            </div>
                             <div className="text-right flex items-center gap-4">
                                {isBuyer && order.status === 'Entregado' && (
                                    item.userRating 
@@ -456,9 +468,12 @@ export default function OrderTrackingPage() {
                            <p className="text-sm text-muted-foreground flex items-center"><Mail className="h-4 w-4 mr-2" />Email: {customerProfile.email}</p>
                         </div>
                      )}
+                     
                      <div>
-                        <h3 className="font-semibold">Dirección de Envío</h3>
-                        <p className="text-sm text-muted-foreground">{order.shippingInfo?.address || order.shippingAddress?.address}</p>
+                        <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4" /> Dirección de Envío (Referencia)</h3>
+                        <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded border mt-1">
+                            {order.shippingInfo?.address || order.shippingAddress?.address}
+                        </p>
                      </div>
                 </CardContent>
                  
@@ -474,7 +489,6 @@ export default function OrderTrackingPage() {
                 <CardContent className="h-96">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent><CardFooter><p className="text-xs text-muted-foreground"> {order.status === 'En reparto' ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación." : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."}</p></CardFooter>
             </Card>
             
-            {/* ✅ CORRECCIÓN CLAVE: El cliente (isBuyer) ahora ve el chat */}
             {(isStoreOwner || isDeliveryPerson || isBuyer) && (
                 <ChatWindow order={order} />
             )}

@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight } from 'lucide-react'; 
@@ -35,13 +35,21 @@ interface Store {
   available?: boolean;
 }
 
+// --- FUNCIÓN DE LIMPIEZA VISUAL (NUEVO) ---
+const cleanAddress = (rawAddress: string | undefined) => {
+    if (!rawAddress) return 'Ubicación no disponible';
+    if (rawAddress.includes('Ubicación GPS') || rawAddress.includes('lat:') || rawAddress.includes('(-28.')) {
+        return 'Ver ubicación en mapa'; // Texto amigable si es coordenada fea
+    }
+    return rawAddress;
+};
+
 // --- COMPONENTES DE LA LANDING PAGE (MODO INVITADO) ---
 
 const HeroSection = () => (
   <div className="relative overflow-hidden bg-background py-20 sm:py-32">
     <div className="container mx-auto px-4 relative z-10">
       <div className="mx-auto max-w-2xl text-center">
-        {/* ✅ CORRECCIÓN: Se elimina 'text-foreground' para evitar conflicto con 'text-transparent' */}
         <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600 animate-in fade-in slide-in-from-bottom-4 duration-1000">
           Tu ciudad, en la puerta de tu casa.
         </h1>
@@ -381,7 +389,8 @@ function HomeContent() {
                                 </div>
                                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                     <MapPin className="h-3 w-3" /> 
-                                    <span className="line-clamp-1">{store.address || 'Ubicación desconocida'}</span>
+                                    {/* ✅ AQUI APLICAMOS LA LIMPIEZA */}
+                                    <span className="line-clamp-1">{cleanAddress(store.address)}</span>
                                 </div>
                             </CardHeader>
                             

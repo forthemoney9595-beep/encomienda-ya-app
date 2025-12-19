@@ -12,26 +12,28 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { Home, Loader2, Phone, AlertTriangle, ArrowLeft, Store as StoreIcon, Receipt, CreditCard, Lock } from 'lucide-react';
-// createOrder se importa pero ya no se usa directamente para escribir en BD
-import { createOrder } from '@/lib/order-service'; 
+import { Home, Loader2, Phone, AlertTriangle, ArrowLeft, Store as StoreIcon, Receipt, CreditCard, Lock, MapPin, Crosshair } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useState, useMemo } from 'react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { doc, getDoc } from 'firebase/firestore';
 import { useFirestore, useDoc, useMemoFirebase } from '@/firebase'; 
+// ✅ CORRECCIÓN: Agregamos la importación que faltaba
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
+// ✅ CONFIGURACIÓN DE PRECIO (Tinogasta)
+const FIXED_SHIPPING_COST = 2000; 
 
 interface StoreData {
   name: string;
   address: string;
   maintenanceMode?: boolean;
-  userId: string; // ✅ El ID del dueño de la tienda
+  userId: string;
 }
 
 const formSchema = z.object({
   name: z.string().min(3, "El nombre es obligatorio."),
-  address: z.string().min(5, "La dirección es obligatoria."),
+  address: z.string().min(5, "La referencia es obligatoria (ej: Barrio, color de casa)."),
   addressId: z.string().optional(),
 });
 
@@ -43,6 +45,10 @@ export default function CheckoutPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clientLoaded, setClientLoaded] = useState(false);
+
+  // --- 📍 ESTADO DE GEOLOCALIZACIÓN ---
+  const [coords, setCoords] = useState<{latitude: number; longitude: number} | null>(null);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   // --- CONFIGURACIÓN GLOBAL ---
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
@@ -60,7 +66,7 @@ export default function CheckoutPage() {
   const { serviceFeeAmount, shippingCost, finalTotal } = useMemo(() => {
     const feePercentage = globalConfig?.serviceFee || 0;
     const fee = (totalPrice * feePercentage) / 100;
-    const shipping = 5.00; 
+    const shipping = FIXED_SHIPPING_COST; 
     const total = totalPrice + fee + shipping;
     
     return {
@@ -92,7 +98,7 @@ export default function CheckoutPage() {
 
         form.reset({
             name: userProfile.name || userProfile.displayName || "",
-            address: userProfile.addresses?.[0] ? `${userProfile.addresses[0].street}, ${userProfile.addresses[0].city}` : "",
+            address: userProfile.addresses?.[0] ? `${userProfile.addresses[0].street}` : "",
             addressId: userProfile.addresses?.[0]?.id || "new",
         });
     }
@@ -102,9 +108,13 @@ export default function CheckoutPage() {
   useEffect(() => {
     if(addressIdValue && userProfile?.addresses && addressIdValue !== 'new') {
         const selected = userProfile.addresses.find((a: any) => a.id === addressIdValue);
-        if(selected) form.setValue('address', `${selected.street}, ${selected.city}, ${selected.zipCode}`);
+        if(selected) {
+            form.setValue('address', `${selected.street}, ${selected.city}`);
+        }
     } else if (addressIdValue === 'new') {
         form.setValue('address', '');
+        setCoords(null); 
+        setLocationStatus('idle');
     }
   }, [addressIdValue, userProfile?.addresses, form]);
 
@@ -117,6 +127,33 @@ export default function CheckoutPage() {
       router.push('/');
     }
   }, [clientLoaded, authLoading, totalItems, storeId, router]);
+
+  // --- 📍 FUNCIÓN PARA OBTENER GPS ---
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+        toast({ variant: "destructive", title: "Error", description: "Tu navegador no soporta geolocalización." });
+        return;
+    }
+
+    setLocationStatus('loading');
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            setCoords({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+            });
+            setLocationStatus('success');
+            toast({ title: "¡Ubicación detectada!", description: "Coordenadas guardadas correctamente." });
+        },
+        (error) => {
+            console.error(error);
+            setLocationStatus('error');
+            toast({ variant: "destructive", title: "Error de GPS", description: "No pudimos obtener tu ubicación. Asegúrate de dar permisos." });
+        },
+        { enableHighAccuracy: true }
+    );
+  };
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (globalConfig?.maintenanceMode || storeData?.maintenanceMode) {
@@ -124,21 +161,21 @@ export default function CheckoutPage() {
         return;
     }
 
-    if (!user || !userProfile || !storeId || !firestore) return;
-
-    if (!userProfile.phoneNumber || userProfile.phoneNumber.trim() === '') {
-        toast({
-            variant: 'destructive',
-            title: 'Faltan datos',
-            description: 'Por favor, guarda tu número de teléfono antes de continuar.',
+    // 🔒 OBLIGAR GPS SI ES NUEVA DIRECCIÓN
+    if (addressIdValue === 'new' && !coords) {
+        toast({ 
+            variant: "destructive", 
+            title: "Ubicación Requerida", 
+            description: "Por favor, presiona 'Usar mi ubicación actual' para que el repartidor sepa dónde ir." 
         });
-        router.push('/profile');
         return;
     }
 
+    if (!user || !userProfile || !storeId || !firestore) return;
+
     setIsSubmitting(true);
     try {
-      // 1. Datos de Tienda y Seguridad
+      // 1. Datos de Tienda
       const storeRef = doc(firestore, 'stores', storeId);
       const storeSnap = await getDoc(storeRef);
 
@@ -147,48 +184,36 @@ export default function CheckoutPage() {
       }
       const currentStoreData = storeSnap.data() as StoreData;
 
-      if (!currentStoreData.userId) {
-         console.warn("⚠️ La tienda no tiene userId asignado. La notificación podría fallar.");
-      }
-
-      // ⚠️ 2. SANITIZACIÓN DE ITEMS (IMPORTANTE)
-      // Limpiamos los datos del carrito para asegurar que el API reciba 'price' numérico
-      console.log("🛒 [Checkout] Contenido Crudo del Carrito:", cart);
-
+      // 2. Sanitización de Items
       const cleanItems = cart.map((item: any) => {
-          // Buscamos el precio en cualquier variable posible
           const rawPrice = item.price || item.unit_price || item.unitPrice || item.product?.price || 0;
           const parsedPrice = Number(rawPrice);
 
           return {
             id: item.id,
             title: item.name || item.title || item.productName || 'Producto',
-            // Si el precio no es un número válido, forzamos 0
             price: isNaN(parsedPrice) ? 0 : parsedPrice,
             quantity: Number(item.quantity || 1)
           };
       });
 
-      console.log("📤 [Checkout] Items limpios enviados a API:", cleanItems);
-
-      // Verificación de seguridad local
       if (cleanItems.some((i: any) => i.price <= 0)) {
-          console.error("❌ ERROR: Se detectaron productos con precio 0 o inválido.");
-          toast({ variant: "destructive", title: "Error en el Carrito", description: "Hay productos con precio inválido. Por favor, vacía el carrito e intenta de nuevo." });
+          toast({ variant: "destructive", title: "Error en el Carrito", description: "Hay productos con precio inválido." });
           setIsSubmitting(false);
           return;
       }
 
-      // 3. CREAR ORDEN VÍA API SEGURA (BACKEND)
+      // 3. CREAR ORDEN VÍA API SEGURA
       const createResponse = await fetch('/api/orders/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
               userId: user.uid,
-              items: cleanItems, // Enviamos los items limpios
+              items: cleanItems,
               storeId: storeId,
-              shippingInfo: { name: values.name, address: values.address },
-              paymentMethod: 'mercadopago' 
+              shippingInfo: { name: values.name, address: values.address }, 
+              paymentMethod: 'mercadopago',
+              customerCoords: coords || undefined 
           })
       });
 
@@ -199,19 +224,19 @@ export default function CheckoutPage() {
       }
 
       const newOrderId = orderDataResult.orderId;
-      console.log("📦 Orden Segura Creada (Server-Side):", newOrderId);
 
       // 4. GENERAR LINK DE PAGO
       const paymentResponse = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            items: cleanItems, // Usamos items limpios también aquí
+            items: cleanItems,
             orderId: newOrderId,
             userId: user.uid, 
             storeId: storeId,
             storeOwnerId: currentStoreData.userId, 
             payerEmail: user.email || 'guest@encomiendaya.com',
+            shippingCost: shippingCost 
         })
       });
 
@@ -221,7 +246,6 @@ export default function CheckoutPage() {
         throw new Error(paymentData.error || "Error al generar pago");
       }
 
-      // 5. LIMPIEZA Y REDIRECCIÓN
       clearCart(); 
       toast({ title: "Redirigiendo a MercadoPago...", description: "No cierres esta ventana." });
       
@@ -241,18 +265,12 @@ export default function CheckoutPage() {
         <div className="container mx-auto py-20 flex justify-center items-center">
             <Card className={`max-w-md w-full border-${isStore ? 'orange' : 'red'}-200 bg-${isStore ? 'orange' : 'red'}-50 shadow-lg`}>
                 <CardHeader className="text-center pb-2">
-                    <div className={`mx-auto bg-${isStore ? 'orange' : 'red'}-100 p-4 rounded-full mb-4 w-fit`}>
-                        {isStore ? <StoreIcon className="h-10 w-10 text-orange-600" /> : <AlertTriangle className="h-10 w-10 text-red-600" />}
-                    </div>
                     <CardTitle className={`text-2xl text-${isStore ? 'orange' : 'red'}-800`}>
                         {isStore ? `${storeData?.name} Cerrada` : 'Plataforma en Mantenimiento'}
                     </CardTitle>
-                    <CardDescription className={`text-${isStore ? 'orange' : 'red'}-700`}>
-                        {isStore ? 'Esta tienda está temporalmente fuera de servicio.' : 'Estamos realizando mejoras técnicas.'}
-                    </CardDescription>
                 </CardHeader>
                 <CardFooter className="justify-center pt-4">
-                    <Button variant="outline" onClick={() => router.push('/')} className={`w-full border-${isStore ? 'orange' : 'red'}-200 bg-white`}>
+                    <Button variant="outline" onClick={() => router.push('/')}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Volver al Inicio
                     </Button>
                 </CardFooter>
@@ -269,20 +287,25 @@ export default function CheckoutPage() {
 
   return (
     <div className="container mx-auto pb-20">
-      <PageHeader title="Finalizar Compra" description="Confirma tus datos y procede al pago seguro." />
+      <PageHeader title="Finalizar Compra" description="Confirma tu ubicación para el delivery." />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         
         {/* FORMULARIO */}
         <div className="md:col-span-2">
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                    <Card>
-                        <CardHeader><CardTitle className="flex items-center gap-2"><Home className="h-5 w-5" /> Dirección de Entrega</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
+                    <Card className="border-l-4 border-l-primary">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /> Ubicación de Entrega</CardTitle>
+                            <CardDescription>Necesitamos tu ubicación exacta para el GPS del repartidor.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            
+                            {/* SECCIÓN DATOS PERSONALES */}
                              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg border">
                                 <Phone className="h-5 w-5 text-primary" />
                                 <div className="flex flex-col">
-                                    <p className="text-sm font-medium text-muted-foreground">Contacto Validado</p>
+                                    <p className="text-sm font-medium text-muted-foreground">Te llamarán al:</p>
                                     <p className="text-lg font-bold">{userProfile.phoneNumber}</p>
                                 </div>
                             </div>
@@ -291,38 +314,86 @@ export default function CheckoutPage() {
                                 <FormItem><FormLabel>Nombre de quien recibe</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                              )} />
                             
-                            {hasAddresses && (
-                                <FormField control={form.control} name="addressId" render={({ field }) => (
-                                    <FormItem><FormLabel>Mis Direcciones</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                            <SelectContent>
-                                                {userProfile.addresses?.map(addr => <SelectItem key={addr.id} value={addr.id}>{addr.street}</SelectItem>)}
-                                                <SelectItem value="new">Nueva dirección</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </FormItem>
-                                )} />
-                            )}
-                            
+                            <Separator />
+
+                            {/* SECCIÓN MAPA / GPS */}
+                            <div className="space-y-3">
+                                <FormLabel className="text-base font-semibold">1. Ubicación GPS (Obligatorio)</FormLabel>
+                                
+                                {addressIdValue === 'new' ? (
+                                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-3">
+                                        <p className="text-sm text-blue-800">
+                                            Para asegurar que tu pedido llegue bien, por favor comparte tu ubicación actual.
+                                        </p>
+                                        <Button 
+                                            type="button" 
+                                            onClick={handleGetLocation} 
+                                            disabled={locationStatus === 'loading' || locationStatus === 'success'}
+                                            className={`w-full ${locationStatus === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                        >
+                                            {locationStatus === 'loading' ? (
+                                                <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
+                                            ) : locationStatus === 'success' ? (
+                                                <><MapPin className="mr-2 h-4 w-4"/> ¡Ubicación Guardada!</>
+                                            ) : (
+                                                <><Crosshair className="mr-2 h-4 w-4"/> 📍 Usar mi ubicación actual</>
+                                            )}
+                                        </Button>
+                                        {locationStatus === 'success' && (
+                                            <p className="text-xs text-green-700 text-center font-medium">
+                                                Coordenadas: {coords?.latitude.toFixed(4)}, {coords?.longitude.toFixed(4)}
+                                            </p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Alert className="bg-gray-50">
+                                        <MapPin className="h-4 w-4" />
+                                        <AlertTitle>Usando dirección guardada</AlertTitle>
+                                        <AlertDescription className="text-xs text-muted-foreground">
+                                            Usaremos las coordenadas de tu dirección guardada.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+
+                                {/* SELECTOR DE DIRECCIONES GUARDADAS */}
+                                {hasAddresses && (
+                                    <FormField control={form.control} name="addressId" render={({ field }) => (
+                                        <FormItem className="mt-2">
+                                            <Select onValueChange={(val) => {
+                                                field.onChange(val);
+                                                if (val !== 'new') setLocationStatus('idle');
+                                            }} defaultValue={field.value}>
+                                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    {userProfile.addresses?.map(addr => <SelectItem key={addr.id} value={addr.id}>{addr.street}</SelectItem>)}
+                                                    <SelectItem value="new">+ Nueva ubicación</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </FormItem>
+                                    )} />
+                                )}
+                            </div>
+
+                            {/* SECCIÓN REFERENCIAS TEXTO */}
                             <FormField control={form.control} name="address" render={({ field }) => (
                                 <FormItem>
-                                    {!hasAddresses && <FormLabel>Dirección</FormLabel>}
+                                    <FormLabel className="text-base font-semibold">2. Referencias / Detalle</FormLabel>
                                     <FormControl>
                                         <Input 
-                                            placeholder="Calle, número, ciudad" 
+                                            placeholder="Ej: Casa blanca rejas negras, frente a la plaza." 
                                             {...field}
                                             disabled={hasAddresses && form.getValues('addressId') !== 'new'}
-                                            className={(!hasAddresses || form.getValues('addressId') === 'new') ? '' : 'bg-muted/50'}
                                         />
                                     </FormControl>
                                     <FormMessage />
+                                    <p className="text-xs text-muted-foreground">Ayuda al repartidor a identificar tu casa.</p>
                                 </FormItem>
                             )} />
+
                         </CardContent>
                     </Card>
 
-                     <Button type="submit" size="lg" className="w-full h-12 text-lg font-semibold shadow-md" disabled={isSubmitting}>
+                     <Button type="submit" size="lg" className="w-full h-14 text-lg font-bold shadow-lg bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
                         {isSubmitting ? (
                             <span className="flex items-center gap-2">
                                 <Loader2 className="h-5 w-5 animate-spin" /> Procesando...
@@ -330,12 +401,12 @@ export default function CheckoutPage() {
                         ) : (
                             <span className="flex items-center gap-2">
                                 <CreditCard className="h-5 w-5" />
-                                Pagar ${finalTotal.toFixed(2)} con MercadoPago
+                                Pagar ${finalTotal.toFixed(2)}
                             </span>
                         )}
                     </Button>
                     <p className="text-center text-xs text-muted-foreground flex justify-center items-center gap-1">
-                        <Lock className="h-3 w-3" /> Pagos procesados de forma segura
+                        <Lock className="h-3 w-3" /> Pagos procesados de forma segura con MercadoPago
                     </p>
                 </form>
             </Form>
@@ -343,22 +414,25 @@ export default function CheckoutPage() {
 
         {/* RESUMEN */}
         <div className="md:col-span-1">
-          <Card className="sticky top-20">
-            <CardHeader><CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Tu Pedido</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
+          <Card className="sticky top-24 shadow-md border-t-4 border-t-orange-500">
+            <CardHeader className="bg-muted/20"><CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-orange-600" /> Resumen del Pedido</CardTitle></CardHeader>
+            <CardContent className="space-y-4 pt-6">
               {cart.map(item => (
                 <div key={item.id} className="flex justify-between text-sm">
-                  <div><span className="font-medium">{item.name}</span> <span className="text-muted-foreground">x{item.quantity}</span></div>
+                  <div className="flex gap-2">
+                      <span className="font-bold text-muted-foreground">x{item.quantity}</span>
+                      <span className="font-medium line-clamp-1">{item.name}</span> 
+                  </div>
                   <span className="font-semibold">${(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
               <Separator />
                <div className="flex justify-between text-muted-foreground">
-                <p>Subtotal</p>
+                <p>Subtotal Productos</p>
                 <p>${totalPrice.toFixed(2)}</p>
               </div>
               <div className="flex justify-between text-muted-foreground">
-                <p>Envío</p>
+                <p>Costo de Envío</p>
                 <p>${shippingCost.toFixed(2)}</p>
               </div>
               {serviceFeeAmount > 0 && (
@@ -368,7 +442,7 @@ export default function CheckoutPage() {
                   </div>
               )}
               <Separator />
-              <div className="flex justify-between font-bold text-xl">
+              <div className="flex justify-between font-black text-2xl pt-2">
                 <p>Total</p>
                 <p className="text-green-600">${finalTotal.toFixed(2)}</p>
               </div>

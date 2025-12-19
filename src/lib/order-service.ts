@@ -9,13 +9,20 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 
-export type PaymentMethod = 'CARD';
+export type PaymentMethod = 'CARD' | 'Efectivo' | 'mercadopago'; // ✅ Agregado para soportar tus métodos reales
 
+// ✅ DICCIONARIO COMPLETO DE ESTADOS
+// Aquí unificamos todos los estados que usan Admin, Tienda y Delivery
 export type OrderStatus = 
+  | 'pending'
+  | 'Pendiente'
   | 'Pendiente de Confirmación'
   | 'Pendiente de Pago'
-  | 'En preparación'
-  | 'En reparto'
+  | 'Aceptado'             // Tienda aceptó
+  | 'En preparación'       // Cocinando
+  | 'Listo para recoger'   // Esperando Delivery
+  | 'En camino'            // Delivery yendo a buscarlo
+  | 'En reparto'           // Delivery yendo al cliente
   | 'Entregado'
   | 'Cancelado'
   | 'Rechazado';
@@ -45,7 +52,7 @@ export interface Order {
   deliveryFee: number;
   serviceFee: number;
   total: number;
-  paymentMethod: PaymentMethod;
+  paymentMethod: string; // Lo relajamos a string para evitar conflictos con variantes
   createdAt: Timestamp | Date;
   shippingInfo?: { name: string; address: string; };
   shippingAddress: { name: string; address: string; };
@@ -58,11 +65,13 @@ export interface Order {
   deliveryReview?: string;
 
   // ✅ NUEVOS CAMPOS FINANCIEROS (SEPARADOS)
-  // Permiten saber si ya le pagaste a la tienda y al repartidor por separado.
   storePayoutStatus?: 'pending' | 'paid'; 
   deliveryPayoutStatus?: 'pending' | 'paid'; 
   
   payoutDate?: any; 
+  
+  // Datos del driver para el mapa en tiempo real
+  driverCoords?: { latitude: number; longitude: number };
 }
 
 export interface CreateOrderInput {
@@ -107,7 +116,7 @@ export const OrderService = {
                 icon: 'bell'
             });
 
-            // Disparar notificación Push (opcional si tienes configurado el API route)
+            // Disparar notificación Push (opcional)
             fetch('/api/notify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -140,7 +149,7 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
               items: input.items,
               shippingInfo: input.shippingInfo,
               storeId: input.storeId,
-              paymentMethod: 'CARD', 
+              paymentMethod: 'CARD', // Ojo: Esto se debería dinámicar luego si usas efectivo
               customerCoords: input.customerCoords 
           }),
       });
@@ -166,6 +175,7 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
   }
 };
 
+// ✅ GESTIÓN CENTRALIZADA DE ESTADOS Y NOTIFICACIONES
 export const updateOrderStatus = async (db: Firestore, orderId: string, status: OrderStatus) => {
   if (!db) throw new Error("Firestore instance is required");
   
@@ -192,9 +202,18 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
                   title = "👨‍🍳 Cocinando";
                   message = `${storeName} está preparando tu pedido.`;
                   break;
+              case 'Listo para recoger':
+                   // Opcional: Avisar al cliente que ya casi sale
+                   // title = "🥡 Pedido Listo";
+                   // message = "Esperando que el repartidor lo retire.";
+                   break;
+              case 'En camino': // ✅ NUEVO: Cuando el delivery toma el viaje
+                  title = "🛵 Repartidor Asignado";
+                  message = "Un repartidor está yendo a retirar tu pedido.";
+                  break;
               case 'En reparto':
-                  title = "🛵 ¡En Camino!";
-                  message = "El repartidor está yendo a tu domicilio.";
+                  title = "🚀 ¡En Camino a tu casa!";
+                  message = "El repartidor ya tiene tu pedido y va hacia ti.";
                   break;
               case 'Entregado':
                   title = "🏠 ¡Llegamos!";

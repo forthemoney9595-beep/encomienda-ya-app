@@ -1,17 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, CheckCircle2, MapPin, ShoppingBag, LocateFixed } from 'lucide-react'; // Agregamos LocateFixed
+import { Loader2, CheckCircle2, MapPin, ShoppingBag, LocateFixed, Crosshair, AlertTriangle } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
 import { OrderService } from '@/lib/order-service';
-import { useFirestore } from '@/lib/firebase';
+// ✅ IMPORTANTE: Agregamos useDoc y useMemoFirebase para leer la config
+import { useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore'; 
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+
+// ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Igual que en checkout/page.tsx)
+const FIXED_SHIPPING_COST = 2000; 
 
 interface CheckoutDialogProps {
   open: boolean;
@@ -26,12 +30,13 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const router = useRouter();
 
   // Estados de Formulario
-  const [address, setAddress] = useState(''); 
+  const [address, setAddress] = useState(''); // Ahora es solo REFERENCIA
   const [phone, setPhone] = useState(userProfile?.phoneNumber || '');
   
-  // ✅ NUEVO: Estado para guardar coordenadas GPS
+  // ✅ Estado para guardar coordenadas GPS
   const [locationCoords, setLocationCoords] = useState<{latitude: number, longitude: number} | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   // Estados de Tienda
   const [storeName, setStoreName] = useState('Tienda');
@@ -41,7 +46,24 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const { total } = OrderService.calculateTotals(cartSubtotal);
+  // --- 💰 LOGICA FINANCIERA (NUEVA) ---
+  // 1. Obtener Configuración Global (Fee %)
+  const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
+  const { data: globalConfig } = useDoc<{ serviceFee?: number }>(configRef);
+
+  // 2. Calcular Totales Exactos
+  const { serviceFeeAmount, finalTotal } = useMemo(() => {
+    const feePercentage = globalConfig?.serviceFee || 0;
+    const fee = (cartSubtotal * feePercentage) / 100;
+    const shipping = FIXED_SHIPPING_COST; 
+    const total = cartSubtotal + fee + shipping;
+    
+    return {
+        serviceFeeAmount: fee,
+        finalTotal: total
+    };
+  }, [cartSubtotal, globalConfig]);
+
 
   useEffect(() => {
     const fetchStoreDetails = async () => {
@@ -62,7 +84,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     if (open) fetchStoreDetails();
   }, [storeId, firestore, open]);
 
-  // ✅ NUEVA FUNCION: Obtener GPS del navegador
+  // ✅ FUNCION: Obtener GPS del navegador
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
         toast({ variant: "destructive", title: "Error", description: "Tu navegador no soporta geolocalización." });
@@ -75,15 +97,15 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         (position) => {
             const { latitude, longitude } = position.coords;
             setLocationCoords({ latitude, longitude });
-            // Rellenamos el input visualmente para que el usuario sepa que funcionó
-            setAddress("📍 Ubicación GPS Actual"); 
+            setLocationStatus('success');
             setIsLocating(false);
-            toast({ title: "Ubicación detectada", description: "Coordenadas guardadas correctamente." });
+            toast({ title: "Ubicación detectada", description: "Coordenadas guardadas para el mapa." });
         },
         (error) => {
             console.error("Error GPS:", error);
             setIsLocating(false);
-            toast({ variant: "destructive", title: "Error GPS", description: "No pudimos obtener tu ubicación. Escríbela manualmente." });
+            setLocationStatus('error');
+            toast({ variant: "destructive", title: "Error GPS", description: "Asegúrate de permitir el acceso a tu ubicación." });
         },
         { enableHighAccuracy: true }
     );
@@ -94,15 +116,25 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión." });
         return;
     }
+
+    // 🔒 VALIDACIÓN ESTRICTA DE GPS
+    if (!locationCoords) {
+        toast({ 
+            variant: "destructive", 
+            title: "Falta Ubicación GPS", 
+            description: "Por favor presiona '📍 Usar mi ubicación actual' para que el delivery sepa dónde ir." 
+        });
+        return;
+    }
+
     if (!address) {
-        toast({ variant: "destructive", title: "Falta dirección", description: "Ingresa la dirección de entrega." });
+        toast({ variant: "destructive", title: "Falta Referencia", description: "Escribe un detalle de tu casa (ej: Portón negro)." });
         return;
     }
 
     setIsProcessing(true);
 
     try {
-        // ⚠️ MANTENEMOS LA LIMPIEZA DE PRECIOS (NO TOCAR)
         const cleanItems = items.map((i: any) => ({
             id: i.id,
             title: i.name || i.title || 'Producto',
@@ -126,9 +158,9 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 storeAddress: storeAddress,
                 shippingInfo: {
                     name: userProfile?.name || user.displayName || 'Cliente',
-                    address: address // Texto visual
+                    address: address // Enviamos la referencia visual escrita
                 },
-                // ✅ ENVIAMOS LAS COORDENADAS (Esto activa el mapa)
+                // ✅ ENVIAMOS LAS COORDENADAS
                 customerCoords: locationCoords, 
                 
                 customerName: userProfile?.name || user.displayName || 'Cliente',
@@ -151,6 +183,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             // Limpiamos estados locales
             setAddress('');
             setLocationCoords(null);
+            setLocationStatus('idle');
             
             if (result.orderId) {
                 router.push(`/orders/${result.orderId}`); 
@@ -196,31 +229,51 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         </DialogHeader>
         
         <div className="grid gap-6 py-2">
-          <div className="space-y-3">
-            <h4 className="font-semibold text-sm flex items-center gap-2"><MapPin className="h-4 w-4"/> Dirección de Entrega</h4>
+          
+          {/* SECCIÓN DE DIRECCIÓN Y GPS */}
+          <div className="space-y-3 bg-muted/20 p-4 rounded-xl border">
+            <h4 className="font-semibold text-sm flex items-center gap-2"><MapPin className="h-4 w-4 text-primary"/> ¿Dónde entregamos?</h4>
             
-            {/* Input con Botón de GPS integrado */}
-            <div className="flex gap-2">
+            {/* BOTÓN GPS */}
+            <Button 
+                type="button" 
+                onClick={handleGetLocation} 
+                disabled={isLocating || locationStatus === 'success'}
+                variant={locationStatus === 'success' ? 'outline' : 'default'}
+                className={`w-full justify-start ${locationStatus === 'success' ? 'border-green-500 bg-green-50 text-green-700 hover:bg-green-100' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+            >
+                {isLocating ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
+                ) : locationStatus === 'success' ? (
+                    <><CheckCircle2 className="mr-2 h-4 w-4"/> Ubicación Guardada Correctamente</>
+                ) : (
+                    <><Crosshair className="mr-2 h-4 w-4"/> 📍 Usar mi ubicación actual (Obligatorio)</>
+                )}
+            </Button>
+            
+            {locationStatus === 'error' && (
+                <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No pudimos obtener tu ubicación. Activa el GPS.</p>
+            )}
+
+            {/* INPUT REFERENCIA VISUAL */}
+            <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground ml-1">Referencias visuales (Casa, portón, etc)</label>
                 <Input 
-                    placeholder="Dirección exacta" 
+                    placeholder="Ej: Casa blanca rejas negras, frente a plaza." 
                     value={address} 
                     onChange={(e) => setAddress(e.target.value)} 
-                    className="bg-muted/30 flex-1" 
+                    // ✅ Mantenemos tu fix de color negro
+                    className="bg-white text-black placeholder:text-gray-400" 
                 />
-                <Button 
-                    variant="outline" 
-                    size="icon" 
-                    onClick={handleGetLocation} 
-                    disabled={isLocating}
-                    title="Usar mi ubicación actual"
-                    className="shrink-0"
-                >
-                    {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4 text-blue-600" />}
-                </Button>
             </div>
-            {locationCoords && <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3"/> Coordenadas GPS listas para el mapa</p>}
 
-            <Input placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-muted/30" />
+            <Input 
+                placeholder="Teléfono de contacto" 
+                value={phone} 
+                onChange={(e) => setPhone(e.target.value)} 
+                // ✅ Mantenemos tu fix de color negro
+                className="bg-white text-black placeholder:text-gray-400" 
+            />
           </div>
 
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 flex items-start gap-3">
@@ -233,8 +286,27 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
               </div>
           </div>
 
-          <div className="bg-muted/50 p-4 rounded-lg space-y-1 text-sm border">
-            <div className="flex justify-between font-bold text-base text-primary"><span>Total Estimado</span><span>${total.toLocaleString()}</span></div>
+          {/* ✅ DESGLOSE DE PRECIO EXACTO */}
+          <div className="bg-muted/50 p-4 rounded-lg space-y-2 text-sm border">
+             <div className="flex justify-between text-muted-foreground">
+                <span>Subtotal</span>
+                <span>${cartSubtotal.toLocaleString()}</span>
+             </div>
+             <div className="flex justify-between text-muted-foreground">
+                <span>Envío</span>
+                <span>${FIXED_SHIPPING_COST.toLocaleString()}</span>
+             </div>
+             {serviceFeeAmount > 0 && (
+                 <div className="flex justify-between text-muted-foreground">
+                    <span>Servicio</span>
+                    <span>${serviceFeeAmount.toLocaleString()}</span>
+                 </div>
+             )}
+             
+             <div className="border-t pt-2 mt-2 flex justify-between font-bold text-base text-primary">
+                <span>Total Estimado</span>
+                <span>${finalTotal.toLocaleString()}</span>
+            </div>
           </div>
         </div>
 
