@@ -161,6 +161,16 @@ export default function CheckoutPage() {
         return;
     }
 
+    // 🔒 BLOQUEAR SI EMAIL NO VERIFICADO
+    if (user && !user.emailVerified) {
+        toast({
+            variant: "destructive",
+            title: "Email no verificado",
+            description: "Verificá tu correo electrónico antes de realizar un pedido. Revisá tu bandeja de entrada.",
+        });
+        return;
+    }
+
     // 🔒 OBLIGAR GPS SI ES NUEVA DIRECCIÓN
     if (addressIdValue === 'new' && !coords) {
         toast({ 

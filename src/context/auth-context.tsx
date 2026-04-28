@@ -107,7 +107,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(currentUser);
 
       if (currentUser) {
-        // ✅ Apenas detectamos usuario, intentamos registrar notificaciones
+        // Si el email aún no fue verificado, intentamos recargar el estado
+        // para detectar si el usuario ya hizo click en el link de verificación
+        if (!currentUser.emailVerified) {
+            currentUser.reload().catch(() => {});
+        }
+
         registerPushNotifications(currentUser.uid);
 
         const profileRef = doc(db, 'users', currentUser.uid);
