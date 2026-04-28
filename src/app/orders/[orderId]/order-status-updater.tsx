@@ -30,7 +30,7 @@ const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
 
 export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { user: appUser, userProfile } = useAuth();
-  const firestore = useFirestore();
+  const firestore = useFirestore(); // usado por handleUpdateStatus y handleBuyerPayment
   const router = useRouter();
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
@@ -38,14 +38,20 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const handleCancelOrder = async () => {
-    if (!firestore) return;
+    if (!appUser) return;
     setIsUpdating(true);
     try {
-      await updateOrderStatus(firestore, order.id, 'Cancelado');
+      const res = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, userId: appUser.uid }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error desconocido');
       toast({ title: 'Pedido cancelado', description: 'Tu pedido fue cancelado correctamente.' });
       router.refresh();
-    } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo cancelar el pedido.' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message || 'No se pudo cancelar el pedido.' });
     } finally {
       setIsUpdating(false);
       setShowCancelDialog(false);
