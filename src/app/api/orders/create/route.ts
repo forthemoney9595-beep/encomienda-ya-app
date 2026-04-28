@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
-// ✅ Importamos adminMessaging para poder enviar Push
-import { adminDb, adminMessaging } from "@/lib/firebase-admin"; 
+import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 const FIXED_SHIPPING_COST = 2000; 
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const { allowed } = checkRateLimit(ip, 'orders:create', 5, 60_000);
+  if (!allowed) {
+    return NextResponse.json({ error: "Demasiadas solicitudes. Espera un momento." }, { status: 429 });
+  }
+
   try {
     const body = await request.json();
     const { userId, items, shippingInfo, storeId, paymentMethod, customerCoords } = body;

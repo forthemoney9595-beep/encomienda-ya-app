@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import MercadoPagoConfig, { Preference } from 'mercadopago';
 import { adminDb } from '@/lib/firebase-admin';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
+    const ip = getClientIp(request);
+    const { allowed } = checkRateLimit(ip, 'checkout', 5, 60_000);
+    if (!allowed) {
+        return NextResponse.json({ error: "Demasiadas solicitudes. Espera un momento." }, { status: 429 });
+    }
+
     // 1. Verificar Token
     const accessToken = process.env.MP_ACCESS_TOKEN;
     if (!accessToken) {
@@ -15,7 +22,7 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
 
-        const { orderId, items, payerEmail, userId, storeId, storeOwnerId } = body;
+        const { orderId, items, payerEmail, storeId } = body;
 
         // 2. Validación básica
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -24,6 +31,15 @@ export async function POST(request: Request) {
         if (!storeId || !orderId) {
             return NextResponse.json({ error: "Faltan storeId u orderId" }, { status: 400 });
         }
+
+        // 🔐 Obtener storeOwnerId y userId desde Firestore — nunca del cliente
+        const orderSnap = await adminDb.collection("orders").doc(orderId).get();
+        if (!orderSnap.exists) {
+            return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 });
+        }
+        const orderData = orderSnap.data()!;
+        const storeOwnerId: string = orderData.storeOwnerId || orderData.storeId;
+        const userId: string = orderData.userId;
 
         // 🔐 Verificar precios reales contra Firestore — evita manipulación desde el cliente
         const verifiedItems: { id: string; title: string; quantity: number; unit_price: number }[] = [];
@@ -86,12 +102,11 @@ export async function POST(request: Request) {
                 payer: {
                     email: payerEmail || 'test_user_encomiendaya@test.com'
                 },
-                // ⚠️ METADATA CRÍTICA: Aquí guardamos los IDs para el viaje de ida y vuelta
                 metadata: {
                     order_id: orderId,
-                    buyer_id: userId || 'unknown_user',
-                    store_id: storeId || 'unknown_store',
-                    store_owner_id: storeOwnerId || 'unknown_owner' // ✅ AGREGADO: El ID del dueño real
+                    buyer_id: userId,
+                    store_id: storeId,
+                    store_owner_id: storeOwnerId,
                 },
                 notification_url: notificationUrl,
                 back_urls: {
@@ -104,10 +119,7 @@ export async function POST(request: Request) {
         });
 
         const urlToReturn = result.init_point;
-
-        // ⭐⭐ MARCA DE AGUA V3: Actualizada para confirmar el cambio
-        console.log("⭐⭐ [Checkout API V3] URL Generada:", urlToReturn);
-        
+        console.log(`✅ [Checkout API] Preferencia creada para orden ${orderId}`);
         return NextResponse.json({ url: urlToReturn });
 
     } catch (error: any) {
