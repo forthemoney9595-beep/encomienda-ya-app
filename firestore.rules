@@ -87,9 +87,11 @@ service cloud.firestore {
     }
 
     // 6. NOTIFICACIONES
+    // create: cualquier usuario logueado puede crear (tienda notifica al delivery, etc.)
+    // read/update/delete: solo el destinatario puede ver/marcar sus propias notificaciones
     match /notifications/{notifId} {
       allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if false; // El sistema las crea, no el usuario
+      allow create: if isSignedIn();
     }
 
     // 7. CHATS — solo participantes de la orden (cliente, tienda, repartidor, admin)
