@@ -19,9 +19,14 @@ interface OrderStatusUpdaterProps {
 }
 
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
-  'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'], 
-  'Pendiente de Pago': ['En preparación'], 
-  'En preparación': ['En reparto'],
+  'pending': [],
+  'Pendiente': [],
+  'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'],
+  'Pendiente de Pago': ['En preparación'],
+  'Aceptado': ['En preparación'],
+  'En preparación': ['Listo para recoger', 'En reparto'],
+  'Listo para recoger': ['En camino', 'En reparto'],
+  'En camino': ['En reparto'],
   'En reparto': ['Entregado'],
   'Entregado': [],
   'Cancelado': [],

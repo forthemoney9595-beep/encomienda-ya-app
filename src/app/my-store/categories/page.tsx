@@ -6,7 +6,8 @@ import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PlusCircle, Tag, Trash2, Edit, Loader2 } from 'lucide-react';
-import { useAuth, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ManageCategoryDialog } from './manage-category-dialog';
@@ -16,15 +17,15 @@ import { doc, updateDoc } from 'firebase/firestore';
 import type { Store } from '@/lib/placeholder-data';
 
 export default function StoreCategoriesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
 
   const storeRef = useMemoFirebase(() => {
-    if (!firestore || !user?.storeId) return null;
-    return doc(firestore, 'stores', user.storeId);
-  }, [firestore, user?.storeId]);
+    if (!firestore || !userProfile?.storeId) return null;
+    return doc(firestore, 'stores', userProfile.storeId!);
+  }, [firestore, userProfile?.storeId]);
 
   const { data: store, isLoading: storeLoading } = useDoc<Store>(storeRef);
   
@@ -35,7 +36,7 @@ export default function StoreCategoriesPage() {
   const isLoading = authLoading || storeLoading;
 
   useEffect(() => {
-    if (!isLoading && (!user || user.role !== 'store' || !user.storeId)) {
+    if (!isLoading && (!user || userProfile?.role !== 'store' || !userProfile?.storeId)) {
       router.push('/');
     }
   }, [user, isLoading, router]);

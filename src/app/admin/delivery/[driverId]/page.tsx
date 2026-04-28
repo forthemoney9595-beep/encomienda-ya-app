@@ -224,7 +224,7 @@ function DriverProfilePage() {
                 orderId: order.id,
                 rating: order.deliveryRating!,
                 review: order.deliveryReview || '',
-                date: order.createdAt,
+                date: (order.createdAt as any)?.toDate ? (order.createdAt as any).toDate() : new Date(order.createdAt as any),
                 customerName: order.customerName,
             }));
     }, [orders]);
@@ -302,7 +302,7 @@ function DriverProfilePage() {
                             </div>
                             <div className="flex items-center gap-3 text-sm">
                                 <Car className="h-4 w-4 text-muted-foreground" />
-                                <span className="capitalize">{driver.vehicle}</span>
+                                <span className="capitalize">{typeof driver.vehicle === 'string' ? driver.vehicle : driver.vehicle?.type || 'N/A'}</span>
                             </div>
                         </CardContent>
                     </Card>

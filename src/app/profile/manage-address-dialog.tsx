@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
-import type { Address } from '@/lib/user';
+import type { Address } from '@/lib/placeholder-data';
 
 const addressSchema = z.object({
   label: z.enum(['Casa', 'Oficina', 'Otro'], { required_error: 'Debes seleccionar una etiqueta.' }),
@@ -42,7 +42,12 @@ export function ManageAddressDialog({ isOpen, setIsOpen, onSave, address }: Mana
   useEffect(() => {
     if (isOpen) {
       if (address) {
-        form.reset(address);
+        form.reset({
+          label: address.label as 'Casa' | 'Oficina' | 'Otro',
+          street: address.street,
+          city: address.city,
+          postalCode: address.postalCode || address.zipCode || '',
+        });
       } else {
         form.reset({ label: 'Casa', street: '', city: '', postalCode: '' });
       }
@@ -51,8 +56,12 @@ export function ManageAddressDialog({ isOpen, setIsOpen, onSave, address }: Mana
 
   const handleSubmit = (values: z.infer<typeof addressSchema>) => {
     const newAddress: Address = {
-      id: isEditing ? address.id : `addr-${Date.now()}`,
-      ...values,
+      id: isEditing ? address!.id : `addr-${Date.now()}`,
+      label: values.label,
+      street: values.street,
+      city: values.city,
+      postalCode: values.postalCode,
+      zipCode: values.postalCode,
     };
     onSave(newAddress);
   };

@@ -61,7 +61,7 @@ export default function SignupBuyerPage() {
             name: values.name,
             email: values.email,
             role: isActualAdmin ? 'admin' : 'buyer' as const,
-            addresses: [],
+            addresses: [] as { id: string; street: string; city: string; zipCode: string }[],
         };
         batch.set(userDocRef, userProfile);
         

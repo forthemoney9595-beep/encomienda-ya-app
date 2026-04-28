@@ -45,7 +45,12 @@ export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: Manage
   useEffect(() => {
     if (isOpen) {
       if (driver) {
-        form.reset(driver);
+        form.reset({
+          name: driver.name,
+          email: driver.email,
+          vehicle: (driver.vehicle as 'motocicleta' | 'automovil' | 'bicicleta') || 'motocicleta',
+          status: (driver.status as 'Activo' | 'Pendiente' | 'Inactivo' | 'Rechazado') || 'Pendiente',
+        });
       } else {
         form.reset({ name: '', email: '', vehicle: 'motocicleta', status: 'Pendiente' });
       }
@@ -55,8 +60,11 @@ export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: Manage
   const handleSubmit = (values: FormData) => {
     const driverData: DeliveryPersonnel = {
       id: isEditing && driver ? driver.id : `proto-delivery-${Date.now()}`,
-      ...values,
-      zone: isEditing && driver ? driver.zone : 'Centro',
+      name: values.name,
+      email: values.email,
+      vehicle: values.vehicle,
+      status: values.status,
+      zone: isEditing && driver ? (driver as any).zone : 'Centro',
     };
     onSave(driverData);
   };

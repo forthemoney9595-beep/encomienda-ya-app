@@ -14,7 +14,8 @@ import {
   DocumentReference,
   Firestore,
 } from 'firebase/firestore';
-import type { UserProfile, Address, Store } from './placeholder-data';
+import type { Address, Store } from './placeholder-data';
+import type { UserProfile } from '@/context/auth-context';
 import { getPlaceholderImage } from './placeholder-images';
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 
@@ -116,7 +117,10 @@ export async function createStoreForUser(db: Firestore, ownerId: string, storeDa
         imageUrl: getPlaceholderImage(storeData.name.replace(/\s/g, ''), 600, 400),
         imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
         products: [],
-        horario: "9am - 5pm (simulado)"
+        horario: "9am - 5pm (simulado)",
+        rating: 0,
+        deliveryTime: "30-45 min",
+        minOrder: 500,
     };
 
     const storeDocRef = await addDoc(storesCollectionRef, newStoreData);
