@@ -24,9 +24,9 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // 2. ROLES ADMIN
+    // 2. ROLES ADMIN — solo el propio usuario puede leer su doc (para saber si es admin)
     match /roles_admin/{uid} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || isOwner(uid);
       allow write: if isAdmin();
     }
 
@@ -92,9 +92,14 @@ service cloud.firestore {
       allow create: if false; // El sistema las crea, no el usuario
     }
 
-    // 7. CHATS
+    // 7. CHATS — solo participantes de la orden (cliente, tienda, repartidor, admin)
     match /order_chats/{orderId}/messages/{msgId} {
-      allow read, create: if isSignedIn();
+      allow read, create: if isSignedIn() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryPersonId == request.auth.uid ||
+        isStoreOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.storeId)
+      );
     }
   }
 }

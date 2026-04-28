@@ -132,29 +132,24 @@ export default function OrderTrackingPage() {
   useEffect(() => {
     const status = searchParams.get('status');
     if (status && order && !processedPayment.current) {
-        if (status === 'success' && order.status === 'Pendiente de Pago') {
+        if (status === 'success') {
             processedPayment.current = true;
-            const confirmPayment = async () => {
-                if(!orderRef) return;
-                try {
-                    const response = await fetch('/api/orders/confirm-payment', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ orderId: order.id })
-                    });
-                    if (response.ok) {
-                        toast({ 
-                            title: "¡Pago Exitoso!", 
-                            description: "Tu pedido ya se está preparando.",
-                            className: "bg-green-50 border-green-200 text-green-900"
-                        });
-                        router.replace(`/orders/${orderId}`);
-                    }
-                } catch (e) {
-                    console.error("Error confirmando pago:", e);
-                }
-            };
-            confirmPayment();
+            // El webhook de MercadoPago actualiza Firestore directamente con firma HMAC verificada.
+            // El listener en tiempo real (useDoc) reflejará el cambio automáticamente en segundos.
+            if (order.status === 'En preparación') {
+                toast({
+                    title: "¡Pago Exitoso!",
+                    description: "Tu pedido ya se está preparando.",
+                    className: "bg-green-50 border-green-200 text-green-900"
+                });
+            } else {
+                toast({
+                    title: "¡Pago recibido!",
+                    description: "Verificando con MercadoPago... El estado se actualizará en instantes.",
+                    className: "bg-green-50 border-green-200 text-green-900"
+                });
+            }
+            router.replace(`/orders/${orderId}`);
         } else if (status === 'failure') {
             toast({
                 variant: "destructive",
@@ -164,7 +159,7 @@ export default function OrderTrackingPage() {
             router.replace(`/orders/${orderId}?retry=true`);
         }
     }
-  }, [searchParams, order, orderRef, router, toast, orderId]);
+  }, [searchParams, order, router, toast, orderId]);
 
   useEffect(() => {
     if (!isLoading && order && myUserProfile) {

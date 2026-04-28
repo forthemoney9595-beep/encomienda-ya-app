@@ -44,6 +44,7 @@ export interface Order {
   customerName: string;
   customerPhoneNumber?: string; 
   storeId: string;
+  storeOwnerId?: string | null;
   storeName: string;
   storeAddress?: string;
   status: OrderStatus;
