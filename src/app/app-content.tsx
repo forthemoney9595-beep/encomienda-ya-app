@@ -12,10 +12,11 @@ import Link from 'next/link';
 import { Notifications } from '@/components/notifications';
 import { Cart } from '@/components/cart';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { User, LogOut, Shield, Loader2, ChevronsUpDown, Store } from 'lucide-react'; // Importamos Store icon
+import { User, LogOut, Shield, Loader2, ChevronsUpDown, Store, MailWarning } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
-import { getAuth, signOut } from 'firebase/auth';
+import { getAuth, signOut, sendEmailVerification } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 // Definición de tipo para el contexto con las propiedades extendidas
 interface AuthContextWithAdmin extends ReturnType<typeof useAuth> {
@@ -125,6 +126,35 @@ function UserMenu() {
     )
 }
 
+function EmailVerificationBanner({ user }: { user: any }) {
+    const { toast } = useToast();
+    const [sending, setSending] = useState(false);
+
+    const handleResend = async () => {
+        setSending(true);
+        try {
+            await sendEmailVerification(user);
+            toast({ title: "Correo reenviado", description: "Revisá tu bandeja de entrada." });
+        } catch {
+            toast({ variant: "destructive", title: "Error", description: "No se pudo reenviar el correo." });
+        } finally {
+            setSending(false);
+        }
+    };
+
+    return (
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 flex items-center justify-between gap-4 text-sm text-yellow-800">
+            <div className="flex items-center gap-2">
+                <MailWarning className="h-4 w-4 shrink-0" />
+                <span>Verificá tu correo electrónico para acceder a todas las funciones.</span>
+            </div>
+            <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs border-yellow-400 hover:bg-yellow-100" onClick={handleResend} disabled={sending}>
+                {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Reenviar correo"}
+            </Button>
+        </div>
+    );
+}
+
 function AppContentLayout({ children }: { children: React.ReactNode }) {
     const { user, loading } = useAuth();
     const pathname = usePathname();
@@ -191,6 +221,9 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                         
                     </div>
                 </header>
+                {user && !user.emailVerified && !isLoginPage && (
+                    <EmailVerificationBanner user={user} />
+                )}
                 <main className="flex-1 p-4 md:p-6">
                     {children}
                 </main>

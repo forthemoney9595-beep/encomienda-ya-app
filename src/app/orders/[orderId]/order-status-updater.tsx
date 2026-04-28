@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-// ✅ CORRECCIÓN: Agregado 'Clock' a los imports
-import { Loader2, CreditCard, AlertTriangle, CheckCircle2, XCircle, Clock, ShoppingBag } from 'lucide-react';
+import { Loader2, CreditCard, AlertTriangle, CheckCircle2, XCircle, Clock, ShoppingBag, Ban } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface OrderStatusUpdaterProps {
   order: Order;
@@ -35,6 +35,22 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  const handleCancelOrder = async () => {
+    if (!firestore) return;
+    setIsUpdating(true);
+    try {
+      await updateOrderStatus(firestore, order.id, 'Cancelado');
+      toast({ title: 'Pedido cancelado', description: 'Tu pedido fue cancelado correctamente.' });
+      router.refresh();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo cancelar el pedido.' });
+    } finally {
+      setIsUpdating(false);
+      setShowCancelDialog(false);
+    }
+  };
 
   // Lógica de permisos
   const isStoreOwner = userProfile?.role === 'store' && userProfile?.storeId === order.storeId;
@@ -162,41 +178,84 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   // --- ESCENARIO 1: CLIENTE ESPERANDO CONFIRMACIÓN ---
   if (isBuyer && order.status === 'Pendiente de Confirmación') {
       return (
-        <CardFooter className="flex-col gap-4">
-             <Alert className="bg-yellow-50 border-yellow-200">
-                 <Clock className="h-4 w-4 text-yellow-600" />
-                 <AlertTitle className="text-yellow-800">Verificando disponibilidad</AlertTitle>
-                 <AlertDescription className="text-yellow-700">
-                    La tienda está revisando si tiene stock. Podrás pagar en cuanto confirmen.
-                 </AlertDescription>
-            </Alert>
-            <Button disabled variant="outline" className="w-full opacity-50 cursor-not-allowed">
-                 Esperando a la tienda...
-            </Button>
-        </CardFooter>
+        <>
+          <CardFooter className="flex-col gap-4">
+              <Alert className="bg-yellow-50 border-yellow-200">
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                  <AlertTitle className="text-yellow-800">Verificando disponibilidad</AlertTitle>
+                  <AlertDescription className="text-yellow-700">
+                     La tienda está revisando si tiene stock. Podrás pagar en cuanto confirmen.
+                  </AlertDescription>
+              </Alert>
+              <div className="flex w-full gap-3">
+                  <Button disabled variant="outline" className="flex-1 opacity-50 cursor-not-allowed">
+                      Esperando a la tienda...
+                  </Button>
+                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
+                      <Ban className="mr-2 h-4 w-4" /> Cancelar
+                  </Button>
+              </div>
+          </CardFooter>
+          <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle>¿Cancelar el pedido?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                          El pedido será cancelado y la tienda será notificada. Esta acción no se puede deshacer.
+                      </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel>Volver</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleCancelOrder} className="bg-red-600 hover:bg-red-700">
+                          {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Sí, cancelar pedido
+                      </AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+          </AlertDialog>
+        </>
       );
   }
 
   // --- ESCENARIO 2: CLIENTE PAGA ---
   if (isBuyer && order.status === 'Pendiente de Pago') {
     return (
-      <CardFooter className="flex-col gap-4">
-        <Alert className="bg-green-50 border-green-200">
-             <CheckCircle2 className="h-4 w-4 text-green-600" />
-             <AlertTitle className="text-green-800">¡Stock Confirmado!</AlertTitle>
-             <AlertDescription className="text-green-700">
-                Tus productos están reservados. Realiza el pago para finalizar.
-             </AlertDescription>
-        </Alert>
-        
-        <Button onClick={handleBuyerPayment} disabled={isUpdating} className="w-full h-12 text-lg shadow-md bg-blue-600 hover:bg-blue-700 text-white">
-            {isUpdating ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
-            Pagar ${order.total.toFixed(2)} Ahora
-        </Button>
-        <p className="text-xs text-muted-foreground text-center">
-            * Procesado seguro vía MercadoPago
-        </p>
-      </CardFooter>
+      <>
+        <CardFooter className="flex-col gap-4">
+          <Alert className="bg-green-50 border-green-200">
+               <CheckCircle2 className="h-4 w-4 text-green-600" />
+               <AlertTitle className="text-green-800">¡Stock Confirmado!</AlertTitle>
+               <AlertDescription className="text-green-700">
+                  Tus productos están reservados. Realiza el pago para finalizar.
+               </AlertDescription>
+          </Alert>
+          <Button onClick={handleBuyerPayment} disabled={isUpdating} className="w-full h-12 text-lg shadow-md bg-blue-600 hover:bg-blue-700 text-white">
+              {isUpdating ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
+              Pagar ${order.total.toFixed(2)} Ahora
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">* Procesado seguro vía MercadoPago</p>
+          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 w-full" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
+              <Ban className="mr-2 h-3 w-3" /> Cancelar este pedido
+          </Button>
+        </CardFooter>
+        <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Cancelar el pedido?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        El pedido aún no fue pagado. Será cancelado y la tienda será notificada.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Volver</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleCancelOrder} className="bg-red-600 hover:bg-red-700">
+                        {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Sí, cancelar pedido
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      </>
     );
   }
 

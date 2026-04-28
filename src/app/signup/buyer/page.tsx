@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, AuthErrorCodes } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, AuthErrorCodes } from 'firebase/auth';
 import { doc, setDoc, writeBatch } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { createUserProfile } from '@/lib/user-service';
@@ -73,10 +73,11 @@ export default function SignupBuyerPage() {
         
         // 3. Commit both writes as a single transaction
         await batch.commit();
-        
+        await sendEmailVerification(user);
+
         toast({
             title: "¡Cuenta Creada!",
-            description: "Tu cuenta ha sido creada con éxito. Serás redirigido.",
+            description: "Te enviamos un correo de verificación. Revisá tu bandeja de entrada.",
         });
         router.push('/');
 
@@ -168,10 +169,13 @@ export default function SignupBuyerPage() {
               </Button>
               <div className="mt-4 text-center text-sm">
                 ¿Ya tienes una cuenta?{" "}
-                <Link href="/login" className="underline">
-                  Iniciar Sesión
-                </Link>
+                <Link href="/login" className="underline">Iniciar Sesión</Link>
               </div>
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                Al registrarte aceptás nuestros{' '}
+                <Link href="/terms" className="underline">Términos</Link> y{' '}
+                <Link href="/privacy" className="underline">Política de Privacidad</Link>.
+              </p>
             </CardFooter>
           </form>
         </Form>

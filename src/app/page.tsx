@@ -293,8 +293,13 @@ function HomeContent() {
             <HeroSection />
             <FeaturesSection />
             {/* Footer simple */}
-            <footer className="py-6 text-center text-sm text-muted-foreground border-t">
-                © 2024 EncomiendaYA. Todos los derechos reservados.
+            <footer className="py-6 text-center text-sm text-muted-foreground border-t space-y-2">
+                <p>© 2025 EncomiendaYA. Todos los derechos reservados.</p>
+                <div className="flex justify-center gap-4">
+                    <Link href="/terms" className="underline hover:text-foreground">Términos y Condiciones</Link>
+                    <Link href="/privacy" className="underline hover:text-foreground">Política de Privacidad</Link>
+                    <Link href="/support" className="underline hover:text-foreground">Soporte</Link>
+                </div>
             </footer>
         </div>
     );

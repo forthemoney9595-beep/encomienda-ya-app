@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { createStoreForUser } from '@/lib/user-service';
 import { Loader2 } from 'lucide-react';
@@ -85,10 +85,11 @@ export default function SignupStorePage() {
         };
         
         await setDoc(doc(firestore, "users", user.uid), userProfile);
-        
+        await sendEmailVerification(user);
+
         toast({
             title: "¡Solicitud de Tienda Enviada!",
-            description: "Tu tienda ha sido registrada. Refrescando la página...",
+            description: "Revisá tu correo para verificar tu cuenta. Tu tienda está pendiente de aprobación.",
         });
         
         // Recarga completa para reinicializar el contexto de autenticación

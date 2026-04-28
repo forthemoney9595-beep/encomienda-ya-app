@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Bike, Car, Loader2 } from 'lucide-react';
 import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
 const formSchema = z.object({
@@ -64,10 +64,11 @@ export default function SignupDeliveryPage() {
         };
         
         await setDoc(doc(firestore, "users", user.uid), userProfile);
-        
+        await sendEmailVerification(user);
+
         toast({
             title: "¡Solicitud Enviada!",
-            description: "Tu cuenta de repartidor ha sido creada y está pendiente de aprobación.",
+            description: "Revisá tu correo para verificar tu cuenta. Tu perfil de repartidor está pendiente de aprobación.",
         });
         router.push('/');
         
