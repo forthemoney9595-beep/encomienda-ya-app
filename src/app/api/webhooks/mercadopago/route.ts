@@ -1,17 +1,60 @@
 import { NextResponse } from "next/server";
 import MercadoPagoConfig, { Payment } from "mercadopago";
-// ✅ Importamos adminMessaging para enviar PUSH
+import { createHmac } from "crypto";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,
 });
 
+function verifyMpSignature(request: Request, rawBody: string, url: URL): boolean {
+  const secret = process.env.MP_WEBHOOK_SECRET;
+  // Si no hay secret configurado, se omite la verificación (para desarrollo)
+  if (!secret) {
+    console.warn("⚠️ [Webhook] MP_WEBHOOK_SECRET no configurado — verificación de firma omitida");
+    return true;
+  }
+
+  const xSignature = request.headers.get("x-signature");
+  const xRequestId = request.headers.get("x-request-id");
+
+  if (!xSignature) {
+    console.error("❌ [Webhook] Header x-signature ausente");
+    return false;
+  }
+
+  const parts = xSignature.split(",");
+  let ts = "";
+  let v1 = "";
+  for (const part of parts) {
+    const [key, val] = part.trim().split("=");
+    if (key === "ts") ts = val;
+    if (key === "v1") v1 = val;
+  }
+
+  if (!ts || !v1) return false;
+
+  const dataId = url.searchParams.get("data.id") || url.searchParams.get("id") || "";
+  const manifest = `id:${dataId};request-id:${xRequestId ?? ""};ts:${ts}`;
+  const expectedHash = createHmac("sha256", secret).update(manifest).digest("hex");
+
+  return expectedHash === v1;
+}
+
 export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
+    const rawBody = await request.text();
+    let body: any = {};
+    try { body = JSON.parse(rawBody); } catch { /* ignored */ }
+
+    // 🔐 Verificar firma de MercadoPago
+    if (!verifyMpSignature(request, rawBody, url)) {
+      console.error("❌ [Webhook] Firma inválida — request rechazada");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+
     const queryId = url.searchParams.get("id") || url.searchParams.get("data.id");
-    const body = await request.json().catch(() => ({}));
     const paymentId = queryId || body?.data?.id;
     const type = body?.type || url.searchParams.get("topic") || url.searchParams.get("type");
 
@@ -32,16 +75,26 @@ export async function POST(request: Request) {
     // 2. Extraer Metadata
     const { metadata } = paymentData;
     const buyerId = metadata.buyer_id;
-    const storeId = metadata.store_id; 
-    const storeOwnerId = metadata.store_owner_id; 
+    const storeId = metadata.store_id;
+    const storeOwnerId = metadata.store_owner_id;
     const orderRefId = metadata.order_id;
 
     if (!orderRefId) return NextResponse.json({ error: "No order ID" }, { status: 400 });
 
-    console.log(`✅ [Webhook] Pago Aprobado. Procesando Orden ${orderRefId}...`);
-
     const ordersCollection = adminDb.collection("orders");
     const notificationsCollection = adminDb.collection("notifications");
+
+    // 🔒 Idempotencia: si la orden ya fue procesada, retornar sin hacer nada
+    const existingOrder = await ordersCollection.doc(orderRefId).get();
+    if (existingOrder.exists) {
+      const existingData = existingOrder.data();
+      if (existingData?.paymentStatus === "paid") {
+        console.log(`ℹ️ [Webhook] Orden ${orderRefId} ya procesada — ignorando duplicado`);
+        return NextResponse.json({ status: "already_processed" });
+      }
+    }
+
+    console.log(`✅ [Webhook] Pago Aprobado. Procesando Orden ${orderRefId}...`);
     
     // 3. Actualizar la Orden en Firestore
     const updateData = {

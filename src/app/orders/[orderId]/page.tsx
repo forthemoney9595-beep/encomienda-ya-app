@@ -156,8 +156,12 @@ export default function OrderTrackingPage() {
             };
             confirmPayment();
         } else if (status === 'failure') {
-            toast({ variant: "destructive", title: "El pago falló", description: "Intenta nuevamente." });
-            router.replace(`/orders/${orderId}`);
+            toast({
+                variant: "destructive",
+                title: "El pago no se procesó",
+                description: "Podés reintentar el pago desde la página del pedido.",
+            });
+            router.replace(`/orders/${orderId}?retry=true`);
         }
     }
   }, [searchParams, order, orderRef, router, toast, orderId]);
@@ -243,10 +247,12 @@ export default function OrderTrackingPage() {
     }
 
     const handleUpdateStatus = async (newStatus: string) => {
-        if (!orderRef) return;
+        if (!orderRef || !order) return;
+        // Prevenir doble actualización al mismo estado (doble click, llamadas duplicadas)
+        if (order.status === newStatus) return;
         setIsUpdatingStatus(true);
         try {
-            await updateDoc(orderRef, { status: newStatus });
+            await updateDoc(orderRef, { status: newStatus, updatedAt: new Date() });
             toast({ title: "Estado actualizado", description: `El pedido ahora está: ${newStatus}` });
         } catch (error) {
             toast({ variant: 'destructive', title: "Error", description: "No se pudo actualizar el estado." });
@@ -288,16 +294,43 @@ export default function OrderTrackingPage() {
     }
 
   if (isLoading || !order) return <OrderPageSkeleton />;
-  
+
   const displayTotal = order.total || (order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + order.deliveryFee);
   const isBuyer = user?.uid === order.userId;
-  const isStoreOwner = myUserProfile?.role === 'store' && myUserProfile?.storeId === order.storeId; 
+  const isStoreOwner = myUserProfile?.role === 'store' && myUserProfile?.storeId === order.storeId;
   const isDeliveryPerson = myUserProfile?.role === 'delivery' && user?.uid === order.deliveryPersonId;
   const isDelivery = myUserProfile?.role === 'delivery';
-  
+
   const isAvailableToAccept = isDelivery && !order.deliveryPersonId && (order.status === 'En preparación' || order.status === 'Listo para recoger');
   const showRightColumn = isStoreOwner || isDelivery || isBuyer;
   const phoneToCall = isDeliveryPerson ? (order.customerPhoneNumber || customerProfile?.phoneNumber) : undefined;
+  const paymentFailed = searchParams.get('retry') === 'true' && isBuyer && order.status === 'Pendiente de Pago';
+
+  const handleRetryPayment = async () => {
+    if (!order || !user) return;
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          items: order.items,
+          payerEmail: user.email,
+          userId: user.uid,
+          storeId: order.storeId,
+          storeOwnerId: order.storeOwnerId,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo iniciar el pago.' });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo conectar con el servidor de pagos.' });
+    }
+  };
 
   return (
     <div className="container mx-auto">
@@ -314,8 +347,20 @@ export default function OrderTrackingPage() {
           </AlertDialogContent>
       </AlertDialog>
 
-      <PageHeader 
-        title={`Pedido #${order.id.substring(0,7)}...`} 
+      {paymentFailed && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTitle className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Pago no procesado</AlertTitle>
+          <AlertDescription className="flex flex-col gap-3 mt-2">
+            <span>Tu pedido quedó pendiente de pago. Podés reintentar el pago ahora.</span>
+            <Button variant="destructive" size="sm" className="w-fit" onClick={handleRetryPayment}>
+              Reintentar pago
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <PageHeader
+        title={`Pedido #${order.id.substring(0,7)}...`}
         description={`Realizado el ${formatDate(order.createdAt)}`}
       >
         {isBuyer && order.status === 'Entregado' && (<Button onClick={handleReorderClick}><Repeat className="mr-2 h-4 w-4" />Volver a Pedir</Button>)}

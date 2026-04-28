@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import MercadoPagoConfig, { Preference } from 'mercadopago';
+import { adminDb } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
     // 1. Verificar Token
@@ -13,36 +14,72 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        console.log("📥 [Checkout API] Body recibido:", body);
 
-        // ✅ AGREGADO: Recibimos storeOwnerId para pasarlo a la metadata
-        const { orderId, items, payerEmail, userId, storeId, storeOwnerId } = body; 
+        const { orderId, items, payerEmail, userId, storeId, storeOwnerId } = body;
 
-        // 2. Validación
+        // 2. Validación básica
         if (!items || !Array.isArray(items) || items.length === 0) {
             return NextResponse.json({ error: "Items inválidos" }, { status: 400 });
         }
+        if (!storeId || !orderId) {
+            return NextResponse.json({ error: "Faltan storeId u orderId" }, { status: 400 });
+        }
+
+        // 🔐 Verificar precios reales contra Firestore — evita manipulación desde el cliente
+        const verifiedItems: { id: string; title: string; quantity: number; unit_price: number }[] = [];
+        for (const item of items) {
+            const itemId = item.id;
+            const requestedQty = Number(item.quantity);
+
+            if (!itemId || requestedQty <= 0 || !Number.isInteger(requestedQty)) {
+                return NextResponse.json({ error: `Item inválido: ${itemId}` }, { status: 400 });
+            }
+
+            // Intentar en subcolección 'products' y luego 'items' por compatibilidad
+            let productSnap = await adminDb.collection("stores").doc(storeId).collection("products").doc(itemId).get();
+            if (!productSnap.exists) {
+                productSnap = await adminDb.collection("stores").doc(storeId).collection("items").doc(itemId).get();
+            }
+
+            if (!productSnap.exists) {
+                console.error(`❌ [Checkout] Producto ${itemId} no encontrado en tienda ${storeId}`);
+                return NextResponse.json({ error: `Producto no encontrado: ${itemId}` }, { status: 400 });
+            }
+
+            const productData = productSnap.data()!;
+            const realPrice = Number(productData.price ?? productData.unit_price ?? 0);
+
+            if (realPrice <= 0) {
+                return NextResponse.json({ error: `Precio inválido para producto: ${itemId}` }, { status: 400 });
+            }
+
+            verifiedItems.push({
+                id: itemId,
+                title: productData.name || productData.title || 'Producto',
+                quantity: requestedQty,
+                unit_price: realPrice,
+            });
+        }
+
+        console.log(`✅ [Checkout API] ${verifiedItems.length} item(s) verificados contra Firestore`);
 
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-        
-        // Configuración de Webhook
-        const isLocalhost = baseUrl.includes("localhost");
-        const notificationUrl = isLocalhost 
-            ? undefined 
-            : `${baseUrl}/api/webhooks/mercadopago`;
 
-        console.log("🔗 [Checkout API] Notification URL configurada:", notificationUrl);
+        const isLocalhost = baseUrl.includes("localhost");
+        const notificationUrl = isLocalhost
+            ? undefined
+            : `${baseUrl}/api/webhooks/mercadopago`;
 
         // 3. Crear Preferencia
         const preference = new Preference(client);
-        
+
         const result = await preference.create({
             body: {
-                items: items.map((item: any) => ({
-                    id: item.id || 'item-id',
-                    title: item.name || 'Producto',
-                    quantity: Number(item.quantity),
-                    unit_price: Number(item.price),
+                items: verifiedItems.map(item => ({
+                    id: item.id,
+                    title: item.title,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
                     currency_id: 'ARS',
                 })),
                 external_reference: orderId, 

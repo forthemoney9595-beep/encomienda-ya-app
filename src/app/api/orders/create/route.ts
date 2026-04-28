@@ -15,6 +15,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
 
+    // 🔒 Idempotencia: evitar doble pedido por doble click / doble request
+    const idempotencyKey = body.idempotencyKey as string | undefined;
+    if (idempotencyKey) {
+      const existing = await adminDb.collection("orders")
+        .where("userId", "==", userId)
+        .where("idempotencyKey", "==", idempotencyKey)
+        .limit(1)
+        .get();
+      if (!existing.empty) {
+        const existingOrder = existing.docs[0].data();
+        console.log(`ℹ️ [API Segura] Pedido duplicado detectado: ${existingOrder.id}`);
+        return NextResponse.json({ orderId: existingOrder.id, total: existingOrder.total, duplicate: true });
+      }
+    }
+
     console.log(`🛡️ [API Segura] Iniciando proceso para usuario: ${userId}`);
 
     // 1. Obtener la Tienda
@@ -23,11 +38,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Tienda no encontrada" }, { status: 404 });
     }
     const storeData = storeDoc.data();
-    
+
     // Obtener configuración global
     const platformConfigSnap = await adminDb.collection("config").doc("platform").get();
     const platformConfig = platformConfigSnap.data() || {};
-    const serviceFeePercent = platformConfig.serviceFee || 0;
+    // Usar 5% como default si no está configurado en Firestore (coherente con el cliente)
+    const serviceFeePercent = platformConfig.serviceFee ?? 5;
 
     // 2. RE-CALCULAR EL TOTAL Y SANITIZAR
     let calculatedSubtotal = 0;
@@ -36,12 +52,18 @@ export async function POST(request: Request) {
     for (const item of items) {
         const rawPrice = item.price ?? item.unit_price ?? item.unitPrice ?? item.cost ?? 0;
         const price = Number(rawPrice);
-        const quantity = Number(item.quantity || 1);
+        const rawQty = item.quantity ?? 1;
+        const quantity = Number(rawQty);
         const title = item.name || item.title || item.product?.name || "Producto sin nombre";
 
         if (price <= 0 || isNaN(price)) {
             console.error(`❌ ERROR FATAL: El producto "${title}" tiene precio inválido: ${rawPrice}`);
             return NextResponse.json({ error: `Error de datos: El producto "${title}" tiene precio 0.` }, { status: 400 });
+        }
+
+        // Validar cantidad: debe ser entero positivo
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+            return NextResponse.json({ error: `Cantidad inválida para "${title}": ${rawQty}` }, { status: 400 });
         }
 
         calculatedSubtotal += price * quantity;
@@ -51,7 +73,7 @@ export async function POST(request: Request) {
             title: title,
             price: price,
             quantity: quantity,
-            originalData: item 
+            originalData: item
         });
     }
 
@@ -101,7 +123,8 @@ export async function POST(request: Request) {
         
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
-        
+
+        idempotencyKey: idempotencyKey || null,
         createdVia: "secure_api_v3"
     };
 

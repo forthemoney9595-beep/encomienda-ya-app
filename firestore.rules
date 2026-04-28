@@ -18,9 +18,9 @@ service cloud.firestore {
 
     // --- REGLAS DE COLECCIONES ---
 
-    // 1. CONFIGURACIÓN GLOBAL (Mantenido de tu versión anterior)
+    // 1. CONFIGURACIÓN GLOBAL
     match /config/{configDoc} {
-      allow read: if true; 
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 

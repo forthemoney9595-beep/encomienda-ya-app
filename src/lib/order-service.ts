@@ -138,6 +138,9 @@ export const OrderService = {
 export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
   console.log("🚀 Enviando pedido a API Segura...");
 
+  // Clave de idempotencia única por intento de checkout — evita pedidos duplicados por doble click
+  const idempotencyKey = `${input.userId}-${input.storeId}-${Date.now()}`;
+
   try {
       const response = await fetch('/api/orders/create', {
           method: 'POST',
@@ -149,8 +152,9 @@ export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
               items: input.items,
               shippingInfo: input.shippingInfo,
               storeId: input.storeId,
-              paymentMethod: 'CARD', // Ojo: Esto se debería dinámicar luego si usas efectivo
-              customerCoords: input.customerCoords 
+              paymentMethod: 'CARD',
+              customerCoords: input.customerCoords,
+              idempotencyKey,
           }),
       });
 
