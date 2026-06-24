@@ -35,7 +35,7 @@ function verifyMpSignature(request: Request, rawBody: string, url: URL): boolean
   if (!ts || !v1) return false;
 
   const dataId = url.searchParams.get("data.id") || url.searchParams.get("id") || "";
-  const manifest = `id:${dataId};request-id:${xRequestId ?? ""};ts:${ts}`;
+  const manifest = `id:${dataId};request-id:${xRequestId ?? ""};ts:${ts};`;
   const expectedHash = createHmac("sha256", secret).update(manifest).digest("hex");
 
   return expectedHash === v1;
