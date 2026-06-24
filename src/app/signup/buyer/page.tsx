@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, AuthErrorCodes } from 'firebase/auth';
-import { doc, setDoc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { createUserProfile } from '@/lib/user-service';
 import type { Address } from '@/lib/placeholder-data';
@@ -51,29 +51,15 @@ export default function SignupBuyerPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
 
-        const isActualAdmin = values.email === 'admin@test.com';
-
-        const batch = writeBatch(firestore);
-
-        // 1. Set User Profile
         const userDocRef = doc(firestore, 'users', user.uid);
         const userProfile = {
             uid: user.uid,
             name: values.name,
             email: values.email,
-            role: isActualAdmin ? 'admin' : 'buyer' as const,
+            role: 'buyer' as const,
             addresses: [] as Address[],
         };
-        batch.set(userDocRef, userProfile);
-        
-        // 2. Set Admin Role if applicable
-        if (isActualAdmin) {
-            const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-            batch.set(adminRoleRef, { role: 'admin', createdAt: new Date() });
-        }
-        
-        // 3. Commit both writes as a single transaction
-        await batch.commit();
+        await setDoc(userDocRef, userProfile);
         await sendEmailVerification(user);
 
         toast({
