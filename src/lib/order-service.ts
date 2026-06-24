@@ -75,34 +75,7 @@ export interface Order {
   driverCoords?: { latitude: number; longitude: number };
 }
 
-export interface CreateOrderInput {
-  userId: string;
-  customerName: string;
-  customerPhoneNumber: string; 
-  storeId: string;
-  storeName: string;
-  storeAddress: string;
-  items: any[];
-  shippingInfo: { name: string; address: string; };
-  subtotal: number; 
-  deliveryFee: number; 
-  serviceFee?: number; 
-  total: number; 
-  customerCoords?: { latitude: number; longitude: number };
-}
-
-const PLATFORM_FEE_PERCENTAGE = 0.05; 
-const DEFAULT_DELIVERY_FEE = 2000; 
-
 export const OrderService = {
-    // Calculadora visual para el carrito (Cliente)
-    calculateTotals: (subtotal: number) => {
-        const serviceFee = Math.round(subtotal * PLATFORM_FEE_PERCENTAGE);
-        const deliveryFee = DEFAULT_DELIVERY_FEE;
-        const total = subtotal + serviceFee + deliveryFee;
-        return { subtotal, serviceFee, deliveryFee, total };
-    },
-
     // Notificaciones Genéricas (Campanita)
     sendNotification: async (db: Firestore, userId: string, title: string, message: string, type: string, orderId?: string) => {
         try {
@@ -133,51 +106,6 @@ export const OrderService = {
             console.error("Error enviando notificación:", error);
         }
     }
-};
-
-// Crea la orden llamando a la API Segura
-export const createOrder = async (db: Firestore, input: CreateOrderInput) => {
-  console.log("🚀 Enviando pedido a API Segura...");
-
-  // Clave de idempotencia única por intento de checkout — evita pedidos duplicados por doble click
-  const idempotencyKey = `${input.userId}-${input.storeId}-${Date.now()}`;
-
-  try {
-      const response = await fetch('/api/orders/create', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-              userId: input.userId,
-              items: input.items,
-              shippingInfo: input.shippingInfo,
-              storeId: input.storeId,
-              paymentMethod: 'CARD',
-              customerCoords: input.customerCoords,
-              idempotencyKey,
-          }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-          throw new Error(data.error || 'Error al procesar el pedido en el servidor.');
-      }
-
-      console.log("✅ Pedido creado vía API:", data.orderId);
-
-      return { 
-          id: data.orderId, 
-          total: data.total, 
-          status: 'Pendiente de Confirmación',
-          ...input 
-      };
-
-  } catch (error) {
-      console.error("❌ Error creando orden:", error);
-      throw error;
-  }
 };
 
 // ✅ GESTIÓN CENTRALIZADA DE ESTADOS Y NOTIFICACIONES

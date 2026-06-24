@@ -123,8 +123,6 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
              throw new Error("El precio de los productos no es válido (0). Contacta a soporte.");
         }
 
-        console.log("📤 Enviando a Checkout (Limpio):", { orderId: order.id, items: cleanItems });
-
         const response = await fetch('/api/checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -40,8 +40,6 @@ export function Notifications() {
         limit(20)
     );
 
-    console.log("🔔 [Notificaciones] Iniciando escucha para usuario:", user.uid);
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
@@ -51,7 +49,6 @@ export function Notifications() {
             return dateB - dateA; 
         });
 
-        console.log("🔔 [Notificaciones] Recibidas:", notifs.length);
         setLocalNotifications(notifs);
     }, (error) => {
         console.error("❌ [Notificaciones] Error escuchando:", error);

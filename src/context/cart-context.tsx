@@ -67,9 +67,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   }, [cart, storeId, isClient]);
 
   const addToCart = (product: ProductInput, newStoreId: string) => {
-    // 🔍 LOG DE DEPURACIÓN: Verifica en la consola que este ID coincida con el de la tienda
-    console.log(`🛒 Agregando al carrito. Tienda Actual: ${storeId}, Nueva Tienda: ${newStoreId}`);
-
     // Si el producto es de otra tienda, limpiar carrito (Regla de negocio: 1 tienda a la vez)
     if (storeId && storeId !== newStoreId) {
       if (confirm("Tu carrito tiene productos de otra tienda. ¿Quieres vaciarlo para añadir este?")) {

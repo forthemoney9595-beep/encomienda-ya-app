@@ -32,7 +32,6 @@ export function LocationTracker({ orderId, isDriver, status }: LocationTrackerPr
             return;
         }
 
-        console.log("🛰️ Iniciando rastreo GPS...");
         setTracking(true);
         toast({ title: "GPS Activo", description: "Compartiendo ubicación en tiempo real." });
 
@@ -52,7 +51,6 @@ export function LocationTracker({ orderId, isDriver, status }: LocationTrackerPr
                             lastUpdate: new Date().toISOString()
                         }
                     });
-                    console.log(`📍 Ubicación actualizada: ${latitude}, ${longitude}`);
                 } catch (error) {
                     console.error("Error guardando ubicación:", error);
                 }
@@ -70,7 +68,6 @@ export function LocationTracker({ orderId, isDriver, status }: LocationTrackerPr
 
         // Limpieza: Cuando el componente se desmonta (o cambia estado), dejamos de rastrear
         return () => {
-            console.log("🛑 Deteniendo rastreo GPS...");
             navigator.geolocation.clearWatch(watchId);
             setTracking(false);
         };

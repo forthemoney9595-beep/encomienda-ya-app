@@ -27,9 +27,8 @@ let messaging: Messaging | null = null;
 if (typeof window !== 'undefined') {
   try {
     messaging = getMessaging(app);
-    console.log("✅ Firebase Messaging inicializado correctamente.");
   } catch (error) {
-    console.error("❌ Error inicializando Messaging:", error);
+    console.error("Error inicializando Firebase Messaging:", error);
   }
 }
 
@@ -40,43 +39,25 @@ export const useAuth = () => auth;
 export const useFirestore = () => db;
 export const useStorage = () => storage;
 
-// --- SOLICITAR PERMISO (DEBUG MODE) ---
+// --- SOLICITAR PERMISO DE NOTIFICACIONES ---
 export const requestNotificationPermission = async () => {
-  console.log("🚀 Iniciando solicitud de permisos...");
-
   if (!messaging) {
-    console.error("❌ Messaging es NULL. No se puede pedir token.");
     return null;
   }
 
   try {
     const permission = await Notification.requestPermission();
-    console.log("Estado del permiso:", permission);
-    
-    if (permission === 'granted') {
-      console.log("Intentando obtener token con VAPID Key...");
-      
-      // ⚠️ HARDCODE TEMPORAL PARA DESCARTAR ERRORES DE ENV
-      // Usamos tu clave directa
-      const currentVapidKey = "BIiNvdw3se4IvGtF8W-lhWqqqxcVGmG1ALI1Po9ERzp8Mr25wSc7Yg7pdP_NUpKWJ-lwMmZr3vWqbkmnbKTvFfQ";
-
-      const token = await getToken(messaging, {
-        vapidKey: currentVapidKey
-      });
-      
-      if (token) {
-        console.log("✅ ¡TOKEN GENERADO CON ÉXITO!", token);
-        return token;
-      } else {
-        console.warn('⚠️ Se obtuvo permiso pero no hay token.');
-        return null;
-      }
-    } else {
-      console.warn('Permiso denegado por el usuario.');
+    if (permission !== 'granted') {
       return null;
     }
+
+    const token = await getToken(messaging, {
+      vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
+    });
+
+    return token || null;
   } catch (error) {
-    console.error('❌ ERROR CRÍTICO AL OBTENER TOKEN:', error);
+    console.error('Error al obtener token de notificaciones:', error);
     return null;
   }
 };

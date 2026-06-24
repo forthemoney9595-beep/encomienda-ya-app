@@ -57,14 +57,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
         // 1. Verificar si el navegador soporta notificaciones y si messaging está inicializado
         if (!('serviceWorker' in navigator) || !messaging) {
-            console.log("🔕 Este navegador no soporta notificaciones Push.");
             return;
         }
 
         // 2. Pedir permiso al usuario
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
-            console.log("🔕 Permiso de notificaciones denegado.");
             return;
         }
 
@@ -75,8 +73,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (currentToken) {
-            console.log("🔔 Token FCM Obtenido:", currentToken);
-            
             // 4. Guardar en la base de datos del usuario
             const userRef = doc(db, 'users', uid);
             await updateDoc(userRef, {

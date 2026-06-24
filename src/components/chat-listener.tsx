@@ -27,8 +27,8 @@ export function ChatListener(): null {
   const playSound = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
-      // El navegador puede bloquear el audio si no ha habido interacción previa del usuario
-      audioRef.current.play().catch(e => console.log("Audio play failed (user interaction needed first)", e));
+      // El navegador puede bloquear el audio si no ha habido interacción previa del usuario — es esperable, no hace falta loggearlo
+      audioRef.current.play().catch(() => {});
     }
   };
 

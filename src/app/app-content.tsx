@@ -29,11 +29,9 @@ function UserMenu() {
     const router = useRouter();
 
     const handleSignOut = async () => {
-        console.log("Iniciando cierre de sesión...");
         try {
             const auth = getAuth(); // Obtenemos la instancia directa
             await signOut(auth);
-            console.log("Sesión cerrada en Firebase");
             router.push('/login');
         } catch (error) {
             console.error("Error al cerrar sesión:", error);
