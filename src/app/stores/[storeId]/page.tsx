@@ -57,7 +57,9 @@ export default function StorePublicPage() {
   
   const { data: store, isLoading: storeLoading } = useDoc<StoreData>(storeRef);
 
-  // 2. Obtener PRODUCTOS
+  // 2. Obtener PRODUCTOS — leemos 'items' (actual) y 'products' (legacy) por separado
+  // y los combinamos, para que las tiendas viejas con catálogo en la subcolección
+  // anterior no le aparezcan vacías al comprador.
   const productsQuery = useMemoFirebase(() => {
     if (!firestore || !storeId) return null;
     return query(collection(firestore, 'stores', storeId, 'items'));
@@ -65,13 +67,20 @@ export default function StorePublicPage() {
 
   const { data: rawProducts, isLoading: productsLoading } = useCollection<Product>(productsQuery);
 
+  const legacyProductsQuery = useMemoFirebase(() => {
+    if (!firestore || !storeId) return null;
+    return query(collection(firestore, 'stores', storeId, 'products'));
+  }, [firestore, storeId]);
+
+  const { data: rawLegacyProducts, isLoading: legacyProductsLoading } = useCollection<Product>(legacyProductsQuery);
+
   // 3. Filtrar y Ordenar
   const products = useMemo(() => {
-    if (!rawProducts) return [];
-    return rawProducts
+    const all = [...(rawProducts || []), ...(rawLegacyProducts || [])];
+    return all
       .filter(p => p.available === true)
       .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  }, [rawProducts]);
+  }, [rawProducts, rawLegacyProducts]);
 
   // 4. Estado de Apertura
   const storeStatus = useMemo(() => {
@@ -130,7 +139,7 @@ export default function StorePublicPage() {
     });
   };
 
-  if (storeLoading || productsLoading) return <LoadingSkeleton />;
+  if (storeLoading || productsLoading || legacyProductsLoading) return <LoadingSkeleton />;
   if (!store) return <StoreNotFound router={router} />;
 
   const featuredProducts = products.filter(p => p.isFeatured);

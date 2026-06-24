@@ -32,6 +32,9 @@ interface Product {
   available?: boolean;
   isFeatured?: boolean;
   createdAt?: any;
+  // De qué subcolección vino ('items' es la actual, 'products' es legacy) — determina
+  // a qué colección apuntar al editar/borrar este producto puntual.
+  sourceCollection?: 'items' | 'products';
 }
 
 export default function ProductManagementPage() {
@@ -66,32 +69,52 @@ export default function ProductManagementPage() {
     }
   }, [authLoading, user, userProfile, router]);
 
-  // Lógica de Carga (Trae TODO sin filtros)
+  // Lógica de Carga (Trae TODO sin filtros) — escuchamos 'items' (actual) y 'products'
+  // (legacy) por separado y los combinamos, así no se "pierden" productos de tiendas
+  // viejas que todavía tengan su catálogo en la subcolección anterior.
   useEffect(() => {
     if (!firestore || !userProfile?.storeId) return;
 
-    const q = query(collection(firestore, 'stores', userProfile.storeId, 'items'));
+    let itemsDocs: Product[] = [];
+    let productsDocs: Product[] = [];
+    let itemsLoaded = false;
+    let productsLoaded = false;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const items = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Product));
-
-        items.sort((a, b) => {
+    const mergeAndSet = () => {
+        if (!itemsLoaded || !productsLoaded) return;
+        const merged = [...itemsDocs, ...productsDocs];
+        merged.sort((a, b) => {
             const dateA = a.createdAt?.seconds || 0;
             const dateB = b.createdAt?.seconds || 0;
             return dateB - dateA;
         });
+        setProducts(merged);
+        setProductsLoading(false);
+    };
 
-        setProducts(items);
-        setProductsLoading(false);
+    const qItems = query(collection(firestore, 'stores', userProfile.storeId, 'items'));
+    const unsubItems = onSnapshot(qItems, (snapshot) => {
+        itemsDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), sourceCollection: 'items' } as Product));
+        itemsLoaded = true;
+        mergeAndSet();
     }, (error) => {
-        console.error("Error fetching products:", error);
-        setProductsLoading(false);
+        console.error("Error fetching products (items):", error);
+        itemsLoaded = true;
+        mergeAndSet();
     });
 
-    return () => unsubscribe();
+    const qProducts = query(collection(firestore, 'stores', userProfile.storeId, 'products'));
+    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
+        productsDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), sourceCollection: 'products' } as Product));
+        productsLoaded = true;
+        mergeAndSet();
+    }, (error) => {
+        console.error("Error fetching products (legacy 'products'):", error);
+        productsLoaded = true;
+        mergeAndSet();
+    });
+
+    return () => { unsubItems(); unsubProducts(); };
   }, [firestore, userProfile?.storeId]);
 
   const filteredProducts = products.filter(product => {
@@ -150,7 +173,7 @@ export default function ProductManagementPage() {
       };
 
       if (editingProduct) {
-        const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', editingProduct.id);
+        const docRef = doc(firestore, 'stores', userProfile.storeId, editingProduct.sourceCollection || 'items', editingProduct.id);
         await updateDoc(docRef, productData);
         toast({ title: "Producto actualizado" });
       } else {
@@ -171,7 +194,7 @@ export default function ProductManagementPage() {
   const toggleAvailability = async (product: Product) => {
     if (!firestore || !userProfile?.storeId) return;
     try {
-      const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', product.id);
+      const docRef = doc(firestore, 'stores', userProfile.storeId, product.sourceCollection || 'items', product.id);
       await updateDoc(docRef, { available: !product.available });
       toast({ title: "Disponibilidad actualizada" });
     } catch (error) {
@@ -182,7 +205,7 @@ export default function ProductManagementPage() {
   const toggleFeatured = async (product: Product) => {
     if (!firestore || !userProfile?.storeId) return;
     try {
-      const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', product.id);
+      const docRef = doc(firestore, 'stores', userProfile.storeId, product.sourceCollection || 'items', product.id);
       await updateDoc(docRef, { isFeatured: !product.isFeatured });
       toast({ title: !product.isFeatured ? "Producto Destacado" : "Producto ya no es destacado" });
     } catch (error) {
@@ -190,12 +213,12 @@ export default function ProductManagementPage() {
     }
   };
 
-  const handleDelete = async (productId: string) => {
+  const handleDelete = async (product: Product) => {
     if (!firestore || !userProfile?.storeId) return;
     if (!confirm("¿Estás seguro de eliminar este producto permanentemente?")) return;
 
     try {
-      const docRef = doc(firestore, 'stores', userProfile.storeId, 'items', productId);
+      const docRef = doc(firestore, 'stores', userProfile.storeId, product.sourceCollection || 'items', product.id);
       await deleteDoc(docRef);
       toast({ title: "Producto eliminado" });
     } catch (error) {
@@ -268,7 +291,7 @@ export default function ProductManagementPage() {
                                            {p.name ? p.name : <span className="text-red-600 font-bold">⚠️ SIN NOMBRE</span>}
                                        </TableCell>
                                        <TableCell>
-                                           <Button variant="destructive" size="sm" onClick={() => handleDelete(p.id)}>
+                                           <Button variant="destructive" size="sm" onClick={() => handleDelete(p)}>
                                                ELIMINAR
                                            </Button>
                                        </TableCell>
@@ -374,7 +397,7 @@ export default function ProductManagementPage() {
                     <Button variant="outline" size="sm" onClick={() => openDialog(product)}>
                     <Pencil className="mr-2 h-3 w-3" /> Editar
                     </Button>
-                    <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDelete(product.id)}>
+                    <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDelete(product)}>
                     <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>
