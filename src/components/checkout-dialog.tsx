@@ -41,6 +41,15 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   // Estados de Tienda
   const [storeName, setStoreName] = useState('Tienda');
   const [storeAddress, setStoreAddress] = useState('Dirección de la tienda');
+  const [storeMaintenanceMode, setStoreMaintenanceMode] = useState(false);
+
+  // 🔒 Clave de idempotencia: una por apertura del diálogo, evita pedidos duplicados
+  // por doble click — igual que en checkout/page.tsx
+  const [idempotencyKey] = useState(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
 
   // Estados de UI
   const [isProcessing, setIsProcessing] = useState(false);
@@ -49,7 +58,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   // --- 💰 LOGICA FINANCIERA (NUEVA) ---
   // 1. Obtener Configuración Global (Fee %)
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
-  const { data: globalConfig } = useDoc<{ serviceFee?: number }>(configRef);
+  const { data: globalConfig } = useDoc<{ serviceFee?: number; maintenanceMode?: boolean }>(configRef);
 
   // 2. Calcular Totales Exactos
   const { serviceFeeAmount, finalTotal } = useMemo(() => {
@@ -74,6 +83,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                     const data = storeDoc.data();
                     setStoreName(data.name || 'Tienda');
                     setStoreAddress(data.address || 'Dirección no disponible');
+                    setStoreMaintenanceMode(!!data.maintenanceMode);
                 }
             } catch (error) {
                 console.error("Error buscando tienda:", error);
@@ -114,6 +124,21 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const handleRequestOrder = async () => {
     if (!user || !storeId || !firestore) {
         toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión." });
+        return;
+    }
+
+    if (globalConfig?.maintenanceMode || storeMaintenanceMode) {
+        toast({ variant: "destructive", title: "Lo sentimos", description: "No se pueden realizar pedidos en este momento." });
+        return;
+    }
+
+    // 🔒 BLOQUEAR SI EMAIL NO VERIFICADO (igual que en checkout/page.tsx)
+    if (!user.emailVerified) {
+        toast({
+            variant: "destructive",
+            title: "Email no verificado",
+            description: "Verificá tu correo electrónico antes de realizar un pedido. Revisá tu bandeja de entrada.",
+        });
         return;
     }
 
@@ -164,7 +189,8 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 customerCoords: locationCoords, 
                 
                 customerName: userProfile?.name || user.displayName || 'Cliente',
-                customerPhoneNumber: phone || 'Sin teléfono'
+                customerPhoneNumber: phone || 'Sin teléfono',
+                idempotencyKey
             })
         });
 
