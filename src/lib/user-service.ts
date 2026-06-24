@@ -14,7 +14,8 @@ import {
   DocumentReference,
   Firestore,
 } from 'firebase/firestore';
-import type { UserProfile, Address, Store } from './placeholder-data';
+import type { Address, Store } from './placeholder-data';
+import type { UserProfile } from '@/context/auth-context';
 import { getPlaceholderImage } from './placeholder-images';
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 

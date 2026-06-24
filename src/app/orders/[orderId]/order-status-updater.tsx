@@ -18,7 +18,7 @@ interface OrderStatusUpdaterProps {
   order: Order;
 }
 
-const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
+const statusTransitions: Partial<Record<OrderStatus, OrderStatus[]>> = {
   'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'], 
   'Pendiente de Pago': ['En preparación'], 
   'En preparación': ['En reparto'],

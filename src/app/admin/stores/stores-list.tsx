@@ -124,7 +124,7 @@ export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresL
 
                   {/* Descripción y Dirección */}
                   <div className="text-sm space-y-2">
-                      <p className="italic text-muted-foreground">"{selectedStore?.description || 'Sin descripción'}"</p>
+                      <p className="italic text-muted-foreground">&quot;{selectedStore?.description || 'Sin descripción'}&quot;</p>
                       <div className="flex items-center gap-2 font-medium">
                           <MapPin className="h-4 w-4 text-red-500" />
                           {selectedStore?.address || 'Sin dirección física'}

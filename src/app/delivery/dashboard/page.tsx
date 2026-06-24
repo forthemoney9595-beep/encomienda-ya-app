@@ -260,7 +260,7 @@ export default function DeliveryDashboardPage() {
                 <div className="text-center py-12 bg-muted/20 rounded-xl">
                     <CheckCircle2 className="mx-auto h-12 w-12 text-green-500 mb-3" />
                     <h3 className="text-lg font-medium">Estás libre</h3>
-                    <p className="text-sm text-muted-foreground">Ve a la pestaña "Disponibles" para tomar un viaje.</p>
+                    <p className="text-sm text-muted-foreground">Ve a la pestaña &quot;Disponibles&quot; para tomar un viaje.</p>
                 </div>
             ) : (
                 myActiveOrders?.map(order => (

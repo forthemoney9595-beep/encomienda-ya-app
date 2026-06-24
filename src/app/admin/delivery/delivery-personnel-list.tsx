@@ -23,12 +23,13 @@ export interface DeliveryPersonnel {
   id: string;
   name: string;
   email: string;
-  status: 'Activo' | 'Inactivo' | 'Pendiente' | 'Rechazado' | string;
+  status: 'Activo' | 'Inactivo' | 'Pendiente' | 'Rechazado';
   phoneNumber?: string;
   vehicle?: string | { type: string; model: string; plate: string; color: string };
   profileImageUrl?: string;
   licenseUrl?: string;
   joinedDate?: string;
+  zone?: string;
 }
 
 interface DeliveryPersonnelListProps {

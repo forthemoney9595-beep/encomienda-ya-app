@@ -46,6 +46,14 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clientLoaded, setClientLoaded] = useState(false);
 
+  // 🔒 Idempotencia: una sola key por intento de checkout (estable entre reintentos/doble-click),
+  // generada una vez al montar la página, no en cada submit.
+  const [idempotencyKey] = useState(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+
   // --- 📍 ESTADO DE GEOLOCALIZACIÓN ---
   const [coords, setCoords] = useState<{latitude: number; longitude: number} | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -213,7 +221,8 @@ export default function CheckoutPage() {
               storeId: storeId,
               shippingInfo: { name: values.name, address: values.address }, 
               paymentMethod: 'mercadopago',
-              customerCoords: coords || undefined 
+              customerCoords: coords || undefined,
+              idempotencyKey
           })
       });
 

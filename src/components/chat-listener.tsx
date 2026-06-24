@@ -10,7 +10,7 @@ import { usePathname } from 'next/navigation';
 // Sonido de notificación suave (puedes cambiar la URL por una tuya si prefieres)
 const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
 
-export function ChatListener() {
+export function ChatListener(): null {
   const { user, userProfile } = useAuth();
   const firestore = useFirestore();
   const { incrementUnread } = useNotifications();

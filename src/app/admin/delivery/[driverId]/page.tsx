@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Car, Mail, Phone, Star, PackageCheck, Bot, TrendingUp, TrendingDown } from 'lucide-react';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { useEffect, useState, useMemo } from 'react';
-import type { DeliveryPersonnel } from '@/lib/placeholder-data';
+import type { DeliveryPersonnel } from '../delivery-personnel-list';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -189,7 +189,7 @@ function DriverReviews({ reviews }: { reviews: Review[] }) {
                             </div>
                             {review.review && (
                                 <blockquote className="mt-3 border-l-2 pl-4 italic text-muted-foreground">
-                                    "{review.review}"
+                                    &quot;{review.review}&quot;
                                 </blockquote>
                             )}
                         </CardContent>
@@ -224,7 +224,7 @@ function DriverProfilePage() {
                 orderId: order.id,
                 rating: order.deliveryRating!,
                 review: order.deliveryReview || '',
-                date: order.createdAt,
+                date: order.createdAt instanceof Date ? order.createdAt : order.createdAt.toDate(),
                 customerName: order.customerName,
             }));
     }, [orders]);
@@ -302,7 +302,7 @@ function DriverProfilePage() {
                             </div>
                             <div className="flex items-center gap-3 text-sm">
                                 <Car className="h-4 w-4 text-muted-foreground" />
-                                <span className="capitalize">{driver.vehicle}</span>
+                                <span className="capitalize">{typeof driver.vehicle === 'string' ? driver.vehicle : driver.vehicle?.model || 'Sin datos'}</span>
                             </div>
                         </CardContent>
                     </Card>

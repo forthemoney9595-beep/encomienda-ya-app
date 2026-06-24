@@ -119,7 +119,7 @@ const SalesChart = ({ data }: { data: SalesData[] }) => {
                     </div>
                 ))}
             </div>
-            <p className="text-right text-xs pt-2 text-muted-foreground italic">Datos basados en pedidos marcados como "Entregado"</p>
+            <p className="text-right text-xs pt-2 text-muted-foreground italic">Datos basados en pedidos marcados como &quot;Entregado&quot;</p>
         </div>
     );
 }

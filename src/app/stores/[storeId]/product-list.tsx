@@ -265,7 +265,7 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
                            ) : !searchQuery && (
                              <div className="text-center text-muted-foreground py-10">
                                 <p>No hay productos en esta categoría.</p>
-                                {isOwner && <p className="text-sm">¡Añade tu primer artículo a "{category}"!</p>}
+                                {isOwner && <p className="text-sm">¡Añade tu primer artículo a &quot;{category}&quot;!</p>}
                             </div>
                            )}
                         </TabsContent>
@@ -273,7 +273,7 @@ export function ProductList({ products, productCategories, ownerId, storeId, onS
                 })}
                 {filteredProducts.length === 0 && products.length > 0 && (
                     <div className="text-center text-muted-foreground py-10 col-span-full">
-                        <p>No se encontraron productos para "{searchQuery}".</p>
+                        <p>No se encontraron productos para &quot;{searchQuery}&quot;.</p>
                     </div>
                 )}
                  {products.length === 0 && (

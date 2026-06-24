@@ -3,6 +3,10 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "storage": {
+    "bucket": "studio-354048519-4bc1e.firebasestorage.app",
+    "rules": "storage.rules"
+  },
   "hosting": {
     "source": ".",
     "ignore": [

@@ -16,6 +16,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVe
 import { doc, setDoc, writeBatch } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { createUserProfile } from '@/lib/user-service';
+import type { Address } from '@/lib/placeholder-data';
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -61,7 +62,7 @@ export default function SignupBuyerPage() {
             name: values.name,
             email: values.email,
             role: isActualAdmin ? 'admin' : 'buyer' as const,
-            addresses: [],
+            addresses: [] as Address[],
         };
         batch.set(userDocRef, userProfile);
         

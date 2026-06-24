@@ -1,0 +1,45 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isValidImage() {
+      return request.resource.size < 5 * 1024 * 1024 &&
+             request.resource.contentType.matches('image/.*');
+    }
+
+    // Avatares de perfil — visibles públicamente (se muestran en la UI a otros usuarios)
+    match /profiles/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // Banners de tienda — visibles públicamente en /stores/{id}
+    match /store-banners/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // Fotos de productos — visibles públicamente en el catálogo
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // Licencias de conducir (DNI/carnet de repartidores) — documento sensible, NUNCA público.
+    // Nota: como la ruta no incluye el uid, esta regla solo exige estar logueado;
+    // restringir a "solo el dueño o admin" requiere taguear el archivo con metadata
+    // (uploadedBy) al subirlo. Ver recomendación de seguimiento.
+    match /licenses/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // Cualquier otra ruta: denegado por defecto
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

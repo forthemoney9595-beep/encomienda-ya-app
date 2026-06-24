@@ -19,10 +19,11 @@ export interface Store {
   category: string;
   imageUrl: string;
   imageHint?: string;
-  rating: number;
-  deliveryTime: string;
-  minOrder: number;
+  rating?: number;
+  deliveryTime?: string;
+  minOrder?: number;
   products?: Product[];
+  productCategories?: string[];
   ownerId?: string;
   horario?: string;
   

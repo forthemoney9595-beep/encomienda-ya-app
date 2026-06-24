@@ -11,7 +11,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2 } from 'lucide-react';
-import type { DeliveryPersonnel } from '@/lib/placeholder-data';
+import type { DeliveryPersonnel } from './delivery-personnel-list';
 
 interface ManageDriverDialogProps {
   isOpen: boolean;
@@ -45,7 +45,11 @@ export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: Manage
   useEffect(() => {
     if (isOpen) {
       if (driver) {
-        form.reset(driver);
+        const validVehicles: FormData['vehicle'][] = ['motocicleta', 'automovil', 'bicicleta'];
+        const vehicle = typeof driver.vehicle === 'string' && validVehicles.includes(driver.vehicle as FormData['vehicle'])
+          ? driver.vehicle as FormData['vehicle']
+          : 'motocicleta';
+        form.reset({ name: driver.name, email: driver.email, vehicle, status: driver.status });
       } else {
         form.reset({ name: '', email: '', vehicle: 'motocicleta', status: 'Pendiente' });
       }
@@ -55,7 +59,10 @@ export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: Manage
   const handleSubmit = (values: FormData) => {
     const driverData: DeliveryPersonnel = {
       id: isEditing && driver ? driver.id : `proto-delivery-${Date.now()}`,
-      ...values,
+      name: values.name,
+      email: values.email,
+      vehicle: values.vehicle,
+      status: values.status,
       zone: isEditing && driver ? driver.zone : 'Centro',
     };
     onSave(driverData);

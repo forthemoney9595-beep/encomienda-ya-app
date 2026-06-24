@@ -167,7 +167,7 @@ function AdminUsersPage() {
                         {filteredUsers.length === 0 && (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                    No se encontraron usuarios que coincidan con "{search}".
+                                    No se encontraron usuarios que coincidan con &quot;{search}&quot;.
                                 </TableCell>
                             </TableRow>
                         )}

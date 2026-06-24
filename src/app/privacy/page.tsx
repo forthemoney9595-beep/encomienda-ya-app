@@ -60,7 +60,7 @@ export default function PrivacyPage() {
       <ul>
         <li>Acceder a tus datos personales.</li>
         <li>Rectificar datos incorrectos.</li>
-        <li>Solicitar la eliminación de tus datos ("derecho al olvido").</li>
+        <li>Solicitar la eliminación de tus datos (&quot;derecho al olvido&quot;).</li>
         <li>Oponerte al tratamiento de tus datos.</li>
       </ul>
       <p>

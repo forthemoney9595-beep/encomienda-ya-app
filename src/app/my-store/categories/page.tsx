@@ -6,7 +6,8 @@ import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PlusCircle, Tag, Trash2, Edit, Loader2 } from 'lucide-react';
-import { useAuth, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ManageCategoryDialog } from './manage-category-dialog';
@@ -16,18 +17,18 @@ import { doc, updateDoc } from 'firebase/firestore';
 import type { Store } from '@/lib/placeholder-data';
 
 export default function StoreCategoriesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading } = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
 
   const storeRef = useMemoFirebase(() => {
-    if (!firestore || !user?.storeId) return null;
-    return doc(firestore, 'stores', user.storeId);
-  }, [firestore, user?.storeId]);
+    if (!firestore || !userProfile?.storeId) return null;
+    return doc(firestore, 'stores', userProfile.storeId);
+  }, [firestore, userProfile?.storeId]);
 
   const { data: store, isLoading: storeLoading } = useDoc<Store>(storeRef);
-  
+
   const [isManageDialogOpen, setManageDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
 
@@ -35,10 +36,10 @@ export default function StoreCategoriesPage() {
   const isLoading = authLoading || storeLoading;
 
   useEffect(() => {
-    if (!isLoading && (!user || user.role !== 'store' || !user.storeId)) {
+    if (!isLoading && (!userProfile || userProfile.role !== 'store' || !userProfile.storeId)) {
       router.push('/');
     }
-  }, [user, isLoading, router]);
+  }, [userProfile, isLoading, router]);
 
   const handleSaveCategory = async (oldCategory: string | null, newCategory: string) => {
     if (!storeRef || !store) return;
@@ -151,7 +152,7 @@ export default function StoreCategoriesPage() {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>¿Estás seguro de que quieres eliminar "{category}"?</AlertDialogTitle>
+                          <AlertDialogTitle>¿Estás seguro de que quieres eliminar &quot;{category}&quot;?</AlertDialogTitle>
                           <AlertDialogDescription>
                             Esta acción no se puede deshacer. Los productos de esta categoría no serán eliminados, pero deberás asignarles una nueva categoría.
                           </AlertDialogDescription>
@@ -168,7 +169,7 @@ export default function StoreCategoriesPage() {
             ) : (
               <div className="text-center text-muted-foreground py-10">
                 <p>No tienes categorías definidas.</p>
-                <p className="text-sm">Haz clic en "Añadir Categoría" para crear la primera.</p>
+                <p className="text-sm">Haz clic en &quot;Añadir Categoría&quot; para crear la primera.</p>
               </div>
             )}
           </div>

@@ -535,7 +535,7 @@ export default function OrderTrackingPage() {
 
             {isBuyer && order.status === 'Entregado' && order.deliveryPersonName && (
                 order.deliveryRating ? (
-                    <Card><CardHeader><CardTitle>Tu Valoración de la Entrega</CardTitle></CardHeader><CardContent className="space-y-2"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30')} />))}<span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span></div>{order.deliveryReview && (<blockquote className="border-l-2 pl-4 italic text-muted-foreground">"{order.deliveryReview}"</blockquote>)}<p className="text-xs text-muted-foreground pt-2">Valoración para {order.deliveryPersonName}.</p></CardContent></Card>
+                    <Card><CardHeader><CardTitle>Tu Valoración de la Entrega</CardTitle></CardHeader><CardContent className="space-y-2"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30')} />))}<span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span></div>{order.deliveryReview && (<blockquote className="border-l-2 pl-4 italic text-muted-foreground">&quot;{order.deliveryReview}&quot;</blockquote>)}<p className="text-xs text-muted-foreground pt-2">Valoración para {order.deliveryPersonName}.</p></CardContent></Card>
                 ) : (
                     <DeliveryReviewCard order={order} onSubmit={handleDeliveryReviewSubmit} />
                 )
