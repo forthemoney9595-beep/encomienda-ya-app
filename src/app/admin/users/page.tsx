@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -35,12 +35,32 @@ function AdminUsersPage() {
 
   // --- ACCIONES ---
 
-  const handleRoleChange = async (userId: string, newRole: string) => {
+  const handleRoleChange = async (userId: string, newRole: string, oldRole: string) => {
     if (!firestore) return;
-    if (!confirm(`¿Estás seguro de cambiar el rol de este usuario a ${newRole}?`)) return;
-    
+
+    const promotingToAdmin = newRole === 'admin' && oldRole !== 'admin';
+    const demotingFromAdmin = oldRole === 'admin' && newRole !== 'admin';
+
+    const confirmMessage = promotingToAdmin
+        ? '⚠️ Le vas a dar acceso TOTAL de administrador a este usuario (va a poder aprobar pagos, retiros, y gestionar todas las tiendas y repartidores). ¿Confirmás?'
+        : demotingFromAdmin
+        ? '¿Confirmás quitarle el acceso de administrador a este usuario?'
+        : `¿Estás seguro de cambiar el rol de este usuario a ${newRole}?`;
+
+    if (!confirm(confirmMessage)) return;
+
     try {
+        // role en users/{uid} es lo que decide la UI del lado del cliente,
+        // pero el acceso real a datos sensibles depende de roles_admin/{uid}
+        // (asi lo exige firestore.rules) — hay que mantener los dos en sync.
         await updateDoc(doc(firestore, 'users', userId), { role: newRole });
+
+        if (promotingToAdmin) {
+            await setDoc(doc(firestore, 'roles_admin', userId), { role: 'admin', createdAt: serverTimestamp() });
+        } else if (demotingFromAdmin) {
+            await deleteDoc(doc(firestore, 'roles_admin', userId));
+        }
+
         toast({ title: 'Rol actualizado', description: `El usuario ahora es ${newRole}.` });
     } catch (error) {
         console.error(error);
@@ -145,11 +165,11 @@ function AdminUsersPage() {
                                             <DropdownMenuContent align="end" className="w-48">
                                                 <DropdownMenuLabel>Cambiar Rol</DropdownMenuLabel>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'buyer')}>Convertir en Cliente</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'store')}>Convertir en Tienda</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'delivery')}>Convertir en Repartidor</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'buyer', user.role)}>Convertir en Cliente</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'store', user.role)}>Convertir en Tienda</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'delivery', user.role)}>Convertir en Repartidor</DropdownMenuItem>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-purple-600 font-bold focus:text-purple-700 focus:bg-purple-50" onClick={() => handleRoleChange(user.id, 'admin')}>
+                                                <DropdownMenuItem className="text-purple-600 font-bold focus:text-purple-700 focus:bg-purple-50" onClick={() => handleRoleChange(user.id, 'admin', user.role)}>
                                                     <Shield className="mr-2 h-4 w-4" /> Hacer Admin
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
