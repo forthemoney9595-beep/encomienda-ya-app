@@ -3,7 +3,8 @@
     "allow": [
       "PowerShell(Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force)",
       "PowerShell(Get-ExecutionPolicy -Scope CurrentUser)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "PowerShell(npm install -g firebase-tools 2>&1)"
     ]
   }
 }

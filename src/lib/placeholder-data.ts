@@ -35,7 +35,6 @@ export interface Store {
 
   // ✅ NUEVO: Comisión que la plataforma le cobra a ESTA tienda (ej: 10)
   commissionRate?: number;
-  productCategories?: string[];
 }
 
 export interface DeliveryPersonnel {
