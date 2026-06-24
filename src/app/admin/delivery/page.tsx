@@ -9,20 +9,9 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
 import { ManageDriverDialog } from './manage-driver-dialog';
 import AdminAuthGuard from '../admin-auth-guard';
-import { collection, query, where, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-
-// Definición local para evitar dependencias rotas
-interface UserProfile {
-    uid: string;
-    email: string;
-    name: string;
-    role: 'delivery';
-    [key: string]: any;
-}
+import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 function AdminDeliveryPage() {
   const { user, loading: authLoading } = useAuth();
@@ -69,37 +58,22 @@ function AdminDeliveryPage() {
     }
   };
 
-  // Guardar / Editar (Desde el Modal de Gestión)
+  // Editar (Desde el Modal de Gestión) — la creación manual de repartidores se
+  // sacó porque solo creaba un perfil en Firestore sin cuenta real de Firebase Auth
+  // (el repartidor nunca podría loguearse). El alta real es por autorregistro en
+  // /signup/delivery; este panel solo aprueba/edita cuentas que ya existen.
   const handleSaveDriver = async (driverData: DeliveryPersonnel) => {
-    if(!firestore) return;
-    
-    const isEditing = !!editingDriver;
+    if(!firestore || !editingDriver) return;
 
     try {
-      if (isEditing) {
-        // Editar existente
-        const userRef = doc(firestore, 'users', driverData.id);
-        await updateDoc(userRef, {
-            ...driverData,
-            updatedAt: serverTimestamp()
-        });
-      } else {
-        // Crear nuevo (Simulado para Admin)
-        const newDriverId = driverData.id || `driver-${Date.now()}`;
-        const profileToCreate: UserProfile = {
-            uid: newDriverId,
-            email: driverData.email,
-            name: driverData.name,
-            role: 'delivery',
-            status: 'Activo',
-            vehicle: driverData.vehicle,
-            createdAt: serverTimestamp()
-        };
-        await setDoc(doc(firestore, "users", newDriverId), profileToCreate);
-      }
-       
+      const userRef = doc(firestore, 'users', driverData.id);
+      await updateDoc(userRef, {
+          ...driverData,
+          updatedAt: serverTimestamp()
+      });
+
       toast({
-        title: isEditing ? 'Repartidor Actualizado' : 'Repartidor Añadido',
+        title: 'Repartidor Actualizado',
         description: `Los datos de ${driverData.name} han sido guardados.`,
       });
 
@@ -116,18 +90,14 @@ function AdminDeliveryPage() {
   };
 
   const handleDeleteDriver = async (driverId: string) => {
-    if(!confirm("¿Estás seguro de eliminar este usuario?")) return;
-    // Aquí iría la lógica de borrado (normalmente soft-delete o cloud function)
+    // La confirmación ya la pide el AlertDialog en personnel-actions.tsx — acá no
+    // hace falta otro confirm(). Por seguridad la eliminación directa no está
+    // habilitada todavía (requeriría borrar también la cuenta de Firebase Auth).
     toast({
       title: 'Acción no disponible',
-      description: `Por seguridad, la eliminación directa no está habilitada en esta demo.`,
+      description: 'Por seguridad, la eliminación directa no está habilitada todavía.',
       variant: 'destructive',
     });
-  };
-
-  const openDialogForCreate = () => {
-    setEditingDriver(null);
-    setManageDialogOpen(true);
   };
 
   const openDialogForEdit = (driver: DeliveryPersonnel) => {
@@ -144,12 +114,7 @@ function AdminDeliveryPage() {
         driver={editingDriver}
       />
       
-      <PageHeader title="Gestión de Repartidores" description="Administra las cuentas y aprobaciones de tu flota.">
-         <Button onClick={openDialogForCreate}>
-           <PlusCircle className="mr-2 h-4 w-4" />
-           Agregar Manualmente
-         </Button>
-      </PageHeader>
+      <PageHeader title="Gestión de Repartidores" description="Administra las cuentas y aprobaciones de tu flota." />
 
       {authLoading || personnelLoading ? (
          <div className="border rounded-lg p-4 space-y-4">

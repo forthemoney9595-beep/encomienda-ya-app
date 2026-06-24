@@ -57,11 +57,19 @@ export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: Manage
   }, [isOpen, driver, form]);
 
   const handleSubmit = (values: FormData) => {
+    // Si el repartidor ya tenía un vehículo "completo" (modelo/patente/color, cargado
+    // por él mismo), no lo pisamos con solo el tipo — actualizamos el tipo dentro del
+    // mismo objeto para no perder esos datos al guardar desde este diálogo.
+    const existingVehicle = isEditing && driver ? driver.vehicle : undefined;
+    const vehicle = (typeof existingVehicle === 'object' && existingVehicle !== null)
+      ? { ...existingVehicle, type: values.vehicle }
+      : values.vehicle;
+
     const driverData: DeliveryPersonnel = {
       id: isEditing && driver ? driver.id : `proto-delivery-${Date.now()}`,
       name: values.name,
       email: values.email,
-      vehicle: values.vehicle,
+      vehicle,
       status: values.status,
       zone: isEditing && driver ? driver.zone : 'Centro',
     };

@@ -148,9 +148,19 @@ export default function DeliveryOrdersView() {
       });
       toast({ title: "¡Pedido Asignado!", description: "Ve a la tienda a retirarlo." });
       setActiveTab('active');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast({ variant: "destructive", title: "Error", description: "No se pudo tomar el pedido." });
+      // Si Firestore rechazó la escritura, lo más probable es que otro repartidor
+      // ya haya tomado este pedido un instante antes (la regla de seguridad exige
+      // que deliveryPersonId siga siendo null en el momento exacto de escribir).
+      const isPermissionDenied = error?.code === 'permission-denied';
+      toast({
+        variant: "destructive",
+        title: isPermissionDenied ? "Pedido ya tomado" : "Error",
+        description: isPermissionDenied
+          ? "Otro repartidor ya tomó este pedido justo antes que tú."
+          : "No se pudo tomar el pedido.",
+      });
     }
   };
 
