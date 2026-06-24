@@ -52,34 +52,48 @@ export async function POST(request: Request) {
     const serviceFeePercent = platformConfig.serviceFee ?? 5;
 
     // 2. RE-CALCULAR EL TOTAL Y SANITIZAR
+    // 🔐 El precio SIEMPRE se busca en Firestore — el precio que manda el cliente
+    // se ignora por completo, solo se usan id y quantity. Así nadie puede pagar lo
+    // que quiera por un producto manipulando el body del request.
     let calculatedSubtotal = 0;
     const verifiedItems = [];
 
     for (const item of items) {
-        const rawPrice = item.price ?? item.unit_price ?? item.unitPrice ?? item.cost ?? 0;
-        const price = Number(rawPrice);
+        const itemId = item.id;
         const rawQty = item.quantity ?? 1;
         const quantity = Number(rawQty);
-        const title = item.name || item.title || item.product?.name || "Producto sin nombre";
 
-        if (price <= 0 || isNaN(price)) {
-            console.error(`❌ ERROR FATAL: El producto "${title}" tiene precio inválido: ${rawPrice}`);
-            return NextResponse.json({ error: `Error de datos: El producto "${title}" tiene precio 0.` }, { status: 400 });
+        if (!itemId || !Number.isInteger(quantity) || quantity <= 0) {
+            return NextResponse.json({ error: `Item inválido: ${itemId}` }, { status: 400 });
         }
 
-        // Validar cantidad: debe ser entero positivo
-        if (!Number.isInteger(quantity) || quantity <= 0) {
-            return NextResponse.json({ error: `Cantidad inválida para "${title}": ${rawQty}` }, { status: 400 });
+        // Intentar en subcolección 'products' y luego 'items' por compatibilidad
+        let productSnap = await adminDb.collection("stores").doc(storeId).collection("products").doc(itemId).get();
+        if (!productSnap.exists) {
+            productSnap = await adminDb.collection("stores").doc(storeId).collection("items").doc(itemId).get();
+        }
+
+        if (!productSnap.exists) {
+            console.error(`❌ [API Segura] Producto ${itemId} no encontrado en tienda ${storeId}`);
+            return NextResponse.json({ error: `Producto no encontrado: ${itemId}` }, { status: 400 });
+        }
+
+        const productData = productSnap.data()!;
+        const title = productData.name || productData.title || "Producto sin nombre";
+        const price = Number(productData.price ?? productData.unit_price ?? 0);
+
+        if (price <= 0 || isNaN(price)) {
+            console.error(`❌ ERROR FATAL: El producto "${title}" tiene precio inválido: ${price}`);
+            return NextResponse.json({ error: `Error de datos: El producto "${title}" tiene precio 0.` }, { status: 400 });
         }
 
         calculatedSubtotal += price * quantity;
 
         verifiedItems.push({
-            id: item.id,
+            id: itemId,
             title: title,
             price: price,
             quantity: quantity,
-            originalData: item
         });
     }
 

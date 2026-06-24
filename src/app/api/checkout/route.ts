@@ -22,62 +22,60 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
 
-        const { orderId, items, payerEmail, storeId } = body;
+        const { orderId, payerEmail } = body;
 
         // 2. Validación básica
-        if (!items || !Array.isArray(items) || items.length === 0) {
-            return NextResponse.json({ error: "Items inválidos" }, { status: 400 });
-        }
-        if (!storeId || !orderId) {
-            return NextResponse.json({ error: "Faltan storeId u orderId" }, { status: 400 });
+        if (!orderId) {
+            return NextResponse.json({ error: "Falta orderId" }, { status: 400 });
         }
 
-        // 🔐 Obtener storeOwnerId y userId desde Firestore — nunca del cliente
+        // 🔐 Obtener todos los datos del pedido desde Firestore — nunca del cliente.
+        // La orden ya quedó creada (y sus precios verificados) por /api/orders/create,
+        // así que acá reusamos ese mismo subtotal/envío/tarifa en vez de recalcular
+        // de nuevo — evita que MercadoPago cobre de menos que order.total.
         const orderSnap = await adminDb.collection("orders").doc(orderId).get();
         if (!orderSnap.exists) {
             return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 });
         }
         const orderData = orderSnap.data()!;
+        const storeId: string = orderData.storeId;
         const storeOwnerId: string = orderData.storeOwnerId || orderData.storeId;
         const userId: string = orderData.userId;
 
-        // 🔐 Verificar precios reales contra Firestore — evita manipulación desde el cliente
-        const verifiedItems: { id: string; title: string; quantity: number; unit_price: number }[] = [];
-        for (const item of items) {
-            const itemId = item.id;
-            const requestedQty = Number(item.quantity);
+        if (!Array.isArray(orderData.items) || orderData.items.length === 0) {
+            return NextResponse.json({ error: "El pedido no tiene items" }, { status: 400 });
+        }
 
-            if (!itemId || requestedQty <= 0 || !Number.isInteger(requestedQty)) {
-                return NextResponse.json({ error: `Item inválido: ${itemId}` }, { status: 400 });
-            }
+        const mpItems: { id: string; title: string; quantity: number; unit_price: number; currency_id: string }[] =
+            orderData.items.map((item: any) => ({
+                id: item.id,
+                title: item.title || item.name || 'Producto',
+                quantity: Number(item.quantity) || 1,
+                unit_price: Number(item.price ?? item.unit_price ?? 0),
+                currency_id: 'ARS',
+            }));
 
-            // Intentar en subcolección 'products' y luego 'items' por compatibilidad
-            let productSnap = await adminDb.collection("stores").doc(storeId).collection("products").doc(itemId).get();
-            if (!productSnap.exists) {
-                productSnap = await adminDb.collection("stores").doc(storeId).collection("items").doc(itemId).get();
-            }
-
-            if (!productSnap.exists) {
-                console.error(`❌ [Checkout] Producto ${itemId} no encontrado en tienda ${storeId}`);
-                return NextResponse.json({ error: `Producto no encontrado: ${itemId}` }, { status: 400 });
-            }
-
-            const productData = productSnap.data()!;
-            const realPrice = Number(productData.price ?? productData.unit_price ?? 0);
-
-            if (realPrice <= 0) {
-                return NextResponse.json({ error: `Precio inválido para producto: ${itemId}` }, { status: 400 });
-            }
-
-            verifiedItems.push({
-                id: itemId,
-                title: productData.name || productData.title || 'Producto',
-                quantity: requestedQty,
-                unit_price: realPrice,
+        if (orderData.deliveryFee > 0) {
+            mpItems.push({
+                id: 'shipping',
+                title: 'Envío',
+                quantity: 1,
+                unit_price: Number(orderData.deliveryFee),
+                currency_id: 'ARS',
             });
         }
 
-        console.log(`✅ [Checkout API] ${verifiedItems.length} item(s) verificados contra Firestore`);
+        if (orderData.serviceFee > 0) {
+            mpItems.push({
+                id: 'service-fee',
+                title: 'Tarifa de servicio',
+                quantity: 1,
+                unit_price: Number(orderData.serviceFee),
+                currency_id: 'ARS',
+            });
+        }
+
+        console.log(`✅ [Checkout API] ${mpItems.length} item(s) tomados de la orden ${orderId} (incluye envío y tarifa de servicio)`);
 
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
@@ -91,14 +89,8 @@ export async function POST(request: Request) {
 
         const result = await preference.create({
             body: {
-                items: verifiedItems.map(item => ({
-                    id: item.id,
-                    title: item.title,
-                    quantity: item.quantity,
-                    unit_price: item.unit_price,
-                    currency_id: 'ARS',
-                })),
-                external_reference: orderId, 
+                items: mpItems,
+                external_reference: orderId,
                 payer: {
                     email: payerEmail || 'test_user_encomiendaya@test.com'
                 },
