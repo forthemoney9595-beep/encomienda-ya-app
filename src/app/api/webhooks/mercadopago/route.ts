@@ -38,6 +38,13 @@ function verifyMpSignature(request: Request, rawBody: string, url: URL): boolean
   const manifest = `id:${dataId};request-id:${xRequestId ?? ""};ts:${ts};`;
   const expectedHash = createHmac("sha256", secret).update(manifest).digest("hex");
 
+  // 🔧 DEBUG TEMPORAL — sin exponer el secreto, solo para diagnosticar el mismatch de firma
+  console.log("🔧 [Webhook Debug] url:", url.href);
+  console.log("🔧 [Webhook Debug] x-signature recibido:", xSignature);
+  console.log("🔧 [Webhook Debug] x-request-id recibido:", xRequestId);
+  console.log("🔧 [Webhook Debug] manifest construido:", manifest);
+  console.log("🔧 [Webhook Debug] v1 recibido:", v1, "| expectedHash calculado:", expectedHash);
+
   return expectedHash === v1;
 }
 
