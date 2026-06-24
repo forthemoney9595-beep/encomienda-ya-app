@@ -82,7 +82,10 @@ service cloud.firestore {
         isStoreOwner(resource.data.storeId) ||
         resource.data.deliveryPersonId == request.auth.uid ||
         // Auto-asignación de repartidor
-        (resource.data.deliveryPersonId == null && request.resource.data.deliveryPersonId == request.auth.uid)
+        (resource.data.deliveryPersonId == null && request.resource.data.deliveryPersonId == request.auth.uid) ||
+        // Cliente: solo puede calificar (productos y/o repartidor), no otros campos
+        (resource.data.userId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items', 'deliveryRating', 'deliveryReview']))
       );
     }
 
