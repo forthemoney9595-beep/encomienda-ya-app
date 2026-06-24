@@ -302,7 +302,7 @@ function DriverProfilePage() {
                             </div>
                             <div className="flex items-center gap-3 text-sm">
                                 <Car className="h-4 w-4 text-muted-foreground" />
-                                <span className="capitalize">{typeof driver.vehicle === 'string' ? driver.vehicle : driver.vehicle?.model || 'Sin datos'}</span>
+                                <span className="capitalize">{typeof driver.vehicle === 'string' ? driver.vehicle : driver.vehicle?.type || 'N/A'}</span>
                             </div>
                         </CardContent>
                     </Card>

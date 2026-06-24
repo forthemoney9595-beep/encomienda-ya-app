@@ -17,7 +17,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import type { Store } from '@/lib/placeholder-data';
 
 export default function StoreCategoriesPage() {
-  const { userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
@@ -36,7 +36,7 @@ export default function StoreCategoriesPage() {
   const isLoading = authLoading || storeLoading;
 
   useEffect(() => {
-    if (!isLoading && (!userProfile || userProfile.role !== 'store' || !userProfile.storeId)) {
+    if (!isLoading && (!user || userProfile?.role !== 'store' || !userProfile?.storeId)) {
       router.push('/');
     }
   }, [userProfile, isLoading, router]);

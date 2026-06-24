@@ -34,7 +34,39 @@ export interface Store {
   ownerName?: string;       
 
   // ✅ NUEVO: Comisión que la plataforma le cobra a ESTA tienda (ej: 10)
-  commissionRate?: number; 
+  commissionRate?: number;
+  productCategories?: string[];
+}
+
+export interface DeliveryPersonnel {
+  id: string;
+  name: string;
+  email: string;
+  status: 'Activo' | 'Rechazado' | 'Pendiente' | 'Inactivo' | string;
+  vehicle?: 'motocicleta' | 'automovil' | 'bicicleta' | string | { type: string; model: string; plate: string; color: string };
+  phoneNumber?: string;
+  rating?: number;
+  deliveriesCount?: number;
+  zone?: string;
+  profileImageUrl?: string;
+  licenseUrl?: string;
+  joinedDate?: string;
+}
+
+export interface UserProfile {
+  id?: string;
+  uid?: string;
+  role: 'buyer' | 'store' | 'delivery' | 'admin';
+  name: string;
+  email: string;
+  phoneNumber?: string;
+  displayName?: string;
+  profileImageUrl?: string;
+  storeId?: string;
+  addresses?: Address[];
+  favoriteStores?: string[];
+  favoriteProducts?: string[];
+  isApproved?: boolean;
 }
 
 export interface Order {
@@ -70,10 +102,11 @@ export interface Order {
 
 export interface Address {
     id: string;
-    label: string;
+    label: 'Casa' | 'Oficina' | 'Otro' | string;
     street: string;
     city: string;
     zipCode: string;
+    postalCode?: string;
 }
 
 // Datos de ejemplo

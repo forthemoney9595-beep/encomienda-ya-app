@@ -117,7 +117,10 @@ export async function createStoreForUser(db: Firestore, ownerId: string, storeDa
         imageUrl: getPlaceholderImage(storeData.name.replace(/\s/g, ''), 600, 400),
         imageHint: storeData.category?.toLowerCase().split('-')[0] || 'store',
         products: [],
-        horario: "9am - 5pm (simulado)"
+        horario: "9am - 5pm (simulado)",
+        rating: 0,
+        deliveryTime: "30-45 min",
+        minOrder: 500,
     };
 
     const storeDocRef = await addDoc(storesCollectionRef, newStoreData);
