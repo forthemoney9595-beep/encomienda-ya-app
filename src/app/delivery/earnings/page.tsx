@@ -178,21 +178,21 @@ export default function DeliveryEarningsPage() {
       />
 
       {/* TARJETA PRINCIPAL: BALANCE DISPONIBLE */}
-      <Card className="bg-gradient-to-br from-green-50 to-emerald-100 border-green-200 shadow-md">
+      <Card className="bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30 shadow-md">
           <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium text-green-800 flex items-center gap-2">
-                  <Wallet className="h-5 w-5" /> Saldo Disponible
+              <CardTitle className="text-lg font-medium text-foreground flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-primary" /> Saldo Disponible
               </CardTitle>
-              <CardDescription className="text-green-700/80">Dinero listo para retirar</CardDescription>
+              <CardDescription className="text-muted-foreground">Dinero listo para retirar</CardDescription>
           </CardHeader>
           <CardContent>
-              <div className="text-4xl font-bold text-green-900 mb-4">
+              <div className="text-4xl font-bold text-foreground mb-4">
                   ${financialSummary.availableBalance.toLocaleString()}
               </div>
-              
+
               <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
                   <DialogTrigger asChild>
-                      <Button className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto font-bold shadow-sm">
+                      <Button className="w-full sm:w-auto font-bold shadow-sm">
                           Solicitar Retiro
                       </Button>
                   </DialogTrigger>
@@ -229,7 +229,7 @@ export default function DeliveryEarningsPage() {
                       </div>
                       <DialogFooter>
                           <Button variant="outline" onClick={() => setIsWithdrawOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                          <Button onClick={handleRequestWithdrawal} disabled={isSubmitting} className="bg-green-600 hover:bg-green-700">
+                          <Button onClick={handleRequestWithdrawal} disabled={isSubmitting}>
                               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirmar
                           </Button>
                       </DialogFooter>
@@ -257,7 +257,7 @@ export default function DeliveryEarningsPage() {
                 </CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold text-orange-600">${financialSummary.totalWithdrawn.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-muted-foreground">${financialSummary.totalWithdrawn.toLocaleString()}</div>
             </CardContent>
         </Card>
       </div>
@@ -290,7 +290,7 @@ export default function DeliveryEarningsPage() {
                                   <Badge variant={
                                       w.status === 'approved' ? 'default' : 
                                       w.status === 'rejected' ? 'destructive' : 'secondary'
-                                  } className={w.status === 'approved' ? 'bg-green-600' : w.status === 'pending' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}>
+                                  } className={w.status === 'approved' ? 'bg-success text-success-foreground hover:bg-success/90' : w.status === 'pending' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : ''}>
                                       {w.status === 'approved' ? 'Pagado' : 
                                        w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
                                   </Badge>
@@ -326,7 +326,7 @@ export default function DeliveryEarningsPage() {
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <span className="block font-bold text-green-600">+${order.deliveryFee}</span>
+                                    <span className="block font-bold text-success">+${order.deliveryFee}</span>
                                 </div>
                             </div>
                         ))

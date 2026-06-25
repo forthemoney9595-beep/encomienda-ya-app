@@ -258,7 +258,7 @@ export default function DeliveryOrdersView() {
           <TabsTrigger value="active">
             En Curso ({myActiveOrders?.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="wallet" className="text-orange-700 font-semibold data-[state=active]:bg-orange-50 data-[state=active]:text-orange-800">
+          <TabsTrigger value="wallet" className="text-primary font-semibold data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
              <Wallet className="h-4 w-4 mr-2"/> Billetera
           </TabsTrigger>
         </TabsList>
@@ -287,14 +287,14 @@ export default function DeliveryOrdersView() {
                             </Badge>
                         </div>
                     </div>
-                    <Badge className="bg-green-600 hover:bg-green-700">
+                    <Badge className="bg-success text-success-foreground hover:bg-success/90">
                         +${order.deliveryFee}
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="py-4 space-y-3">
                     <div className="flex items-start gap-3">
-                        <MapPin className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                        <MapPin className="h-5 w-5 text-info shrink-0 mt-0.5" />
                         <div>
                             <p className="text-xs font-bold uppercase text-muted-foreground">Retirar en:</p>
                             {/* ✅ USAMOS LA FUNCIÓN DE LIMPIEZA */}
@@ -302,7 +302,7 @@ export default function DeliveryOrdersView() {
                         </div>
                     </div>
                     <div className="flex items-start gap-3">
-                        <Navigation className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                        <Navigation className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                         <div>
                             <p className="text-xs font-bold uppercase text-muted-foreground">Entregar a:</p>
                             <p className="text-sm">{order.shippingInfo?.address}</p>
@@ -323,17 +323,17 @@ export default function DeliveryOrdersView() {
         <TabsContent value="active" className="space-y-4">
             {myActiveOrders?.length === 0 ? (
                 <div className="text-center py-12 bg-muted/20 rounded-xl">
-                    <CheckCircle2 className="mx-auto h-12 w-12 text-green-500 mb-3" />
+                    <CheckCircle2 className="mx-auto h-12 w-12 text-success mb-3" />
                     <h3 className="text-lg font-medium">Estás libre</h3>
                     <p className="text-sm text-muted-foreground">Ve a la pestaña &quot;Disponibles&quot; para tomar un viaje.</p>
                 </div>
             ) : (
                 myActiveOrders?.map(order => (
-                    <Card key={order.id} className={`border-l-4 shadow-md ${order.paymentMethod === 'Efectivo' ? 'border-l-yellow-500 ring-2 ring-yellow-500/20' : 'border-l-blue-500'}`}>
+                    <Card key={order.id} className={`border-l-4 shadow-md ${order.paymentMethod === 'Efectivo' ? 'border-l-warning ring-2 ring-warning/20' : 'border-l-info'}`}>
                         <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
                                 <div className="space-y-1">
-                                    <Badge variant="secondary" className="animate-pulse bg-blue-100 text-blue-700 uppercase">
+                                    <Badge variant="secondary" className="animate-pulse bg-info/15 text-info uppercase">
                                         {order.status}
                                     </Badge>
                                     <CardTitle className="mt-1 text-lg">{order.storeName}</CardTitle>
@@ -347,19 +347,19 @@ export default function DeliveryOrdersView() {
                             
                             {/* Mensajes de Estado */}
                             {(order.status === 'En camino' || order.status === 'Aceptado' || order.status === 'Listo para recoger') && (
-                                <div className="p-3 bg-blue-50 text-blue-800 rounded-lg text-sm flex items-center gap-2 border border-blue-100">
-                                    <MapPin className="h-4 w-4"/> 
+                                <div className="p-3 bg-info/10 text-foreground rounded-lg text-sm flex items-center gap-2 border border-info/30">
+                                    <MapPin className="h-4 w-4 text-info"/>
                                     <strong>Paso 1:</strong> Dirígete a la tienda para retirar.
                                 </div>
                             )}
                             {order.status === 'En reparto' && (
-                                <div className="p-3 bg-orange-50 text-orange-800 rounded-lg text-sm flex items-center gap-2 border border-orange-100">
-                                    <Navigation className="h-4 w-4"/> 
+                                <div className="p-3 bg-primary/10 text-foreground rounded-lg text-sm flex items-center gap-2 border border-primary/30">
+                                    <Navigation className="h-4 w-4 text-primary"/>
                                     <strong>Paso 2:</strong> Estás llevando el pedido al cliente.
                                 </div>
                             )}
 
-                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-1">
+                            <div className="p-3 bg-muted/50 rounded-lg border space-y-1">
                                 <p className="text-xs text-muted-foreground uppercase font-bold">Destino Final:</p>
                                 <p className="text-sm font-medium">{order.shippingInfo?.address}</p>
                                 <p className="text-xs text-muted-foreground">Cliente: {order.customerName}</p>
@@ -367,13 +367,13 @@ export default function DeliveryOrdersView() {
                             
                             {/* ALERTA DE COBRO EN EFECTIVO */}
                             {order.paymentMethod === 'Efectivo' && order.status === 'En reparto' && (
-                                <div className="p-4 bg-yellow-50 rounded-lg border-2 border-yellow-400 flex items-start gap-3 animate-in fade-in zoom-in">
-                                    <div className="bg-yellow-100 p-2 rounded-full">
-                                        <DollarSign className="h-6 w-6 text-yellow-700" />
+                                <div className="p-4 bg-warning/10 rounded-lg border-2 border-warning flex items-start gap-3 animate-in fade-in zoom-in">
+                                    <div className="bg-warning/20 p-2 rounded-full">
+                                        <DollarSign className="h-6 w-6 text-warning" />
                                     </div>
                                     <div>
-                                        <p className="font-bold text-yellow-900 uppercase text-sm">¡COBRAR AL CLIENTE!</p>
-                                        <p className="text-sm text-yellow-800 font-medium">
+                                        <p className="font-bold text-warning uppercase text-sm">¡COBRAR AL CLIENTE!</p>
+                                        <p className="text-sm text-foreground font-medium">
                                             Debes recibir <span className="text-lg font-bold">${order.total}</span> en efectivo.
                                         </p>
                                     </div>
@@ -382,9 +382,9 @@ export default function DeliveryOrdersView() {
 
                              {/* AVISO DE PAGO ONLINE */}
                              {order.paymentMethod === 'mercadopago' && (
-                                <div className="p-3 bg-green-50 rounded-lg border border-green-200 flex items-center gap-3">
-                                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                    <p className="text-sm text-green-800 font-medium">
+                                <div className="p-3 bg-success/10 rounded-lg border border-success/30 flex items-center gap-3">
+                                    <CheckCircle2 className="h-5 w-5 text-success" />
+                                    <p className="text-sm text-foreground font-medium">
                                         Pedido pagado online. <strong>Solo entregar.</strong>
                                     </p>
                                 </div>
@@ -392,17 +392,17 @@ export default function DeliveryOrdersView() {
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
                             {/* ✅ BOTÓN DE NAVEGACIÓN */}
-                            <Button variant="secondary" className="w-full h-10 border-blue-200 text-blue-700 hover:bg-blue-100" onClick={() => goToDetails(order.id)}>
+                            <Button variant="secondary" className="w-full h-10" onClick={() => goToDetails(order.id)}>
                                 <MapIcon className="mr-2 h-4 w-4" /> Ver Detalles / Mapa / Chat
                             </Button>
 
                             {/* ✅ BOTONES DE FLUJO */}
                             {(order.status === 'En camino' || order.status === 'Aceptado' || order.status === 'Listo para recoger') ? (
-                                <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700" onClick={() => handlePickupOrder(order)}>
+                                <Button className="w-full h-12 bg-info hover:bg-info/90 text-info-foreground" onClick={() => handlePickupOrder(order)}>
                                     <PackageCheck className="mr-2 h-5 w-5" /> Ya retiré el pedido
                                 </Button>
                             ) : (
-                                <Button className={`w-full text-lg h-12 ${order.paymentMethod === 'Efectivo' ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : 'bg-green-600 hover:bg-green-700'}`} onClick={() => handleFinishDeliveryClick(order)}>
+                                <Button className={`w-full text-lg h-12 ${order.paymentMethod === 'Efectivo' ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : 'bg-success hover:bg-success/90 text-success-foreground'}`} onClick={() => handleFinishDeliveryClick(order)}>
                                     <CheckCircle2 className="mr-2 h-5 w-5" /> 
                                     {order.paymentMethod === 'Efectivo' ? 'Ya cobré y Entregué' : 'Confirmar Entrega'}
                                 </Button>
@@ -416,30 +416,30 @@ export default function DeliveryOrdersView() {
         {/* --- PESTAÑA: BILLETERA --- */}
         <TabsContent value="wallet" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
              <div className="grid gap-4 md:grid-cols-2">
-                <Card className="border-l-4 border-l-orange-600 shadow-md">
+                <Card className="border-l-4 border-l-info shadow-md">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <Clock className="h-4 w-4" /> Saldo Pendiente de Cobro
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-orange-700">${financeStats.pendingBalance.toLocaleString()}</div>
+                        <div className="text-3xl font-bold text-info">${financeStats.pendingBalance.toLocaleString()}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             Ganancias por envíos entregados (no pagados).
                         </p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-l-4 border-l-green-600 shadow-sm bg-green-50/30">
+                <Card className="border-l-4 border-l-success shadow-sm bg-success/5">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-green-600" /> Último Pago Recibido
+                            <CheckCircle2 className="h-4 w-4 text-success" /> Último Pago Recibido
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         {financeStats.lastPayoutDate ? (
                             <>
-                                <div className="text-xl font-bold text-green-800">
+                                <div className="text-xl font-bold text-success">
                                     {format(financeStats.lastPayoutDate, "d 'de' MMMM", { locale: es })}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
@@ -461,7 +461,7 @@ export default function DeliveryOrdersView() {
                 <CardContent>
                     {financeStats.unpaidOrders.length === 0 && financeStats.totalPaid === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
-                            <Wallet className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                            <Wallet className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
                             <p>No tienes movimientos aún.</p>
                         </div>
                     ) : (
@@ -470,9 +470,9 @@ export default function DeliveryOrdersView() {
                                 <div key={order.id} className="flex justify-between items-center border-b pb-2 last:border-0">
                                     <div>
                                         <p className="font-medium text-sm">Pedido #{order.id.substring(0,6)}</p>
-                                        <Badge variant="outline" className="text-[10px] border-orange-200 text-orange-700">Pendiente</Badge>
+                                        <Badge variant="outline" className="text-[10px] border-warning/30 text-warning">Pendiente</Badge>
                                     </div>
-                                    <div className="font-bold text-orange-600">
+                                    <div className="font-bold text-info">
                                         +${(order.deliveryFee || 0).toLocaleString()}
                                     </div>
                                 </div>
@@ -494,15 +494,15 @@ export default function DeliveryOrdersView() {
             </DialogHeader>
 
             {confirmDeliveryOrder?.paymentMethod === 'Efectivo' && (
-                <div className="bg-yellow-100 p-4 rounded-lg border border-yellow-400 text-center my-2">
-                    <p className="font-bold text-yellow-900 uppercase">¡COBRAR AL CLIENTE!</p>
-                    <h3 className="font-black text-2xl text-yellow-900">${confirmDeliveryOrder.total}</h3>
+                <div className="bg-warning/15 p-4 rounded-lg border border-warning text-center my-2">
+                    <p className="font-bold text-warning uppercase">¡COBRAR AL CLIENTE!</p>
+                    <h3 className="font-black text-2xl text-foreground">${confirmDeliveryOrder.total}</h3>
                 </div>
             )}
 
             <DialogFooter>
                 <Button variant="outline" onClick={() => setConfirmDeliveryOrder(null)}>Cancelar</Button>
-                <Button className="bg-green-600 hover:bg-green-700" onClick={confirmFinishDelivery}>
+                <Button className="bg-success hover:bg-success/90 text-success-foreground" onClick={confirmFinishDelivery}>
                     Sí, Entregado
                 </Button>
             </DialogFooter>
