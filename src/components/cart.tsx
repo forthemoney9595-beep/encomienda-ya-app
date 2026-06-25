@@ -97,11 +97,11 @@ export function Cart() {
                         <span>Subtotal productos</span>
                         <span>${totalPrice.toFixed(2)}</span>
                     </div>
-                    {/* Nota: Los impuestos y envío se calculan en el siguiente paso */}
                     <div className="flex justify-between font-bold text-lg pt-2">
-                        <span>Total estimado</span>
-                        <span>${totalPrice.toFixed(2)}</span>
+                        <span>Subtotal</span>
+                        <span className="text-primary">${totalPrice.toFixed(2)}</span>
                     </div>
+                    <p className="text-xs text-muted-foreground">El envío y la tarifa de servicio se calculan al pagar.</p>
                 </div>
                 <div className="grid gap-2">
                     <Button 
