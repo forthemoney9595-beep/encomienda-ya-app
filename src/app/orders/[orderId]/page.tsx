@@ -4,7 +4,7 @@ import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { type Order, OrderService } from '@/lib/order-service';
+import { type Order, OrderService, updateOrderStatus } from '@/lib/order-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
@@ -238,15 +238,33 @@ export default function OrderTrackingPage() {
     }
 
     const handleAcceptOrder = async () => {
-        if (!user || !orderRef) return;
+        if (!user || !orderRef || !order || !firestore) return;
         setIsAccepting(true);
         try {
-            await updateDoc(orderRef, { 
+            const driverName = myUserProfile?.displayName || 'Repartidor';
+            await updateDoc(orderRef, {
                 deliveryPersonId: user.uid,
-                deliveryPersonName: myUserProfile?.displayName || 'Repartidor',
-                status: 'En camino'
+                deliveryPersonName: driverName,
+                status: 'En camino',
+                takenAt: serverTimestamp()
             });
             toast({ title: "¡Pedido Aceptado!", description: "Ve a la tienda a retirarlo." });
+
+            // Avisar a la tienda y al comprador — este botón es un camino alternativo al
+            // de "Panel de Entregas" (delivery-orders-view.tsx), que ya hace esto mismo.
+            const targetStoreUser = order.storeOwnerId || order.storeId;
+            if (targetStoreUser) {
+                OrderService.sendNotification(
+                    firestore, targetStoreUser, "🛵 Repartidor en camino",
+                    `${driverName} aceptó el pedido y va a retirarlo.`, "order_status", order.id
+                ).catch(console.error);
+            }
+            if (order.userId) {
+                OrderService.sendNotification(
+                    firestore, order.userId, "🛵 Repartidor Asignado",
+                    "Un repartidor está yendo a retirar tu pedido.", "order_status", order.id
+                ).catch(console.error);
+            }
         } catch (error) {
             console.error(error);
             toast({ variant: 'destructive', title: "Error", description: "No se pudo aceptar el pedido." });
@@ -256,12 +274,14 @@ export default function OrderTrackingPage() {
     }
 
     const handleUpdateStatus = async (newStatus: string) => {
-        if (!orderRef || !order) return;
+        if (!orderRef || !order || !firestore) return;
         // Prevenir doble actualización al mismo estado (doble click, llamadas duplicadas)
         if (order.status === newStatus) return;
         setIsUpdatingStatus(true);
         try {
-            await updateDoc(orderRef, { status: newStatus, updatedAt: new Date() });
+            // updateOrderStatus ya manda el aviso correspondiente al comprador
+            // (ej: "🚀 ¡En Camino a tu casa!" al pasar a En reparto).
+            await updateOrderStatus(firestore, order.id, newStatus as Order['status']);
             toast({ title: "Estado actualizado", description: `El pedido ahora está: ${newStatus}` });
         } catch (error) {
             toast({ variant: 'destructive', title: "Error", description: "No se pudo actualizar el estado." });
