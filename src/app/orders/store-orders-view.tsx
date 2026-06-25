@@ -14,7 +14,30 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
+
+// Dos tonos cortos generados con la Web Audio API -- sin archivo de audio que mantener.
+function playNewOrderBeep() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    [880, 1175].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = ctx.currentTime + i * 0.18;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.18);
+    });
+    setTimeout(() => ctx.close(), 500);
+  } catch {
+    // Navegador sin soporte / sin gesto previo del usuario -- silencioso, no rompe nada.
+  }
+}
 
 export default function StoreOrdersView() {
   const { userProfile } = useAuth();
@@ -40,6 +63,20 @@ export default function StoreOrdersView() {
   const pendingOrders = sortedOrders.filter(o => o.status === 'Pendiente de Confirmación');
   const activeOrders = sortedOrders.filter(o => ['Pendiente de Pago', 'En preparación', 'En reparto', 'En camino'].includes(o.status));
   const historyOrders = sortedOrders.filter(o => ['Entregado', 'Cancelado', 'Rechazado'].includes(o.status));
+
+  // Alerta sonora de pedido nuevo: solo para ids que aparecen DESPUÉS del primer render
+  // (la primera carga siembra el set sin sonar, para no pitar pedidos viejos al entrar).
+  const seenOrderIdsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const currentIds = pendingOrders.map(o => o.id);
+    if (seenOrderIdsRef.current === null) {
+      seenOrderIdsRef.current = new Set(currentIds);
+      return;
+    }
+    const hasNew = currentIds.some(id => !seenOrderIdsRef.current!.has(id));
+    if (hasNew) playNewOrderBeep();
+    seenOrderIdsRef.current = new Set(currentIds);
+  }, [pendingOrders]);
 
   // --- 💰 CÁLCULOS FINANCIEROS (NUEVO) ---
   const financeStats = useMemo(() => {
