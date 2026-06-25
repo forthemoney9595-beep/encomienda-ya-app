@@ -6,11 +6,13 @@ import { doc, collection, query } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store as StoreIcon, MapPin, Star, Plus, Package, Clock, Info } from 'lucide-react';
+import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { getCategoryStyle } from '@/lib/category-style';
 
 interface StoreData {
   name: string;
@@ -41,6 +43,10 @@ const cleanAddress = (rawAddress: string | undefined) => {
     }
     return rawAddress;
 };
+
+// Id de sección para el scroll-to-category (sin tildes/espacios, para que sea un anchor válido)
+const categorySlug = (category: string) =>
+    `cat-${category.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-')}`;
 
 export default function StorePublicPage() {
   const params = useParams();
@@ -146,6 +152,25 @@ export default function StorePublicPage() {
   const featuredProducts = products.filter(p => p.isFeatured);
   const regularProducts = products.filter(p => !p.isFeatured);
 
+  // Agrupar por categoría real del producto (selector fijo en el panel de tienda) para que
+  // el "Menú Completo" deje de ser una sola grilla con todo mezclado.
+  const groupedProducts = Object.entries(
+    regularProducts.reduce((groups: Record<string, Product[]>, p) => {
+      const cat = (p.category || '').trim() || 'Otros';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(p);
+      return groups;
+    }, {})
+  ).sort(([a], [b]) => {
+    if (a === 'Otros') return 1;
+    if (b === 'Otros') return -1;
+    return a.localeCompare(b);
+  });
+
+  const scrollToCategory = (category: string) => {
+    document.getElementById(categorySlug(category))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="container mx-auto">
       {/* BANNER */}
@@ -200,6 +225,30 @@ export default function StorePublicPage() {
           </div>
       )}
 
+      {/* NAVEGACIÓN POR CATEGORÍA */}
+      {groupedProducts.length > 1 && (
+          <div className="sticky top-14 sm:top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 py-3 mb-6 border-b sm:border-b-0">
+              <div className="flex gap-4 overflow-x-auto no-scrollbar">
+                  {groupedProducts.map(([category], i) => {
+                      const style = getCategoryStyle(category, i);
+                      const Icon = style.icon;
+                      return (
+                          <button
+                              key={category}
+                              onClick={() => scrollToCategory(category)}
+                              className="flex flex-col items-center gap-1.5 shrink-0 opacity-80 hover:opacity-100 transition-opacity"
+                          >
+                              <div className={cn('h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm', style.bg)}>
+                                  <Icon className={cn('h-5 w-5', style.text)} />
+                              </div>
+                              <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">{category}</span>
+                          </button>
+                      );
+                  })}
+              </div>
+          </div>
+      )}
+
       {/* DESTACADOS */}
       {featuredProducts.length > 0 && (
         <div className="mb-10">
@@ -214,14 +263,18 @@ export default function StorePublicPage() {
         </div>
       )}
 
-      {/* MENU COMPLETO */}
-      <h2 className="font-headline text-xl font-bold mb-4">Menú Completo</h2>
+      {/* MENU COMPLETO, AGRUPADO POR CATEGORÍA */}
       {products.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {regularProducts.map(product => (
-                <ProductCard key={product.id} product={product} onAdd={handleAddToCart} isDisabled={!storeStatus.isOpen} />
-            ))}
-        </div>
+        groupedProducts.map(([category, items]) => (
+            <div key={category} id={categorySlug(category)} className="mb-10 scroll-mt-32 sm:scroll-mt-20">
+                <h2 className="font-headline text-xl font-bold mb-2">{category}</h2>
+                <div>
+                    {items.map(product => (
+                        <ProductRow key={product.id} product={product} onAdd={handleAddToCart} isDisabled={!storeStatus.isOpen} />
+                    ))}
+                </div>
+            </div>
+        ))
       ) : (
         <div className="text-center py-12 bg-muted/10 rounded-lg border border-dashed">
             <p className="text-muted-foreground">Esta tienda aún no tiene productos disponibles.</p>
@@ -280,10 +333,78 @@ function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Prod
                 <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
             </CardHeader>
             <CardFooter className="p-4 mt-auto">
-                <Button onClick={() => onAdd(product)} className="w-full" size="sm" disabled={isDisabled}>
-                    {isDisabled ? 'Cerrado' : <><Plus className="h-4 w-4 mr-1" /> Agregar</>}
-                </Button>
+                <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} />
             </CardFooter>
         </Card>
+    );
+}
+
+function ProductRow({ product, onAdd, isDisabled }: { product: Product, onAdd: (p: Product) => void, isDisabled?: boolean }) {
+    return (
+        <div className={cn('flex items-center gap-4 py-4 border-b last:border-0', isDisabled && 'opacity-60')}>
+            <div className="flex-1 min-w-0">
+                <h3 className="font-semibold line-clamp-1">{product.name}</h3>
+                <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>
+                <p className="font-bold text-foreground mt-1.5">${product.price}</p>
+            </div>
+            <div className="relative h-20 w-20 shrink-0">
+                <div className="h-20 w-20 rounded-xl bg-muted overflow-hidden flex items-center justify-center">
+                    {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                    ) : (
+                        <Package className="h-8 w-8 text-muted-foreground/50" />
+                    )}
+                </div>
+                <div className="absolute -bottom-2 -right-2">
+                    <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} variant="compact" />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Botón "Agregar" / píldora de cantidad — refleja si el producto ya está en el carrito
+// (antes "Agregar" no cambiaba nunca, sin importar cuántas unidades ya tuvieras en el carrito).
+function QuantityControl({ product, onAdd, isDisabled, variant = 'full' }: { product: Product, onAdd: (p: Product) => void, isDisabled?: boolean, variant?: 'full' | 'compact' }) {
+    const { cart, updateQuantity, removeFromCart } = useCart();
+    const quantity = cart.find(i => i.id === product.id)?.quantity || 0;
+
+    const dec = () => quantity <= 1 ? removeFromCart(product.id) : updateQuantity(product.id, quantity - 1);
+    const inc = () => updateQuantity(product.id, quantity + 1);
+
+    if (variant === 'compact') {
+        if (quantity === 0) {
+            return (
+                <button
+                    onClick={() => onAdd(product)}
+                    disabled={isDisabled}
+                    className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md disabled:opacity-50"
+                >
+                    <Plus className="h-4 w-4" />
+                </button>
+            );
+        }
+        return (
+            <div className="flex items-center gap-1 bg-primary text-primary-foreground rounded-full shadow-md px-1 h-7">
+                <button onClick={dec} disabled={isDisabled} className="h-5 w-5 flex items-center justify-center"><Minus className="h-3.5 w-3.5" /></button>
+                <span className="text-xs font-bold w-3 text-center">{quantity}</span>
+                <button onClick={inc} disabled={isDisabled} className="h-5 w-5 flex items-center justify-center"><Plus className="h-3.5 w-3.5" /></button>
+            </div>
+        );
+    }
+
+    if (quantity === 0) {
+        return (
+            <Button onClick={() => onAdd(product)} className="w-full" size="sm" disabled={isDisabled}>
+                {isDisabled ? 'Cerrado' : <><Plus className="h-4 w-4 mr-1" /> Agregar</>}
+            </Button>
+        );
+    }
+    return (
+        <div className="flex items-center justify-between w-full rounded-md border border-primary/30 bg-primary/10">
+            <button onClick={dec} disabled={isDisabled} className="h-9 w-10 flex items-center justify-center text-primary disabled:opacity-50"><Minus className="h-4 w-4" /></button>
+            <span className="font-bold text-sm text-foreground">{quantity} en el carrito</span>
+            <button onClick={inc} disabled={isDisabled} className="h-9 w-10 flex items-center justify-center text-primary disabled:opacity-50"><Plus className="h-4 w-4" /></button>
+        </div>
     );
 }

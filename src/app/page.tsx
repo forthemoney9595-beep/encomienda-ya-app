@@ -10,8 +10,9 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight, Utensils, Shirt, Package, LayoutGrid } from 'lucide-react';
+import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getCategoryStyle } from '@/lib/category-style';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Rating } from '@/components/ui/rating';
@@ -126,22 +127,6 @@ const FeaturesSection = () => (
 );
 
 // --- COMPONENTES DE LA APP (MODO USUARIO) ---
-
-// Ícono + color por categoría — paleta fija que rota para categorías nuevas/desconocidas
-const CATEGORY_STYLES: { icon: any; bg: string; text: string }[] = [
-  { icon: LayoutGrid, bg: 'bg-primary/15', text: 'text-primary' },
-  { icon: Utensils, bg: 'bg-warning/15', text: 'text-warning' },
-  { icon: Shirt, bg: 'bg-info/15', text: 'text-info' },
-  { icon: Package, bg: 'bg-success/15', text: 'text-success' },
-];
-
-function getCategoryStyle(category: string, index: number) {
-  const c = category.toLowerCase();
-  if (c === 'todas') return CATEGORY_STYLES[0];
-  if (c.includes('comida') || c.includes('food')) return CATEGORY_STYLES[1];
-  if (c.includes('ropa') || c.includes('cloth')) return CATEGORY_STYLES[2];
-  return CATEGORY_STYLES[(index % (CATEGORY_STYLES.length - 1)) + 1];
-}
 
 interface CategoryChipsProps {
   categories: string[];
