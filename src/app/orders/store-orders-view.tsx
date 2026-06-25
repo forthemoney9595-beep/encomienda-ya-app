@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, doc, updateDoc, getDocs, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -74,36 +74,23 @@ export default function StoreOrdersView() {
   }, [allOrders]);
 
   // --- FUNCIÓN DE BROADCAST (Difusión a repartidores) ---
-  const notifyAllDrivers = async (orderId: string, storeName: string) => {
-      if (!firestore) return;
+  // Va por API (no por Firestore directo) porque las reglas no le permiten a
+  // una tienda leer la lista completa de usuarios/repartidores.
+  const notifyAllDrivers = async (orderId: string) => {
       try {
-          const driversQuery = query(collection(firestore, 'users'), where('role', '==', 'delivery'));
-          const driversSnap = await getDocs(driversQuery);
-          
-          if (driversSnap.empty) {
-              toast({ variant: "destructive", title: "No hay repartidores", description: "No se encontraron repartidores registrados en la zona." });
-              return;
-          }
-
-          const batch = writeBatch(firestore);
-          
-          driversSnap.forEach(driverDoc => {
-              const notifRef = doc(collection(firestore, 'notifications'));
-              batch.set(notifRef, {
-                  userId: driverDoc.id,
-                  title: "📦 Nuevo Pedido Disponible",
-                  body: `La tienda ${storeName} tiene un pedido listo. ¡Aceptalo rápido!`,
-                  type: "delivery_request",
-                  orderId: orderId,
-                  read: false,
-                  createdAt: serverTimestamp(),
-                  icon: "alert"
-              });
+          const res = await fetch('/api/orders/notify-drivers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderId }),
           });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al notificar');
 
-          await batch.commit();
-          toast({ title: "📢 Alerta Masiva Enviada", description: `Se notificó a ${driversSnap.size} repartidores.` });
-
+          if (data.notified > 0) {
+              toast({ title: "📢 Alerta Masiva Enviada", description: `Se notificó a ${data.notified} repartidores.` });
+          } else {
+              toast({ variant: "destructive", title: "No hay repartidores", description: "No se encontraron repartidores registrados." });
+          }
       } catch (e) {
           console.error("Error en broadcast:", e);
           toast({ variant: "destructive", title: "Error al notificar" });
@@ -155,9 +142,12 @@ export default function StoreOrdersView() {
             toast({ title: "Repartidor avisado", description: "Se notificó al conductor asignado." });
         } else {
             // BROADCAST
-            await notifyAllDrivers(order.id, userProfile?.displayName || 'Tienda');
+            await notifyAllDrivers(order.id);
         }
-      } catch (e) { console.error(e); }
+      } catch (e) {
+          console.error(e);
+          toast({ variant: "destructive", title: "Error al avisar al repartidor" });
+      }
   };
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground"><Clock className="mx-auto h-8 w-8 animate-spin mb-2"/>Cargando pedidos...</div>;
