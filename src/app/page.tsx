@@ -428,7 +428,7 @@ function HomeContent() {
                 return (
                     <Link href={`/stores/${store.id}`} key={store.id} className="group">
                         <Card className="h-full overflow-hidden hover:shadow-lg transition-all duration-300 border-transparent hover:border-primary/20 relative">
-                            <div className="relative h-40 w-full bg-muted">
+                            <div className="relative aspect-video w-full bg-muted">
                                 {store.imageUrl ? (
                                     <Image
                                         src={store.imageUrl}
