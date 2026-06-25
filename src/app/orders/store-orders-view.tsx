@@ -7,6 +7,7 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { OrderService } from '@/lib/order-service';
 import { Clock, CheckCircle2, Megaphone, Utensils, CreditCard, Bike, Eye, Wallet, DollarSign, CalendarDays } from 'lucide-react';
@@ -14,7 +15,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, useState } from 'react';
 
 // Dos tonos cortos generados con la Web Audio API -- sin archivo de audio que mantener.
 function playNewOrderBeep() {
@@ -134,17 +135,24 @@ export default function StoreOrdersView() {
       }
   };
 
-  const handleConfirmStock = async (order: any) => {
-      if (!firestore) return;
+  const handleConfirmStock = async (order: any, removedItemIds: string[] = []) => {
       try {
-          await updateDoc(doc(firestore, 'orders', order.id), { status: 'Pendiente de Pago' });
-          
-          const msg = "La tienda ha confirmado el stock. ¡Puedes proceder al pago!";
-          await OrderService.sendNotification(firestore, order.userId, "✅ Stock Confirmado", msg, "order_status", order.id);
-          
-          toast({ title: "Stock Confirmado", description: "El cliente ha sido notificado para pagar." });
-      } catch (error) {
-          toast({ variant: "destructive", title: "Error al confirmar stock" });
+          const res = await fetch('/api/orders/confirm-stock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderId: order.id, storeId: userProfile?.storeId, removedItemIds }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'No se pudo confirmar el pedido.');
+
+          toast({
+              title: removedItemIds.length > 0 ? 'Stock parcial confirmado' : 'Stock Confirmado',
+              description: removedItemIds.length > 0
+                  ? `Se sacaron ${removedItemIds.length} producto(s). El cliente ya tiene el nuevo total.`
+                  : 'El cliente ha sido notificado para pagar.',
+          });
+      } catch (error: any) {
+          toast({ variant: "destructive", title: "Error al confirmar stock", description: error.message });
       }
   };
 
@@ -214,16 +222,17 @@ export default function StoreOrdersView() {
                 </div>
             ) : (
                 pendingOrders.map(order => (
-                    <OrderCard 
-                        key={order.id} 
-                        order={order} 
-                        onAction={() => handleConfirmStock(order)}
-                        onReject={() => handleRejectOrder(order)} 
+                    <OrderCard
+                        key={order.id}
+                        order={order}
+                        onAction={(removedItemIds: string[]) => handleConfirmStock(order, removedItemIds)}
+                        onReject={() => handleRejectOrder(order)}
                         actionLabel="Confirmar Stock"
                         actionIcon={CheckCircle2}
                         statusColor="border-l-warning"
                         statusLabel="Solicitud Nueva"
                         statusBadgeColor="bg-warning/15 text-warning border-warning/30"
+                        selectable
                     />
                 ))
             )}
@@ -376,7 +385,19 @@ export default function StoreOrdersView() {
 }
 
 // ✅ COMPONENTE TARJETA MEJORADO (Con botón de Navegación)
-function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, isDisabled, statusColor, statusLabel, statusBadgeColor }: any) {
+function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, isDisabled, statusColor, statusLabel, statusBadgeColor, selectable }: any) {
+    // Solo relevante en "Nuevos": permite destildar ítems sin stock antes de confirmar,
+    // en vez del todo-o-nada de antes (confirmar todo o rechazar todo el pedido).
+    const [uncheckedIds, setUncheckedIds] = useState<Set<string>>(new Set());
+    const toggleItem = (itemId: string) => {
+        setUncheckedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+            return next;
+        });
+    };
+    const allUnchecked = selectable && order.items?.length > 0 && uncheckedIds.size === order.items.length;
+
     return (
         <Card className={`border-l-4 ${statusColor} shadow-sm overflow-hidden`}>
             <CardHeader className="bg-muted/10 pb-3 pt-3">
@@ -408,11 +429,24 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                 
                 <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2 border">
                     {order.items?.map((item: any, i: number) => (
-                        <div key={i} className="flex justify-between items-start">
-                            <span className="font-medium text-foreground">{item.quantity}x {item.title || item.name}</span>
+                        <div key={item.id || i} className="flex justify-between items-start gap-2">
+                            <span className="font-medium text-foreground flex items-center gap-2">
+                                {selectable && (
+                                    <Checkbox
+                                        checked={!uncheckedIds.has(item.id)}
+                                        onCheckedChange={() => toggleItem(item.id)}
+                                    />
+                                )}
+                                <span className={uncheckedIds.has(item.id) ? 'line-through text-muted-foreground' : ''}>
+                                    {item.quantity}x {item.title || item.name}
+                                </span>
+                            </span>
                             <span className="text-muted-foreground">${(item.price * item.quantity).toLocaleString()}</span>
                         </div>
                     ))}
+                    {selectable && uncheckedIds.size > 0 && (
+                        <p className="text-xs text-warning pt-1">Vas a confirmar sin {uncheckedIds.size} producto(s) tildado(s) arriba.</p>
+                    )}
                 </div>
                 
                 {order.readyForPickup && order.status === 'En preparación' && (
@@ -444,12 +478,13 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                 {onAction && actionLabel && (
                     <Button
                         size="sm"
-                        className={`${isDisabled ? 'bg-muted text-muted-foreground opacity-80' : 'bg-success hover:bg-success/90 text-success-foreground shadow-sm'} flex-1 sm:flex-none`}
-                        onClick={onAction}
-                        disabled={isDisabled && !actionLabel.includes("Reenviar")} 
+                        className={`${(isDisabled || allUnchecked) ? 'bg-muted text-muted-foreground opacity-80' : 'bg-success hover:bg-success/90 text-success-foreground shadow-sm'} flex-1 sm:flex-none`}
+                        onClick={() => onAction(Array.from(uncheckedIds))}
+                        disabled={(isDisabled && !actionLabel.includes("Reenviar")) || allUnchecked}
+                        title={allUnchecked ? 'Destildaste todos los productos -- rechazá el pedido en su lugar' : undefined}
                     >
                         {Icon && <Icon className="mr-2 h-4 w-4" />}
-                        {actionLabel}
+                        {selectable && uncheckedIds.size > 0 ? 'Confirmar con cambios' : actionLabel}
                     </Button>
                 )}
             </CardFooter>

@@ -8,6 +8,7 @@ import { updateOrderStatus } from '@/lib/order-service';
 import { CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2, CreditCard, AlertTriangle, CheckCircle2, XCircle, Clock, ShoppingBag, Ban } from 'lucide-react';
@@ -91,6 +92,43 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     } finally {
         setIsUpdating(false);
         setSelectedStatus('');
+    }
+  };
+
+  // Reemplaza al todo-o-nada de "Tengo Stock": permite destildar ítems puntuales sin
+  // stock antes de confirmar. El total se recalcula siempre server-side (ver
+  // /api/orders/confirm-stock), nunca se confía en un total calculado en el cliente.
+  const [uncheckedIds, setUncheckedIds] = useState<Set<string>>(new Set());
+  const toggleStockItem = (itemId: string) => {
+    setUncheckedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      return next;
+    });
+  };
+  const allItemsUnchecked = order.items?.length > 0 && uncheckedIds.size === order.items.length;
+
+  const handleConfirmStock = async () => {
+    setIsUpdating(true);
+    try {
+      const res = await fetch('/api/orders/confirm-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, storeId: order.storeId, removedItemIds: Array.from(uncheckedIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo confirmar el pedido.');
+      toast({
+        title: uncheckedIds.size > 0 ? 'Stock parcial confirmado' : 'Stock Confirmado',
+        description: uncheckedIds.size > 0
+          ? `Se sacaron ${uncheckedIds.size} producto(s). El cliente ya tiene el nuevo total.`
+          : 'El cliente ha sido notificado para pagar.',
+      });
+      router.refresh();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'No se pudo confirmar el pedido.' });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -282,25 +320,43 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                 <span className="font-semibold text-foreground">Solicitud de Stock</span>
             </div>
             <CardDescription>
-                Revisa si tienes los productos. Si aceptas, el cliente podrá pagar.
+                Destildá los productos que no tengas. Si aceptas, el cliente podrá pagar
+                (con el total recalculado si sacaste algo).
             </CardDescription>
+            <div className="w-full space-y-1.5 bg-background/50 rounded-md border p-3">
+                {order.items?.map((item) => (
+                    <label key={item.id} className="flex items-center justify-between gap-2 text-sm cursor-pointer">
+                        <span className="flex items-center gap-2">
+                            <Checkbox
+                                checked={!uncheckedIds.has(item.id)}
+                                onCheckedChange={() => toggleStockItem(item.id)}
+                            />
+                            <span className={uncheckedIds.has(item.id) ? 'line-through text-muted-foreground' : ''}>
+                                {item.quantity}x {item.name}
+                            </span>
+                        </span>
+                        <span className="text-muted-foreground">${(item.price * item.quantity).toFixed(0)}</span>
+                    </label>
+                ))}
+            </div>
             <div className="flex w-full gap-3">
-                 <Button 
-                    onClick={() => handleUpdateStatus('Rechazado')} 
-                    disabled={isUpdating} 
-                    variant="outline" 
+                 <Button
+                    onClick={() => handleUpdateStatus('Rechazado')}
+                    disabled={isUpdating}
+                    variant="outline"
                     className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
                  >
                     <XCircle className="mr-2 h-4 w-4" />
-                    Sin Stock
+                    Sin Stock (todo)
                 </Button>
-                <Button 
-                    onClick={() => handleUpdateStatus('Pendiente de Pago')} 
-                    disabled={isUpdating} 
+                <Button
+                    onClick={handleConfirmStock}
+                    disabled={isUpdating || allItemsUnchecked}
                     className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
+                    title={allItemsUnchecked ? 'Destildaste todos los productos -- usá "Sin Stock (todo)"' : undefined}
                 >
                     {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                    Tengo Stock
+                    {uncheckedIds.size > 0 ? 'Confirmar con cambios' : 'Tengo Stock'}
                 </Button>
             </div>
         </CardFooter>
