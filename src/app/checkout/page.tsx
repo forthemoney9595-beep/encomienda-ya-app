@@ -340,15 +340,15 @@ export default function CheckoutPage() {
                                 <FormLabel className="text-base font-semibold">1. Ubicación GPS (Obligatorio)</FormLabel>
                                 
                                 {addressIdValue === 'new' ? (
-                                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-3">
-                                        <p className="text-sm text-blue-800">
+                                    <div className="bg-info/10 p-4 rounded-xl border border-info/30 space-y-3">
+                                        <p className="text-sm text-foreground">
                                             Para asegurar que tu pedido llegue bien, por favor comparte tu ubicación actual.
                                         </p>
-                                        <Button 
-                                            type="button" 
-                                            onClick={handleGetLocation} 
+                                        <Button
+                                            type="button"
+                                            onClick={handleGetLocation}
                                             disabled={locationStatus === 'loading' || locationStatus === 'success'}
-                                            className={`w-full ${locationStatus === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                            className={`w-full ${locationStatus === 'success' ? 'bg-success hover:bg-success/90 text-success-foreground' : 'bg-info hover:bg-info/90 text-info-foreground'}`}
                                         >
                                             {locationStatus === 'loading' ? (
                                                 <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
@@ -359,13 +359,13 @@ export default function CheckoutPage() {
                                             )}
                                         </Button>
                                         {locationStatus === 'success' && (
-                                            <p className="text-xs text-green-700 text-center font-medium">
+                                            <p className="text-xs text-success text-center font-medium">
                                                 Coordenadas: {coords?.latitude.toFixed(4)}, {coords?.longitude.toFixed(4)}
                                             </p>
                                         )}
                                     </div>
                                 ) : (
-                                    <Alert className="bg-gray-50">
+                                    <Alert className="bg-muted/50">
                                         <MapPin className="h-4 w-4" />
                                         <AlertTitle>Usando dirección guardada</AlertTitle>
                                         <AlertDescription className="text-xs text-muted-foreground">
@@ -412,7 +412,7 @@ export default function CheckoutPage() {
                         </CardContent>
                     </Card>
 
-                     <Button type="submit" size="lg" className="w-full h-14 text-lg font-bold shadow-lg bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                     <Button type="submit" size="lg" className="w-full h-14 text-lg font-bold shadow-lg" disabled={isSubmitting}>
                         {isSubmitting ? (
                             <span className="flex items-center gap-2">
                                 <Loader2 className="h-5 w-5 animate-spin" /> Procesando...
@@ -433,8 +433,8 @@ export default function CheckoutPage() {
 
         {/* RESUMEN */}
         <div className="md:col-span-1">
-          <Card className="sticky top-24 shadow-md border-t-4 border-t-orange-500">
-            <CardHeader className="bg-muted/20"><CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-orange-600" /> Resumen del Pedido</CardTitle></CardHeader>
+          <Card className="sticky top-24 shadow-md border-t-4 border-t-primary">
+            <CardHeader className="bg-muted/20"><CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" /> Resumen del Pedido</CardTitle></CardHeader>
             <CardContent className="space-y-4 pt-6">
               {cart.map(item => (
                 <div key={item.id} className="flex justify-between text-sm">
@@ -463,7 +463,7 @@ export default function CheckoutPage() {
               <Separator />
               <div className="flex justify-between font-black text-2xl pt-2">
                 <p>Total</p>
-                <p className="text-green-600">${finalTotal.toFixed(2)}</p>
+                <p className="text-primary">${finalTotal.toFixed(2)}</p>
               </div>
             </CardContent>
           </Card>

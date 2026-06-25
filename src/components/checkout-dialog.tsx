@@ -230,10 +230,10 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
       return (
         <Dialog open={open} onOpenChange={() => {}}>
             <DialogContent className="sm:max-w-md text-center py-10">
-                <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 animate-in zoom-in duration-300">
-                    <CheckCircle2 className="h-8 w-8 text-green-600" />
+                <div className="mx-auto w-16 h-16 bg-success/15 rounded-full flex items-center justify-center mb-4 animate-in zoom-in duration-300">
+                    <CheckCircle2 className="h-8 w-8 text-success" />
                 </div>
-                <DialogTitle className="text-2xl font-bold text-green-700">¡Solicitud Enviada!</DialogTitle>
+                <DialogTitle className="text-2xl font-bold text-success">¡Solicitud Enviada!</DialogTitle>
                 <DialogDescription>
                     Pedido enviado a <strong>{storeName}</strong>.
                     <br/>
@@ -266,7 +266,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 onClick={handleGetLocation} 
                 disabled={isLocating || locationStatus === 'success'}
                 variant={locationStatus === 'success' ? 'outline' : 'default'}
-                className={`w-full justify-start ${locationStatus === 'success' ? 'border-green-500 bg-green-50 text-green-700 hover:bg-green-100' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                className={`w-full justify-start ${locationStatus === 'success' ? 'border-success/50 bg-success/10 text-success hover:bg-success/15' : 'bg-info hover:bg-info/90 text-info-foreground'}`}
             >
                 {isLocating ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
@@ -278,35 +278,31 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             </Button>
             
             {locationStatus === 'error' && (
-                <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No pudimos obtener tu ubicación. Activa el GPS.</p>
+                <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No pudimos obtener tu ubicación. Activa el GPS.</p>
             )}
 
             {/* INPUT REFERENCIA VISUAL */}
             <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground ml-1">Referencias visuales (Casa, portón, etc)</label>
-                <Input 
-                    placeholder="Ej: Casa blanca rejas negras, frente a plaza." 
-                    value={address} 
-                    onChange={(e) => setAddress(e.target.value)} 
-                    // ✅ Mantenemos tu fix de color negro
-                    className="bg-white text-black placeholder:text-gray-400" 
+                <Input
+                    placeholder="Ej: Casa blanca rejas negras, frente a plaza."
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
                 />
             </div>
 
-            <Input 
-                placeholder="Teléfono de contacto" 
-                value={phone} 
-                onChange={(e) => setPhone(e.target.value)} 
-                // ✅ Mantenemos tu fix de color negro
-                className="bg-white text-black placeholder:text-gray-400" 
+            <Input
+                placeholder="Teléfono de contacto"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
             />
           </div>
 
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 flex items-start gap-3">
-              <ShoppingBag className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+          <div className="bg-info/10 p-4 rounded-lg border border-info/30 flex items-start gap-3">
+              <ShoppingBag className="h-5 w-5 text-info mt-0.5 shrink-0" />
               <div>
-                  <p className="font-bold text-blue-900 text-sm">Primero confirmamos Stock</p>
-                  <p className="text-xs text-blue-700 mt-1">
+                  <p className="font-bold text-foreground text-sm">Primero confirmamos Stock</p>
+                  <p className="text-xs text-muted-foreground mt-1">
                       Al solicitar, la tienda verificará si tiene los productos. Luego podrás pagar.
                   </p>
               </div>
