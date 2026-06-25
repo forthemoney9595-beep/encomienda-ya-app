@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { OrderService } from '@/lib/order-service';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -46,6 +47,9 @@ interface Order {
   deliveryFee: number;
   items: any[];
   createdAt: any;
+  userId: string;
+  storeOwnerId?: string | null;
+  storeId?: string;
   deliveryPersonId?: string;
   deliveryPayoutStatus?: 'pending' | 'paid';
   payoutDate?: any;
@@ -136,18 +140,34 @@ export default function DeliveryOrdersView() {
   // --- ACCIONES DEL PROCESO ---
 
   // A. TOMAR PEDIDO -> Pasa a 'En camino'
-  const handleTakeOrder = async (orderId: string) => {
+  const handleTakeOrder = async (order: Order) => {
     if (!user || !firestore) return;
     try {
-      const orderRef = doc(firestore, 'orders', orderId);
+      const driverName = userProfile?.name || user.displayName || 'Un repartidor';
+      const orderRef = doc(firestore, 'orders', order.id);
       await updateDoc(orderRef, {
         deliveryPersonId: user.uid,
-        deliveryPersonName: userProfile?.name || user.displayName || 'Repartidor',
-        status: 'En camino', 
+        deliveryPersonName: driverName,
+        status: 'En camino',
         takenAt: serverTimestamp()
       });
       toast({ title: "¡Pedido Asignado!", description: "Ve a la tienda a retirarlo." });
       setActiveTab('active');
+
+      // Avisar a la tienda y al comprador — antes este flujo no avisaba a nadie
+      const targetStoreUser = order.storeOwnerId || order.storeId;
+      if (targetStoreUser) {
+        OrderService.sendNotification(
+          firestore, targetStoreUser, "🛵 Repartidor en camino",
+          `${driverName} aceptó el pedido y va a retirarlo.`, "order_status", order.id
+        ).catch(console.error);
+      }
+      if (order.userId) {
+        OrderService.sendNotification(
+          firestore, order.userId, "🛵 Repartidor Asignado",
+          "Un repartidor está yendo a retirar tu pedido.", "order_status", order.id
+        ).catch(console.error);
+      }
     } catch (error: any) {
       console.error(error);
       // Si Firestore rechazó la escritura, lo más probable es que otro repartidor
@@ -165,15 +185,24 @@ export default function DeliveryOrdersView() {
   };
 
   // B. CONFIRMAR RETIRO -> Pasa a 'En reparto'
-  const handlePickupOrder = async (orderId: string) => {
+  const handlePickupOrder = async (order: Order) => {
     if (!firestore) return;
     try {
-        const orderRef = doc(firestore, 'orders', orderId);
+        const orderRef = doc(firestore, 'orders', order.id);
         await updateDoc(orderRef, {
             status: 'En reparto',
             pickedUpAt: serverTimestamp()
         });
         toast({ title: "¡Pedido Retirado!", description: "Inicia la ruta hacia el cliente." });
+
+        // A partir de acá arranca el mapa GPS para el comprador (location-tracker.tsx
+        // ya escucha status === 'En reparto') — solo faltaba avisarle que ya salió.
+        if (order.userId) {
+          OrderService.sendNotification(
+            firestore, order.userId, "🚀 ¡En Camino a tu casa!",
+            "El repartidor ya tiene tu pedido y va hacia ti.", "order_status", order.id
+          ).catch(console.error);
+        }
     } catch (error) {
         toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar." });
     }
@@ -281,7 +310,7 @@ export default function DeliveryOrdersView() {
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button className="w-full" size="lg" onClick={() => handleTakeOrder(order.id)}>
+                    <Button className="w-full" size="lg" onClick={() => handleTakeOrder(order)}>
                         Tomar Pedido
                     </Button>
                 </CardFooter>
@@ -369,7 +398,7 @@ export default function DeliveryOrdersView() {
 
                             {/* ✅ BOTONES DE FLUJO */}
                             {(order.status === 'En camino' || order.status === 'Aceptado' || order.status === 'Listo para recoger') ? (
-                                <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700" onClick={() => handlePickupOrder(order.id)}>
+                                <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700" onClick={() => handlePickupOrder(order)}>
                                     <PackageCheck className="mr-2 h-5 w-5" /> Ya retiré el pedido
                                 </Button>
                             ) : (
