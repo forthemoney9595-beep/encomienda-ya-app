@@ -145,7 +145,7 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
                 else batch.update(orderRef, { deliveryPayoutStatus: 'paid', payoutDate: serverTimestamp() });
             });
             await batch.commit();
-            toast({ title: "Liquidación Manual Exitosa", className: "bg-green-50 border-green-200 text-green-800" });
+            toast({ title: "Liquidación Manual Exitosa", className: "bg-success/10 border-success/30 text-foreground" });
         } catch (error) {
             toast({ variant: "destructive", title: "Error al liquidar" });
         } finally {
@@ -163,9 +163,9 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
         <div className="space-y-8 animate-in fade-in duration-500">
             
             {/* SECCIÓN 1: SOLICITUDES DE RETIRO (NUEVO SISTEMA) */}
-            <Card className="border-l-4 border-l-yellow-500 shadow-md">
+            <Card className="border-l-4 border-l-warning shadow-md">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-yellow-800">
+                    <CardTitle className="flex items-center gap-2 text-foreground">
                         <DollarSign className="h-5 w-5" /> Solicitudes de Retiro (Pendientes: ${pendingRequestsTotal.toLocaleString()})
                     </CardTitle>
                     <CardDescription>
@@ -196,17 +196,17 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
                                     <TableCell className="font-bold">${w.amount.toLocaleString()}</TableCell>
                                     <TableCell className="font-mono text-xs">{w.cbu}</TableCell>
                                     <TableCell>
-                                        <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'secondary'} className={w.status === 'pending' ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' : ''}>
+                                        <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'secondary'} className={w.status === 'pending' ? 'bg-warning/15 text-warning hover:bg-warning/25' : ''}>
                                             {w.status === 'pending' ? 'Pendiente' : w.status === 'approved' ? 'Pagado' : 'Rechazado'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         {w.status === 'pending' && (
                                             <div className="flex justify-end gap-2">
-                                                <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleApproveWithdrawal(w.id)} disabled={!!isProcessing} title="Confirmar Pago">
+                                                <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-success border-success/30 hover:bg-success/10" onClick={() => handleApproveWithdrawal(w.id)} disabled={!!isProcessing} title="Confirmar Pago">
                                                     {isProcessing === w.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                                                 </Button>
-                                                <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleRejectWithdrawal(w.id)} disabled={!!isProcessing} title="Rechazar">
+                                                <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRejectWithdrawal(w.id)} disabled={!!isProcessing} title="Rechazar">
                                                     <XCircle className="h-4 w-4" />
                                                 </Button>
                                             </div>
@@ -231,11 +231,11 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
                 <div className="grid gap-4 md:grid-cols-2 mb-6">
                     <Card className="bg-muted/30">
                         <CardHeader className="pb-2"><CardTitle className="text-sm">Deuda Tiendas</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-blue-700">${totalStoreDebt.toLocaleString()}</div></CardContent>
+                        <CardContent><div className="text-2xl font-bold text-info">${totalStoreDebt.toLocaleString()}</div></CardContent>
                     </Card>
                     <Card className="bg-muted/30">
                         <CardHeader className="pb-2"><CardTitle className="text-sm">Deuda Repartidores</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-orange-700">${totalDriverDebt.toLocaleString()}</div></CardContent>
+                        <CardContent><div className="text-2xl font-bold text-primary">${totalDriverDebt.toLocaleString()}</div></CardContent>
                     </Card>
                 </div>
 
@@ -255,7 +255,7 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
                                             storeDebts.map((debt, i) => (
                                                 <TableRow key={i}>
                                                     <TableCell>{debt.name}</TableCell>
-                                                    <TableCell className="font-bold text-blue-600">${debt.total.toLocaleString()}</TableCell>
+                                                    <TableCell className="font-bold text-info">${debt.total.toLocaleString()}</TableCell>
                                                     <TableCell className="text-right">
                                                         <Button size="sm" variant="secondary" disabled={!!isProcessing} onClick={() => handleManualPayout('store', debt.name, debt.ids, debt.total, debt.ownerId)}>
                                                             Marcar Pagado
@@ -280,7 +280,7 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
                                             driverDebts.map((debt, i) => (
                                                 <TableRow key={i}>
                                                     <TableCell>{debt.name}</TableCell>
-                                                    <TableCell className="font-bold text-orange-600">${debt.total.toLocaleString()}</TableCell>
+                                                    <TableCell className="font-bold text-primary">${debt.total.toLocaleString()}</TableCell>
                                                     <TableCell className="text-right">
                                                         <Button size="sm" variant="secondary" disabled={!!isProcessing} onClick={() => handleManualPayout('delivery', debt.name, debt.ids, debt.total, debt.driverId)}>
                                                             Marcar Pagado

@@ -83,7 +83,7 @@ export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresL
                     <TableCell className="text-right flex justify-end gap-2 items-center">
                       {/* 👁️ BOTÓN VER DETALLES */}
                       <Button variant="ghost" size="icon" onClick={() => setSelectedStore(store)} title="Ver Detalles">
-                          <Eye className="h-4 w-4 text-blue-600" />
+                          <Eye className="h-4 w-4 text-info" />
                       </Button>
 
                       <StoreActions
@@ -106,7 +106,7 @@ export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresL
           <DialogContent className="max-w-md">
               <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
-                      <StoreIcon className="h-5 w-5 text-blue-600" />
+                      <StoreIcon className="h-5 w-5 text-info" />
                       {selectedStore?.name}
                   </DialogTitle>
                   <DialogDescription>{selectedStore?.category} • Dueño: {selectedStore?.ownerId}</DialogDescription>
@@ -126,7 +126,7 @@ export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresL
                   <div className="text-sm space-y-2">
                       <p className="italic text-muted-foreground">&quot;{selectedStore?.description || 'Sin descripción'}&quot;</p>
                       <div className="flex items-center gap-2 font-medium">
-                          <MapPin className="h-4 w-4 text-red-500" />
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
                           {selectedStore?.address || 'Sin dirección física'}
                       </div>
                   </div>
@@ -134,7 +134,7 @@ export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresL
                   {/* Horarios */}
                   <div className="bg-muted/30 p-3 rounded-lg border flex items-center justify-between">
                       <h4 className="font-semibold text-sm flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-green-600" /> Horarios
+                          <Clock className="h-4 w-4 text-success" /> Horarios
                       </h4>
                       {(selectedStore as any)?.schedule ? (
                           <Badge variant="outline" className="text-sm">
@@ -148,7 +148,7 @@ export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresL
                   {/* Botones de Acción */}
                   {selectedStore && (
                     <div className="flex gap-2 pt-2">
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => {
+                        <Button className="w-full bg-success hover:bg-success/90 text-success-foreground" onClick={() => {
                             onStatusUpdate(selectedStore.id, 'Aprobado');
                             setSelectedStore(null);
                         }}>

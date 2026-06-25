@@ -123,7 +123,7 @@ export default function AdminStoresPage() {
                                 <div className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {store.address}</div>
                             </TableCell>
                             <TableCell>
-                                <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
+                                <Badge variant="outline" className="border-info/30 text-info bg-info/10">
                                     {store.commissionRate || 0}%
                                 </Badge>
                             </TableCell>
@@ -135,10 +135,10 @@ export default function AdminStoresPage() {
                             <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
                                     <Button size="sm" variant="ghost" onClick={() => { setSelectedStore(store); setIsDialogOpen(true); }}>
-                                        <Edit className="h-4 w-4 text-blue-600" />
+                                        <Edit className="h-4 w-4 text-info" />
                                     </Button>
                                     <Button size="sm" variant="ghost" onClick={() => handleDelete(store.id)}>
-                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                        <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </div>
                             </TableCell>

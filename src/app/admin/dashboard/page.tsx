@@ -143,17 +143,17 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
     
     return (
         <>
-        <Card className="h-fit shadow-md border-l-4 border-l-yellow-400">
+        <Card className="h-fit shadow-md border-l-4 border-l-warning">
             <CardHeader className="flex flex-row items-center justify-between pb-2 bg-muted/10">
                 <CardTitle className="text-lg font-medium">{title}</CardTitle>
-                <div className="bg-white p-2 rounded-full shadow-sm">
-                    <Icon className="h-5 w-5 text-yellow-600" />
+                <div className="bg-muted p-2 rounded-full shadow-sm">
+                    <Icon className="h-5 w-5 text-warning" />
                 </div>
             </CardHeader>
             <CardContent className="pt-4">
                 {users.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-lg bg-muted/5">
-                        <Check className="mx-auto h-6 w-6 mb-2 text-green-500/50" />
+                        <Check className="mx-auto h-6 w-6 mb-2 text-success/50" />
                         <p>¡Todo al día! No hay solicitudes pendientes.</p>
                     </div>
                 ) : (
@@ -172,14 +172,14 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
                                 </div>
                                 <div className="flex space-x-1 shrink-0">
                                     {/* 👁️ BOTÓN VER DETALLES */}
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50" onClick={() => setSelectedUser(user)}>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-info hover:bg-info/10" onClick={() => setSelectedUser(user)}>
                                         <Eye className="h-4 w-4" />
                                     </Button>
 
-                                    <Button size="icon" variant="outline" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200" onClick={() => onApprove(user.id, user.name || 'Usuario')}>
+                                    <Button size="icon" variant="outline" className="h-8 w-8 text-success hover:text-success hover:bg-success/10 border-success/30" onClick={() => onApprove(user.id, user.name || 'Usuario')}>
                                         <Check className="h-4 w-4" />
                                     </Button>
-                                    <Button size="icon" variant="outline" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={() => onReject(user.id, user.name || 'Usuario')}>
+                                    <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={() => onReject(user.id, user.name || 'Usuario')}>
                                         <X className="h-4 w-4" />
                                     </Button>
                                 </div>
@@ -212,12 +212,12 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
                         <>
                             <div className="bg-muted/30 p-3 rounded-lg border">
                                 <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
-                                    <Car className="h-4 w-4 text-orange-600" /> Vehículo
+                                    <Car className="h-4 w-4 text-primary" /> Vehículo
                                 </h4>
                                 {selectedUser.vehicle ? (
                                     <div className="text-sm space-y-1">
                                         <p>Tipo: {selectedUser.vehicle.type || 'N/A'}</p>
-                                        <p>Patente: <span className="font-mono bg-white px-1 border rounded">{selectedUser.vehicle.plate || 'N/A'}</span></p>
+                                        <p>Patente: <span className="font-mono bg-muted px-1 border rounded">{selectedUser.vehicle.plate || 'N/A'}</span></p>
                                         <p>Modelo: {selectedUser.vehicle.model || 'N/A'}</p>
                                     </div>
                                 ) : <p className="text-sm text-muted-foreground">Sin datos de vehículo.</p>}
@@ -225,13 +225,13 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
 
                             <div className="bg-muted/30 p-3 rounded-lg border">
                                 <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
-                                    <FileText className="h-4 w-4 text-blue-600" /> Licencia
+                                    <FileText className="h-4 w-4 text-info" /> Licencia
                                 </h4>
                                 {selectedUser.licenseUrl ? (
-                                    <div className="relative h-32 w-full rounded-md overflow-hidden border bg-white">
+                                    <div className="relative h-32 w-full rounded-md overflow-hidden border bg-muted">
                                         <img src={selectedUser.licenseUrl} alt="Licencia" className="h-full w-full object-contain" />
                                     </div>
-                                ) : <p className="text-sm text-red-500">⚠️ No subió foto de licencia.</p>}
+                                ) : <p className="text-sm text-destructive">⚠️ No subió foto de licencia.</p>}
                             </div>
                         </>
                     )}
@@ -245,8 +245,8 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
                                 ) : <div className="flex items-center justify-center h-full text-muted-foreground">Sin Portada</div>}
                             </div>
                             <div className="grid gap-2 text-sm">
-                                <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-red-500"/> {selectedUser.address || 'Sin dirección'}</div>
-                                <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-green-500"/> 
+                                <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground"/> {selectedUser.address || 'Sin dirección'}</div>
+                                <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-success"/>
                                     {selectedUser.schedule ? `${selectedUser.schedule.open} - ${selectedUser.schedule.close}` : 'Horario no definido'}
                                 </div>
                             </div>
@@ -255,7 +255,7 @@ function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading 
 
                     {/* BOTONES DE ACCIÓN EN EL MODAL */}
                     <div className="flex gap-2 pt-2">
-                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => {
+                        <Button className="w-full bg-success hover:bg-success/90 text-success-foreground" onClick={() => {
                             if (selectedUser) onApprove(selectedUser.id, selectedUser.name || 'Usuario');
                             setSelectedUser(null);
                         }}>
@@ -385,7 +385,7 @@ export default function AdminDashboardPage() {
                 <Card className="shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos Totales</CardTitle>
-                        <DollarSign className="h-4 w-4 text-green-600" />
+                        <DollarSign className="h-4 w-4 text-success" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-foreground">${globalStats.totalRevenue.toLocaleString()}</div>
@@ -396,7 +396,7 @@ export default function AdminDashboardPage() {
                 <Card className="shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Pedidos</CardTitle>
-                        <Package className="h-4 w-4 text-orange-500" />
+                        <Package className="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-foreground">{globalStats.totalOrders}</div>
@@ -406,7 +406,7 @@ export default function AdminDashboardPage() {
                 <Card className="shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Usuarios</CardTitle>
-                        <Users className="h-4 w-4 text-blue-500" />
+                        <Users className="h-4 w-4 text-info" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-foreground">{globalStats.totalUsers}</div>
@@ -419,7 +419,7 @@ export default function AdminDashboardPage() {
             <Tabs defaultValue="overview" className="w-full">
                 <TabsList className="mb-4">
                     <TabsTrigger value="overview">Visión General</TabsTrigger>
-                    <TabsTrigger value="finances" className="text-green-700 font-semibold flex gap-2">
+                    <TabsTrigger value="finances" className="text-success font-semibold flex gap-2">
                         <DollarSign className="h-4 w-4" /> Finanzas y Pagos
                     </TabsTrigger>
                 </TabsList>
@@ -442,9 +442,9 @@ export default function AdminDashboardPage() {
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
                         {/* COLUMNA IZQUIERDA: CONFIGURACIÓN Y ALERTAS */}
                         <div className="lg:col-span-3 space-y-6">
-                            <Card className="border-orange-200 bg-orange-50/30 shadow-sm">
+                            <Card className="border-primary/30 bg-primary/5 shadow-sm">
                                 <CardHeader className="pb-3">
-                                    <CardTitle className="text-lg font-bold flex items-center gap-2 text-orange-900">
+                                    <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
                                         <Settings className="h-5 w-5" /> Configuración de Plataforma
                                     </CardTitle>
                                 </CardHeader>
@@ -457,28 +457,28 @@ export default function AdminDashboardPage() {
                                                 type="number" 
                                                 value={localConfig.serviceFee}
                                                 onChange={(e) => setLocalConfig({...localConfig, serviceFee: Number(e.target.value)})}
-                                                className="pl-8 bg-white text-black border-orange-200 focus-visible:ring-orange-500" 
+                                                className="pl-8 border-primary/30"
                                             />
                                             <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center justify-between border border-orange-200 p-3 rounded-lg bg-white/80 backdrop-blur-sm">
+                                    <div className="flex items-center justify-between border border-border p-3 rounded-lg bg-muted/30 backdrop-blur-sm">
                                         <div className="space-y-0.5">
-                                            <Label className="text-base font-bold text-red-600 flex items-center gap-2">
+                                            <Label className="text-base font-bold text-destructive flex items-center gap-2">
                                                 <AlertTriangle className="h-4 w-4" /> Modo Mantenimiento
                                             </Label>
                                             <p className="text-xs text-muted-foreground">Impide crear nuevos pedidos.</p>
                                         </div>
-                                        <Switch 
+                                        <Switch
                                             checked={localConfig.maintenanceMode}
                                             onCheckedChange={(checked) => setLocalConfig({...localConfig, maintenanceMode: checked})}
-                                            className="data-[state=checked]:bg-red-600"
+                                            className="data-[state=checked]:bg-destructive"
                                         />
                                     </div>
                                 </CardContent>
                                 <CardFooter>
-                                    <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white" onClick={handleSaveConfig} disabled={isSavingConfig}>
+                                    <Button className="w-full" onClick={handleSaveConfig} disabled={isSavingConfig}>
                                         {isSavingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                         {isSavingConfig ? "Guardando..." : "Guardar Configuración"}
                                     </Button>

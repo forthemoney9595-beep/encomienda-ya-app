@@ -139,7 +139,7 @@ function DriverReviews({ reviews }: { reviews: Review[] }) {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {analysis.strengths.length > 0 && <Card className="bg-secondary/30">
                                         <CardHeader className="p-4">
-                                            <CardTitle className="flex items-center text-base gap-2 text-green-500">
+                                            <CardTitle className="flex items-center text-base gap-2 text-success">
                                                 <TrendingUp className="h-5 w-5" />
                                                 Puntos Fuertes
                                             </CardTitle>
@@ -183,7 +183,7 @@ function DriverReviews({ reviews }: { reviews: Review[] }) {
                                 </div>
                                 <div className="flex items-center gap-1">
                                     {[1, 2, 3, 4, 5].map(star => (
-                                        <Star key={star} className={cn('h-4 w-4', review.rating >= star ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30')} />
+                                        <Star key={star} className={cn('h-4 w-4', review.rating >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30')} />
                                     ))}
                                 </div>
                             </div>
@@ -314,7 +314,7 @@ function DriverProfilePage() {
                             <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-muted">
                                 <div className="flex items-baseline gap-1">
                                     <span className="text-2xl font-bold">{driverStats.avgRating.toFixed(1)}</span>
-                                    <Star className="h-4 w-4 text-amber-400" />
+                                    <Star className="h-4 w-4 text-warning" />
                                 </div>
                                 <p className="text-xs text-muted-foreground text-center">Calificación Promedio</p>
                             </div>

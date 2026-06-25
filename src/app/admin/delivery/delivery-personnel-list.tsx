@@ -102,7 +102,7 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                     </TableCell>
                     <TableCell className="text-right flex justify-end gap-2 items-center">
                       <Button variant="ghost" size="icon" onClick={() => setSelectedDriver(driver)} title="Ver Ficha Técnica">
-                          <Eye className="h-4 w-4 text-blue-600" />
+                          <Eye className="h-4 w-4 text-info" />
                       </Button>
 
                       <PersonnelActions 
@@ -146,13 +146,13 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
 
                 <div className="bg-muted/30 p-3 rounded-lg border">
                     <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
-                        <Car className="h-4 w-4 text-orange-600" /> Información del Vehículo
+                        <Car className="h-4 w-4 text-primary" /> Información del Vehículo
                     </h4>
                     {selectedDriver?.vehicle && typeof selectedDriver.vehicle === 'object' ? (
                         <div className="text-sm space-y-1">
                             <p><strong>Tipo:</strong> {selectedDriver.vehicle.type}</p>
                             <p><strong>Modelo:</strong> {selectedDriver.vehicle.model}</p>
-                            <p><strong>Patente/Placa:</strong> <span className="font-mono bg-white px-1 border rounded">{selectedDriver.vehicle.plate}</span></p>
+                            <p><strong>Patente/Placa:</strong> <span className="font-mono bg-muted px-1 border rounded">{selectedDriver.vehicle.plate}</span></p>
                             <p><strong>Color:</strong> {selectedDriver.vehicle.color}</p>
                         </div>
                     ) : (
@@ -164,10 +164,10 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
 
                 <div className="bg-muted/30 p-3 rounded-lg border">
                     <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
-                        <FileText className="h-4 w-4 text-blue-600" /> Licencia de Conducir
+                        <FileText className="h-4 w-4 text-info" /> Licencia de Conducir
                     </h4>
                     {selectedDriver?.licenseUrl ? (
-                        <div className="relative h-40 w-full rounded-md overflow-hidden border bg-white">
+                        <div className="relative h-40 w-full rounded-md overflow-hidden border bg-muted">
                              <img 
                                 src={selectedDriver.licenseUrl} 
                                 alt="Licencia" 
@@ -175,7 +175,7 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                              />
                         </div>
                     ) : (
-                        <p className="text-sm text-red-500 italic flex items-center gap-1">
+                        <p className="text-sm text-destructive italic flex items-center gap-1">
                             ⚠️ No ha subido foto de licencia.
                         </p>
                     )}
@@ -183,7 +183,7 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
 
                 {selectedDriver && (
                     <div className="flex gap-2 pt-2">
-                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => {
+                        <Button className="w-full bg-success hover:bg-success/90 text-success-foreground" onClick={() => {
                             onStatusUpdate(selectedDriver.id, 'approved');
                             setSelectedDriver(null);
                         }}>

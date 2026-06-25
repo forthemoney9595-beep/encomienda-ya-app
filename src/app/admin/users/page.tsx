@@ -137,10 +137,10 @@ function AdminUsersPage() {
                                 </TableCell>
                                 <TableCell>
                                     <Badge variant="outline" className={
-                                        user.role === 'admin' ? 'border-purple-500 text-purple-600 bg-purple-50' :
-                                        user.role === 'store' ? 'border-blue-500 text-blue-600 bg-blue-50' :
-                                        user.role === 'delivery' ? 'border-orange-500 text-orange-600 bg-orange-50' : 
-                                        'bg-gray-100 text-gray-600 border-gray-200'
+                                        user.role === 'admin' ? 'border-primary/50 text-primary bg-primary/10' :
+                                        user.role === 'store' ? 'border-info/50 text-info bg-info/10' :
+                                        user.role === 'delivery' ? 'border-warning/50 text-warning bg-warning/10' :
+                                        'bg-muted text-muted-foreground border-border'
                                     }>
                                         {user.role === 'buyer' ? 'Cliente' : user.role === 'store' ? 'Tienda' : user.role === 'delivery' ? 'Repartidor' : 'Admin'}
                                     </Badge>
@@ -169,7 +169,7 @@ function AdminUsersPage() {
                                                 <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'store', user.role)}>Convertir en Tienda</DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'delivery', user.role)}>Convertir en Repartidor</DropdownMenuItem>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-purple-600 font-bold focus:text-purple-700 focus:bg-purple-50" onClick={() => handleRoleChange(user.id, 'admin', user.role)}>
+                                                <DropdownMenuItem className="text-primary font-bold focus:text-primary focus:bg-primary/10" onClick={() => handleRoleChange(user.id, 'admin', user.role)}>
                                                     <Shield className="mr-2 h-4 w-4" /> Hacer Admin
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>

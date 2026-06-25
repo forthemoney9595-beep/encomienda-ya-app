@@ -45,7 +45,7 @@ function AdminDeliveryPage() {
         toast({
             title: 'Estado Actualizado',
             description: `El repartidor ha sido marcado como ${newStatus}.`,
-            className: status === 'approved' ? "bg-green-50 text-green-900" : "bg-red-50 text-red-900"
+            className: status === 'approved' ? "bg-success/10 text-foreground" : "bg-destructive/10 text-foreground"
         });
 
     } catch (error) {
