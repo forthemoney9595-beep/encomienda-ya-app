@@ -61,7 +61,7 @@ export function ReviewDialog({ isOpen, setIsOpen, productName, onSubmit }: Revie
                 <Star 
                   className={cn(
                     "h-8 w-8 transition-colors", 
-                    (hoverRating || rating) >= star ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/20"
+                    (hoverRating || rating) >= star ? "fill-warning text-warning" : "text-muted-foreground/20"
                   )} 
                 />
               </button>

@@ -154,13 +154,13 @@ export default function OrderTrackingPage() {
                 toast({
                     title: "¡Pago Exitoso!",
                     description: "Tu pedido ya se está preparando.",
-                    className: "bg-green-50 border-green-200 text-green-900"
+                    className: "bg-success/10 border-success/30 text-foreground"
                 });
             } else {
                 toast({
                     title: "¡Pago recibido!",
                     description: "Verificando con MercadoPago... El estado se actualizará en instantes.",
-                    className: "bg-green-50 border-green-200 text-green-900"
+                    className: "bg-success/10 border-success/30 text-foreground"
                 });
             }
             router.replace(`/orders/${orderId}`);
@@ -413,14 +413,14 @@ export default function OrderTrackingPage() {
                 <CardContent className="space-y-4">
                     {/* ACCIONES REPARTIDOR */}
                     {isAvailableToAccept && (
-                        <div className="mb-6 bg-green-50 border border-green-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in zoom-in duration-300">
-                            <div className="p-4 bg-green-100 border-b border-green-200 flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-green-900 flex items-center gap-2"><Bike className="h-5 w-5" /> Solicitud de Entrega</h3>
-                                <span className="bg-green-600 text-white px-3 py-1 rounded-full font-bold text-sm">+${order.deliveryFee.toFixed(2)}</span>
+                        <div className="mb-6 bg-success/10 border border-success/30 rounded-xl overflow-hidden shadow-sm animate-in fade-in zoom-in duration-300">
+                            <div className="p-4 bg-success/15 border-b border-success/30 flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-success flex items-center gap-2"><Bike className="h-5 w-5" /> Solicitud de Entrega</h3>
+                                <span className="bg-success text-success-foreground px-3 py-1 rounded-full font-bold text-sm">+${order.deliveryFee.toFixed(2)}</span>
                             </div>
                             <div className="p-4 space-y-3 text-center">
-                                <p className="text-green-800 mb-2">Este pedido está listo o preparándose. ¿Quieres llevarlo?</p>
-                                <Button className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md transition-all hover:scale-[1.02]" size="lg" onClick={handleAcceptOrder} disabled={isAccepting}>
+                                <p className="text-foreground mb-2">Este pedido está listo o preparándose. ¿Quieres llevarlo?</p>
+                                <Button className="w-full bg-success hover:bg-success/90 text-success-foreground shadow-md transition-all hover:scale-[1.02]" size="lg" onClick={handleAcceptOrder} disabled={isAccepting}>
                                     {isAccepting ? "Aceptando..." : "✅ Aceptar y Asignarme este Pedido"}
                                 </Button>
                             </div>
@@ -429,10 +429,10 @@ export default function OrderTrackingPage() {
 
                     {/* ACCIONES TIENDA */}
                     {isStoreOwner && order.status === 'En preparación' && order.deliveryPersonId && (
-                         <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
-                            <h3 className="text-md font-bold text-blue-900 mb-2">Coordinación de Entrega</h3>
-                            <p className="text-sm text-blue-800 mb-3">Cuando termines de preparar, avisa al repartidor con un toque.</p>
-                            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={handleNotifyDriver} disabled={isUpdatingStatus || (order as any).readyForPickup}>
+                         <div className="mb-6 bg-info/10 border border-info/30 rounded-xl p-4">
+                            <h3 className="text-md font-bold text-info mb-2">Coordinación de Entrega</h3>
+                            <p className="text-sm text-muted-foreground mb-3">Cuando termines de preparar, avisa al repartidor con un toque.</p>
+                            <Button className="w-full bg-info hover:bg-info/90 text-info-foreground" onClick={handleNotifyDriver} disabled={isUpdatingStatus || (order as any).readyForPickup}>
                                 <BellRing className="mr-2 h-4 w-4" /> {isUpdatingStatus ? "Enviando..." : ((order as any).readyForPickup ? "Repartidor Notificado" : "¡Pedido Listo! Avisar Repartidor")}
                             </Button>
                         </div>
@@ -440,23 +440,23 @@ export default function OrderTrackingPage() {
 
                     {/* ESTADO DE ENTREGA REPARTIDOR */}
                     {isDeliveryPerson && order.status !== 'Entregado' && order.status !== 'Cancelado' && (
-                        <div className="mb-6 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                            <div className="p-4 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Navigation className="h-5 w-5" /> Tu Misión</h3>
-                                <div className="text-xs font-mono bg-white px-2 py-1 rounded border">
+                        <div className="mb-6 bg-muted/30 border border-border rounded-xl overflow-hidden shadow-sm">
+                            <div className="p-4 bg-muted border-b border-border flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Navigation className="h-5 w-5" /> Tu Misión</h3>
+                                <div className="text-xs font-mono bg-background px-2 py-1 rounded border">
                                     {(order.status === 'En camino' || order.status === 'En preparación' || order.status === 'Listo para recoger') ? 'FASE 1: TIENDA' : 'FASE 2: CLIENTE'}
                                 </div>
                             </div>
                             
                             <div className="p-4 space-y-4">
                                 {(order as any).readyForPickup && (order.status === 'En preparación' || order.status === 'En camino') && (
-                                    <div className="p-3 bg-green-100 text-green-800 rounded-lg border border-green-300 font-semibold text-center flex items-center justify-center gap-2 animate-pulse"><BellRing className="h-5 w-5" /> ¡Pedido LISTO para recoger!</div>
+                                    <div className="p-3 bg-success/15 text-success rounded-lg border border-success/30 font-semibold text-center flex items-center justify-center gap-2 animate-pulse"><BellRing className="h-5 w-5" /> ¡Pedido LISTO para recoger!</div>
                                 )}
 
                                 <div className="grid grid-cols-1 gap-4">
                                     <div className="flex items-start gap-3">
-                                        <div className="bg-white p-2 rounded-full border shadow-sm mt-1">
-                                            {order.status === 'En reparto' ? <Home className="h-5 w-5 text-orange-600"/> : <Store className="h-5 w-5 text-blue-600"/>}
+                                        <div className="bg-background p-2 rounded-full border shadow-sm mt-1">
+                                            {order.status === 'En reparto' ? <Home className="h-5 w-5 text-primary"/> : <Store className="h-5 w-5 text-info"/>}
                                         </div>
                                         <div>
                                             <p className="text-xs text-muted-foreground uppercase font-bold">Destino Actual:</p>
@@ -471,7 +471,7 @@ export default function OrderTrackingPage() {
 
                                     {order.status === 'En reparto' && phoneToCall && (
                                         <a href={`tel:${phoneToCall}`} className="w-full">
-                                            <Button variant="outline" className="w-full border-green-200 text-green-700 bg-green-50 hover:bg-green-100">
+                                            <Button variant="outline" className="w-full border-success/30 text-success bg-success/10 hover:bg-success/15">
                                                 <Phone className="mr-2 h-4 w-4" /> Llamar al Cliente ({phoneToCall})
                                             </Button>
                                         </a>
@@ -481,12 +481,12 @@ export default function OrderTrackingPage() {
                                 <Separator />
                                 
                                 {(order.status === 'En camino' || order.status === 'En preparación' || order.status === 'Listo para recoger') && (
-                                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-14 text-xl shadow-md" onClick={() => handleUpdateStatus('En reparto')} disabled={isUpdatingStatus}>
+                                    <Button className="w-full bg-info hover:bg-info/90 text-info-foreground h-14 text-xl shadow-md" onClick={() => handleUpdateStatus('En reparto')} disabled={isUpdatingStatus}>
                                         <PackageCheck className="mr-2 h-6 w-6" /> {isUpdatingStatus ? "..." : "Ya recogí el pedido"}
                                     </Button>
                                 )}
                                 {order.status === 'En reparto' && (
-                                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white h-14 text-xl shadow-md" onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdatingStatus}>
+                                    <Button className="w-full bg-success hover:bg-success/90 text-success-foreground h-14 text-xl shadow-md" onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdatingStatus}>
                                         <CheckCircle className="mr-2 h-6 w-6" /> {isUpdatingStatus ? "..." : "Confirmar Entrega"}
                                     </Button>
                                 )}
@@ -495,10 +495,10 @@ export default function OrderTrackingPage() {
                     )}
 
                     {isDeliveryPerson && order.status === 'Entregado' && (
-                         <div className="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col items-center text-center">
-                            <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center mb-3"><CheckCircle className="h-6 w-6 text-green-600" /></div>
-                            <h3 className="text-lg font-bold text-gray-900">¡Entrega Completada!</h3>
-                            <div className="mt-2 px-4 py-2 bg-green-600 text-white rounded-full font-bold text-lg flex items-center gap-2 shadow-sm"><DollarSign className="h-5 w-5" />Ganaste ${order.deliveryFee.toFixed(2)}</div>
+                         <div className="mb-6 bg-muted/30 border border-border rounded-xl p-4 flex flex-col items-center text-center">
+                            <div className="h-12 w-12 bg-success/15 rounded-full flex items-center justify-center mb-3"><CheckCircle className="h-6 w-6 text-success" /></div>
+                            <h3 className="text-lg font-bold text-foreground">¡Entrega Completada!</h3>
+                            <div className="mt-2 px-4 py-2 bg-success text-success-foreground rounded-full font-bold text-lg flex items-center gap-2 shadow-sm"><DollarSign className="h-5 w-5" />Ganaste ${order.deliveryFee.toFixed(2)}</div>
                         </div>
                     )}
 
@@ -520,7 +520,7 @@ export default function OrderTrackingPage() {
                             <div className="text-right flex items-center gap-4">
                                {isBuyer && order.status === 'Entregado' && (
                                    item.userRating 
-                                   ? (<div className="flex items-center gap-1 text-sm text-amber-500"><Star className="h-4 w-4 fill-current" /><span className="font-bold">{item.userRating}</span></div>) 
+                                   ? (<div className="flex items-center gap-1 text-sm text-warning"><Star className="h-4 w-4 fill-current" /><span className="font-bold">{item.userRating}</span></div>)
                                    : (<Button variant="outline" size="sm" onClick={() => setReviewingItem(item)}><Star className="mr-2 h-4 w-4" /> Valorar</Button>)
                                 )}<p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
                             </div>
@@ -569,7 +569,7 @@ export default function OrderTrackingPage() {
 
             {isBuyer && order.status === 'Entregado' && order.deliveryPersonName && (
                 order.deliveryRating ? (
-                    <Card><CardHeader><CardTitle>Tu Valoración de la Entrega</CardTitle></CardHeader><CardContent className="space-y-2"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30')} />))}<span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span></div>{order.deliveryReview && (<blockquote className="border-l-2 pl-4 italic text-muted-foreground">&quot;{order.deliveryReview}&quot;</blockquote>)}<p className="text-xs text-muted-foreground pt-2">Valoración para {order.deliveryPersonName}.</p></CardContent></Card>
+                    <Card><CardHeader><CardTitle>Tu Valoración de la Entrega</CardTitle></CardHeader><CardContent className="space-y-2"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30')} />))}<span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span></div>{order.deliveryReview && (<blockquote className="border-l-2 pl-4 italic text-muted-foreground">&quot;{order.deliveryReview}&quot;</blockquote>)}<p className="text-xs text-muted-foreground pt-2">Valoración para {order.deliveryPersonName}.</p></CardContent></Card>
                 ) : (
                     <DeliveryReviewCard order={order} onSubmit={handleDeliveryReviewSubmit} />
                 )

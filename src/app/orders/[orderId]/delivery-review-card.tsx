@@ -43,7 +43,7 @@ export function DeliveryReviewCard({ order, onSubmit }: DeliveryReviewCardProps)
                             key={star}
                             className={cn(
                                 'h-10 w-10 cursor-pointer transition-all',
-                                (hoverRating || rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30'
+                                (hoverRating || rating) >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30'
                             )}
                             onClick={() => setRating(star)}
                             onMouseEnter={() => setHoverRating(star)}

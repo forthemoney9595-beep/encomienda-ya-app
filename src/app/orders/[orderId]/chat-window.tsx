@@ -154,21 +154,21 @@ export function ChatWindow({ order }: ChatWindowProps) {
     const MessageBubble = ({ message }: { message: ChatMessage }) => {
         const isMine = message.senderId === myUser?.uid;
         
-        let roleColor = "text-gray-600";
+        let roleColor = "text-muted-foreground";
         let roleLabel = "Usuario";
-        
-        if (message.senderRole === 'store') { roleColor = "text-blue-700 font-bold"; roleLabel = "Tienda"; }
-        else if (message.senderRole === 'delivery') { roleColor = "text-green-700 font-bold"; roleLabel = "Repartidor"; }
-        else if (message.senderRole === 'buyer') { roleColor = "text-orange-700 font-bold"; roleLabel = "Cliente"; }
+
+        if (message.senderRole === 'store') { roleColor = "text-info font-bold"; roleLabel = "Tienda"; }
+        else if (message.senderRole === 'delivery') { roleColor = "text-success font-bold"; roleLabel = "Repartidor"; }
+        else if (message.senderRole === 'buyer') { roleColor = "text-primary font-bold"; roleLabel = "Cliente"; }
 
         return (
             <div className={cn("flex w-full", isMine ? "justify-end" : "justify-start")}>
                 <div 
                     className={cn(
                         "max-w-[85%] p-3 rounded-xl shadow-sm border text-sm",
-                        isMine 
-                            ? "bg-blue-600 text-white rounded-br-none border-blue-700" 
-                            : "bg-white text-slate-900 rounded-bl-none border-gray-200"
+                        isMine
+                            ? "bg-primary text-primary-foreground rounded-br-none border-primary"
+                            : "bg-card text-card-foreground rounded-bl-none border-border"
                     )}
                 >
                     {!isMine && (
@@ -180,7 +180,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                         </p>
                     )}
                     <p className="break-words leading-relaxed">{message.text}</p>
-                    <p className={cn("text-[9px] mt-1 opacity-70", isMine ? "text-blue-100 text-right" : "text-gray-400 text-left")}>
+                    <p className={cn("text-[9px] mt-1 opacity-70", isMine ? "text-primary-foreground/80 text-right" : "text-muted-foreground text-left")}>
                         {message.createdAt && typeof (message.createdAt as any).toDate === 'function' 
                             ? format((message.createdAt as any).toDate(), 'HH:mm', { locale: es })
                             : '...'}
@@ -204,7 +204,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                 </CardDescription>
             </CardHeader>
 
-            <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-100 dark:bg-slate-900">
+            <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 bg-muted/30">
                 {loadingMessages ? (
                     <div className="text-center py-10">
                         <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
@@ -228,7 +228,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                         <Badge 
                             key={index} 
                             variant="outline" 
-                            className="cursor-pointer hover:bg-primary hover:text-white transition-colors py-1 px-2 text-[10px] font-normal shrink-0 border-primary/20"
+                            className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors py-1 px-2 text-[10px] font-normal shrink-0 border-primary/20"
                             onClick={() => handleSend(undefined, reply)}
                         >
                             {reply}
