@@ -155,10 +155,10 @@ export default function FavoritesPage() {
                                     {/* Botón Quitar Favorito */}
                                     <button
                                         onClick={(e) => handleRemoveFavorite(e, store.id, store.name)}
-                                        className="absolute top-2 right-2 p-2 rounded-full bg-white/90 hover:bg-white shadow-sm backdrop-blur-sm transition-all hover:scale-110 z-10"
+                                        className="absolute top-2 right-2 p-2 rounded-full bg-background/80 hover:bg-background shadow-sm backdrop-blur-sm transition-all hover:scale-110 z-10"
                                         title="Quitar de favoritos"
                                     >
-                                        <Heart className="h-5 w-5 fill-red-500 text-red-500" />
+                                        <Heart className="h-5 w-5 fill-primary text-primary" />
                                     </button>
 
                                     <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
@@ -170,8 +170,8 @@ export default function FavoritesPage() {
                                     <div className="flex justify-between items-start">
                                         <CardTitle className="text-base font-bold">{store.name}</CardTitle>
                                         {store.rating && (
-                                            <div className="flex items-center gap-1 text-xs font-medium bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
-                                                <Star className="h-3 w-3 fill-yellow-700" />
+                                            <div className="flex items-center gap-1 text-xs font-medium bg-warning/15 text-warning px-1.5 py-0.5 rounded">
+                                                <Star className="h-3 w-3 fill-current" />
                                                 {store.rating.toFixed(1)}
                                             </div>
                                         )}

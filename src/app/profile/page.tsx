@@ -202,9 +202,9 @@ export default function ProfilePage() {
 
     const getRoleBadge = (role?: string) => {
         switch(role) {
-            case 'store': return <Badge className="bg-blue-600 gap-1"><Store className="h-3 w-3"/> Tienda</Badge>;
-            case 'delivery': return <Badge className="bg-orange-600 gap-1"><Bike className="h-3 w-3"/> Repartidor</Badge>;
-            case 'admin': return <Badge className="bg-purple-600">Admin</Badge>;
+            case 'store': return <Badge className="bg-info text-info-foreground gap-1"><Store className="h-3 w-3"/> Tienda</Badge>;
+            case 'delivery': return <Badge className="bg-primary text-primary-foreground gap-1"><Bike className="h-3 w-3"/> Repartidor</Badge>;
+            case 'admin': return <Badge className="bg-foreground text-background">Admin</Badge>;
             default: return <Badge variant="secondary">Cliente</Badge>;
         }
     };
@@ -322,7 +322,7 @@ export default function ProfilePage() {
                                                 </div>
 
                                                 {/* BOTÓN GPS */}
-                                                <div className="flex items-center justify-between bg-white p-2 rounded border">
+                                                <div className="flex items-center justify-between bg-muted p-2 rounded border">
                                                     <span className="text-sm text-muted-foreground ml-2">
                                                         {tempCoords ? "✅ GPS detectado" : "📍 Ubicación exacta (Recomendado)"}
                                                     </span>
@@ -332,7 +332,7 @@ export default function ProfilePage() {
                                                         size="sm" 
                                                         onClick={handleGetLocation} 
                                                         disabled={isLocating}
-                                                        className={tempCoords ? "text-green-600 border-green-200 bg-green-50" : ""}
+                                                        className={tempCoords ? "text-success border-success/30 bg-success/10" : ""}
                                                     >
                                                         {isLocating ? <Loader2 className="h-4 w-4 animate-spin"/> : 
                                                          tempCoords ? <CheckCircle2 className="h-4 w-4"/> : <LocateFixed className="h-4 w-4"/>}
@@ -356,7 +356,7 @@ export default function ProfilePage() {
                                             addresses.map(addr => (
                                                 <div key={addr.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`p-2 rounded-full ${addr.coords ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+                                                        <div className={`p-2 rounded-full ${addr.coords ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'}`}>
                                                             <MapPin className="h-4 w-4"/>
                                                         </div>
                                                         <div>
@@ -365,7 +365,7 @@ export default function ProfilePage() {
                                                         </div>
                                                     </div>
                                                     <div className="flex gap-1">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDeleteAddress(addr)}><Trash2 className="h-4 w-4"/></Button>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteAddress(addr)}><Trash2 className="h-4 w-4"/></Button>
                                                     </div>
                                                 </div>
                                             ))
@@ -475,7 +475,7 @@ export default function ProfilePage() {
                                             </div>
                                         </div>
 
-                                        <Button className="w-full bg-orange-600 hover:bg-orange-700" onClick={handleSaveProfile}>
+                                        <Button className="w-full" onClick={handleSaveProfile}>
                                             Guardar Datos del Vehículo
                                         </Button>
                                     </CardContent>
