@@ -34,8 +34,12 @@ interface Product {
   available?: boolean;
   isFeatured?: boolean;
   stock?: number | null;
+  discountPercent?: number | null;
   createdAt?: any;
 }
+
+const effectivePrice = (product: Product) =>
+    product.discountPercent ? product.price * (1 - product.discountPercent / 100) : product.price;
 
 // ✅ FUNCIÓN DE LIMPIEZA VISUAL (NUEVO)
 const cleanAddress = (rawAddress: string | undefined) => {
@@ -141,11 +145,14 @@ export default function StorePublicPage() {
     addToCart({
       id: product.id,
       name: product.name,
-      price: product.price,
+      // Precio ya con descuento aplicado (si tiene) -- así el carrito/checkout, que solo
+      // suman el price de cada item, reflejan el descuento sin tocar esos archivos. El
+      // servidor en /api/orders/create igual recalcula todo desde el catálogo real.
+      price: effectivePrice(product),
       description: product.description,
       category: product.category,
       imageUrl: product.imageUrl,
-    }, storeId); 
+    }, storeId);
     
     toast({
       title: "Agregado al carrito",
@@ -343,11 +350,21 @@ function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Prod
                         Quedan {product.stock}
                     </span>
                 )}
+                {!!product.discountPercent && (
+                    <span className="absolute bottom-2 left-2 bg-success text-success-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                        -{product.discountPercent}%
+                    </span>
+                )}
             </div>
             <CardHeader className="p-4 pb-0">
                 <div className="flex justify-between items-start gap-2">
                     <CardTitle className="text-base line-clamp-1">{product.name}</CardTitle>
-                    <span className="font-bold text-foreground">${product.price}</span>
+                    <span className="flex flex-col items-end shrink-0">
+                        {!!product.discountPercent && (
+                            <span className="text-xs text-muted-foreground line-through">${product.price}</span>
+                        )}
+                        <span className="font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
+                    </span>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
             </CardHeader>
@@ -369,7 +386,15 @@ function ProductRow({ product, onAdd, isDisabled }: { product: Product, onAdd: (
             <div className="flex-1 min-w-0">
                 <h3 className="font-semibold line-clamp-1">{product.name}</h3>
                 <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>
-                <p className="font-bold text-foreground mt-1.5">${product.price}</p>
+                <p className="mt-1.5 flex items-center gap-2">
+                    {!!product.discountPercent && (
+                        <span className="text-xs text-muted-foreground line-through">${product.price}</span>
+                    )}
+                    <span className="font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
+                    {!!product.discountPercent && (
+                        <span className="text-xs font-bold text-success">-{product.discountPercent}%</span>
+                    )}
+                </p>
                 {outOfStock ? (
                     <p className="text-xs font-medium text-destructive mt-1">Sin stock</p>
                 ) : product.stock != null && product.stock <= 3 ? (
