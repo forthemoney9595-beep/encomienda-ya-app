@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarFooter, SidebarTrigger } from '@/components/ui/sidebar';
 import { MainNav } from '@/components/main-nav';
+import { BottomNav } from '@/components/bottom-nav';
 import Logo from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -141,12 +142,12 @@ function EmailVerificationBanner({ user }: { user: any }) {
     };
 
     return (
-        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 flex items-center justify-between gap-4 text-sm text-yellow-800">
+        <div className="bg-warning/10 border-b border-warning/30 px-4 py-2 flex items-center justify-between gap-4 text-sm text-foreground">
             <div className="flex items-center gap-2">
-                <MailWarning className="h-4 w-4 shrink-0" />
+                <MailWarning className="h-4 w-4 shrink-0 text-warning" />
                 <span>Verificá tu correo electrónico para acceder a todas las funciones.</span>
             </div>
-            <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs border-yellow-400 hover:bg-yellow-100" onClick={handleResend} disabled={sending}>
+            <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs border-warning/40 hover:bg-warning/15" onClick={handleResend} disabled={sending}>
                 {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Reenviar correo"}
             </Button>
         </div>
@@ -222,9 +223,10 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                 {user && !user.emailVerified && !isLoginPage && (
                     <EmailVerificationBanner user={user} />
                 )}
-                <main className="flex-1 p-4 md:p-6">
+                <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
                     {children}
                 </main>
+                {user && !loading && !isLoginPage && <BottomNav />}
             </SidebarInset>
         </div>
     );

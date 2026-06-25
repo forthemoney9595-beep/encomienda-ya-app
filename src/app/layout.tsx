@@ -52,7 +52,7 @@ export default function RootLayout({
     <html lang="es" className="dark">
       <head>
         {/* PWA: Color de la barra de estado del navegador/móvil */}
-        <meta name="theme-color" content="#4f46e5" />
+        <meta name="theme-color" content="#F97316" />
         {/* PWA: Referencia al archivo de manifiesto para la instalación */}
         <link rel="manifest" href="/manifest.json" />
 
