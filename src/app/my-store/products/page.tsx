@@ -34,6 +34,9 @@ interface Product {
   // Opcional: sin valor = sin límite (no rompe productos existentes que nunca tuvieron
   // este campo). Si está definido, /api/orders/create lo valida y lo descuenta.
   stock?: number | null;
+  // Opcional, 0-90. Si está definido, /api/orders/create lo aplica al precio real
+  // antes de sumar al subtotal (nunca se confía en un precio con descuento del cliente).
+  discountPercent?: number | null;
   createdAt?: any;
   // De qué subcolección vino ('items' es la actual, 'products' es legacy) — determina
   // a qué colección apuntar al editar/borrar este producto puntual.
@@ -64,7 +67,8 @@ export default function ProductManagementPage() {
     imageUrl: '',
     available: true,
     isFeatured: false,
-    stock: ''
+    stock: '',
+    discountPercent: ''
   });
 
   useEffect(() => {
@@ -139,7 +143,8 @@ export default function ProductManagementPage() {
         imageUrl: product.imageUrl || '',
         available: product.available !== undefined ? product.available : true,
         isFeatured: product.isFeatured || false,
-        stock: product.stock != null ? product.stock.toString() : ''
+        stock: product.stock != null ? product.stock.toString() : '',
+        discountPercent: product.discountPercent != null ? product.discountPercent.toString() : ''
       });
     } else {
       setEditingProduct(null);
@@ -151,7 +156,8 @@ export default function ProductManagementPage() {
         imageUrl: '',
         available: true,
         isFeatured: false,
-        stock: ''
+        stock: '',
+        discountPercent: ''
       });
     }
     setIsDialogOpen(true);
@@ -165,6 +171,14 @@ export default function ProductManagementPage() {
     e.preventDefault();
     if (!firestore || !userProfile?.storeId) return;
 
+    if (formData.discountPercent.trim() !== '') {
+      const pct = Number(formData.discountPercent);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 90) {
+        toast({ variant: 'destructive', title: 'Descuento inválido', description: 'Tiene que ser un número entre 0 y 90.' });
+        return;
+      }
+    }
+
     setIsLoadingAction(true);
     try {
       const productData: any = {
@@ -177,6 +191,7 @@ export default function ProductManagementPage() {
         isFeatured: formData.isFeatured,
         // null = sin límite de stock; explícito para poder "borrar" el límite en una edición
         stock: formData.stock.trim() === '' ? null : parseInt(formData.stock, 10),
+        discountPercent: formData.discountPercent.trim() === '' ? null : parseInt(formData.discountPercent, 10),
         updatedAt: serverTimestamp()
       };
 
@@ -358,6 +373,11 @@ export default function ProductManagementPage() {
                             Quedan {product.stock}
                         </span>
                     )}
+                    {!!product.discountPercent && (
+                        <span className="bg-success text-success-foreground text-xs px-2 py-1 rounded-md font-bold">
+                            -{product.discountPercent}%
+                        </span>
+                    )}
                 </div>
 
                 {!product.available && (
@@ -372,8 +392,13 @@ export default function ProductManagementPage() {
                   <CardTitle className={`text-lg line-clamp-1 ${!product.name ? 'text-destructive italic' : ''}`} title={product.name}>
                       {product.name || '⚠️ Sin Nombre'}
                   </CardTitle>
-                  <span className="font-bold text-foreground flex items-center">
-                    ${(product.price || 0).toFixed(2)}
+                  <span className="flex flex-col items-end">
+                    {!!product.discountPercent && (
+                        <span className="text-xs text-muted-foreground line-through">${(product.price || 0).toFixed(2)}</span>
+                    )}
+                    <span className="font-bold text-foreground">
+                        ${(product.discountPercent ? (product.price || 0) * (1 - product.discountPercent / 100) : (product.price || 0)).toFixed(2)}
+                    </span>
                   </span>
                 </div>
               </CardHeader>
@@ -486,17 +511,32 @@ export default function ProductManagementPage() {
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="stock">Stock disponible (opcional)</Label>
-              <Input
-                id="stock"
-                type="number"
-                min="0"
-                step="1"
-                value={formData.stock}
-                onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                placeholder="Dejá vacío para stock ilimitado"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="stock">Stock disponible (opcional)</Label>
+                <Input
+                  id="stock"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.stock}
+                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                  placeholder="Vacío = ilimitado"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="discountPercent">Descuento % (opcional)</Label>
+                <Input
+                  id="discountPercent"
+                  type="number"
+                  min="0"
+                  max="90"
+                  step="1"
+                  value={formData.discountPercent}
+                  onChange={(e) => setFormData({ ...formData, discountPercent: e.target.value })}
+                  placeholder="Vacío = sin descuento"
+                />
+              </div>
             </div>
 
             <div className="grid gap-2">
