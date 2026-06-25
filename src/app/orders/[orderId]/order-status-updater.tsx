@@ -18,16 +18,21 @@ interface OrderStatusUpdaterProps {
   order: Order;
 }
 
+// Transiciones que la TIENDA puede disparar a mano desde este desplegable genérico.
+// A partir de "Listo para recoger" la posta es del repartidor (tomar pedido -> retirar
+// -> entregar, todo en delivery-orders-view.tsx) — ahí sí se asigna deliveryPersonId
+// y se avisa a quien corresponde. Si la tienda pudiera saltar directo a "En reparto" o
+// "Entregado" desde aquí, el pedido queda sin repartidor asignado y nadie se entera.
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
   'pending': [],
   'Pendiente': [],
   'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'],
   'Pendiente de Pago': ['En preparación'],
   'Aceptado': ['En preparación'],
-  'En preparación': ['Listo para recoger', 'En reparto'],
-  'Listo para recoger': ['En camino', 'En reparto'],
-  'En camino': ['En reparto'],
-  'En reparto': ['Entregado'],
+  'En preparación': ['Listo para recoger'],
+  'Listo para recoger': [],
+  'En camino': [],
+  'En reparto': [],
   'Entregado': [],
   'Cancelado': [],
   'Rechazado': [],
@@ -315,6 +320,25 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
             </Alert>
         </CardFooter>
     );
+  }
+
+  // --- VISTA TIENDA: ESPERANDO AL REPARTIDOR ---
+  if (isStoreOwner && ['Listo para recoger', 'En camino', 'En reparto'].includes(order.status)) {
+      return (
+        <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-blue-50/30">
+            <Alert className="bg-blue-50 border-blue-200">
+                <Clock className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800">
+                    {order.status === 'Listo para recoger' ? 'Buscando repartidor' : order.status === 'En camino' ? 'Repartidor en camino a retirarlo' : 'En camino al cliente'}
+                </AlertTitle>
+                <AlertDescription className="text-blue-700">
+                    {order.status === 'Listo para recoger'
+                        ? 'Avisamos a los repartidores disponibles. En cuanto uno lo acepte, te avisamos.'
+                        : 'El repartidor se encarga del resto — vos ya hiciste tu parte.'}
+                </AlertDescription>
+            </Alert>
+        </CardFooter>
+      );
   }
 
   // --- VISTA TIENDA: CONTROLES GENERALES ---
