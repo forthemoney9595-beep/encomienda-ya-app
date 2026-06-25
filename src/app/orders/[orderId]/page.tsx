@@ -64,10 +64,24 @@ function OrderPageSkeleton() {
     )
 }
 
+// Las 5 columnas fijas que se ven en la barra de progreso (no cambiar sin
+// ajustar el grid-cols-5 más abajo). statusSteps abajo puede mapear MÁS
+// estados que estos (estados intermedios como "Listo para recoger"/"En
+// camino") usando un step fraccionario, sin agregar columnas nuevas.
+const DISPLAY_STEPS = [
+  { step: 0, label: 'Pendiente', icon: Clock },
+  { step: 1, label: 'Por Pagar', icon: Wallet },
+  { step: 2, label: 'Preparando', icon: CookingPot },
+  { step: 3, label: 'En Reparto', icon: Bike },
+  { step: 4, label: 'Entregado', icon: Home },
+];
+
 const statusSteps: any = {
   'Pendiente de Confirmación': { step: 0, label: 'Pendiente', icon: Clock, description: 'Esperando que la tienda confirme stock.' },
   'Pendiente de Pago': { step: 1, label: 'Por Pagar', icon: Wallet, description: 'Stock confirmado. Realiza el pago.' },
   'En preparación': { step: 2, label: 'Preparando', icon: CookingPot, description: 'La tienda está preparando tu pedido.' },
+  'Listo para recoger': { step: 2.3, label: 'Listo para recoger', icon: PackageCheck, description: 'Tu pedido está listo. Buscando un repartidor disponible.' },
+  'En camino': { step: 2.7, label: 'Repartidor asignado', icon: Bike, description: 'Un repartidor fue asignado y va a retirar tu pedido de la tienda.' },
   'En reparto': { step: 3, label: 'En Reparto', icon: Bike, description: 'Un repartidor ha recogido tu pedido y está en camino.' },
   'Entregado': { step: 4, label: 'Entregado', icon: Home, description: '¡Tu pedido ha sido entregado! Disfrútalo.' },
   'Cancelado': { step: -1, label: 'Cancelado', icon: Ban, description: 'Este pedido ha sido cancelado.' },
@@ -76,13 +90,13 @@ const statusSteps: any = {
 
 function OrderProgress({ status }: { status: any }) {
     const currentStatusInfo = statusSteps[status] || { step: 0, label: 'Desconocido', icon: Clock, description: '' };
-    const totalSteps = 4; 
+    const totalSteps = 4;
     const progressValue = (currentStatusInfo.step / totalSteps) * 100;
-    
+
     if (status === 'Cancelado' || status === 'Rechazado') {
         return ( <div className="text-center"><Ban className="mx-auto h-12 w-12 text-destructive" /><h3 className="mt-2 text-lg font-semibold">{status}</h3><p className="text-sm text-muted-foreground">{currentStatusInfo.description}</p></div>)
     }
-    const steps = Object.values(statusSteps).filter((s:any) => s.step >= 0 && s.step <= totalSteps).sort((a:any,b:any) => a.step - b.step);
+    const steps = DISPLAY_STEPS;
     return (
         <div className="space-y-8">
             <div>
