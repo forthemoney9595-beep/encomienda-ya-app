@@ -122,5 +122,20 @@ service cloud.firestore {
       // ✏️ UPDATE/DELETE: solo el admin puede aprobar, rechazar o eliminar
       allow update, delete: if isAdmin();
     }
+
+    // 9. RESEÑAS DE TIENDA
+    match /reviews/{reviewId} {
+      allow read: if true; // públicas, igual que las tiendas
+
+      // ❌ CREATE: bloqueado, igual que orders -- va solo por /api/reviews/create
+      // (verifica que el pedido sea del comprador, esté Entregado, y evita duplicados)
+      allow create: if false;
+
+      // La tienda solo puede agregar su respuesta, no tocar el resto de la reseña
+      allow update: if isStoreOwner(resource.data.storeId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerReply', 'ownerReplyAt']);
+
+      allow delete: if isAdmin();
+    }
   }
 }

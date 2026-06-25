@@ -136,6 +136,7 @@ export default function OrderTrackingPage() {
   const { clearCart, addToCart, storeId: cartStoreId } = useCart();
   
   const [reviewingItem, setReviewingItem] = useState<any | null>(null);
+  const [isStoreReviewOpen, setIsStoreReviewOpen] = useState(false);
   const [isReorderAlertOpen, setReorderAlertOpen] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -221,6 +222,21 @@ export default function OrderTrackingPage() {
             await updateDoc(orderRef, { deliveryRating: rating, deliveryReview: review });
             toast({ title: "¡Reseña enviada!", description: "Se ha valorado al repartidor." });
         } catch (error) { toast({ variant: 'destructive', title: "Error" }); }
+    };
+
+    const handleStoreReviewSubmit = async (rating: number, comment: string) => {
+        if (!order || !user) return;
+        const res = await fetch('/api/reviews/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: order.id, userId: user.uid, rating, comment }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            toast({ variant: 'destructive', title: "Error", description: data.error || 'No se pudo enviar la reseña.' });
+            throw new Error(data.error);
+        }
+        toast({ title: "¡Gracias por tu reseña!", description: `Calificaste a ${order.storeName} con ${rating} estrella${rating === 1 ? '' : 's'}.` });
     };
 
     const executeReorder = () => {
@@ -578,6 +594,24 @@ export default function OrderTrackingPage() {
                 <ChatWindow order={order} />
             )}
 
+            {isBuyer && order.status === 'Entregado' && (
+                <Card>
+                    <CardHeader><CardTitle>Reseña de la tienda</CardTitle></CardHeader>
+                    <CardContent>
+                        {order.storeReviewed ? (
+                            <p className="text-sm text-muted-foreground">¡Gracias por calificar a <strong>{order.storeName}</strong>!</p>
+                        ) : (
+                            <div className="flex items-center justify-between gap-4">
+                                <p className="text-sm text-muted-foreground">¿Qué te pareció tu pedido en {order.storeName}?</p>
+                                <Button variant="outline" size="sm" onClick={() => setIsStoreReviewOpen(true)}>
+                                    <Star className="mr-2 h-4 w-4" /> Calificar
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             {isBuyer && order.status === 'Entregado' && order.deliveryPersonName && (
                 order.deliveryRating ? (
                     <Card><CardHeader><CardTitle>Tu Valoración de la Entrega</CardTitle></CardHeader><CardContent className="space-y-2"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30')} />))}<span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span></div>{order.deliveryReview && (<blockquote className="border-l-2 pl-4 italic text-muted-foreground">&quot;{order.deliveryReview}&quot;</blockquote>)}<p className="text-xs text-muted-foreground pt-2">Valoración para {order.deliveryPersonName}.</p></CardContent></Card>
@@ -589,11 +623,20 @@ export default function OrderTrackingPage() {
       </div>
        
        {reviewingItem && (
-           <ReviewDialog 
-               isOpen={!!reviewingItem} 
-               setIsOpen={(isOpen) => !isOpen && setReviewingItem(null)} 
-               productName={reviewingItem.name} 
-               onSubmit={handleReviewSubmit} 
+           <ReviewDialog
+               isOpen={!!reviewingItem}
+               setIsOpen={(isOpen) => !isOpen && setReviewingItem(null)}
+               productName={reviewingItem.name}
+               onSubmit={handleReviewSubmit}
+           />
+       )}
+       {order && (
+           <ReviewDialog
+               isOpen={isStoreReviewOpen}
+               setIsOpen={setIsStoreReviewOpen}
+               title="Calificar Tienda"
+               productName={order.storeName}
+               onSubmit={handleStoreReviewSubmit}
            />
        )}
     </div>

@@ -11,10 +11,11 @@ interface ReviewDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   productName: string;
+  title?: string;
   onSubmit: (rating: number, review: string) => Promise<void>;
 }
 
-export function ReviewDialog({ isOpen, setIsOpen, productName, onSubmit }: ReviewDialogProps) {
+export function ReviewDialog({ isOpen, setIsOpen, productName, title = 'Calificar Producto', onSubmit }: ReviewDialogProps) {
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,7 +41,7 @@ export function ReviewDialog({ isOpen, setIsOpen, productName, onSubmit }: Revie
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Calificar Producto</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             ¿Qué te pareció <strong>{productName}</strong>? Tu opinión ayuda a otros usuarios.
           </DialogDescription>

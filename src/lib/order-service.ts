@@ -64,6 +64,7 @@ export interface Order {
   customerCoords?: { latitude: number; longitude: number };
   deliveryRating?: number;
   deliveryReview?: string;
+  storeReviewed?: boolean;
 
   // ✅ NUEVOS CAMPOS FINANCIEROS (SEPARADOS)
   storePayoutStatus?: 'pending' | 'paid'; 

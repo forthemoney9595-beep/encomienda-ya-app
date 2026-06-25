@@ -18,7 +18,8 @@ import {
   Shirt,
   MoreHorizontal,
   Users,
-  Wallet // ✅ AÑADIDO: Icono de Billetera
+  Wallet, // ✅ AÑADIDO: Icono de Billetera
+  Star
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -101,6 +102,12 @@ export function MainNav({
                <Store className="mr-2 h-4 w-4" />
                Mi Tienda
              </Button>
+          </Link>
+          <Link href="/my-store/reviews">
+            <Button variant={pathname === '/my-store/reviews' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Star className="mr-2 h-4 w-4" />
+              Reseñas
+            </Button>
           </Link>
         </div>
       </div>
