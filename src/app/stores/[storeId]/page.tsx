@@ -146,11 +146,11 @@ export default function StorePublicPage() {
   const regularProducts = products.filter(p => !p.isFeatured);
 
   return (
-    <div className="container mx-auto pb-20">
+    <div className="container mx-auto">
       {/* CABECERA */}
       <div className="relative bg-muted/30 -mx-4 px-4 py-8 sm:mx-0 sm:rounded-xl sm:mt-4 mb-8 border-b sm:border">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            <div className="h-24 w-24 bg-white rounded-full flex items-center justify-center shadow-sm border overflow-hidden shrink-0">
+            <div className="h-24 w-24 bg-muted rounded-full flex items-center justify-center shadow-sm border overflow-hidden shrink-0">
                 {store.imageUrl ? (
                     <img src={store.imageUrl} alt={store.name} className="h-full w-full object-cover" />
                 ) : (
@@ -159,8 +159,8 @@ export default function StorePublicPage() {
             </div>
             <div className="text-center md:text-left space-y-2 flex-1">
                 <div className="flex flex-col md:flex-row items-center gap-2">
-                    <h1 className="text-3xl font-bold tracking-tight">{store.name}</h1>
-                    <Badge variant={storeStatus.isOpen ? "default" : "destructive"} className={`gap-1 ${storeStatus.isOpen ? 'bg-green-600 hover:bg-green-700' : ''}`}>
+                    <h1 className="font-headline text-3xl font-bold tracking-tight">{store.name}</h1>
+                    <Badge variant={storeStatus.isOpen ? "default" : "destructive"} className={`gap-1 ${storeStatus.isOpen ? 'bg-success hover:bg-success/90 text-success-foreground' : ''}`}>
                         {storeStatus.isOpen ? <Clock className="h-3 w-3" /> : <Info className="h-3 w-3" />}
                         {storeStatus.label}
                     </Badge>
@@ -187,7 +187,7 @@ export default function StorePublicPage() {
       </div>
       
       {!storeStatus.isOpen && (
-          <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
+          <div className="bg-destructive/10 border border-destructive/30 text-foreground p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
               <p className="font-semibold">🔴 Este local se encuentra cerrado en este momento.</p>
               <p className="text-sm">Puedes ver el menú, pero no podrás realizar pedidos hasta que abra.</p>
           </div>
@@ -196,8 +196,8 @@ export default function StorePublicPage() {
       {/* DESTACADOS */}
       {featuredProducts.length > 0 && (
         <div className="mb-10">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" /> Recomendados
+            <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
+                <Star className="h-5 w-5 text-warning fill-current" /> Recomendados
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {featuredProducts.map(product => (
@@ -208,7 +208,7 @@ export default function StorePublicPage() {
       )}
 
       {/* MENU COMPLETO */}
-      <h2 className="text-xl font-bold mb-4">Menú Completo</h2>
+      <h2 className="font-headline text-xl font-bold mb-4">Menú Completo</h2>
       {products.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {regularProducts.map(product => (
@@ -252,7 +252,7 @@ function StoreNotFound({ router }: { router: any }) {
 
 function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Product, onAdd: (p: Product) => void, isFeatured?: boolean, isDisabled?: boolean }) {
     return (
-        <Card className={`flex flex-col overflow-hidden border hover:shadow-md transition-all ${isFeatured ? 'border-yellow-200 bg-yellow-50/30' : ''} ${isDisabled ? 'opacity-70 grayscale' : ''}`}>
+        <Card className={`flex flex-col overflow-hidden border hover:shadow-md transition-all ${isFeatured ? 'border-warning/30 bg-warning/5' : ''} ${isDisabled ? 'opacity-70 grayscale' : ''}`}>
             <div className="relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden">
                 {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
@@ -260,7 +260,7 @@ function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Prod
                     <Package className="h-10 w-10 text-muted-foreground/50" />
                 )}
                 {isFeatured && (
-                    <span className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                    <span className="absolute top-2 right-2 bg-warning text-warning-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
                         POPULAR
                     </span>
                 )}
@@ -268,7 +268,7 @@ function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Prod
             <CardHeader className="p-4 pb-0">
                 <div className="flex justify-between items-start gap-2">
                     <CardTitle className="text-base line-clamp-1">{product.name}</CardTitle>
-                    <span className="font-bold text-green-700">${product.price}</span>
+                    <span className="font-bold text-foreground">${product.price}</span>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
             </CardHeader>
