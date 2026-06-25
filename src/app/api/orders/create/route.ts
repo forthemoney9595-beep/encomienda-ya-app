@@ -104,11 +104,17 @@ export async function POST(request: Request) {
 
             const productData = productSnap.data()!;
             const title = productData.name || productData.title || "Producto sin nombre";
-            const price = Number(productData.price ?? productData.unit_price ?? 0);
+            const catalogPrice = Number(productData.price ?? productData.unit_price ?? 0);
 
-            if (price <= 0 || isNaN(price)) {
+            if (catalogPrice <= 0 || isNaN(catalogPrice)) {
                 throw new Error(`Error de datos: El producto "${title}" tiene precio 0.`);
             }
+
+            // Descuento opcional (0-90%): se aplica acá al precio real, nunca se confía en
+            // un precio ya descontado que mande el cliente (el carrito lo muestra, pero el
+            // servidor vuelve a calcularlo desde el catálogo).
+            const discountPercent = Number(productData.discountPercent) || 0;
+            const price = discountPercent > 0 ? catalogPrice * (1 - discountPercent / 100) : catalogPrice;
 
             // Stock opcional: sin valor = sin límite, no rompe productos que nunca tuvieron este campo.
             if (productData.stock != null) {
