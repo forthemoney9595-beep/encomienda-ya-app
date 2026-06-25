@@ -150,7 +150,7 @@ interface CategoryChipsProps {
 }
 
 const CategoryChips = ({ categories, selectedCategory, setSelectedCategory }: CategoryChipsProps) => (
-  <div className="flex gap-3 overflow-x-auto pb-2 mb-6 no-scrollbar">
+  <div className="flex gap-4 overflow-x-auto pb-2 mb-6 no-scrollbar">
     {categories.map((cat, i) => {
       const style = getCategoryStyle(cat, i);
       const Icon = style.icon;
@@ -160,13 +160,14 @@ const CategoryChips = ({ categories, selectedCategory, setSelectedCategory }: Ca
           key={cat}
           onClick={() => setSelectedCategory(cat)}
           className={cn(
-            'flex flex-col items-center gap-1.5 shrink-0 transition-transform',
+            'flex flex-col items-center gap-2 shrink-0 transition-transform',
             isActive ? 'scale-105' : 'opacity-80 hover:opacity-100'
           )}
         >
           <div className={cn(
-            'h-12 w-12 rounded-2xl flex items-center justify-center shadow-sm transition-all',
-            isActive ? `${style.bg} ring-2 ring-offset-2 ring-offset-background ${style.text.replace('text-', 'ring-')}` : style.bg
+            'h-12 w-12 rounded-2xl flex items-center justify-center transition-all',
+            style.bg,
+            isActive ? 'shadow-md' : 'shadow-sm'
           )}>
             <Icon className={cn('h-5 w-5', style.text)} />
           </div>
