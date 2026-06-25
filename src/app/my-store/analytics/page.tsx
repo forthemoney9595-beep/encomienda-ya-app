@@ -109,7 +109,7 @@ export default function StoreAnalyticsPage() {
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Ventas Totales</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-green-600" />
+            <ShoppingBag className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${stats.totalRevenue.toLocaleString()}</div>
@@ -121,7 +121,7 @@ export default function StoreAnalyticsPage() {
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Entregados</CardTitle>
-            <Package className="h-4 w-4 text-blue-600" />
+            <Package className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.completedOrders}</div>
@@ -133,7 +133,7 @@ export default function StoreAnalyticsPage() {
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Ticket Promedio</CardTitle>
-            <TrendingUp className="h-4 w-4 text-orange-600" />
+            <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${stats.avgTicket.toFixed(0)}</div>
@@ -145,10 +145,10 @@ export default function StoreAnalyticsPage() {
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
+            <XCircle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.rejectedCount}</div>
+            <div className="text-2xl font-bold text-destructive">{stats.rejectedCount}</div>
             <p className="text-xs text-muted-foreground">Pedidos no concretados</p>
           </CardContent>
         </Card>
@@ -165,7 +165,7 @@ export default function StoreAnalyticsPage() {
             {stats.recentOrders.map(order => (
                 <Link key={order.id} href={`/orders/${order.id}`} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group">
                     <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+                        <div className="h-10 w-10 rounded-full bg-info/15 text-info flex items-center justify-center shrink-0 group-hover:bg-info/25 transition-colors">
                             <User className="h-5 w-5" />
                         </div>
                         <div className="space-y-1">
@@ -174,11 +174,11 @@ export default function StoreAnalyticsPage() {
                         </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                        <div className="font-bold text-green-700">+${order.total.toLocaleString()}</div>
+                        <div className="font-bold text-success">+${order.total.toLocaleString()}</div>
                         <Badge variant="outline" className={`text-[10px] uppercase ${
-                            order.status === 'Entregado' ? 'bg-green-50 text-green-700 border-green-200' :
-                            order.status === 'Rechazado' ? 'bg-red-50 text-red-700 border-red-200' : 
-                            'bg-gray-50 text-gray-600'
+                            order.status === 'Entregado' ? 'bg-success/15 text-success border-success/30' :
+                            order.status === 'Rechazado' ? 'bg-destructive/15 text-destructive border-destructive/30' :
+                            'bg-muted text-muted-foreground'
                         }`}>
                             {order.status}
                         </Badge>

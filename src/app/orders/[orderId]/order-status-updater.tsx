@@ -165,8 +165,8 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   // --- DIAGNÓSTICO PARA TIENDAS ---
   if (userProfile?.role === 'store' && !isStoreOwner) {
       return (
-          <CardFooter className="bg-yellow-50 border-t border-yellow-200 p-4">
-              <div className="flex flex-col gap-2 text-sm text-yellow-800 w-full">
+          <CardFooter className="bg-warning/10 border-t border-warning/30 p-4">
+              <div className="flex flex-col gap-2 text-sm text-foreground w-full">
                   <div className="flex items-center gap-2 font-bold">
                       <AlertTriangle className="h-4 w-4" />
                       <span>Modo Diagnóstico: Permisos</span>
@@ -181,7 +181,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   if (isDeliveryPerson && order.status === 'En reparto' && order.deliveryPersonId === appUser?.uid) {
      return (
        <CardFooter>
-            <Button onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdating} className="w-full h-12 text-lg bg-green-600 hover:bg-green-700">
+            <Button onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdating} className="w-full h-12 text-lg bg-success hover:bg-success/90 text-success-foreground">
                 {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
                 Confirmar Entrega
             </Button>
@@ -194,10 +194,10 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
       return (
         <>
           <CardFooter className="flex-col gap-4">
-              <Alert className="bg-yellow-50 border-yellow-200">
-                  <Clock className="h-4 w-4 text-yellow-600" />
-                  <AlertTitle className="text-yellow-800">Verificando disponibilidad</AlertTitle>
-                  <AlertDescription className="text-yellow-700">
+              <Alert className="bg-warning/10 border-warning/30">
+                  <Clock className="h-4 w-4 text-warning" />
+                  <AlertTitle className="text-foreground">Verificando disponibilidad</AlertTitle>
+                  <AlertDescription className="text-muted-foreground">
                      La tienda está revisando si tiene stock. Podrás pagar en cuanto confirmen.
                   </AlertDescription>
               </Alert>
@@ -205,7 +205,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                   <Button disabled variant="outline" className="flex-1 opacity-50 cursor-not-allowed">
                       Esperando a la tienda...
                   </Button>
-                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
+                  <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
                       <Ban className="mr-2 h-4 w-4" /> Cancelar
                   </Button>
               </div>
@@ -220,7 +220,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                       <AlertDialogCancel>Volver</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleCancelOrder} className="bg-red-600 hover:bg-red-700">
+                      <AlertDialogAction onClick={handleCancelOrder} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                           {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                           Sí, cancelar pedido
                       </AlertDialogAction>
@@ -236,19 +236,19 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     return (
       <>
         <CardFooter className="flex-col gap-4">
-          <Alert className="bg-green-50 border-green-200">
-               <CheckCircle2 className="h-4 w-4 text-green-600" />
-               <AlertTitle className="text-green-800">¡Stock Confirmado!</AlertTitle>
-               <AlertDescription className="text-green-700">
+          <Alert className="bg-success/10 border-success/30">
+               <CheckCircle2 className="h-4 w-4 text-success" />
+               <AlertTitle className="text-foreground">¡Stock Confirmado!</AlertTitle>
+               <AlertDescription className="text-muted-foreground">
                   Tus productos están reservados. Realiza el pago para finalizar.
                </AlertDescription>
           </Alert>
-          <Button onClick={handleBuyerPayment} disabled={isUpdating} className="w-full h-12 text-lg shadow-md bg-blue-600 hover:bg-blue-700 text-white">
+          <Button onClick={handleBuyerPayment} disabled={isUpdating} className="w-full h-12 text-lg shadow-md">
               {isUpdating ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
               Pagar ${order.total.toFixed(2)} Ahora
           </Button>
           <p className="text-xs text-muted-foreground text-center">* Procesado seguro vía MercadoPago</p>
-          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 w-full" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
+          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
               <Ban className="mr-2 h-3 w-3" /> Cancelar este pedido
           </Button>
         </CardFooter>
@@ -262,7 +262,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Volver</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleCancelOrder} className="bg-red-600 hover:bg-red-700">
+                    <AlertDialogAction onClick={handleCancelOrder} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                         {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Sí, cancelar pedido
                     </AlertDialogAction>
@@ -276,10 +276,10 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   // --- ESCENARIO 3: TIENDA CONFIRMA STOCK ---
   if (isStoreOwner && order.status === 'Pendiente de Confirmación') {
       return (
-         <CardFooter className="flex-col items-start gap-4 pt-4 border-t bg-orange-50/30">
+         <CardFooter className="flex-col items-start gap-4 pt-4 border-t bg-warning/5">
             <div className="flex items-center gap-2 w-full">
-                <ShoppingBag className="text-orange-600 h-5 w-5" />
-                <span className="font-semibold text-orange-800">Solicitud de Stock</span>
+                <ShoppingBag className="text-warning h-5 w-5" />
+                <span className="font-semibold text-foreground">Solicitud de Stock</span>
             </div>
             <CardDescription>
                 Revisa si tienes los productos. Si aceptas, el cliente podrá pagar.
@@ -289,7 +289,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                     onClick={() => handleUpdateStatus('Rechazado')} 
                     disabled={isUpdating} 
                     variant="outline" 
-                    className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
+                    className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
                  >
                     <XCircle className="mr-2 h-4 w-4" />
                     Sin Stock
@@ -297,7 +297,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                 <Button 
                     onClick={() => handleUpdateStatus('Pendiente de Pago')} 
                     disabled={isUpdating} 
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
                 >
                     {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                     Tengo Stock
@@ -311,10 +311,10 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   if (isStoreOwner && order.status === 'Pendiente de Pago') {
     return (
         <CardFooter className="flex-col items-start gap-4 pt-4 border-t">
-            <Alert className="bg-blue-50 border-blue-200">
-                 <CreditCard className="h-4 w-4 text-blue-600" />
-                 <AlertTitle className="text-blue-800">Esperando Pago</AlertTitle>
-                 <AlertDescription className="text-blue-700">
+            <Alert className="bg-info/10 border-info/30">
+                 <CreditCard className="h-4 w-4 text-info" />
+                 <AlertTitle className="text-foreground">Esperando Pago</AlertTitle>
+                 <AlertDescription className="text-muted-foreground">
                     Has confirmado el stock. Esperando que el cliente complete el pago.
                  </AlertDescription>
             </Alert>
@@ -325,13 +325,13 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   // --- VISTA TIENDA: ESPERANDO AL REPARTIDOR ---
   if (isStoreOwner && ['Listo para recoger', 'En camino', 'En reparto'].includes(order.status)) {
       return (
-        <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-blue-50/30">
-            <Alert className="bg-blue-50 border-blue-200">
-                <Clock className="h-4 w-4 text-blue-600" />
-                <AlertTitle className="text-blue-800">
+        <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-info/5">
+            <Alert className="bg-info/10 border-info/30">
+                <Clock className="h-4 w-4 text-info" />
+                <AlertTitle className="text-foreground">
                     {order.status === 'Listo para recoger' ? 'Buscando repartidor' : order.status === 'En camino' ? 'Repartidor en camino a retirarlo' : 'En camino al cliente'}
                 </AlertTitle>
-                <AlertDescription className="text-blue-700">
+                <AlertDescription className="text-muted-foreground">
                     {order.status === 'Listo para recoger'
                         ? 'Avisamos a los repartidores disponibles. En cuanto uno lo acepte, te avisamos.'
                         : 'El repartidor se encarga del resto — vos ya hiciste tu parte.'}

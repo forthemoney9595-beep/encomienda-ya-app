@@ -260,9 +260,9 @@ export default function ProductManagementPage() {
 
        {/* ✅ TABLA DE LIMPIEZA (Solo visible si activas el bichito) */}
        {showDebug && (
-           <Card className="mb-8 border-red-200 bg-red-50/20">
+           <Card className="mb-8 border-destructive/30 bg-destructive/10">
                <CardHeader>
-                   <CardTitle className="text-red-700 flex items-center gap-2">
+                   <CardTitle className="text-destructive flex items-center gap-2">
                         <Trash2 className="h-5 w-5"/> MODO LIMPIEZA ACTIVADO
                    </CardTitle>
                    <CardDescription>Aquí aparecen TODOS los items. Borra los que no tengan nombre.</CardDescription>
@@ -288,7 +288,7 @@ export default function ProductManagementPage() {
                                    <TableRow key={p.id}>
                                        <TableCell className="font-mono text-xs">{p.id}</TableCell>
                                        <TableCell>
-                                           {p.name ? p.name : <span className="text-red-600 font-bold">⚠️ SIN NOMBRE</span>}
+                                           {p.name ? p.name : <span className="text-destructive font-bold">⚠️ SIN NOMBRE</span>}
                                        </TableCell>
                                        <TableCell>
                                            <Button variant="destructive" size="sm" onClick={() => handleDelete(p)}>
@@ -325,7 +325,7 @@ export default function ProductManagementPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
-            <Card key={product.id} className={`flex flex-col overflow-hidden group hover:shadow-lg transition-shadow ${!product.available ? 'opacity-75 border-dashed' : ''} ${product.isFeatured ? 'ring-2 ring-yellow-400' : ''}`}>
+            <Card key={product.id} className={`flex flex-col overflow-hidden group hover:shadow-lg transition-shadow ${!product.available ? 'opacity-75 border-dashed' : ''} ${product.isFeatured ? 'ring-2 ring-warning' : ''}`}>
               <div className="relative h-48 w-full bg-muted flex items-center justify-center overflow-hidden">
                 {product.imageUrl ? (
                   <img 
@@ -341,8 +341,8 @@ export default function ProductManagementPage() {
                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
                     <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">{product.category || 'Sin cat.'}</span>
                     {product.isFeatured && (
-                        <span className="bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-md font-bold flex items-center gap-1">
-                            <Star className="h-3 w-3 fill-yellow-900" /> TOP
+                        <span className="bg-warning text-warning-foreground text-xs px-2 py-1 rounded-md font-bold flex items-center gap-1">
+                            <Star className="h-3 w-3 fill-current" /> TOP
                         </span>
                     )}
                 </div>
@@ -356,10 +356,10 @@ export default function ProductManagementPage() {
               
               <CardHeader className="p-4 pb-2">
                 <div className="flex justify-between items-start">
-                  <CardTitle className={`text-lg line-clamp-1 ${!product.name ? 'text-red-500 italic' : ''}`} title={product.name}>
+                  <CardTitle className={`text-lg line-clamp-1 ${!product.name ? 'text-destructive italic' : ''}`} title={product.name}>
                       {product.name || '⚠️ Sin Nombre'}
                   </CardTitle>
-                  <span className="font-bold text-green-600 flex items-center">
+                  <span className="font-bold text-foreground flex items-center">
                     ${(product.price || 0).toFixed(2)}
                   </span>
                 </div>
@@ -376,7 +376,7 @@ export default function ProductManagementPage() {
                     <Button 
                     variant="ghost" 
                     size="icon" 
-                    className={`h-8 w-8 ${product.available ? 'text-green-600' : 'text-muted-foreground'}`}
+                    className={`h-8 w-8 ${product.available ? 'text-success' : 'text-muted-foreground'}`}
                     onClick={() => toggleAvailability(product)}
                     title={product.available ? "Marcar como Agotado" : "Marcar como Disponible"}
                     >
@@ -386,7 +386,7 @@ export default function ProductManagementPage() {
                     <Button 
                     variant="ghost" 
                     size="icon" 
-                    className={`h-8 w-8 ${product.isFeatured ? 'text-yellow-500' : 'text-muted-foreground'}`}
+                    className={`h-8 w-8 ${product.isFeatured ? 'text-warning' : 'text-muted-foreground'}`}
                     onClick={() => toggleFeatured(product)}
                     >
                     <Star className={`h-4 w-4 ${product.isFeatured ? 'fill-current' : ''}`} />

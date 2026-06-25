@@ -160,11 +160,11 @@ export default function StoreOrdersView() {
         <TabsList className="grid w-full grid-cols-4 mb-6">
           <TabsTrigger value="pending" className="relative">
              Nuevos
-             {pendingOrders.length > 0 && <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingOrders.length}</span>}
+             {pendingOrders.length > 0 && <span className="ml-2 bg-destructive text-destructive-foreground text-[10px] px-1.5 py-0.5 rounded-full">{pendingOrders.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="active">En Curso ({activeOrders.length})</TabsTrigger>
           <TabsTrigger value="history">Historial</TabsTrigger>
-          <TabsTrigger value="wallet" className="text-green-700 font-semibold"><Wallet className="h-4 w-4 mr-2"/> Billetera</TabsTrigger>
+          <TabsTrigger value="wallet" className="text-success font-semibold"><Wallet className="h-4 w-4 mr-2"/> Billetera</TabsTrigger>
         </TabsList>
 
         {/* PESTAÑA PENDIENTES */}
@@ -184,9 +184,9 @@ export default function StoreOrdersView() {
                         onReject={() => handleRejectOrder(order)} 
                         actionLabel="Confirmar Stock"
                         actionIcon={CheckCircle2}
-                        statusColor="border-l-orange-500"
+                        statusColor="border-l-warning"
                         statusLabel="Solicitud Nueva"
-                        statusBadgeColor="bg-orange-100 text-orange-800 border-orange-200"
+                        statusBadgeColor="bg-warning/15 text-warning border-warning/30"
                     />
                 ))
             )}
@@ -199,13 +199,13 @@ export default function StoreOrdersView() {
                 let label = "";
                 let icon = null;
                 let isDisabled = false;
-                let badgeColor = "bg-blue-100 text-blue-800 border-blue-200"; 
+                let badgeColor = "bg-info/15 text-info border-info/30";
 
                 if (order.status === 'Pendiente de Pago') {
                     label = "Esperando Pago del Cliente...";
                     icon = Clock;
                     isDisabled = true;
-                    badgeColor = "bg-yellow-100 text-yellow-800 border-yellow-200";
+                    badgeColor = "bg-warning/15 text-warning border-warning/30";
                 } else if (order.status === 'En preparación') {
                     action = () => handleNotifyDriver(order);
                     
@@ -218,12 +218,12 @@ export default function StoreOrdersView() {
                         icon = Utensils;
                         isDisabled = false;
                     }
-                    badgeColor = "bg-orange-100 text-orange-800 border-orange-200"; 
+                    badgeColor = "bg-warning/15 text-warning border-warning/30";
                 } else if (order.status === 'En reparto') {
                     label = "En camino con Repartidor";
                     icon = Bike;
                     isDisabled = true;
-                    badgeColor = "bg-blue-100 text-blue-800 border-blue-200";
+                    badgeColor = "bg-info/15 text-info border-info/30";
                 }
 
                 return (
@@ -234,7 +234,7 @@ export default function StoreOrdersView() {
                         actionLabel={label}
                         actionIcon={icon}
                         isDisabled={isDisabled}
-                        statusColor="border-l-blue-500"
+                        statusColor="border-l-info"
                         statusLabel={order.status}
                         statusBadgeColor={badgeColor}
                     />
@@ -254,9 +254,9 @@ export default function StoreOrdersView() {
                     key={order.id} 
                     order={order} 
                     isDisabled={true} 
-                    statusColor="border-l-gray-400"
+                    statusColor="border-l-border"
                     statusLabel={order.status}
-                    statusBadgeColor="bg-gray-100 text-gray-800 border-gray-200"
+                    statusBadgeColor="bg-muted text-muted-foreground border-border"
                 />
             ))}
         </TabsContent>
@@ -264,30 +264,30 @@ export default function StoreOrdersView() {
         {/* ✅ NUEVA PESTAÑA BILLETERA */}
         <TabsContent value="wallet" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
              <div className="grid gap-4 md:grid-cols-2">
-                <Card className="border-l-4 border-l-blue-600 shadow-md">
+                <Card className="border-l-4 border-l-info shadow-md">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <Clock className="h-4 w-4" /> Saldo Pendiente de Pago
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-blue-700">${financeStats.pendingBalance.toLocaleString()}</div>
+                        <div className="text-3xl font-bold text-info">${financeStats.pendingBalance.toLocaleString()}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             Ventas entregadas que aún no han sido liquidadas por la plataforma.
                         </p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-l-4 border-l-green-600 shadow-sm bg-green-50/30">
+                <Card className="border-l-4 border-l-success shadow-sm bg-success/5">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-green-600" /> Última Liquidación Recibida
+                            <CheckCircle2 className="h-4 w-4 text-success" /> Última Liquidación Recibida
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         {financeStats.lastPayoutDate ? (
                             <>
-                                <div className="text-xl font-bold text-green-800">
+                                <div className="text-xl font-bold text-success">
                                     {format(financeStats.lastPayoutDate, "d 'de' MMMM", { locale: es })}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
@@ -309,7 +309,7 @@ export default function StoreOrdersView() {
                 <CardContent>
                     {financeStats.pendingBalance === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
-                            <CheckCircle2 className="mx-auto h-8 w-8 text-green-500 mb-2" />
+                            <CheckCircle2 className="mx-auto h-8 w-8 text-success mb-2" />
                             <p>¡Todo al día! No tienes ventas pendientes de cobro.</p>
                         </div>
                     ) : (
@@ -322,7 +322,7 @@ export default function StoreOrdersView() {
                                             <p className="font-medium text-sm">Pedido #{order.id.substring(0,6)}</p>
                                             <p className="text-xs text-muted-foreground">{format(order.createdAt?.toDate ? order.createdAt.toDate() : new Date(), "d MMM, HH:mm", { locale: es })}</p>
                                         </div>
-                                        <div className="font-bold text-blue-600">
+                                        <div className="font-bold text-info">
                                             +${(order.subtotal || 0).toLocaleString()}
                                         </div>
                                     </div>
@@ -347,7 +347,7 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <CardTitle className="text-base">Pedido #{order.id.substring(0, 6)}</CardTitle>
-                            <Badge className={`${statusBadgeColor || 'bg-gray-100 text-gray-800'} border px-2 py-0.5 font-medium`}>
+                            <Badge className={`${statusBadgeColor || 'bg-muted text-muted-foreground'} border px-2 py-0.5 font-medium`}>
                                 {statusLabel || order.status}
                             </Badge>
                         </div>
@@ -357,7 +357,7 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                     </div>
                     
                     {order.paymentStatus === 'paid' && (
-                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                         <Badge variant="outline" className="bg-success/15 text-success border-success/30">
                             <CreditCard className="h-3 w-3 mr-1" /> Pagado
                          </Badge>
                     )}
@@ -366,20 +366,20 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
             <CardContent className="py-4 space-y-3">
                 <div className="flex justify-between items-center">
                     <p className="text-sm font-medium">Cliente: <span className="text-muted-foreground">{order.customerName}</span></p>
-                    <p className="font-bold text-base text-green-700">${order.total.toLocaleString()}</p>
+                    <p className="font-bold text-base text-success">${order.total.toLocaleString()}</p>
                 </div>
                 
                 <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2 border">
                     {order.items?.map((item: any, i: number) => (
                         <div key={i} className="flex justify-between items-start">
-                            <span className="font-medium text-gray-700">{item.quantity}x {item.title || item.name}</span>
-                            <span className="text-gray-500">${(item.price * item.quantity).toLocaleString()}</span>
+                            <span className="font-medium text-foreground">{item.quantity}x {item.title || item.name}</span>
+                            <span className="text-muted-foreground">${(item.price * item.quantity).toLocaleString()}</span>
                         </div>
                     ))}
                 </div>
                 
                 {order.readyForPickup && order.status === 'En preparación' && (
-                    <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-100">
+                    <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 p-2 rounded border border-warning/30">
                         <Megaphone className="h-3 w-3 animate-pulse" />
                         <span>Buscando repartidor... (Alerta enviada)</span>
                     </div>
@@ -387,27 +387,27 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
             </CardContent>
             
             {/* ✅ FOOTER SIEMPRE VISIBLE PARA NAVEGACIÓN */}
-            <CardFooter className="bg-gray-50/50 flex flex-wrap gap-2 justify-end border-t p-3">
-                
+            <CardFooter className="bg-muted/20 flex flex-wrap gap-2 justify-end border-t p-3">
+
                 {/* 1. Botón Universal: Ver Detalles / Chat */}
                 <Link href={`/orders/${order.id}`} className="flex-1 sm:flex-none">
-                    <Button variant="secondary" size="sm" className="w-full bg-white border border-gray-200 hover:bg-gray-100 text-gray-700">
+                    <Button variant="secondary" size="sm" className="w-full">
                         <Eye className="mr-2 h-4 w-4" /> Ver Detalles / Chat
                     </Button>
                 </Link>
 
                 {/* 2. Botón Rechazar */}
                 {onReject && (
-                    <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50 border-red-200 flex-1 sm:flex-none" onClick={onReject}>
+                    <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 border-destructive/30 flex-1 sm:flex-none" onClick={onReject}>
                         Rechazar
                     </Button>
                 )}
-                
+
                 {/* 3. Botón Acción Principal (Confirmar / Llamar Delivery) */}
                 {onAction && actionLabel && (
-                    <Button 
-                        size="sm" 
-                        className={`${isDisabled ? 'bg-muted text-muted-foreground opacity-80' : 'bg-green-600 hover:bg-green-700 text-white shadow-sm'} flex-1 sm:flex-none`} 
+                    <Button
+                        size="sm"
+                        className={`${isDisabled ? 'bg-muted text-muted-foreground opacity-80' : 'bg-success hover:bg-success/90 text-success-foreground shadow-sm'} flex-1 sm:flex-none`}
                         onClick={onAction}
                         disabled={isDisabled && !actionLabel.includes("Reenviar")} 
                     >

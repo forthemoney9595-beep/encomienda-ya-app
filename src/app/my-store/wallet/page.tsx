@@ -170,23 +170,22 @@ export default function StoreWalletPage() {
     <div className="container mx-auto pb-20 space-y-6">
       <PageHeader title="Billetera de Tienda" description={`Gestión financiera de ${myStore?.name || 'mi tienda'}.`} />
 
-      <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 border-blue-200 shadow-md">
+      <Card className="bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30 shadow-md">
           <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium text-blue-800 flex items-center gap-2">
-                  <Wallet className="h-5 w-5" /> Saldo Disponible
+              <CardTitle className="text-lg font-medium text-foreground flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-primary" /> Saldo Disponible
               </CardTitle>
-              {/* ✅ Muestra el 6% real */}
-              <CardDescription className="text-blue-700/80">
+              <CardDescription className="text-muted-foreground">
                   Neto (Comisión actual: {financialSummary.commissionRate}%)
               </CardDescription>
           </CardHeader>
           <CardContent>
-              <div className="text-4xl font-bold text-blue-900 mb-4">
+              <div className="text-4xl font-bold text-foreground mb-4">
                   ${financialSummary.availableBalance.toLocaleString()}
               </div>
               <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
                   <DialogTrigger asChild>
-                      <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">Solicitar Retiro</Button>
+                      <Button className="shadow-sm">Solicitar Retiro</Button>
                   </DialogTrigger>
                   <DialogContent>
                       <DialogHeader>
@@ -215,11 +214,11 @@ export default function StoreWalletPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ventas Totales</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold text-green-700">+${financialSummary.totalSalesRevenue.toLocaleString()}</div></CardContent>
+            <CardContent><div className="text-2xl font-bold text-success">+${financialSummary.totalSalesRevenue.toLocaleString()}</div></CardContent>
         </Card>
         <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Retirado</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold text-orange-600">-${financialSummary.totalWithdrawn.toLocaleString()}</div></CardContent>
+            <CardContent><div className="text-2xl font-bold text-muted-foreground">-${financialSummary.totalWithdrawn.toLocaleString()}</div></CardContent>
         </Card>
       </div>
 
@@ -249,7 +248,7 @@ export default function StoreWalletPage() {
                       {orders?.map((o) => (
                           <div key={o.id} className="flex justify-between items-center p-3 border rounded text-sm">
                               <span>Orden #{o.id.slice(0,6)}</span>
-                              <span className="font-bold text-green-600">
+                              <span className="font-bold text-success">
                                   +${((o.total || 0) - (o.deliveryFee || 0)) * (1 - (financialSummary.commissionRate / 100))}
                               </span>
                           </div>

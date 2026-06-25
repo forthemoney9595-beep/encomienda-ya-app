@@ -246,17 +246,17 @@ export default function MyStorePage() {
                         onClick={handleGetLocation}
                         disabled={isLocating}
                         title="Actualizar ubicación GPS del mapa"
-                        className={coords ? "bg-green-600 hover:bg-green-700 text-white" : ""}
+                        className={coords ? "bg-success hover:bg-success/90 text-success-foreground" : ""}
                     >
-                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : 
-                         coords ? <CheckCircle2 className="h-4 w-4" /> : <LocateFixed className="h-4 w-4 text-blue-600" />}
+                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> :
+                         coords ? <CheckCircle2 className="h-4 w-4" /> : <LocateFixed className="h-4 w-4 text-info" />}
                     </Button>
                 </div>
                 
                 {/* Feedback Visual Claro */}
                 {coords ? (
                     <div className="flex justify-between items-center text-xs">
-                        <span className="text-green-600 flex items-center gap-1 font-medium">
+                        <span className="text-success flex items-center gap-1 font-medium">
                             <MapPin className="h-3 w-3"/> Mapa configurado correctamente
                         </span>
                         <span className="text-muted-foreground text-[10px]">
@@ -264,7 +264,7 @@ export default function MyStorePage() {
                         </span>
                     </div>
                 ) : (
-                    <p className="text-xs text-amber-600 flex items-center gap-1 font-medium">
+                    <p className="text-xs text-warning flex items-center gap-1 font-medium">
                         <AlertTriangle className="h-3 w-3"/> Importante: Presiona el botón GPS para activar el mapa.
                     </p>
                 )}
