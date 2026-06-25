@@ -45,6 +45,12 @@ export async function POST(request: Request) {
     }
     const storeData = storeDoc.data();
 
+    // Defensa en profundidad: hasta ahora nada del lado servidor bloqueaba pedidos a una
+    // tienda pausada/cerrada (solo era un filtro visual del cliente).
+    if (storeData?.manuallyPaused) {
+        return NextResponse.json({ error: "Esta tienda pausó temporalmente los pedidos." }, { status: 400 });
+    }
+
     // Obtener configuración global
     const platformConfigSnap = await adminDb.collection("config").doc("platform").get();
     const platformConfig = platformConfigSnap.data() || {};

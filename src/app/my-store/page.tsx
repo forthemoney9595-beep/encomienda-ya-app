@@ -10,10 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle, PauseCircle } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
 import { useRouter } from 'next/navigation';
+import { Switch } from '@/components/ui/switch';
 
 export default function MyStorePage() {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -29,6 +30,11 @@ export default function MyStorePage() {
 
   // Estado para Horarios
   const [schedule, setSchedule] = useState({ open: '09:00', close: '22:00' });
+
+  // Pausa manual: se guarda al toque (no espera a "Guardar Cambios") porque es una
+  // acción de emergencia ("me quedé sin stock/personal"), no un dato de perfil.
+  const [manuallyPaused, setManuallyPaused] = useState(false);
+  const [isTogglingPause, setIsTogglingPause] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -67,6 +73,8 @@ export default function MyStorePage() {
           if (data.schedule) {
               setSchedule(data.schedule);
           }
+
+          setManuallyPaused(!!data.manuallyPaused);
         }
       } catch (error) {
         console.error("Error cargando tienda:", error);
@@ -175,16 +183,52 @@ export default function MyStorePage() {
     }
   };
 
+  const handleTogglePause = async (checked: boolean) => {
+    if (!firestore || !userProfile?.storeId) return;
+    setIsTogglingPause(true);
+    try {
+      await updateDoc(doc(firestore, 'stores', userProfile.storeId), { manuallyPaused: checked });
+      setManuallyPaused(checked);
+      toast({
+        title: checked ? 'Tienda pausada' : 'Tienda reactivada',
+        description: checked
+          ? 'No vas a recibir pedidos nuevos hasta que la reactives.'
+          : 'Ya podés volver a recibir pedidos.',
+      });
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo cambiar el estado de la tienda.' });
+    } finally {
+      setIsTogglingPause(false);
+    }
+  };
+
   if (authLoading || isLoading) {
     return <div className="flex justify-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
   return (
     <div className="container max-w-3xl mx-auto space-y-6 pb-20">
-      <PageHeader 
-        title="Editar Mi Tienda" 
+      <PageHeader
+        title="Editar Mi Tienda"
         description="Gestiona la apariencia y datos de tu negocio."
       />
+
+      <Card className={manuallyPaused ? 'border-destructive/40 bg-destructive/5' : ''}>
+        <CardContent className="flex items-center justify-between gap-4 py-5">
+          <div className="flex items-center gap-3">
+            <PauseCircle className={`h-6 w-6 ${manuallyPaused ? 'text-destructive' : 'text-muted-foreground'}`} />
+            <div>
+              <p className="font-semibold">Pausar tienda temporalmente</p>
+              <p className="text-sm text-muted-foreground">
+                {manuallyPaused
+                  ? 'Pausada: no te llegan pedidos nuevos aunque estés en horario de atención.'
+                  : 'Si te quedaste sin stock o personal, pausá y no te van a llegar pedidos nuevos.'}
+              </p>
+            </div>
+          </div>
+          <Switch checked={manuallyPaused} onCheckedChange={handleTogglePause} disabled={isTogglingPause} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

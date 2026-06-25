@@ -21,6 +21,7 @@ interface StoreData {
   imageUrl?: string;
   schedule?: { open: string; close: string };
   rating?: number;
+  manuallyPaused?: boolean;
 }
 
 interface Product {
@@ -90,9 +91,12 @@ export default function StorePublicPage() {
   }, [rawProducts, rawLegacyProducts]);
 
   // 4. Estado de Apertura
-  const storeStatus = useMemo(() => {
-      if (!store?.schedule) return { isOpen: true, label: 'Abierto' }; 
-      
+  const storeStatus = useMemo((): { isOpen: boolean; label: string; timeRange?: string; paused?: boolean } => {
+      if (store?.manuallyPaused) {
+          return { isOpen: false, label: 'Pausada temporalmente', paused: true };
+      }
+      if (!store?.schedule) return { isOpen: true, label: 'Abierto' };
+
       const now = new Date();
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       
@@ -125,8 +129,10 @@ export default function StorePublicPage() {
     if (!storeStatus.isOpen) {
         toast({
             variant: "destructive",
-            title: "Tienda Cerrada",
-            description: `El local abre a las ${store?.schedule?.open}. No se aceptan pedidos ahora.`
+            title: storeStatus.paused ? "Tienda en pausa" : "Tienda Cerrada",
+            description: storeStatus.paused
+                ? "La tienda pausó los pedidos temporalmente. Probá más tarde."
+                : `El local abre a las ${store?.schedule?.open}. No se aceptan pedidos ahora.`
         });
         return;
     }
@@ -220,8 +226,14 @@ export default function StorePublicPage() {
 
       {!storeStatus.isOpen && (
           <div className="bg-destructive/10 border border-destructive/30 text-foreground p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
-              <p className="font-semibold">🔴 Este local se encuentra cerrado en este momento.</p>
-              <p className="text-sm">Puedes ver el menú, pero no podrás realizar pedidos hasta que abra.</p>
+              <p className="font-semibold">
+                  {storeStatus.paused ? '⏸️ Este local pausó temporalmente los pedidos.' : '🔴 Este local se encuentra cerrado en este momento.'}
+              </p>
+              <p className="text-sm">
+                  {storeStatus.paused
+                      ? 'Puedes ver el menú, pero la tienda no está aceptando pedidos en este momento.'
+                      : 'Puedes ver el menú, pero no podrás realizar pedidos hasta que abra.'}
+              </p>
           </div>
       )}
 
