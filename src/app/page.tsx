@@ -10,7 +10,8 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight } from 'lucide-react'; 
+import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight, Utensils, Shirt, Package, LayoutGrid } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Rating } from '@/components/ui/rating';
@@ -88,8 +89,8 @@ const FeaturesSection = () => (
             <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 lg:max-w-none lg:grid-cols-3 lg:gap-y-16">
                 <div className="relative pl-16">
                     <dt className="text-base font-semibold leading-7 text-foreground">
-                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                            <Zap className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
+                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+                            <Zap className="h-6 w-6 text-primary" aria-hidden="true" />
                         </div>
                         Entregas Flash
                     </dt>
@@ -99,8 +100,8 @@ const FeaturesSection = () => (
                 </div>
                 <div className="relative pl-16">
                     <dt className="text-base font-semibold leading-7 text-foreground">
-                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                            <ShieldCheck className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
+                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-success/15">
+                            <ShieldCheck className="h-6 w-6 text-success" aria-hidden="true" />
                         </div>
                         Pagos Seguros
                     </dt>
@@ -110,8 +111,8 @@ const FeaturesSection = () => (
                 </div>
                 <div className="relative pl-16">
                     <dt className="text-base font-semibold leading-7 text-foreground">
-                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                            <Smartphone className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
+                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-info/15">
+                            <Smartphone className="h-6 w-6 text-info" aria-hidden="true" />
                         </div>
                         Todo en tu bolsillo
                     </dt>
@@ -125,6 +126,58 @@ const FeaturesSection = () => (
 );
 
 // --- COMPONENTES DE LA APP (MODO USUARIO) ---
+
+// Ícono + color por categoría — paleta fija que rota para categorías nuevas/desconocidas
+const CATEGORY_STYLES: { icon: any; bg: string; text: string }[] = [
+  { icon: LayoutGrid, bg: 'bg-primary/15', text: 'text-primary' },
+  { icon: Utensils, bg: 'bg-warning/15', text: 'text-warning' },
+  { icon: Shirt, bg: 'bg-info/15', text: 'text-info' },
+  { icon: Package, bg: 'bg-success/15', text: 'text-success' },
+];
+
+function getCategoryStyle(category: string, index: number) {
+  const c = category.toLowerCase();
+  if (c === 'todas') return CATEGORY_STYLES[0];
+  if (c.includes('comida') || c.includes('food')) return CATEGORY_STYLES[1];
+  if (c.includes('ropa') || c.includes('cloth')) return CATEGORY_STYLES[2];
+  return CATEGORY_STYLES[(index % (CATEGORY_STYLES.length - 1)) + 1];
+}
+
+interface CategoryChipsProps {
+  categories: string[];
+  selectedCategory: string;
+  setSelectedCategory: (category: string) => void;
+}
+
+const CategoryChips = ({ categories, selectedCategory, setSelectedCategory }: CategoryChipsProps) => (
+  <div className="flex gap-3 overflow-x-auto pb-2 mb-6 no-scrollbar">
+    {categories.map((cat, i) => {
+      const style = getCategoryStyle(cat, i);
+      const Icon = style.icon;
+      const isActive = selectedCategory === cat;
+      return (
+        <button
+          key={cat}
+          onClick={() => setSelectedCategory(cat)}
+          className={cn(
+            'flex flex-col items-center gap-1.5 shrink-0 transition-transform',
+            isActive ? 'scale-105' : 'opacity-80 hover:opacity-100'
+          )}
+        >
+          <div className={cn(
+            'h-12 w-12 rounded-2xl flex items-center justify-center shadow-sm transition-all',
+            isActive ? `${style.bg} ring-2 ring-offset-2 ring-offset-background ${style.text.replace('text-', 'ring-')}` : style.bg
+          )}>
+            <Icon className={cn('h-5 w-5', style.text)} />
+          </div>
+          <span className={cn('text-[11px] font-medium whitespace-nowrap', isActive ? 'text-foreground' : 'text-muted-foreground')}>
+            {cat}
+          </span>
+        </button>
+      );
+    })}
+  </div>
+);
 
 interface FilterBarProps {
   searchTerm: string;
@@ -319,12 +372,28 @@ function HomeContent() {
 
   return (
     <div className="container mx-auto animate-in fade-in duration-500">
-      <PageHeader
-        title={`Hola, ${userProfile?.displayName || 'Invitado'} 👋`}
-        description="¿Qué se te antoja comer hoy?"
+      <div className="flex items-center gap-4 mb-6">
+        <Avatar className="h-14 w-14 border-2 border-primary/30 shadow-sm">
+          <AvatarImage src={userProfile?.profileImageUrl} alt={userProfile?.displayName} />
+          <AvatarFallback className="bg-primary/15 text-primary font-bold text-lg">
+            {(userProfile?.displayName || 'I').charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div>
+          <h1 className="font-headline text-2xl font-bold leading-tight">
+            Hola, {userProfile?.displayName || 'Invitado'} 👋
+          </h1>
+          <p className="text-muted-foreground">¿Qué se te antoja comer hoy?</p>
+        </div>
+      </div>
+
+      <CategoryChips
+        categories={categories}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
       />
-      
-      <FilterBar 
+
+      <FilterBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         selectedCategory={selectedCategory}

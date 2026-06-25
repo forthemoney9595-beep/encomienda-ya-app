@@ -16,6 +16,7 @@ import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'; 
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
+import { CircularProgress } from '@/components/ui/circular-progress';
 import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, Mail, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -97,8 +98,18 @@ function OrderProgress({ status }: { status: any }) {
         return ( <div className="text-center"><Ban className="mx-auto h-12 w-12 text-destructive" /><h3 className="mt-2 text-lg font-semibold">{status}</h3><p className="text-sm text-muted-foreground">{currentStatusInfo.description}</p></div>)
     }
     const steps = DISPLAY_STEPS;
+    const CurrentIcon = currentStatusInfo.icon;
     return (
         <div className="space-y-8">
+            <div className="flex items-center gap-4">
+                <CircularProgress value={progressValue} size={64} strokeWidth={6}>
+                    <CurrentIcon className="h-6 w-6 text-primary" />
+                </CircularProgress>
+                <div>
+                    <p className="font-headline font-bold text-lg">{currentStatusInfo.label}</p>
+                    <p className="text-sm text-muted-foreground">{Math.round(progressValue)}% del camino</p>
+                </div>
+            </div>
             <div>
                 <Progress value={progressValue} className="h-2" />
                 <div className="mt-4 grid grid-cols-5 gap-2 text-center text-[10px] lg:text-xs">

@@ -100,3 +100,14 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* Oculta la barra de scroll pero deja scrollear (chips de categoría, respuestas rápidas del chat) */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
