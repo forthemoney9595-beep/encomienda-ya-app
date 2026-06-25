@@ -31,6 +31,9 @@ interface Product {
   imageUrl: string;
   available?: boolean;
   isFeatured?: boolean;
+  // Opcional: sin valor = sin límite (no rompe productos existentes que nunca tuvieron
+  // este campo). Si está definido, /api/orders/create lo valida y lo descuenta.
+  stock?: number | null;
   createdAt?: any;
   // De qué subcolección vino ('items' es la actual, 'products' es legacy) — determina
   // a qué colección apuntar al editar/borrar este producto puntual.
@@ -60,7 +63,8 @@ export default function ProductManagementPage() {
     category: 'Comida',
     imageUrl: '',
     available: true,
-    isFeatured: false
+    isFeatured: false,
+    stock: ''
   });
 
   useEffect(() => {
@@ -134,7 +138,8 @@ export default function ProductManagementPage() {
         category: product.category || 'Comida',
         imageUrl: product.imageUrl || '',
         available: product.available !== undefined ? product.available : true,
-        isFeatured: product.isFeatured || false
+        isFeatured: product.isFeatured || false,
+        stock: product.stock != null ? product.stock.toString() : ''
       });
     } else {
       setEditingProduct(null);
@@ -145,7 +150,8 @@ export default function ProductManagementPage() {
         category: 'Comida',
         imageUrl: '',
         available: true,
-        isFeatured: false
+        isFeatured: false,
+        stock: ''
       });
     }
     setIsDialogOpen(true);
@@ -169,6 +175,8 @@ export default function ProductManagementPage() {
         imageUrl: formData.imageUrl || 'https://placehold.co/400?text=Sin+Imagen',
         available: formData.available,
         isFeatured: formData.isFeatured,
+        // null = sin límite de stock; explícito para poder "borrar" el límite en una edición
+        stock: formData.stock.trim() === '' ? null : parseInt(formData.stock, 10),
         updatedAt: serverTimestamp()
       };
 
@@ -345,6 +353,11 @@ export default function ProductManagementPage() {
                             <Star className="h-3 w-3 fill-current" /> TOP
                         </span>
                     )}
+                    {product.stock != null && (
+                        <span className={`text-xs px-2 py-1 rounded-md font-medium ${product.stock <= 3 ? 'bg-destructive text-destructive-foreground' : 'bg-black/70 text-white'}`}>
+                            Quedan {product.stock}
+                        </span>
+                    )}
                 </div>
 
                 {!product.available && (
@@ -471,6 +484,19 @@ export default function ProductManagementPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="stock">Stock disponible (opcional)</Label>
+              <Input
+                id="stock"
+                type="number"
+                min="0"
+                step="1"
+                value={formData.stock}
+                onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                placeholder="Dejá vacío para stock ilimitado"
+              />
             </div>
 
             <div className="grid gap-2">
