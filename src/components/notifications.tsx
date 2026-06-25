@@ -34,10 +34,15 @@ export function Notifications() {
   useEffect(() => {
     if (!firestore || !user?.uid) return;
 
+    // IMPORTANTE: el orderBy('createdAt','desc') es obligatorio. Sin él, Firestore
+    // ordena por ID de documento (aleatorio), y al pasar de 20 notificaciones las
+    // nuevas quedaban dentro o fuera del limite al azar — la campanita fallaba de
+    // forma intermitente. Requiere el indice compuesto en firestore.indexes.json.
     const q = query(
         collection(firestore, 'notifications'),
         where('userId', '==', user.uid),
-        limit(20)
+        orderBy('createdAt', 'desc'),
+        limit(50)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

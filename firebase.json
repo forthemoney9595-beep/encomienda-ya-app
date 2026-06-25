@@ -1,7 +1,8 @@
 
 {
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "storage": {
     "bucket": "studio-354048519-4bc1e.firebasestorage.app",
