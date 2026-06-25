@@ -18,6 +18,7 @@ interface StoreData {
   address?: string;
   imageUrl?: string;
   schedule?: { open: string; close: string };
+  rating?: number;
 }
 
 interface Product {
@@ -147,45 +148,51 @@ export default function StorePublicPage() {
 
   return (
     <div className="container mx-auto">
-      {/* CABECERA */}
-      <div className="relative bg-muted/30 -mx-4 px-4 py-8 sm:mx-0 sm:rounded-xl sm:mt-4 mb-8 border-b sm:border">
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            <div className="h-24 w-24 bg-muted rounded-full flex items-center justify-center shadow-sm border overflow-hidden shrink-0">
-                {store.imageUrl ? (
-                    <img src={store.imageUrl} alt={store.name} className="h-full w-full object-cover" />
-                ) : (
-                    <StoreIcon className="h-10 w-10 text-muted-foreground" />
-                )}
-            </div>
-            <div className="text-center md:text-left space-y-2 flex-1">
-                <div className="flex flex-col md:flex-row items-center gap-2">
-                    <h1 className="font-headline text-3xl font-bold tracking-tight">{store.name}</h1>
-                    <Badge variant={storeStatus.isOpen ? "default" : "destructive"} className={`gap-1 ${storeStatus.isOpen ? 'bg-success hover:bg-success/90 text-success-foreground' : ''}`}>
-                        {storeStatus.isOpen ? <Clock className="h-3 w-3" /> : <Info className="h-3 w-3" />}
-                        {storeStatus.label}
-                    </Badge>
+      {/* BANNER */}
+      <div className="relative -mx-4 sm:mx-0 sm:mt-4 mb-6">
+        <div className="relative aspect-[2.5/1] sm:rounded-2xl overflow-hidden bg-muted">
+            {store.imageUrl ? (
+                <img src={store.imageUrl} alt={store.name} className="h-full w-full object-cover" />
+            ) : (
+                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+                    <StoreIcon className="h-16 w-16 text-primary/40" />
                 </div>
-                
-                <p className="text-muted-foreground max-w-2xl">{store.description || 'Sin descripción disponible.'}</p>
-                
-                <div className="flex flex-col md:flex-row items-center gap-4 text-sm text-muted-foreground mt-2">
-                      {store.address && (
-                        <div className="flex items-center gap-1">
-                            <MapPin className="h-4 w-4" /> 
-                            {/* ✅ AQUI APLICAMOS LA LIMPIEZA */}
-                            {cleanAddress(store.address)}
-                        </div>
-                    )}
-                    {store.schedule && (
-                         <div className="flex items-center gap-1 font-medium text-foreground">
-                            <Clock className="h-4 w-4 text-primary" /> {storeStatus.timeRange} hs
-                        </div>
-                    )}
-                </div>
-            </div>
+            )}
         </div>
       </div>
-      
+
+      {/* INFO */}
+      <div className="px-4 sm:px-0 mb-8 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight">{store.name}</h1>
+              <Badge variant={storeStatus.isOpen ? "default" : "destructive"} className={`gap-1 ${storeStatus.isOpen ? 'bg-success hover:bg-success/90 text-success-foreground' : ''}`}>
+                  {storeStatus.isOpen ? <Clock className="h-3 w-3" /> : <Info className="h-3 w-3" />}
+                  {storeStatus.label}
+              </Badge>
+              {(store.rating || 0) > 0 && (
+                  <div className="flex items-center gap-1 text-sm font-medium bg-warning/15 text-warning px-2 py-0.5 rounded-full">
+                      <Star className="h-3.5 w-3.5 fill-current" /> {store.rating?.toFixed(1)}
+                  </div>
+              )}
+          </div>
+
+          <p className="text-muted-foreground max-w-2xl">{store.description || 'Sin descripción disponible.'}</p>
+
+          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground pt-1">
+                {store.address && (
+                  <div className="flex items-center gap-1">
+                      <MapPin className="h-4 w-4" />
+                      {cleanAddress(store.address)}
+                  </div>
+              )}
+              {store.schedule && (
+                   <div className="flex items-center gap-1 font-medium text-foreground">
+                      <Clock className="h-4 w-4 text-primary" /> {storeStatus.timeRange} hs
+                  </div>
+              )}
+          </div>
+      </div>
+
       {!storeStatus.isOpen && (
           <div className="bg-destructive/10 border border-destructive/30 text-foreground p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
               <p className="font-semibold">🔴 Este local se encuentra cerrado en este momento.</p>
