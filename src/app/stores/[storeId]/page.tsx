@@ -33,6 +33,7 @@ interface Product {
   imageUrl: string;
   available?: boolean;
   isFeatured?: boolean;
+  stock?: number | null;
   createdAt?: any;
 }
 
@@ -323,8 +324,9 @@ function StoreNotFound({ router }: { router: any }) {
 }
 
 function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Product, onAdd: (p: Product) => void, isFeatured?: boolean, isDisabled?: boolean }) {
+    const outOfStock = product.stock != null && product.stock <= 0;
     return (
-        <Card className={`flex flex-col overflow-hidden border hover:shadow-md transition-all ${isFeatured ? 'border-warning/30 bg-warning/5' : ''} ${isDisabled ? 'opacity-70 grayscale' : ''}`}>
+        <Card className={`flex flex-col overflow-hidden border hover:shadow-md transition-all ${isFeatured ? 'border-warning/30 bg-warning/5' : ''} ${(isDisabled || outOfStock) ? 'opacity-70 grayscale' : ''}`}>
             <div className="relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden">
                 {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
@@ -336,6 +338,11 @@ function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Prod
                         POPULAR
                     </span>
                 )}
+                {!outOfStock && product.stock != null && product.stock <= 3 && (
+                    <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                        Quedan {product.stock}
+                    </span>
+                )}
             </div>
             <CardHeader className="p-4 pb-0">
                 <div className="flex justify-between items-start gap-2">
@@ -345,19 +352,29 @@ function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Prod
                 <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
             </CardHeader>
             <CardFooter className="p-4 mt-auto">
-                <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} />
+                {outOfStock ? (
+                    <Button className="w-full" size="sm" disabled>Sin stock</Button>
+                ) : (
+                    <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} maxQuantity={product.stock ?? undefined} />
+                )}
             </CardFooter>
         </Card>
     );
 }
 
 function ProductRow({ product, onAdd, isDisabled }: { product: Product, onAdd: (p: Product) => void, isDisabled?: boolean }) {
+    const outOfStock = product.stock != null && product.stock <= 0;
     return (
-        <div className={cn('flex items-center gap-4 py-4 border-b last:border-0', isDisabled && 'opacity-60')}>
+        <div className={cn('flex items-center gap-4 py-4 border-b last:border-0', (isDisabled || outOfStock) && 'opacity-60')}>
             <div className="flex-1 min-w-0">
                 <h3 className="font-semibold line-clamp-1">{product.name}</h3>
                 <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>
                 <p className="font-bold text-foreground mt-1.5">${product.price}</p>
+                {outOfStock ? (
+                    <p className="text-xs font-medium text-destructive mt-1">Sin stock</p>
+                ) : product.stock != null && product.stock <= 3 ? (
+                    <p className="text-xs font-medium text-destructive mt-1">Quedan {product.stock}</p>
+                ) : null}
             </div>
             <div className="relative h-20 w-20 shrink-0">
                 <div className="h-20 w-20 rounded-xl bg-muted overflow-hidden flex items-center justify-center">
@@ -367,9 +384,11 @@ function ProductRow({ product, onAdd, isDisabled }: { product: Product, onAdd: (
                         <Package className="h-8 w-8 text-muted-foreground/50" />
                     )}
                 </div>
-                <div className="absolute -bottom-2 -right-2">
-                    <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} variant="compact" />
-                </div>
+                {!outOfStock && (
+                    <div className="absolute -bottom-2 -right-2">
+                        <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} variant="compact" maxQuantity={product.stock ?? undefined} />
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -377,12 +396,13 @@ function ProductRow({ product, onAdd, isDisabled }: { product: Product, onAdd: (
 
 // Botón "Agregar" / píldora de cantidad — refleja si el producto ya está en el carrito
 // (antes "Agregar" no cambiaba nunca, sin importar cuántas unidades ya tuvieras en el carrito).
-function QuantityControl({ product, onAdd, isDisabled, variant = 'full' }: { product: Product, onAdd: (p: Product) => void, isDisabled?: boolean, variant?: 'full' | 'compact' }) {
+function QuantityControl({ product, onAdd, isDisabled, variant = 'full', maxQuantity }: { product: Product, onAdd: (p: Product) => void, isDisabled?: boolean, variant?: 'full' | 'compact', maxQuantity?: number }) {
     const { cart, updateQuantity, removeFromCart } = useCart();
     const quantity = cart.find(i => i.id === product.id)?.quantity || 0;
+    const atMax = maxQuantity != null && quantity >= maxQuantity;
 
     const dec = () => quantity <= 1 ? removeFromCart(product.id) : updateQuantity(product.id, quantity - 1);
-    const inc = () => updateQuantity(product.id, quantity + 1);
+    const inc = () => { if (!atMax) updateQuantity(product.id, quantity + 1); };
 
     if (variant === 'compact') {
         if (quantity === 0) {
@@ -400,7 +420,7 @@ function QuantityControl({ product, onAdd, isDisabled, variant = 'full' }: { pro
             <div className="flex items-center gap-1 bg-primary text-primary-foreground rounded-full shadow-md px-1 h-7">
                 <button onClick={dec} disabled={isDisabled} className="h-5 w-5 flex items-center justify-center"><Minus className="h-3.5 w-3.5" /></button>
                 <span className="text-xs font-bold w-3 text-center">{quantity}</span>
-                <button onClick={inc} disabled={isDisabled} className="h-5 w-5 flex items-center justify-center"><Plus className="h-3.5 w-3.5" /></button>
+                <button onClick={inc} disabled={isDisabled || atMax} className="h-5 w-5 flex items-center justify-center disabled:opacity-50"><Plus className="h-3.5 w-3.5" /></button>
             </div>
         );
     }
@@ -416,7 +436,7 @@ function QuantityControl({ product, onAdd, isDisabled, variant = 'full' }: { pro
         <div className="flex items-center justify-between w-full rounded-md border border-primary/30 bg-primary/10">
             <button onClick={dec} disabled={isDisabled} className="h-9 w-10 flex items-center justify-center text-primary disabled:opacity-50"><Minus className="h-4 w-4" /></button>
             <span className="font-bold text-sm text-foreground">{quantity} en el carrito</span>
-            <button onClick={inc} disabled={isDisabled} className="h-9 w-10 flex items-center justify-center text-primary disabled:opacity-50"><Plus className="h-4 w-4" /></button>
+            <button onClick={inc} disabled={isDisabled || atMax} className="h-9 w-10 flex items-center justify-center text-primary disabled:opacity-50"><Plus className="h-4 w-4" /></button>
         </div>
     );
 }
