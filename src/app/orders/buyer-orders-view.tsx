@@ -13,6 +13,8 @@ import { Package, Clock, Truck, CheckCircle2, ChevronRight, DollarSign, ChefHat,
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { getOrderStatusKind, orderStatusBadgeClass, orderStatusTextClass } from '@/lib/order-status';
 
 export default function BuyerOrdersView() {
   const { user } = useAuth();
@@ -33,29 +35,18 @@ export default function BuyerOrdersView() {
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Cargando tus pedidos...</div>;
 
-  // 🎨 MEJORA VISUAL: Adaptado a los estados del Webhook
+  // 🎨 Ícono por estado, coloreado con el sistema semántico compartido.
   const getStatusIcon = (status: string) => {
-    // Normalizamos a minúsculas para evitar errores de tipeo
     const s = status?.toLowerCase() || '';
+    const color = orderStatusTextClass[getOrderStatusKind(status)];
 
-    if (s.includes('entregado')) return <CheckCircle2 className="h-5 w-5 text-green-600" />;
-    if (s.includes('reparto') || s.includes('camino')) return <Truck className="h-5 w-5 text-blue-500" />;
-    // Nuevo estado del Webhook:
-    if (s.includes('preparación') || s.includes('cocina')) return <ChefHat className="h-5 w-5 text-orange-500" />;
-    if (s.includes('cancelado') || s.includes('rechazado')) return <AlertCircle className="h-5 w-5 text-red-500" />;
-    
-    // Default (Pendiente)
-    return <Clock className="h-5 w-5 text-slate-400" />;
+    if (s.includes('entregado')) return <CheckCircle2 className={cn('h-5 w-5', color)} />;
+    if (s.includes('reparto') || s.includes('camino')) return <Truck className={cn('h-5 w-5', color)} />;
+    if (s.includes('preparación') || s.includes('cocina') || s.includes('listo')) return <ChefHat className={cn('h-5 w-5', color)} />;
+    if (s.includes('cancelado') || s.includes('rechazado')) return <AlertCircle className={cn('h-5 w-5', color)} />;
+    return <Clock className={cn('h-5 w-5', color)} />;
   };
 
-  const getBadgeVariant = (status: string) => {
-    const s = status?.toLowerCase() || '';
-    if (s.includes('entregado')) return 'secondary'; // Verde/Gris suave
-    if (s.includes('reparto') || s.includes('preparación')) return 'default'; // Negro/Azul sólido (Activo)
-    if (s.includes('cancelado')) return 'destructive'; // Rojo
-    return 'outline'; // Pendiente
-  };
-  
   const formatDate = (date: any) => {
     if (!date) return 'Fecha desconocida';
     try {
@@ -74,7 +65,7 @@ export default function BuyerOrdersView() {
   };
 
   return (
-    <div className="container mx-auto pb-20 px-4">
+    <div className="container mx-auto">
       <PageHeader title="Mis Pedidos" description="Sigue el estado de tus compras en tiempo real." />
       
       <div className="space-y-4">
@@ -91,10 +82,9 @@ export default function BuyerOrdersView() {
                 const isPaid = order.paymentStatus === 'paid'; 
                 
                 return (
-                    <Card 
-                        key={order.id} 
-                        // Si está pagado, borde verde. Si no, borde primario (negro/azul)
-                        className={`cursor-pointer hover:shadow-md transition-all border-l-4 group ${isPaid ? 'border-l-green-500' : 'border-l-slate-300'}`}
+                    <Card
+                        key={order.id}
+                        className={`cursor-pointer hover:shadow-md transition-all border-l-4 group ${isPaid ? 'border-l-success' : 'border-l-border'}`}
                         onClick={() => router.push(`/orders/${order.id}`)}
                     >
                         <div className="p-4 flex items-center justify-between">
@@ -109,12 +99,12 @@ export default function BuyerOrdersView() {
                                     </p>
                                     <div className="mt-2 flex flex-wrap gap-2">
                                         {/* Badge de Estado del Pedido */}
-                                        <Badge variant={getBadgeVariant(order.status)} className="text-[10px]">
+                                        <Badge variant="outline" className={cn('text-[10px]', orderStatusBadgeClass[getOrderStatusKind(order.status)])}>
                                             {order.status}
                                         </Badge>
 
                                         {/* Badge de Método de Pago */}
-                                        <Badge variant="outline" className={`text-[10px] flex items-center gap-1 ${isPaid ? 'bg-green-50 text-green-700 border-green-200' : ''}`}>
+                                        <Badge variant="outline" className={`text-[10px] flex items-center gap-1 ${isPaid ? 'bg-success/15 text-success border-success/30' : ''}`}>
                                             {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : order.paymentMethod}
                                             {isPaid && <CheckCircle2 className="h-3 w-3 ml-1" />}
                                         </Badge>
