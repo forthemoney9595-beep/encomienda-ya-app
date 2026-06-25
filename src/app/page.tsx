@@ -50,7 +50,7 @@ const HeroSection = () => (
   <div className="relative overflow-hidden bg-background py-20 sm:py-32">
     <div className="container mx-auto px-4 relative z-10">
       <div className="mx-auto max-w-2xl text-center">
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        <h1 className="font-headline text-4xl font-extrabold tracking-tight sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-amber-400 animate-in fade-in slide-in-from-bottom-4 duration-1000">
           Tu ciudad, en la puerta de tu casa.
         </h1>
         <p className="mt-6 text-lg leading-8 text-muted-foreground animate-in fade-in slide-in-from-bottom-5 duration-1000 delay-200">
@@ -71,7 +71,7 @@ const HeroSection = () => (
     
     {/* Fondo decorativo */}
     <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
-        <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#ff80b5] to-[#9089fc] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)' }} />
+        <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#F97316] to-[#fbbf24] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)' }} />
     </div>
   </div>
 );
@@ -89,7 +89,7 @@ const FeaturesSection = () => (
                 <div className="relative pl-16">
                     <dt className="text-base font-semibold leading-7 text-foreground">
                         <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                            <Zap className="h-6 w-6 text-white" aria-hidden="true" />
+                            <Zap className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
                         </div>
                         Entregas Flash
                     </dt>
@@ -100,7 +100,7 @@ const FeaturesSection = () => (
                 <div className="relative pl-16">
                     <dt className="text-base font-semibold leading-7 text-foreground">
                         <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                            <ShieldCheck className="h-6 w-6 text-white" aria-hidden="true" />
+                            <ShieldCheck className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
                         </div>
                         Pagos Seguros
                     </dt>
@@ -111,7 +111,7 @@ const FeaturesSection = () => (
                 <div className="relative pl-16">
                     <dt className="text-base font-semibold leading-7 text-foreground">
                         <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                            <Smartphone className="h-6 w-6 text-white" aria-hidden="true" />
+                            <Smartphone className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
                         </div>
                         Todo en tu bolsillo
                     </dt>
@@ -318,10 +318,10 @@ function HomeContent() {
   }
 
   return (
-    <div className="container mx-auto pb-20 animate-in fade-in duration-500">
-      <PageHeader 
-        title={`Hola, ${userProfile?.displayName || 'Invitado'} 👋`} 
-        description="¿Qué se te antoja comer hoy?" 
+    <div className="container mx-auto animate-in fade-in duration-500">
+      <PageHeader
+        title={`Hola, ${userProfile?.displayName || 'Invitado'} 👋`}
+        description="¿Qué se te antoja comer hoy?"
       />
       
       <FilterBar 
@@ -334,8 +334,8 @@ function HomeContent() {
         categories={categories}
       />
 
-      <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-        <ShoppingBag className="h-5 w-5" /> Tiendas Disponibles
+      <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
+        <ShoppingBag className="h-5 w-5 text-primary" /> Tiendas Disponibles
         <span className="text-sm font-normal text-muted-foreground ml-2">({filteredStores.length})</span>
       </h2>
 
@@ -373,9 +373,9 @@ function HomeContent() {
                                 )}
                                 <button
                                     onClick={(e) => toggleFavorite(e, store)}
-                                    className="absolute top-2 right-2 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm backdrop-blur-sm transition-all hover:scale-110 z-10"
+                                    className="absolute top-2 right-2 p-2 rounded-full bg-background/70 hover:bg-background shadow-sm backdrop-blur-sm transition-all hover:scale-110 z-10"
                                 >
-                                    <Heart className={cn("h-5 w-5 transition-colors", isFav ? "fill-red-500 text-red-500" : "text-gray-500")} />
+                                    <Heart className={cn("h-5 w-5 transition-colors", isFav ? "fill-primary text-primary" : "text-muted-foreground")} />
                                 </button>
                                 <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
                                     {store.category || 'General'}
@@ -386,8 +386,8 @@ function HomeContent() {
                                 <div className="flex justify-between items-start">
                                     <CardTitle className="text-base font-bold line-clamp-1">{store.name}</CardTitle>
                                     {(store.rating || 0) > 0 && (
-                                        <div className="flex items-center gap-1 text-xs font-medium bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
-                                            <Star className="h-3 w-3 fill-yellow-700" />
+                                        <div className="flex items-center gap-1 text-xs font-medium bg-warning/15 text-warning px-1.5 py-0.5 rounded">
+                                            <Star className="h-3 w-3 fill-current" />
                                             {store.rating?.toFixed(1)}
                                         </div>
                                     )}
@@ -406,7 +406,7 @@ function HomeContent() {
                                         {store.deliveryTime || '30-45 min'}
                                     </div>
                                     <div>
-                                        Envío: ${store.minOrder || '5.00'}
+                                        Envío: $2000
                                     </div>
                                 </div>
                             </CardContent>
