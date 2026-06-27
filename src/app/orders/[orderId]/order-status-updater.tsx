@@ -332,7 +332,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                                 onCheckedChange={() => toggleStockItem(item.id)}
                             />
                             <span className={uncheckedIds.has(item.id) ? 'line-through text-muted-foreground' : ''}>
-                                {item.quantity}x {item.name}
+                                {item.quantity}x {item.name || (item as any).title || 'Producto'}
                             </span>
                         </span>
                         <span className="text-muted-foreground">${(item.price * item.quantity).toFixed(0)}</span>
