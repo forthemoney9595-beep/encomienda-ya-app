@@ -112,6 +112,45 @@ El archivo `.env.local` con los valores reales NO va a git. Hay que copiarlo man
 - **OJO Tailwind:** ignora clases inexistentes en silencio (`bg-sucess` no pinta nada) → verificar SIEMPRE visual, no solo el build
 - **Rediseño en fases:** cliente, tienda, repartidor y admin ✅ hechos (mismos tokens). También Fase F: tienda/producto reestructurados (banner en vez de logo circular, chips de categoría con scroll-to-section, productos agrupados por categoría en filas en vez de una grilla plana, control de cantidad compartido). Pendiente: Fase J — variantes/modificadores de producto (tamaño, extras), queda anotada aparte por el alcance (toca producto+carrito+checkout a la vez)
 
+## Seguridad — Fase K (jul 2026): 4 hallazgos graves de la auditoría pre-lanzamiento, ya resueltos
+Auditoría completa (3 agentes en paralelo) encontró ~20 hallazgos; se resolvieron los 4 más
+graves (riesgo de plata real o datos personales). El resto queda anotado abajo, fuera de
+alcance de esta fase.
+- **K1** `src/app/api/webhooks/mercadopago/route.ts`: el webhook ahora valida que
+  `paymentData.transaction_amount` coincida con `order.total` (tolerancia $1) y que la orden
+  siga `Pendiente de Pago` antes de marcarla pagada. Si no coincide, no se marca pagada y
+  queda registrado en la colección `payment_mismatches` para revisión manual.
+- **K2** `storage.rules` + `image-upload.tsx`: las fotos de licencia de repartidores eran
+  legibles y sobreescribibles por cualquier usuario logueado (el path de subida no llevaba el
+  uid del dueño). Ahora `ImageUpload` recibe un `ownerId` obligatorio y el path queda
+  `carpeta/dueño/archivo` (afecta también `profiles/`, `store-banners/`, `products/`);
+  `licenses/{uid}/**` solo lo lee/escribe ese mismo usuario o un admin.
+- **K3** `firestore.rules`: la tienda y el repartidor podían escribir cualquier campo del
+  pedido (total, items, paymentStatus) por un `updateDoc` directo, evitando
+  `/api/orders/confirm-stock`. La regla de `orders` ahora restringe por
+  `affectedKeys().hasOnly([...])` y por valor de `status` permitido, igual que ya estaba hecho
+  para el comprador.
+
+**Fuera de alcance de la Fase K, anotado para después:** ninguna ruta de la API verifica el ID
+token de Firebase (causa raíz de varios hallazgos menores — cualquier ruta confía en el
+`userId`/`storeId` que manda el body), `/api/orders/cancel` y `/api/notify` sin límite de
+velocidad, el límite de velocidad existente es en memoria (poco confiable en Vercel
+serverless), reglas de Storage para `profiles`/`store-banners`/`products` sin chequeo de dueño
+(menor severidad que licencias — son públicas por diseño), retiros de plata aprobados sin que
+el servidor recalcule el monto realmente adeudado, ~20 CVEs de `npm audit` (3 críticas, 8
+altas, mayormente en dependencias server-side de Firebase/MercadoPago), sin protección CSRF.
+
+**Bugs nuevos encontrados al probar la Fase K (no relacionados, no resueltos):**
+- La consulta de "pedidos disponibles" del repartidor (`delivery-orders-view.tsx`) pide
+  `status in ['pending','Pendiente','Pendiente de Confirmación','En preparación','Aceptado',
+  'Listo para recoger']`, pero la regla de **lectura** de `orders` solo cubre explícitamente
+  `status == 'En preparación'` para pedidos sin repartidor — Firestore rechaza la consulta
+  completa (no solo filtra), así que hoy el repartidor probablemente no ve pedidos en estados
+  distintos a "En preparación" en la pestaña Disponibles.
+- Aparece un `FirebaseError: Missing or insufficient permissions` en consola al abrir
+  `/orders/{id}` (tienda y repartidor) incluso sin hacer ninguna acción — no rompe la página
+  visualmente, no se identificó la causa exacta (no es la regla de update tocada en K3).
+
 ## Pendientes pre-lanzamiento
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
 - Regenerar el `MP_WEBHOOK_SECRET` (quedó expuesto durante pruebas)
