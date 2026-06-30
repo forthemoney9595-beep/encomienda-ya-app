@@ -67,21 +67,21 @@ export default function DeliveryOrdersView() {
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
 
   // 2. QUERY: PEDIDOS DISPONIBLES
+  // Solo los 2 estados en los que de verdad tiene sentido que un repartidor "tome" un
+  // pedido (la tienda lo está preparando, o ya está listo para retirar). Tiene que
+  // coincidir EXACTO con lo que permite la regla de lectura de Firestore (orders, más
+  // abajo en firestore.rules) -- si se agregan más estados acá sin agregarlos también
+  // ahí, Firestore rechaza la consulta COMPLETA (no la filtra), y la pestaña queda vacía
+  // sin ningún error visible. No se incluyen "Pendiente de Confirmación"/"Pendiente de
+  // Pago" a propósito: la tienda todavía no confirmó que tiene stock, no correspondería
+  // que cualquier repartidor vea esos pedidos todavía.
   const availableQuery = useMemo(() => {
      if (!firestore) return null;
      return query(
-       collection(firestore, 'orders'), 
+       collection(firestore, 'orders'),
        // Que no tengan repartidor asignado
        where('deliveryPersonId', '==', null),
-       // Ampliamos la lista de estados para que no se pierda ninguno
-       where('status', 'in', [
-           'pending', 
-           'Pendiente', 
-           'Pendiente de Confirmación', 
-           'En preparación', 
-           'Aceptado', 
-           'Listo para recoger'
-       ]) 
+       where('status', 'in', ['En preparación', 'Listo para recoger'])
      );
   }, [firestore]);
 

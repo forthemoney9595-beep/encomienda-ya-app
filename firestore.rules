@@ -72,8 +72,10 @@ service cloud.firestore {
         isStoreOwner(resource.data.storeId) ||                // Tienda
         resource.data.deliveryPersonId == request.auth.uid || // Repartidor
         isAdmin() ||                                          // Admin
-        // Repartidores buscando pedidos libres
-        (resource.data.status == 'En preparación' && resource.data.deliveryPersonId == null) 
+        // Repartidores buscando pedidos libres -- tiene que coincidir exacto con la
+        // lista de estados que pide availableQuery en delivery-orders-view.tsx, si no
+        // Firestore rechaza la consulta completa (no la filtra).
+        (resource.data.status in ['En preparación', 'Listo para recoger'] && resource.data.deliveryPersonId == null)
       );
 
       // ✏️ UPDATE: Solo acciones permitidas — cada rol restringido a los campos y valores
