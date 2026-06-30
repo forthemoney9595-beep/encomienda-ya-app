@@ -45,8 +45,9 @@ interface PendingUser extends UserProfile {
 
 interface PlatformConfig {
     serviceFee: number;
+    deliveryFee?: number; // Fee de envío fijo (default 2000 ARS si no está configurado)
     maintenanceMode: boolean;
-    settlementDayOfWeek?: number; // 0=Dom, 1=Lun, ... 5=Vie (default), 6=Sáb
+    settlementDayOfWeek?: number;
 }
 
 interface SalesData {
@@ -289,11 +290,11 @@ export default function AdminDashboardPage() {
     const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
     const { data: configData } = useDoc<PlatformConfig>(configRef);
 
-    const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, maintenanceMode: false, settlementDayOfWeek: 5 });
+    const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, deliveryFee: 2000, maintenanceMode: false, settlementDayOfWeek: 5 });
     const [isSavingConfig, setIsSavingConfig] = useState(false);
 
     useEffect(() => {
-        if (configData) setLocalConfig({ settlementDayOfWeek: 5, ...configData });
+        if (configData) setLocalConfig({ serviceFee: 10, deliveryFee: 2000, settlementDayOfWeek: 5, maintenanceMode: false, ...configData });
     }, [configData]);
 
     const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
@@ -462,6 +463,21 @@ export default function AdminDashboardPage() {
                                             />
                                             <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
                                         </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="deliveryFee" className="text-sm font-semibold">Fee de envío fijo (ARS)</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="deliveryFee"
+                                                type="number"
+                                                value={localConfig.deliveryFee ?? 2000}
+                                                onChange={(e) => setLocalConfig({...localConfig, deliveryFee: Number(e.target.value)})}
+                                                className="pl-8 border-primary/30"
+                                            />
+                                            <span className="absolute left-3 top-2.5 text-muted-foreground font-bold text-xs">$</span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">Costo de envío que se suma a cada pedido. Default: $2000.</p>
                                     </div>
 
                                     <div className="space-y-2">

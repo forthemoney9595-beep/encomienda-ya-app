@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Loader2, Search, MoreHorizontal, Shield, Trash2, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import AdminAuthGuard from '../admin-auth-guard';
+import { logAdminAction } from '@/lib/admin-audit';
 
 function AdminUsersPage() {
   const { user: currentUser } = useAuth();
@@ -63,6 +64,7 @@ function AdminUsersPage() {
         }
 
         toast({ title: 'Rol actualizado', description: `El usuario ahora es ${newRole}.` });
+        if (firestore && currentUser) logAdminAction(firestore, currentUser.uid, 'change_role', userId, `${oldRole} → ${newRole}`);
     } catch (error) {
         console.error(error);
         toast({ variant: 'destructive', title: 'Error al cambiar rol' });
@@ -78,6 +80,7 @@ function AdminUsersPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al eliminar');
         toast({ title: 'Usuario eliminado', description: 'La cuenta fue borrada de Auth y Firestore.' });
+        if (firestore && currentUser) logAdminAction(firestore, currentUser.uid, 'delete_user', userId);
     } catch (error: any) {
         console.error(error);
         toast({ variant: 'destructive', title: 'Error al eliminar', description: error.message });

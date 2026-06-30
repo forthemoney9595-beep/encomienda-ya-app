@@ -5,7 +5,8 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
-const FIXED_SHIPPING_COST = 2000; 
+// Valor fallback si config/platform.deliveryFee no está configurado en Firestore
+const DEFAULT_DELIVERY_FEE = 2000;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
     const platformConfig = platformConfigSnap.data() || {};
     // Usar 5% como default si no está configurado en Firestore (coherente con el cliente)
     const serviceFeePercent = platformConfig.serviceFee ?? 5;
+    const shippingCost: number = platformConfig.deliveryFee ?? DEFAULT_DELIVERY_FEE;
 
     const storeCoords = storeData?.coords || storeData?.location || null;
     // Buscamos el ID del dueño para notificarle
@@ -79,7 +81,7 @@ export async function POST(request: Request) {
     // se ignora por completo, solo se usan id y quantity. Así nadie puede pagar lo
     // que quiera por un producto manipulando el body del request.
     let calculatedSubtotal = 0;
-    let shippingCost = FIXED_SHIPPING_COST;
+    let shippingCostVar = shippingCost; // uso la const del config leída arriba
     let serviceFeeAmount = 0;
     let finalTotal = 0;
     const verifiedItems: { id: string; title: string; price: number; quantity: number }[] = [];
@@ -145,9 +147,9 @@ export async function POST(request: Request) {
         }
 
         // 3. Cálculos Finales
-        shippingCost = FIXED_SHIPPING_COST;
+        shippingCostVar = shippingCost;
         serviceFeeAmount = (calculatedSubtotal * serviceFeePercent) / 100;
-        finalTotal = calculatedSubtotal + shippingCost + serviceFeeAmount;
+        finalTotal = calculatedSubtotal + shippingCostVar + serviceFeeAmount;
 
         // Pasada 2: escrituras — descontar stock y crear la orden.
         for (const { ref, newStock } of stockUpdates) {

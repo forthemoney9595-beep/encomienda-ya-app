@@ -10,6 +10,7 @@ import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, orderBy, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
 import { authedFetch } from '@/lib/authed-fetch';
+import { logAdminAction } from '@/lib/admin-audit';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle2, Wallet, DollarSign, XCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
@@ -48,6 +49,7 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al aprobar');
             toast({ title: "Pago registrado", description: "El saldo ha sido descontado." });
+            if (firestore) logAdminAction(firestore, user.uid, 'approve_withdrawal', withdrawalId, `$${data.amountApproved}`);
         } catch (error: any) {
             toast({ variant: "destructive", title: "Error al aprobar", description: error.message });
         } finally {
@@ -69,6 +71,7 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
                 processedAt: serverTimestamp()
             });
             toast({ title: "Solicitud rechazada", description: "El dinero volverá al saldo del usuario." });
+            if (firestore && user) logAdminAction(firestore, user.uid, 'reject_withdrawal', withdrawalId, reason || '');
         } catch (error) {
             toast({ variant: "destructive", title: "Error al rechazar" });
         } finally {
