@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike } from 'lucide-react';
+import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Bell, Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,6 +19,12 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import AdminAuthGuard from './admin-auth-guard';
+import { useAuth } from '@/context/auth-context';
+import { authedFetch } from '@/lib/authed-fetch';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
@@ -49,6 +55,38 @@ const getStatusVariant = (status: any) => {
 function AdminDashboard() {
   const firestore = useFirestore();
   const router = useRouter();
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  // Estado del panel de notificaciones
+  const [notifTarget, setNotifTarget] = useState<'all'|'stores'|'drivers'|'user'>('all');
+  const [notifUserId, setNotifUserId] = useState('');
+  const [notifUserSearch, setNotifUserSearch] = useState('');
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifBody, setNotifBody] = useState('');
+  const [sendingNotif, setSendingNotif] = useState(false);
+
+  const handleSendBroadcast = async () => {
+    if (!user || !notifTitle.trim() || !notifBody.trim()) return;
+    const target = notifTarget === 'user' ? `user:${notifUserId}` : notifTarget;
+    if (notifTarget === 'user' && !notifUserId) {
+      toast({ variant: 'destructive', title: 'Seleccioná un usuario destino' });
+      return;
+    }
+    if (!confirm(`¿Enviar notificación a "${notifTarget === 'all' ? 'todos' : notifTarget === 'stores' ? 'todas las tiendas' : notifTarget === 'drivers' ? 'todos los repartidores' : 'este usuario'}"?`)) return;
+    setSendingNotif(true);
+    try {
+      const res = await authedFetch('/api/admin/notify-broadcast', user, { target, title: notifTitle, body: notifBody });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast({ title: `Notificación enviada`, description: `${data.notified} destinatarios, ${data.sent} push.` });
+      setNotifTitle(''); setNotifBody('');
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error al enviar', description: e.message });
+    } finally {
+      setSendingNotif(false);
+    }
+  };
 
   const ordersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'orders') as CollectionReference<OrderType> : null, [firestore]);
   const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<StoreType> : null, [firestore]);
@@ -402,6 +440,66 @@ function AdminDashboard() {
                     </TableBody>
                 </Table>
             </CardContent>
+        </Card>
+      </div>
+
+      {/* Panel de comunicaciones */}
+      <div className="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-primary" /> Comunicaciones</CardTitle>
+            <CardDescription>Enviar notificaciones a usuarios de la plataforma (máx. 5 por hora).</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Destino */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Destino</label>
+              <div className="flex gap-2 flex-wrap">
+                {(['all','stores','drivers','user'] as const).map(t => (
+                  <button key={t} onClick={() => setNotifTarget(t)}
+                    className={cn('px-3 py-1.5 rounded-full text-sm font-medium transition-all',
+                      notifTarget === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                    )}>
+                    {t === 'all' ? 'Todos' : t === 'stores' ? 'Todas las tiendas' : t === 'drivers' ? 'Todos los repartidores' : 'Un usuario'}
+                  </button>
+                ))}
+              </div>
+              {notifTarget === 'user' && (
+                <div className="space-y-2">
+                  <Input placeholder="Buscar usuario por nombre o email..." value={notifUserSearch}
+                    onChange={e => setNotifUserSearch(e.target.value)} />
+                  {notifUserSearch.trim() && (
+                    <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
+                      {(users || []).filter(u =>
+                        u.displayName?.toLowerCase().includes(notifUserSearch.toLowerCase()) ||
+                        u.email?.toLowerCase().includes(notifUserSearch.toLowerCase())
+                      ).slice(0,8).map((u: any) => (
+                        <button key={u.id} className={cn('w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors',
+                          notifUserId === u.id ? 'bg-primary/10 font-medium' : ''
+                        )} onClick={() => { setNotifUserId(u.id); setNotifUserSearch(u.displayName || u.email || ''); }}>
+                          {u.displayName || u.name || '(sin nombre)'} — {u.email}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Título y cuerpo */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Título <span className="text-muted-foreground">({notifTitle.length}/60)</span></label>
+              <Input maxLength={60} value={notifTitle} onChange={e => setNotifTitle(e.target.value)} placeholder="Ej: Actualización importante" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Mensaje <span className="text-muted-foreground">({notifBody.length}/160)</span></label>
+              <Textarea maxLength={160} value={notifBody} onChange={e => setNotifBody(e.target.value)} placeholder="Ej: Hoy operamos con horario reducido hasta las 20hs." rows={3} />
+            </div>
+
+            <Button onClick={handleSendBroadcast} disabled={sendingNotif || !notifTitle.trim() || !notifBody.trim()} className="gap-2">
+              {sendingNotif ? <><span className="animate-spin">⋯</span> Enviando...</> : <><Send className="h-4 w-4" /> Enviar notificación</>}
+            </Button>
+          </CardContent>
         </Card>
       </div>
     </div>
