@@ -65,14 +65,18 @@ function computeStats(orders: Order[], from: Date | null, to?: Date | null) {
 }
 
 function pct(current: number, prev: number): { value: number; up: boolean; zero: boolean } {
-    if (prev === 0) return { value: current > 0 ? 100 : 0, up: current > 0, zero: current === 0 };
     const v = ((current - prev) / prev) * 100;
     return { value: Math.abs(v), up: v >= 0, zero: v === 0 };
 }
 
 function PctBadge({ current, prev }: { current: number; prev: number }) {
+    // Sin pedidos en el período anterior no hay con qué comparar -- mostrar "100%" ahí
+    // sería engañoso (parecería un crecimiento real cuando en realidad no hay dato base).
+    if (prev === 0) {
+        if (current === 0) return null;
+        return <span className="text-xs font-medium text-muted-foreground">Sin datos previos</span>;
+    }
     const p = pct(current, prev);
-    if (prev === 0 && current === 0) return null;
     return (
         <span className={cn('flex items-center gap-0.5 text-xs font-medium', p.up ? 'text-success' : 'text-destructive')}>
             {p.zero ? <Minus className="h-3 w-3" /> : p.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -131,7 +135,9 @@ export default function StoreAnalyticsPage() {
     const cur = computeStats(orders, from);
     if (!prevFrom || !prevTo) return { current: cur, prev: computeStats([], null), hasPrev: false };
     const prv = computeStats(orders, prevFrom, prevTo);
-    return { current: cur, prev: prv, hasPrev: true };
+    // Solo tiene sentido comparar si el período anterior tuvo algún pedido --
+    // si no, cualquier "% de cambio" sería contra la nada, no un dato real.
+    return { current: cur, prev: prv, hasPrev: prv.totalOrders > 0 };
   }, [orders, from, prevFrom, prevTo]);
 
   // Gráfico de ventas por día (solo cuando hay rango acotado)
