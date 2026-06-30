@@ -131,14 +131,32 @@ alcance de esta fase.
   `affectedKeys().hasOnly([...])` y por valor de `status` permitido, igual que ya estaba hecho
   para el comprador.
 
-**Fuera de alcance de la Fase K, anotado para después:** ninguna ruta de la API verifica el ID
-token de Firebase (causa raíz de varios hallazgos menores — cualquier ruta confía en el
-`userId`/`storeId` que manda el body), `/api/orders/cancel` y `/api/notify` sin límite de
-velocidad, el límite de velocidad existente es en memoria (poco confiable en Vercel
-serverless), reglas de Storage para `profiles`/`store-banners`/`products` sin chequeo de dueño
-(menor severidad que licencias — son públicas por diseño), retiros de plata aprobados sin que
-el servidor recalcule el monto realmente adeudado, ~20 CVEs de `npm audit` (3 críticas, 8
-altas, mayormente en dependencias server-side de Firebase/MercadoPago), sin protección CSRF.
+**Fuera de alcance de la Fase K** (auth por token resuelto en la Fase L, ver abajo): reglas de
+Storage para `profiles`/`store-banners`/`products` sin chequeo de dueño (menor severidad que
+licencias — son públicas por diseño), retiros de plata aprobados sin que el servidor recalcule
+el monto realmente adeudado, ~20 CVEs de `npm audit` (3 críticas, 8 altas, mayormente en
+dependencias server-side de Firebase/MercadoPago), sin protección CSRF.
+
+## Seguridad — Fase L (jul 2026): verificación de ID token de Firebase en toda la API
+Cerraba la causa raíz de varios hallazgos de la Fase K: ninguna ruta verificaba que quien
+llama sea realmente quien dice ser. `src/lib/auth-server.ts` agrega `verifyAuthToken(request)`
+(decodifica el header `Authorization: Bearer <token>` contra Firebase Admin Auth) y
+`verifyStoreOwnership(uid, storeId)` (mismo criterio que `isStoreOwner()` en
+`firestore.rules`: `stores/{id}.ownerId == uid`). Del lado cliente, `src/lib/authed-fetch.ts`
+agrega el token actual a cada `fetch` POST en vez de repetirlo a mano.
+
+Las 7 rutas que antes confiaban en `userId`/`storeId` del body ahora exigen token válido:
+`/api/orders/create`, `/api/checkout` (compara contra `order.userId` leído de Firestore, no
+del body), `/api/orders/cancel` (+ rate limit que no tenía), `/api/reviews/create`,
+`/api/orders/confirm-stock` y `/api/orders/notify-drivers` (con `verifyStoreOwnership`),
+`/api/notify` (solo exige estar logueado — el destinatario es otra persona, no quien llama; +
+rate limit que tampoco tenía). `OrderService.sendNotification()` y `updateOrderStatus()`
+(`src/lib/order-service.ts`) ahora aceptan un `callerUser` opcional para reenviar el token al
+pegarle a `/api/notify` — si no se pasa, el push no sale pero la notificación de la campanita
+(escritura directa a Firestore) se sigue creando igual.
+
+`/api/webhooks/mercadopago` (MercadoPago llama directo, no hay token de usuario) y
+`/api/dev/seed` (bloqueado por `NODE_ENV`) quedaron sin tocar a propósito.
 
 **Bugs nuevos encontrados al probar la Fase K (no relacionados, no resueltos):**
 - La consulta de "pedidos disponibles" del repartidor (`delivery-orders-view.tsx`) pide
