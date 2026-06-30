@@ -9,12 +9,14 @@ import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import type { Order } from '@/lib/order-service';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ShoppingBag, User, XCircle, TrendingUp, Package, TrendingDown, Minus } from 'lucide-react';
-import { format, subDays, startOfMonth, subMonths } from 'date-fns';
+import { ShoppingBag, User, XCircle, TrendingUp, Package, TrendingDown, Minus, Clock, Star } from 'lucide-react';
+import { format, subDays, startOfMonth, subMonths, eachDayOfInterval, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 
 const formatDate = (date: any) => {
     if (!date) return '';
@@ -132,6 +134,49 @@ export default function StoreAnalyticsPage() {
     return { current: cur, prev: prv, hasPrev: true };
   }, [orders, from, prevFrom, prevTo]);
 
+  // Gráfico de ventas por día (solo cuando hay rango acotado)
+  const dailySalesData = useMemo(() => {
+    if (!from || period === 'all') return null;
+    const completed = current.orders.filter(o => o.status === 'Entregado');
+    const days = eachDayOfInterval({ start: from, end: new Date() });
+    return days.map(day => ({
+      day: format(day, 'd/M', { locale: es }),
+      ventas: completed
+        .filter(o => {
+          const d = o.createdAt && (o.createdAt as any).toDate ? (o.createdAt as any).toDate() : new Date(o.createdAt as any);
+          return isSameDay(d, day);
+        })
+        .reduce((sum, o) => sum + (o.total || 0), 0),
+    }));
+  }, [current.orders, from, period]);
+
+  // Top 5 productos por ingresos
+  const topProducts = useMemo(() => {
+    const completed = current.orders.filter(o => o.status === 'Entregado');
+    const map: Record<string, { name: string; units: number; revenue: number }> = {};
+    completed.forEach(o => {
+      ((o as any).items || []).forEach((item: any) => {
+        const name = item.name || item.title || 'Producto';
+        if (!map[name]) map[name] = { name, units: 0, revenue: 0 };
+        map[name].units += item.quantity || 1;
+        map[name].revenue += (item.price || 0) * (item.quantity || 1);
+      });
+    });
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  }, [current.orders]);
+
+  // Horas pico (cantidad de pedidos por hora del día)
+  const peakHoursData = useMemo(() => {
+    const counts = Array(24).fill(0);
+    current.orders.forEach(o => {
+      try {
+        const d = (o.createdAt as any)?.toDate ? (o.createdAt as any).toDate() : new Date(o.createdAt as any);
+        counts[d.getHours()]++;
+      } catch {}
+    });
+    return counts.map((count, h) => ({ hora: `${String(h).padStart(2,'0')}hs`, pedidos: count }));
+  }, [current.orders]);
+
   if (authLoading || ordersLoading || storeLoading) {
     return (
         <div className="container mx-auto space-y-4 pb-20">
@@ -229,6 +274,83 @@ export default function StoreAnalyticsPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Gráfico de ventas por día */}
+      {dailySalesData && dailySalesData.length > 0 && (
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-success" /> Ventas por día</CardTitle>
+            <CardDescription>Ingresos de pedidos entregados — {PERIOD_LABELS[period]}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={{ ventas: { label: "Ventas ($)", color: "hsl(var(--chart-1))" }}} className="h-[220px] w-full">
+              <BarChart data={dailySalesData}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} className="text-muted-foreground text-xs" />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} className="text-muted-foreground text-xs" />
+                <ChartTooltip content={<ChartTooltipContent formatter={(v: any) => `$${Number(v).toLocaleString()}`} />} />
+                <Bar dataKey="ventas" fill="var(--color-ventas)" radius={[4,4,0,0]} />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Top productos + Horas pico */}
+      <div className="grid gap-6 md:grid-cols-2">
+
+        {/* Top 5 productos */}
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-warning" /> Top productos</CardTitle>
+            <CardDescription>Más vendidos por ingresos — {PERIOD_LABELS[period]}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {topProducts.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Sin pedidos entregados en este período.</p>
+            ) : (
+              <div className="space-y-3">
+                {topProducts.map((p, i) => {
+                  const maxRev = topProducts[0].revenue;
+                  const pct = maxRev > 0 ? (p.revenue / maxRev) * 100 : 0;
+                  return (
+                    <div key={p.name} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium line-clamp-1">{i + 1}. {p.name}</span>
+                        <span className="text-muted-foreground shrink-0 ml-2">{p.units} un. · ${p.revenue.toLocaleString()}</span>
+                      </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Horas pico */}
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-info" /> Horas pico</CardTitle>
+            <CardDescription>Cuándo llegan más pedidos — {PERIOD_LABELS[period]}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={{ pedidos: { label: "Pedidos", color: "hsl(var(--chart-4))" }}} className="h-[220px] w-full">
+              <BarChart data={peakHoursData}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="hora" tickLine={false} axisLine={false} tickMargin={8} className="text-muted-foreground text-xs"
+                  interval={3} />
+                <YAxis tickLine={false} axisLine={false} allowDecimals={false} className="text-muted-foreground text-xs" />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="pedidos" fill="var(--color-pedidos)" radius={[4,4,0,0]} />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
       </div>
 
       {/* Lista de movimientos del período */}
