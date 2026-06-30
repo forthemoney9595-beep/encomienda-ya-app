@@ -48,6 +48,12 @@ export function MainNav({
               Dashboard
             </Button>
           </Link>
+          <Link href="/admin/orders">
+            <Button variant={pathname.startsWith('/admin/orders') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <ShoppingBag className="mr-2 h-4 w-4" />
+              Gestión Pedidos
+            </Button>
+          </Link>
           <Link href="/admin/stores">
             <Button variant={pathname.startsWith('/admin/stores') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Store className="mr-2 h-4 w-4" />

@@ -5,6 +5,8 @@ import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyAuthToken } from '@/lib/auth-server';
 
 const CANCELABLE_STATUSES = ['Pendiente de Confirmación', 'Pendiente de Pago'];
+// El admin puede cancelar más estados (excepto los terminales)
+const ADMIN_CANCELABLE_STATUSES = ['Pendiente de Confirmación', 'Pendiente de Pago', 'En preparación', 'Listo para recoger', 'En camino', 'En reparto'];
 
 export async function POST(request: Request) {
     const ip = getClientIp(request);
@@ -26,7 +28,12 @@ export async function POST(request: Request) {
         if (!callerUid) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
         }
-        if (callerUid !== userId) {
+
+        // Verificar si el caller es admin (puede cancelar cualquier pedido)
+        const adminDoc = await adminDb.collection('roles_admin').doc(callerUid).get();
+        const isAdmin = adminDoc.exists;
+
+        if (!isAdmin && callerUid !== userId) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
         }
 
@@ -39,23 +46,21 @@ export async function POST(request: Request) {
 
         const order = orderSnap.data()!;
 
-        // Solo el comprador puede cancelar su propia orden
-        if (order.userId !== userId) {
+        if (!isAdmin && order.userId !== userId) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
         }
 
-        // Solo se puede cancelar en estados previos al pago
-        if (!CANCELABLE_STATUSES.includes(order.status)) {
+        const allowedStatuses = isAdmin ? ADMIN_CANCELABLE_STATUSES : CANCELABLE_STATUSES;
+        if (!allowedStatuses.includes(order.status)) {
             return NextResponse.json({
                 error: `No se puede cancelar un pedido en estado "${order.status}"`
             }, { status: 400 });
         }
 
-        // Actualizar orden a Cancelado
         await orderRef.update({
             status: 'Cancelado',
             cancelledAt: Timestamp.now(),
-            cancelledBy: 'buyer',
+            cancelledBy: isAdmin ? 'admin' : 'buyer',
             updatedAt: Timestamp.now(),
         });
 
