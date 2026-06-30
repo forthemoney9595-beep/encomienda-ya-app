@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import type { Order } from '@/lib/order-service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TrendingUp, Truck, CreditCard, Wallet, History, AlertCircle, Loader2 } from 'lucide-react';
@@ -139,9 +139,12 @@ export default function DeliveryEarningsPage() {
               userRole: 'delivery',
               amount: amount,
               cbu: cbu,
-              status: 'pending', // Estado inicial
+              status: 'pending',
+              source: 'manual',
               createdAt: serverTimestamp()
           });
+          // Guardar el CBU una vez para que las liquidaciones automáticas lo usen
+          try { await updateDoc(doc(firestore, 'users', user.uid), { payoutCbu: cbu }); } catch {}
 
           toast({ 
               title: "Solicitud enviada", 
@@ -284,14 +287,17 @@ export default function DeliveryEarningsPage() {
                           withdrawals.map((w: any) => (
                               <div key={w.id} className="flex items-center justify-between p-3 border rounded-lg bg-card text-sm">
                                   <div>
-                                      <p className="font-bold">${w.amount.toLocaleString()}</p>
+                                      <div className="flex items-center gap-2">
+                                          <p className="font-bold">${w.amount.toLocaleString()}</p>
+                                          {w.source === 'auto' && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>}
+                                      </div>
                                       <p className="text-xs text-muted-foreground">{formatDate(w.createdAt)}</p>
                                   </div>
                                   <Badge variant={
-                                      w.status === 'approved' ? 'default' : 
+                                      w.status === 'approved' ? 'default' :
                                       w.status === 'rejected' ? 'destructive' : 'secondary'
                                   } className={w.status === 'approved' ? 'bg-success text-success-foreground hover:bg-success/90' : w.status === 'pending' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : ''}>
-                                      {w.status === 'approved' ? 'Pagado' : 
+                                      {w.status === 'approved' ? 'Pagado' :
                                        w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
                                   </Badge>
                               </div>

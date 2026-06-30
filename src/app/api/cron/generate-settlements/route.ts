@@ -1,0 +1,151 @@
+import { NextResponse } from "next/server";
+import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
+import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
+
+// Ruta para el cron job diario de Vercel.
+// Vercel llama a esta URL automáticamente una vez por día (definido en vercel.json) y
+// adjunta un header Authorization: Bearer $CRON_SECRET para evitar que cualquiera
+// la llame. El cron revisa si hoy es el día de liquidación configurado y, si lo es,
+// genera automáticamente las solicitudes de retiro para tiendas y repartidores que
+// ya hayan ingresado su CBU alguna vez.
+export async function GET(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get('authorization');
+  if (secret && authHeader !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  try {
+    const now = new Date();
+    const todayDow = now.getDay(); // 0=Dom, 5=Vie, etc.
+
+    // Día de liquidación configurable desde Firestore (admin/dashboard)
+    const configSnap = await adminDb.collection('config').doc('platform').get();
+    const settlementDayOfWeek: number = configSnap.data()?.settlementDayOfWeek ?? 5; // Viernes por defecto
+
+    if (todayDow !== settlementDayOfWeek) {
+      return NextResponse.json({ status: "skipped", reason: `Hoy es día ${todayDow}, se liquida el día ${settlementDayOfWeek}` });
+    }
+
+    const results: { created: number; skipped: number; errors: number } = { created: 0, skipped: 0, errors: 0 };
+
+    // --- TIENDAS ---
+    const storesSnap = await adminDb.collection('stores').where('isApproved', '==', true).get();
+    for (const storeDoc of storesSnap.docs) {
+      const storeData = storeDoc.data();
+      const ownerId = storeData.ownerId;
+      const payoutCbu = storeData.payoutCbu;
+      if (!ownerId || !payoutCbu) { results.skipped++; continue; }
+
+      // No generar si ya tiene una solicitud pendiente reciente
+      const existingPendingSnap = await adminDb.collection('withdrawals')
+        .where('userId', '==', ownerId)
+        .where('status', '==', 'pending')
+        .limit(1)
+        .get();
+      if (!existingPendingSnap.empty) { results.skipped++; continue; }
+
+      try {
+        const { availableBalance } = await computeStoreBalance(storeDoc.id);
+        if (availableBalance < 1) { results.skipped++; continue; }
+
+        const ref = await adminDb.collection('withdrawals').add({
+          userId: ownerId,
+          userName: storeData.name || 'Tienda',
+          userRole: 'store',
+          amount: Math.floor(availableBalance),
+          cbu: payoutCbu,
+          status: 'pending',
+          source: 'auto',
+          createdAt: Timestamp.now(),
+        });
+
+        // Notificar al dueño
+        const ownerDoc = await adminDb.collection('users').doc(ownerId).get();
+        const tokens: string[] = [];
+        const od = ownerDoc.data();
+        if (od?.fcmToken) tokens.push(od.fcmToken);
+        if (Array.isArray(od?.fcmTokens)) tokens.push(...od.fcmTokens);
+
+        await adminDb.collection('notifications').add({
+          userId: ownerId,
+          title: "💰 Liquidación generada",
+          body: `Tu liquidación de $${Math.floor(availableBalance).toLocaleString()} fue generada. El admin la procesará pronto.`,
+          type: "payout",
+          read: false,
+          createdAt: Timestamp.now(),
+        });
+
+        if (tokens.length > 0) {
+          await adminMessaging.sendEachForMulticast({
+            tokens: [...new Set(tokens)],
+            notification: { title: "💰 Liquidación generada", body: `$${Math.floor(availableBalance).toLocaleString()} disponibles para cobrar.` },
+            webpush: { fcmOptions: { link: '/my-store/wallet' } },
+          }).catch(() => {});
+        }
+
+        results.created++;
+      } catch (e) {
+        console.error(`Error generando liquidación para tienda ${storeDoc.id}:`, e);
+        results.errors++;
+      }
+    }
+
+    // --- REPARTIDORES ---
+    const driversSnap = await adminDb.collection('users')
+      .where('role', '==', 'delivery')
+      .where('status', '==', 'Activo')
+      .get();
+
+    for (const driverDoc of driversSnap.docs) {
+      const driverData = driverDoc.data();
+      const payoutCbu = driverData.payoutCbu;
+      if (!payoutCbu) { results.skipped++; continue; }
+
+      const existingPendingSnap = await adminDb.collection('withdrawals')
+        .where('userId', '==', driverDoc.id)
+        .where('status', '==', 'pending')
+        .limit(1)
+        .get();
+      if (!existingPendingSnap.empty) { results.skipped++; continue; }
+
+      try {
+        const { availableBalance } = await computeDriverBalance(driverDoc.id);
+        if (availableBalance < 1) { results.skipped++; continue; }
+
+        await adminDb.collection('withdrawals').add({
+          userId: driverDoc.id,
+          userName: driverData.displayName || driverData.name || 'Repartidor',
+          userRole: 'delivery',
+          amount: Math.floor(availableBalance),
+          cbu: payoutCbu,
+          status: 'pending',
+          source: 'auto',
+          createdAt: Timestamp.now(),
+        });
+
+        await adminDb.collection('notifications').add({
+          userId: driverDoc.id,
+          title: "💰 Liquidación generada",
+          body: `Tu liquidación de $${Math.floor(availableBalance).toLocaleString()} fue generada.`,
+          type: "payout",
+          read: false,
+          createdAt: Timestamp.now(),
+        });
+
+        results.created++;
+      } catch (e) {
+        console.error(`Error generando liquidación para repartidor ${driverDoc.id}:`, e);
+        results.errors++;
+      }
+    }
+
+    console.log(`[Cron] generate-settlements: ${JSON.stringify(results)}`);
+    return NextResponse.json({ status: "ok", date: now.toISOString(), settlementDay: settlementDayOfWeek, results });
+
+  } catch (error: any) {
+    console.error("❌ [Cron] Error en generate-settlements:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

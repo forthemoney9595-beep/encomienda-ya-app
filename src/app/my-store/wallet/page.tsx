@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context';
 // ✅ Usamos useCollection para buscar la tienda por ownerId
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import type { Order } from '@/lib/order-service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Wallet, Loader2 } from 'lucide-react';
@@ -149,8 +149,13 @@ export default function StoreWalletPage() {
               amount: amount,
               cbu: cbu,
               status: 'pending',
+              source: 'manual',
               createdAt: serverTimestamp()
           });
+          // Guardar el CBU una vez para que las liquidaciones automáticas lo usen
+          if (storeId) {
+              try { await updateDoc(doc(firestore, 'stores', storeId), { payoutCbu: cbu }); } catch {}
+          }
           toast({ title: "Solicitud enviada" });
           setIsWithdrawOpen(false);
           setWithdrawAmount('');
@@ -233,8 +238,13 @@ export default function StoreWalletPage() {
                   <CardContent className="space-y-2">
                       {withdrawals?.map((w: any) => (
                           <div key={w.id} className="flex justify-between items-center p-3 border rounded text-sm">
-                              <span>${w.amount} - {formatDate(w.createdAt)}</span>
-                              <Badge variant={w.status === 'approved' ? 'default' : 'secondary'}>{w.status}</Badge>
+                              <span className="flex items-center gap-2">
+                                  ${w.amount} - {formatDate(w.createdAt)}
+                                  {w.source === 'auto' && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>}
+                              </span>
+                              <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'secondary'}>
+                                  {w.status === 'approved' ? 'Pagado' : w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                              </Badge>
                           </div>
                       ))}
                       {withdrawals?.length === 0 && <p className="text-center text-muted-foreground py-4">Sin retiros aún.</p>}

@@ -46,6 +46,7 @@ interface PendingUser extends UserProfile {
 interface PlatformConfig {
     serviceFee: number;
     maintenanceMode: boolean;
+    settlementDayOfWeek?: number; // 0=Dom, 1=Lun, ... 5=Vie (default), 6=Sáb
 }
 
 interface SalesData {
@@ -288,11 +289,11 @@ export default function AdminDashboardPage() {
     const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
     const { data: configData } = useDoc<PlatformConfig>(configRef);
 
-    const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, maintenanceMode: false });
+    const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, maintenanceMode: false, settlementDayOfWeek: 5 });
     const [isSavingConfig, setIsSavingConfig] = useState(false);
 
     useEffect(() => {
-        if (configData) setLocalConfig(configData);
+        if (configData) setLocalConfig({ settlementDayOfWeek: 5, ...configData });
     }, [configData]);
 
     const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
@@ -461,6 +462,20 @@ export default function AdminDashboardPage() {
                                             />
                                             <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
                                         </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-sm font-semibold">Día de liquidación automática</Label>
+                                        <select
+                                            value={localConfig.settlementDayOfWeek ?? 5}
+                                            onChange={(e) => setLocalConfig({...localConfig, settlementDayOfWeek: Number(e.target.value)})}
+                                            className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background text-foreground"
+                                        >
+                                            {['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'].map((d, i) => (
+                                                <option key={i} value={i}>{d}</option>
+                                            ))}
+                                        </select>
+                                        <p className="text-xs text-muted-foreground">El cron genera automáticamente los retiros pendientes ese día.</p>
                                     </div>
 
                                     <div className="flex items-center justify-between border border-border p-3 rounded-lg bg-muted/30 backdrop-blur-sm">
