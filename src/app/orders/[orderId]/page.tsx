@@ -5,6 +5,7 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { type Order, OrderService, updateOrderStatus } from '@/lib/order-service';
+import { authedFetch } from '@/lib/authed-fetch';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
@@ -365,17 +366,13 @@ export default function OrderTrackingPage() {
   const handleRetryPayment = async () => {
     if (!order || !user) return;
     try {
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: order.id,
-          items: order.items,
-          payerEmail: user.email,
-          userId: user.uid,
-          storeId: order.storeId,
-          storeOwnerId: order.storeOwnerId,
-        }),
+      const res = await authedFetch('/api/checkout', user, {
+        orderId: order.id,
+        items: order.items,
+        payerEmail: user.email,
+        userId: user.uid,
+        storeId: order.storeId,
+        storeOwnerId: order.storeOwnerId,
       });
       const data = await res.json();
       if (data.url) {

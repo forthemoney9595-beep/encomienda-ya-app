@@ -242,18 +242,14 @@ export default function CheckoutPage() {
       const newOrderId = orderDataResult.orderId;
 
       // 4. GENERAR LINK DE PAGO
-      const paymentResponse = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            items: cleanItems,
-            orderId: newOrderId,
-            userId: user.uid, 
-            storeId: storeId,
-            storeOwnerId: currentStoreData.userId, 
-            payerEmail: user.email || 'guest@encomiendaya.com',
-            shippingCost: shippingCost 
-        })
+      const paymentResponse = await authedFetch('/api/checkout', user, {
+        items: cleanItems,
+        orderId: newOrderId,
+        userId: user.uid,
+        storeId: storeId,
+        storeOwnerId: currentStoreData.userId,
+        payerEmail: user.email || 'guest@encomiendaya.com',
+        shippingCost: shippingCost
       });
 
       const paymentData = await paymentResponse.json();

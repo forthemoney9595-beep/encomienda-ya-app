@@ -5,6 +5,7 @@ import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
 import type { Order, OrderStatus } from '@/lib/order-service';
 import { updateOrderStatus } from '@/lib/order-service';
+import { authedFetch } from '@/lib/authed-fetch';
 import { CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -173,17 +174,13 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
              throw new Error("El precio de los productos no es válido (0). Contacta a soporte.");
         }
 
-        const response = await fetch('/api/checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                orderId: order.id,
-                items: cleanItems, 
-                userId: appUser?.uid, 
-                storeId: order.storeId, 
-                storeOwnerId: null, 
-                payerEmail: appUser?.email 
-            })
+        const response = await authedFetch('/api/checkout', appUser, {
+            orderId: order.id,
+            items: cleanItems,
+            userId: appUser?.uid,
+            storeId: order.storeId,
+            storeOwnerId: null,
+            payerEmail: appUser?.email
         });
 
         const data = await response.json();

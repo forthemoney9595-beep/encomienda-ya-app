@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import MercadoPagoConfig, { Preference } from 'mercadopago';
 import { adminDb } from '@/lib/firebase-admin';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { verifyAuthToken } from '@/lib/auth-server';
 
 export async function POST(request: Request) {
     const ip = getClientIp(request);
@@ -41,6 +42,16 @@ export async function POST(request: Request) {
         const storeId: string = orderData.storeId;
         const storeOwnerId: string = orderData.storeOwnerId || orderData.storeId;
         const userId: string = orderData.userId;
+
+        // 🔒 Solo el dueño real del pedido (el userId guardado en Firestore, no nada que
+        // mande el cliente) puede generar el link de pago.
+        const callerUid = await verifyAuthToken(request);
+        if (!callerUid) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+        }
+        if (callerUid !== userId) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+        }
 
         if (!Array.isArray(orderData.items) || orderData.items.length === 0) {
             return NextResponse.json({ error: "El pedido no tiene items" }, { status: 400 });
