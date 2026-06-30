@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 // ✅ Importamos Hooks de Firestore para la nueva lógica de retiros
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { writeBatch, doc, serverTimestamp, collection, query, orderBy, updateDoc } from 'firebase/firestore';
+import { useAuth } from '@/context/auth-context';
+import { authedFetch } from '@/lib/authed-fetch';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle2, Wallet, DollarSign, XCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
@@ -24,6 +26,7 @@ interface FinanceViewProps {
 
 export function FinanceView({ orders, stores, users }: FinanceViewProps) {
     const firestore = useFirestore();
+    const { user } = useAuth();
     const { toast } = useToast();
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
@@ -35,20 +38,19 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
   
     const { data: withdrawals, isLoading: withdrawalsLoading } = useCollection<any>(withdrawalsQuery);
 
-    // Aprobar Solicitud (Nuevo Sistema)
+    // Aprobar Solicitud (Nuevo Sistema) — ahora va por la API que recalcula el saldo real
     const handleApproveWithdrawal = async (withdrawalId: string) => {
-        if (!firestore) return;
-        if (!confirm("¿Confirmas que ya realizaste la transferencia bancaria?")) return;
-  
+        if (!user) return;
+        if (!confirm("¿Confirmás que ya realizaste la transferencia bancaria?")) return;
+
         setIsProcessing(withdrawalId);
         try {
-            await updateDoc(doc(firestore, 'withdrawals', withdrawalId), {
-                status: 'approved',
-                processedAt: serverTimestamp()
-            });
+            const res = await authedFetch('/api/admin/approve-withdrawal', user, { withdrawalId });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al aprobar');
             toast({ title: "Pago registrado", description: "El saldo ha sido descontado." });
-        } catch (error) {
-            toast({ variant: "destructive", title: "Error al aprobar" });
+        } catch (error: any) {
+            toast({ variant: "destructive", title: "Error al aprobar", description: error.message });
         } finally {
             setIsProcessing(null);
         }
