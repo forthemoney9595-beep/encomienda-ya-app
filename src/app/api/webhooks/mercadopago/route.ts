@@ -99,14 +99,49 @@ export async function POST(request: Request) {
     const ordersCollection = adminDb.collection("orders");
     const notificationsCollection = adminDb.collection("notifications");
 
-    // 🔒 Idempotencia: si la orden ya fue procesada, retornar sin hacer nada
     const existingOrder = await ordersCollection.doc(orderRefId).get();
-    if (existingOrder.exists) {
-      const existingData = existingOrder.data();
-      if (existingData?.paymentStatus === "paid") {
-        console.log(`ℹ️ [Webhook] Orden ${orderRefId} ya procesada — ignorando duplicado`);
-        return NextResponse.json({ status: "already_processed" });
-      }
+    if (!existingOrder.exists) {
+      console.error(`❌ [Webhook] Orden ${orderRefId} no encontrada — no se puede procesar el pago.`);
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 });
+    }
+    const existingData = existingOrder.data()!;
+
+    // 🔒 Idempotencia: si la orden ya fue procesada, retornar sin hacer nada
+    if (existingData.paymentStatus === "paid") {
+      console.log(`ℹ️ [Webhook] Orden ${orderRefId} ya procesada — ignorando duplicado`);
+      return NextResponse.json({ status: "already_processed" });
+    }
+
+    // 🔒 El monto realmente pagado tiene que coincidir con el total real del pedido —
+    // nunca se asume que un pago aprobado corresponde al monto que dice la orden.
+    const paidAmount = Number(paymentData.transaction_amount) || 0;
+    const orderTotal = Number(existingData.total) || 0;
+    if (Math.abs(paidAmount - orderTotal) > 1) {
+      console.error(`❌ [Webhook] Monto pagado ($${paidAmount}) no coincide con el total de la orden ${orderRefId} ($${orderTotal}). No se marca como pagada, queda para revisión manual.`);
+      await adminDb.collection("payment_mismatches").add({
+        orderId: orderRefId,
+        paymentId,
+        paidAmount,
+        orderTotal,
+        reason: "amount_mismatch",
+        createdAt: new Date(),
+      });
+      return NextResponse.json({ status: "amount_mismatch_flagged_for_review" });
+    }
+
+    // 🔒 Solo se procesa si la orden sigue esperando el pago — si mientras tanto se
+    // canceló/rechazó, no se marca pagada (queda como posible reembolso manual).
+    if (existingData.status !== "Pendiente de Pago") {
+      console.error(`❌ [Webhook] Orden ${orderRefId} no está "Pendiente de Pago" (está "${existingData.status}"). Pago recibido pero no se marca, queda para revisión manual.`);
+      await adminDb.collection("payment_mismatches").add({
+        orderId: orderRefId,
+        paymentId,
+        paidAmount,
+        reason: "unexpected_order_status",
+        orderStatus: existingData.status,
+        createdAt: new Date(),
+      });
+      return NextResponse.json({ status: "unexpected_order_status_flagged_for_review" });
     }
 
     console.log(`✅ [Webhook] Pago Aprobado. Procesando Orden ${orderRefId}...`);
