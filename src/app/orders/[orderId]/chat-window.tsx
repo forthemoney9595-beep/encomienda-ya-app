@@ -108,9 +108,10 @@ export function ChatWindow({ order }: ChatWindowProps) {
                     firestore,
                     recipient.id,
                     `💬 Nuevo mensaje de ${messageData.senderName}`,
-                    text.trim(), 
+                    text.trim(),
                     recipient.role,
-                    order.id
+                    order.id,
+                    myUser
                 );
             }
 

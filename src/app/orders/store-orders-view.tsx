@@ -154,7 +154,7 @@ export default function StoreOrdersView() {
       if(!confirm("¿Estás seguro de rechazar este pedido?")) return;
       try {
           await updateDoc(doc(firestore, 'orders', order.id), { status: 'Rechazado' });
-          await OrderService.sendNotification(firestore, order.userId, "Pedido Rechazado", "La tienda no puede tomar tu pedido.", "order_status", order.id);
+          await OrderService.sendNotification(firestore, order.userId, "Pedido Rechazado", "La tienda no puede tomar tu pedido.", "order_status", order.id, user);
           toast({ title: "Pedido Rechazado" });
       } catch (error) { toast({ variant: "destructive", title: "Error" }); }
   };
@@ -170,12 +170,13 @@ export default function StoreOrdersView() {
         
         if (order.deliveryPersonId) {
             await OrderService.sendNotification(
-                firestore, 
-                order.deliveryPersonId, 
-                "🔔 Pedido Listo", 
-                "El pedido ya está listo para retirar en mostrador.", 
-                "delivery", 
-                order.id
+                firestore,
+                order.deliveryPersonId,
+                "🔔 Pedido Listo",
+                "El pedido ya está listo para retirar en mostrador.",
+                "delivery",
+                order.id,
+                user
             );
             toast({ title: "Repartidor avisado", description: "Se notificó al conductor asignado." });
         } else {

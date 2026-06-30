@@ -280,13 +280,13 @@ export default function OrderTrackingPage() {
             if (targetStoreUser) {
                 OrderService.sendNotification(
                     firestore, targetStoreUser, "🛵 Repartidor en camino",
-                    `${driverName} aceptó el pedido y va a retirarlo.`, "order_status", order.id
+                    `${driverName} aceptó el pedido y va a retirarlo.`, "order_status", order.id, user
                 ).catch(console.error);
             }
             if (order.userId) {
                 OrderService.sendNotification(
                     firestore, order.userId, "🛵 Repartidor Asignado",
-                    "Un repartidor está yendo a retirar tu pedido.", "order_status", order.id
+                    "Un repartidor está yendo a retirar tu pedido.", "order_status", order.id, user
                 ).catch(console.error);
             }
         } catch (error) {
@@ -305,7 +305,7 @@ export default function OrderTrackingPage() {
         try {
             // updateOrderStatus ya manda el aviso correspondiente al comprador
             // (ej: "🚀 ¡En Camino a tu casa!" al pasar a En reparto).
-            await updateOrderStatus(firestore, order.id, newStatus as Order['status']);
+            await updateOrderStatus(firestore, order.id, newStatus as Order['status'], user);
             toast({ title: "Estado actualizado", description: `El pedido ahora está: ${newStatus}` });
         } catch (error) {
             toast({ variant: 'destructive', title: "Error", description: "No se pudo actualizar el estado." });
@@ -334,7 +334,8 @@ export default function OrderTrackingPage() {
                     "📦 ¡Pedido Listo!",
                     `La tienda ${order.storeName} ya tiene el pedido listo para retirar.`,
                     "delivery",
-                    order.id
+                    order.id,
+                    user
                 );
             }
             toast({ title: "Repartidor notificado", description: "Se ha enviado la alerta a su dispositivo." });

@@ -1,13 +1,14 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  doc, 
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  doc,
   getDoc,
-  serverTimestamp, 
-  Firestore, 
-  Timestamp 
+  serverTimestamp,
+  Firestore,
+  Timestamp
 } from 'firebase/firestore';
+import type { User } from 'firebase/auth';
 
 export type PaymentMethod = 'CARD' | 'Efectivo' | 'mercadopago'; // ✅ Agregado para soportar tus métodos reales
 
@@ -78,7 +79,11 @@ export interface Order {
 
 export const OrderService = {
     // Notificaciones Genéricas (Campanita)
-    sendNotification: async (db: Firestore, userId: string, title: string, message: string, type: string, orderId?: string) => {
+    // callerUser es quien DISPARA la notificación (la tienda avisando al repartidor, etc.),
+    // no el destinatario -- /api/notify ahora exige un token válido (de cualquier usuario
+    // logueado) para mandar el push. Si no se pasa, el push no sale pero la notificación
+    // en la campanita (el addDoc de abajo) se crea igual.
+    sendNotification: async (db: Firestore, userId: string, title: string, message: string, type: string, orderId?: string, callerUser?: User | null) => {
         try {
             await addDoc(collection(db, 'notifications'), {
                 userId,
@@ -92,9 +97,13 @@ export const OrderService = {
             });
 
             // Disparar notificación Push (opcional)
+            const token = callerUser ? await callerUser.getIdToken() : null;
             fetch('/api/notify', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
                 body: JSON.stringify({
                     userId,
                     title,
@@ -110,7 +119,7 @@ export const OrderService = {
 };
 
 // ✅ GESTIÓN CENTRALIZADA DE ESTADOS Y NOTIFICACIONES
-export const updateOrderStatus = async (db: Firestore, orderId: string, status: OrderStatus) => {
+export const updateOrderStatus = async (db: Firestore, orderId: string, status: OrderStatus, callerUser?: User | null) => {
   if (!db) throw new Error("Firestore instance is required");
   
   const orderRef = doc(db, 'orders', orderId);
@@ -170,7 +179,8 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
                   title,
                   message,
                   "order_status",
-                  orderId
+                  orderId,
+                  callerUser
               );
           }
       }

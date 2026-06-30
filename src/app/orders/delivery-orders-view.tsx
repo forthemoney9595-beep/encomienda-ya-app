@@ -159,13 +159,13 @@ export default function DeliveryOrdersView() {
       if (targetStoreUser) {
         OrderService.sendNotification(
           firestore, targetStoreUser, "🛵 Repartidor en camino",
-          `${driverName} aceptó el pedido y va a retirarlo.`, "order_status", order.id
+          `${driverName} aceptó el pedido y va a retirarlo.`, "order_status", order.id, user
         ).catch(console.error);
       }
       if (order.userId) {
         OrderService.sendNotification(
           firestore, order.userId, "🛵 Repartidor Asignado",
-          "Un repartidor está yendo a retirar tu pedido.", "order_status", order.id
+          "Un repartidor está yendo a retirar tu pedido.", "order_status", order.id, user
         ).catch(console.error);
       }
     } catch (error: any) {
@@ -200,7 +200,7 @@ export default function DeliveryOrdersView() {
         if (order.userId) {
           OrderService.sendNotification(
             firestore, order.userId, "🚀 ¡En Camino a tu casa!",
-            "El repartidor ya tiene tu pedido y va hacia ti.", "order_status", order.id
+            "El repartidor ya tiene tu pedido y va hacia ti.", "order_status", order.id, user
           ).catch(console.error);
         }
     } catch (error) {

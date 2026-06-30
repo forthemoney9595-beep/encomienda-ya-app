@@ -84,7 +84,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     if (!firestore) return;
     setIsUpdating(true);
     try {
-      await updateOrderStatus(firestore, order.id, newStatus);
+      await updateOrderStatus(firestore, order.id, newStatus, appUser);
       toast({
           title: 'Estado Actualizado',
           description: `El pedido ahora está "${newStatus}".`,

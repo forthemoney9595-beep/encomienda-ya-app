@@ -1,8 +1,24 @@
 import { NextResponse } from 'next/server';
 import { adminDb, adminMessaging } from '@/lib/firebase-admin';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { verifyAuthToken } from '@/lib/auth-server';
 
 export async function POST(request: Request) {
+    const ip = getClientIp(request);
+    const { allowed } = checkRateLimit(ip, 'notify', 30, 60_000);
+    if (!allowed) {
+        return NextResponse.json({ error: "Demasiadas solicitudes. Espera un momento." }, { status: 429 });
+    }
+
     try {
+        // 🔒 El destinatario (userId) es OTRA persona, no quien llama -- así que acá no se
+        // compara contra el uid del token, solo se exige estar logueado (antes era
+        // totalmente anónimo, cualquiera podía spamear push a cualquier usuario).
+        const callerUid = await verifyAuthToken(request);
+        if (!callerUid) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+        }
+
         const { userId, title, body, link } = await request.json();
 
         if (!userId || !title || !body) {
