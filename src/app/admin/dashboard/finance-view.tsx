@@ -5,10 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 // ✅ Importamos Hooks de Firestore para la nueva lógica de retiros
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { writeBatch, doc, serverTimestamp, collection, query, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
 import { authedFetch } from '@/lib/authed-fetch';
 import { useToast } from '@/hooks/use-toast';
@@ -77,87 +76,6 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
         }
     };
 
-    // --- 2. LÓGICA DE DEUDAS AUTOMÁTICAS (TU CÓDIGO ANTERIOR) ---
-    // (Mantenemos esto para que puedas auditar cuánto se debe teóricamente)
-
-    const deliveredOrders = useMemo(() => {
-        return orders.filter(o => o.status === 'Entregado');
-    }, [orders]);
-
-    const storeDebts = useMemo(() => {
-        const debts: Record<string, { name: string, count: number, total: number, ids: string[], commissionRate: number, ownerId?: string }> = {};
-        
-        deliveredOrders.forEach(order => {
-            if (order.storePayoutStatus === 'paid') return;
-
-            const storeId = order.storeId;
-            const storeObj = stores.find(s => s.id === storeId);
-            const storeName = storeObj?.name || order.storeName || 'Tienda Desconocida';
-            const commissionPercent = storeObj?.commissionRate || 0;
-            const ownerId = storeObj?.ownerId;
-
-            if (!debts[storeId]) {
-                debts[storeId] = { name: storeName, count: 0, total: 0, ids: [], commissionRate: commissionPercent, ownerId: ownerId };
-            }
-
-            const subtotal = order.subtotal || 0;
-            const feeAmount = (subtotal * commissionPercent) / 100;
-            const payoutAmount = subtotal - feeAmount;
-
-            debts[storeId].total += payoutAmount;
-            debts[storeId].count += 1;
-            debts[storeId].ids.push(order.id);
-        });
-        return Object.values(debts);
-    }, [deliveredOrders, stores]);
-
-    const driverDebts = useMemo(() => {
-        const debts: Record<string, { name: string, count: number, total: number, ids: string[], driverId: string }> = {};
-
-        deliveredOrders.forEach(order => {
-            if (order.deliveryPayoutStatus === 'paid') return;
-            if (!order.deliveryPersonId) return;
-
-            const driverId = order.deliveryPersonId;
-            const driverName = users.find(u => u.id === driverId)?.displayName || order.deliveryPersonName || 'Repartidor';
-
-            if (!debts[driverId]) {
-                debts[driverId] = { name: driverName, count: 0, total: 0, ids: [], driverId: driverId };
-            }
-
-            const amountForDriver = order.deliveryFee || 0;
-            debts[driverId].total += amountForDriver;
-            debts[driverId].count += 1;
-            debts[driverId].ids.push(order.id);
-        });
-        return Object.values(debts);
-    }, [deliveredOrders, users]);
-
-    // Función "Manual" para marcar como pagado (Old School)
-    const handleManualPayout = async (type: 'store' | 'delivery', entityName: string, orderIds: string[], amount: number, recipientId?: string) => {
-        if (!firestore) return;
-        if (!confirm(`¿Confirmas el pago de $${amount.toLocaleString()} a ${entityName}?`)) return;
-
-        setIsProcessing('manual');
-        try {
-            const batch = writeBatch(firestore);
-            orderIds.forEach(orderId => {
-                const orderRef = doc(firestore, 'orders', orderId);
-                if (type === 'store') batch.update(orderRef, { storePayoutStatus: 'paid', payoutDate: serverTimestamp() });
-                else batch.update(orderRef, { deliveryPayoutStatus: 'paid', payoutDate: serverTimestamp() });
-            });
-            await batch.commit();
-            toast({ title: "Liquidación Manual Exitosa", className: "bg-success/10 border-success/30 text-foreground" });
-        } catch (error) {
-            toast({ variant: "destructive", title: "Error al liquidar" });
-        } finally {
-            setIsProcessing(null);
-        }
-    };
-
-    const totalStoreDebt = storeDebts.reduce((acc, curr) => acc + curr.total, 0);
-    const totalDriverDebt = driverDebts.reduce((acc, curr) => acc + curr.total, 0);
-    
     // Estadísticas de Solicitudes
     const pendingRequestsTotal = withdrawals?.filter((w: any) => w.status === 'pending').reduce((sum: number, w: any) => sum + w.amount, 0) || 0;
 
@@ -227,80 +145,13 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
                 </CardContent>
             </Card>
 
-            {/* SECCIÓN 2: AUDITORÍA Y PAGOS MANUALES (TU SISTEMA ANTERIOR) */}
-            <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4 text-muted-foreground flex items-center gap-2">
-                    <Wallet className="h-5 w-5"/> Auditoría de Deudas (Cálculo Automático)
-                </h3>
-                
-                <div className="grid gap-4 md:grid-cols-2 mb-6">
-                    <Card className="bg-muted/30">
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Deuda Tiendas</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-info">${totalStoreDebt.toLocaleString()}</div></CardContent>
-                    </Card>
-                    <Card className="bg-muted/30">
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Deuda Repartidores</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-primary">${totalDriverDebt.toLocaleString()}</div></CardContent>
-                    </Card>
-                </div>
-
-                <Tabs defaultValue="stores" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="stores">Tiendas (Por Pagar)</TabsTrigger>
-                        <TabsTrigger value="drivers">Repartidores (Por Pagar)</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="stores">
-                        <Card>
-                            <CardContent className="pt-4">
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Tienda</TableHead><TableHead>A Pagar</TableHead><TableHead className="text-right">Acción Manual</TableHead></TableRow></TableHeader>
-                                    <TableBody>
-                                        {storeDebts.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center">Al día.</TableCell></TableRow> : 
-                                            storeDebts.map((debt, i) => (
-                                                <TableRow key={i}>
-                                                    <TableCell>{debt.name}</TableCell>
-                                                    <TableCell className="font-bold text-info">${debt.total.toLocaleString()}</TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Button size="sm" variant="secondary" disabled={!!isProcessing} onClick={() => handleManualPayout('store', debt.name, debt.ids, debt.total, debt.ownerId)}>
-                                                            Marcar Pagado
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        }
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="drivers">
-                        <Card>
-                            <CardContent className="pt-4">
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Repartidor</TableHead><TableHead>A Pagar</TableHead><TableHead className="text-right">Acción Manual</TableHead></TableRow></TableHeader>
-                                    <TableBody>
-                                        {driverDebts.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center">Al día.</TableCell></TableRow> : 
-                                            driverDebts.map((debt, i) => (
-                                                <TableRow key={i}>
-                                                    <TableCell>{debt.name}</TableCell>
-                                                    <TableCell className="font-bold text-primary">${debt.total.toLocaleString()}</TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Button size="sm" variant="secondary" disabled={!!isProcessing} onClick={() => handleManualPayout('delivery', debt.name, debt.ids, debt.total, debt.driverId)}>
-                                                            Marcar Pagado
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        }
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                </Tabs>
-            </div>
+            {/* La sección "Auditoría de Deudas" fue eliminada en la Fase N2.
+                Usaba storePayoutStatus/deliveryPayoutStatus en cada pedido para calcular
+                deudas, pero ese cálculo difería del que usa la billetera de la tienda
+                (basado en la colección withdrawals). Tener dos sistemas paralelos con
+                cifras distintas confundía al admin y creaba riesgo de doble pago.
+                La colección withdrawals + /api/admin/approve-withdrawal es la única
+                fuente de verdad ahora. */}
         </div>
     );
 }
