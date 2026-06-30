@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { verifyAuthToken, verifyStoreOwnership } from "@/lib/auth-server";
 
 const FIXED_SHIPPING_COST = 2000;
 
@@ -22,6 +23,17 @@ export async function POST(request: Request) {
     if (!orderId || !storeId) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
+
+    // 🔒 Solo el dueño real de la tienda (probado por su token + stores/{id}.ownerId)
+    // puede confirmar stock de sus pedidos -- antes alcanzaba con mandar cualquier storeId.
+    const callerUid = await verifyAuthToken(request);
+    if (!callerUid) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+    if (!(await verifyStoreOwnership(callerUid, storeId))) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
     const removedIds: string[] = Array.isArray(removedItemIds) ? removedItemIds : [];
 
     const orderRef = adminDb.collection("orders").doc(orderId);

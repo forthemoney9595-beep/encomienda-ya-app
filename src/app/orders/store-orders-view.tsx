@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { OrderService } from '@/lib/order-service';
+import { authedFetch } from '@/lib/authed-fetch';
 import { Clock, CheckCircle2, Megaphone, Utensils, CreditCard, Bike, Eye, Wallet, DollarSign, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -41,7 +42,7 @@ function playNewOrderBeep() {
 }
 
 export default function StoreOrdersView() {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   
@@ -137,11 +138,7 @@ export default function StoreOrdersView() {
 
   const handleConfirmStock = async (order: any, removedItemIds: string[] = []) => {
       try {
-          const res = await fetch('/api/orders/confirm-stock', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ orderId: order.id, storeId: userProfile?.storeId, removedItemIds }),
-          });
+          const res = await authedFetch('/api/orders/confirm-stock', user, { orderId: order.id, storeId: userProfile?.storeId, removedItemIds });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'No se pudo confirmar el pedido.');
 

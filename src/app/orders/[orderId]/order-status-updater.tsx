@@ -115,11 +115,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const handleConfirmStock = async () => {
     setIsUpdating(true);
     try {
-      const res = await fetch('/api/orders/confirm-stock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id, storeId: order.storeId, removedItemIds: Array.from(uncheckedIds) }),
-      });
+      const res = await authedFetch('/api/orders/confirm-stock', appUser, { orderId: order.id, storeId: order.storeId, removedItemIds: Array.from(uncheckedIds) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo confirmar el pedido.');
       toast({
