@@ -158,16 +158,19 @@ pegarle a `/api/notify` — si no se pasa, el push no sale pero la notificación
 `/api/webhooks/mercadopago` (MercadoPago llama directo, no hay token de usuario) y
 `/api/dev/seed` (bloqueado por `NODE_ENV`) quedaron sin tocar a propósito.
 
-**Bugs nuevos encontrados al probar la Fase K (no relacionados, no resueltos):**
-- La consulta de "pedidos disponibles" del repartidor (`delivery-orders-view.tsx`) pide
-  `status in ['pending','Pendiente','Pendiente de Confirmación','En preparación','Aceptado',
-  'Listo para recoger']`, pero la regla de **lectura** de `orders` solo cubre explícitamente
-  `status == 'En preparación'` para pedidos sin repartidor — Firestore rechaza la consulta
-  completa (no solo filtra), así que hoy el repartidor probablemente no ve pedidos en estados
-  distintos a "En preparación" en la pestaña Disponibles.
-- Aparece un `FirebaseError: Missing or insufficient permissions` en consola al abrir
-  `/orders/{id}` (tienda y repartidor) incluso sin hacer ninguna acción — no rompe la página
-  visualmente, no se identificó la causa exacta (no es la regla de update tocada en K3).
+**2 bugs encontrados al probar la Fase K — ya resueltos (jul 2026):**
+- La consulta de "pedidos disponibles" del repartidor pedía 6 estados (varios muertos,
+  ningún código los escribe) pero la regla de lectura de `orders` solo cubría
+  `status == 'En preparación'` — Firestore rechazaba la consulta COMPLETA (no la filtraba),
+  así que la pestaña Disponibles quedaba siempre vacía, y "Listo para recoger" (el estado más
+  importante) nunca era visible ahí. Se acotó la consulta a `['En preparación', 'Listo para
+  recoger']` y se amplió la regla para que coincida exacto — a propósito no se incluyen los
+  estados previos a la confirmación de stock de la tienda.
+- `orders/[orderId]/page.tsx` leía `users/{order.userId}` (perfil del comprador) sin importar
+  quién mirara la página — las reglas solo dejan que cada quien lea su propio perfil, así que
+  para tienda/repartidor esa lectura siempre fallaba (no rompía nada, solo ensuciaba la
+  consola). Se sacó esa lectura cruzada: el nombre/teléfono del comprador ya estaban en la
+  propia orden (`customerName`/`customerPhoneNumber`).
 
 ## Pendientes pre-lanzamiento
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
