@@ -60,11 +60,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     if (!appUser) return;
     setIsUpdating(true);
     try {
-      const res = await fetch('/api/orders/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id, userId: appUser.uid }),
-      });
+      const res = await authedFetch('/api/orders/cancel', appUser, { orderId: order.id, userId: appUser.uid });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error desconocido');
       toast({ title: 'Pedido cancelado', description: 'Tu pedido fue cancelado correctamente.' });

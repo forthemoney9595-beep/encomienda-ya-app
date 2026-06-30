@@ -1,15 +1,33 @@
 import { NextResponse } from 'next/server';
 import { adminDb, adminMessaging } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { verifyAuthToken } from '@/lib/auth-server';
 
 const CANCELABLE_STATUSES = ['Pendiente de Confirmación', 'Pendiente de Pago'];
 
 export async function POST(request: Request) {
+    const ip = getClientIp(request);
+    const { allowed } = checkRateLimit(ip, 'orders:cancel', 10, 60_000);
+    if (!allowed) {
+        return NextResponse.json({ error: 'Demasiadas solicitudes. Espera un momento.' }, { status: 429 });
+    }
+
     try {
         const { orderId, userId } = await request.json();
 
         if (!orderId || !userId) {
             return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
+        }
+
+        // 🔒 Antes solo se chequeaba que el pedido fuera de ese userId -- pero nada probaba
+        // que quien llama REALMENTE sea ese usuario. Ahora se verifica el ID token primero.
+        const callerUid = await verifyAuthToken(request);
+        if (!callerUid) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+        }
+        if (callerUid !== userId) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
         }
 
         const orderRef = adminDb.collection('orders').doc(orderId);
