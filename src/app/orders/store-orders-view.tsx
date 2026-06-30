@@ -117,11 +117,7 @@ export default function StoreOrdersView() {
   // una tienda leer la lista completa de usuarios/repartidores.
   const notifyAllDrivers = async (orderId: string) => {
       try {
-          const res = await fetch('/api/orders/notify-drivers', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ orderId }),
-          });
+          const res = await authedFetch('/api/orders/notify-drivers', user, { orderId });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Error al notificar');
 

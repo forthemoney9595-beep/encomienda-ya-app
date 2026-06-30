@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { verifyAuthToken, verifyStoreOwnership } from "@/lib/auth-server";
 
 // Avisa a TODOS los repartidores que un pedido está listo para retirar.
 // Va por API (Admin SDK) porque las reglas de Firestore no le permiten a una
@@ -24,7 +25,18 @@ export async function POST(request: Request) {
     if (!orderSnap.exists) {
       return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 });
     }
-    const storeName = orderSnap.data()?.storeName || "La tienda";
+    const orderData = orderSnap.data()!;
+    const storeName = orderData.storeName || "La tienda";
+
+    // 🔒 Solo el dueño real de la tienda del pedido puede disparar el broadcast a todos
+    // los repartidores -- antes alcanzaba con mandar cualquier orderId.
+    const callerUid = await verifyAuthToken(request);
+    if (!callerUid) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+    if (!(await verifyStoreOwnership(callerUid, orderData.storeId))) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
 
     const driversSnap = await adminDb.collection("users").where("role", "==", "delivery").get();
     if (driversSnap.empty) {
