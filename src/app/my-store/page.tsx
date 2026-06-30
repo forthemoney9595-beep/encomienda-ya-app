@@ -246,10 +246,11 @@ export default function MyStorePage() {
           <div className="space-y-2">
             <Label>Portada de la Tienda</Label>
             <div className="flex justify-center">
-                <ImageUpload 
+                <ImageUpload
                     currentImageUrl={formData.imageUrl}
                     onImageUploaded={handleImageUploaded}
                     folder="store-banners"
+                    ownerId={userProfile!.storeId!}
                     variant="banner"
                 />
             </div>

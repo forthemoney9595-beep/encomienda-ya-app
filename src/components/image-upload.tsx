@@ -13,14 +13,18 @@ interface ImageUploadProps {
   currentImageUrl?: string;
   onImageUploaded: (url: string) => void;
   folder?: string; // 'profiles', 'products', etc.
+  // Uid del usuario o id de la tienda dueña del archivo -- se mete en el path para que
+  // storage.rules pueda comprobar quién puede leer/escribir cada archivo (ver licenses/).
+  ownerId: string;
   variant?: 'avatar' | 'banner';
 }
 
-export function ImageUpload({ 
-  currentImageUrl, 
-  onImageUploaded, 
+export function ImageUpload({
+  currentImageUrl,
+  onImageUploaded,
   folder = 'uploads',
-  variant = 'avatar' 
+  ownerId,
+  variant = 'avatar'
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(currentImageUrl);
@@ -62,8 +66,10 @@ export function ImageUpload({
     setPreviewUrl(objectUrl);
 
     try {
-      // Referencia en Firebase Storage: uploads/timestamp_nombre.jpg
-      const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+      // Referencia en Firebase Storage: carpeta/dueño/timestamp_nombre.jpg -- el id del
+      // dueño en el path es lo que permite a storage.rules restringir quién puede leer/
+      // sobreescribir cada archivo.
+      const storageRef = ref(storage, `${folder}/${ownerId}/${Date.now()}_${file.name}`);
       
       // Subir
       const snapshot = await uploadBytes(storageRef, file);

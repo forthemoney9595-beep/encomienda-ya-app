@@ -9,6 +9,9 @@ service firebase.storage {
       return request.resource.size < 5 * 1024 * 1024 &&
              request.resource.contentType.matches('image/.*');
     }
+    function isAdmin() {
+      return firestore.exists(/databases/(default)/documents/roles_admin/$(request.auth.uid));
+    }
 
     // Avatares de perfil — visibles públicamente (se muestran en la UI a otros usuarios)
     match /profiles/{allPaths=**} {
@@ -28,13 +31,12 @@ service firebase.storage {
       allow write: if isSignedIn() && isValidImage();
     }
 
-    // Licencias de conducir (DNI/carnet de repartidores) — documento sensible, NUNCA público.
-    // Nota: como la ruta no incluye el uid, esta regla solo exige estar logueado;
-    // restringir a "solo el dueño o admin" requiere taguear el archivo con metadata
-    // (uploadedBy) al subirlo. Ver recomendación de seguimiento.
-    match /licenses/{allPaths=**} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidImage();
+    // Licencias de conducir (DNI/carnet de repartidores) — documento sensible, NUNCA
+    // público. El path incluye el uid del dueño (ver image-upload.tsx) para poder
+    // restringir lectura/escritura a ese mismo usuario o a un admin.
+    match /licenses/{uid}/{allPaths=**} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();
     }
 
     // Cualquier otra ruta: denegado por defecto

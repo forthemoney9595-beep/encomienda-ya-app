@@ -220,10 +220,11 @@ export default function ProfilePage() {
                 <Card className="lg:col-span-4 h-fit shadow-md border-t-4 border-t-primary">
                     <CardHeader className="text-center pb-2">
                         <div className="mx-auto mb-4 relative">
-                            <ImageUpload 
+                            <ImageUpload
                                 currentImageUrl={profileImageUrl}
                                 onImageUploaded={setProfileImageUrl}
                                 folder="profiles"
+                                ownerId={user!.uid}
                                 variant="avatar"
                             />
                             <div className="absolute -bottom-2 -right-2">
@@ -465,10 +466,11 @@ export default function ProfilePage() {
                                                         </Button>
                                                     </div>
                                                 ) : (
-                                                    <ImageUpload 
+                                                    <ImageUpload
                                                         onImageUploaded={setLicenseUrl}
                                                         folder="licenses"
-                                                        variant="banner" 
+                                                        ownerId={user!.uid}
+                                                        variant="banner"
                                                     />
                                                 )}
                                                 {!licenseUrl && <p className="text-xs text-muted-foreground mt-2">Sube una foto clara de tu carnet.</p>}

@@ -458,10 +458,11 @@ export default function ProductManagementPage() {
             
             <div className="grid gap-2">
                 <Label>Imagen del Producto</Label>
-                <ImageUpload 
+                <ImageUpload
                     currentImageUrl={formData.imageUrl}
                     onImageUploaded={handleImageUploaded}
                     folder="products"
+                    ownerId={userProfile!.storeId!}
                     variant="banner"
                 />
             </div>
