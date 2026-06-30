@@ -18,8 +18,10 @@ import {
   Shirt,
   MoreHorizontal,
   Users,
-  Wallet, // ✅ AÑADIDO: Icono de Billetera
-  Star
+  Wallet,
+  Star,
+  Shield,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -70,6 +72,18 @@ export function MainNav({
             <Button variant={pathname.startsWith('/admin/users') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Users className="mr-2 h-4 w-4" />
               Gestión Usuarios
+            </Button>
+          </Link>
+          <Link href="/admin/reviews">
+            <Button variant={pathname.startsWith('/admin/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Moderación Reseñas
+            </Button>
+          </Link>
+          <Link href="/admin/audit-log">
+            <Button variant={pathname.startsWith('/admin/audit-log') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Shield className="mr-2 h-4 w-4" />
+              Log de Acciones
             </Button>
           </Link>
           <Link href="/">
