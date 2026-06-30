@@ -298,7 +298,7 @@ function DriverProfilePage() {
                             </div>
                             <div className="flex items-center gap-3 text-sm">
                                 <Phone className="h-4 w-4 text-muted-foreground" />
-                                <span>(123) 456-7890 (simulado)</span>
+                                <span>{driver.phoneNumber || (driver as any).phone || 'No especificado'}</span>
                             </div>
                             <div className="flex items-center gap-3 text-sm">
                                 <Car className="h-4 w-4 text-muted-foreground" />

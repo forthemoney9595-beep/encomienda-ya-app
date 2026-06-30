@@ -12,9 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { ManageStoreDialog } from './manage-store-dialog'; // Asegúrate de que la ruta sea correcta
+import { ManageStoreDialog } from './manage-store-dialog';
+import AdminAuthGuard from '../admin-auth-guard';
 
-export default function AdminStoresPage() {
+function AdminStoresPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -150,12 +151,16 @@ export default function AdminStoresPage() {
       </Card>
 
       {/* MODAL DE EDICIÓN */}
-      <ManageStoreDialog 
-        isOpen={isDialogOpen} 
-        setIsOpen={setIsDialogOpen} 
-        store={selectedStore} 
-        onSave={handleSaveStore} 
+      <ManageStoreDialog
+        isOpen={isDialogOpen}
+        setIsOpen={setIsDialogOpen}
+        store={selectedStore}
+        onSave={handleSaveStore}
       />
     </div>
   );
+}
+
+export default function AdminStoresPageGuarded() {
+  return <AdminAuthGuard><AdminStoresPage /></AdminAuthGuard>;
 }

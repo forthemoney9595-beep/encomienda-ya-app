@@ -201,6 +201,9 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
                                         <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'secondary'} className={w.status === 'pending' ? 'bg-warning/15 text-warning hover:bg-warning/25' : ''}>
                                             {w.status === 'pending' ? 'Pendiente' : w.status === 'approved' ? 'Pagado' : 'Rechazado'}
                                         </Badge>
+                                        {w.status === 'rejected' && w.rejectionReason && (
+                                            <p className="text-[11px] text-muted-foreground mt-1 max-w-[160px] line-clamp-2">{w.rejectionReason}</p>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         {w.status === 'pending' && (

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { authedFetch } from '@/lib/authed-fetch';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -69,15 +70,17 @@ function AdminUsersPage() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!firestore) return;
-    if (!confirm("⚠️ ¿Estás seguro? Esta acción eliminará al usuario permanentemente.")) return;
+    if (!currentUser) return;
+    if (!confirm("⚠️ ¿Estás seguro? Esto elimina la cuenta permanentemente (Firebase Auth + Firestore).")) return;
 
     try {
-        await deleteDoc(doc(firestore, 'users', userId));
-        toast({ title: 'Usuario eliminado' });
-    } catch (error) {
+        const res = await authedFetch('/api/admin/delete-user', currentUser, { userId });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al eliminar');
+        toast({ title: 'Usuario eliminado', description: 'La cuenta fue borrada de Auth y Firestore.' });
+    } catch (error: any) {
         console.error(error);
-        toast({ variant: 'destructive', title: 'Error al eliminar' });
+        toast({ variant: 'destructive', title: 'Error al eliminar', description: error.message });
     }
   };
 
