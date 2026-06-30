@@ -76,14 +76,36 @@ service cloud.firestore {
         (resource.data.status == 'En preparación' && resource.data.deliveryPersonId == null) 
       );
 
-      // ✏️ UPDATE: Solo acciones permitidas
+      // ✏️ UPDATE: Solo acciones permitidas — cada rol restringido a los campos y valores
+      // que de verdad escribe directo (todo lo que toca total/items/pago pasa SIEMPRE por
+      // las API seguras del Admin SDK, que no usan estas reglas).
       allow update: if isSignedIn() && (
         isAdmin() ||
-        isStoreOwner(resource.data.storeId) ||
-        resource.data.deliveryPersonId == request.auth.uid ||
-        // Auto-asignación de repartidor
-        (resource.data.deliveryPersonId == null && request.resource.data.deliveryPersonId == request.auth.uid) ||
-        // Cliente: solo puede calificar (productos y/o repartidor), no otros campos
+
+        // TIENDA: solo rechazar el pedido o marcarlo listo para retirar, y avisar al
+        // repartidor. Total/items/pago: siempre por /api/orders/confirm-stock.
+        (isStoreOwner(resource.data.storeId) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'readyForPickup', 'lastDriverNotification']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
+            request.resource.data.status in ['Rechazado', 'Listo para recoger'])) ||
+
+        // REPARTIDOR ASIGNADO: avanzar su propio pedido + reportar posición GPS
+        // (driverCoords, sin tocar status — tiene que seguir siendo una escritura barata).
+        (resource.data.deliveryPersonId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'pickedUpAt', 'deliveredAt', 'driverCoords']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
+            request.resource.data.status in ['En reparto', 'Entregado'])) ||
+
+        // REPARTIDOR LIBRE: autoasignación de un pedido sin repartidor.
+        (resource.data.deliveryPersonId == null &&
+          request.resource.data.deliveryPersonId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['deliveryPersonId', 'deliveryPersonName', 'status', 'takenAt']) &&
+          request.resource.data.status == 'En camino') ||
+
+        // CLIENTE: solo puede calificar (productos y/o repartidor), no otros campos
         (resource.data.userId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items', 'deliveryRating', 'deliveryReview']))
       );

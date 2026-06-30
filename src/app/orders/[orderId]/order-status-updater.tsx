@@ -24,12 +24,19 @@ interface OrderStatusUpdaterProps {
 // -> entregar, todo en delivery-orders-view.tsx) — ahí sí se asigna deliveryPersonId
 // y se avisa a quien corresponde. Si la tienda pudiera saltar directo a "En reparto" o
 // "Entregado" desde aquí, el pedido queda sin repartidor asignado y nadie se entera.
+// "Pendiente de Pago" como destino se sacó del mapa: ese paso SIEMPRE tiene que ir por
+// /api/orders/confirm-stock (recalcula el total server-side), nunca por este dropdown
+// genérico que escribe directo a Firestore. Ya era inalcanzable en la práctica (los
+// escenarios 3/4 de abajo interceptan esos estados antes), pero quedaba como código
+// muerto al lado de un handleUpdateStatus(selectedStatus) sin guarda — lo sacamos para
+// que la regla de Firestore (que ahora bloquea ese campo/valor por escritura directa)
+// nunca tenga la chance de rechazar un click real del usuario.
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
   'pending': [],
   'Pendiente': [],
-  'Pendiente de Confirmación': ['Pendiente de Pago', 'Rechazado'],
-  'Pendiente de Pago': ['En preparación'],
-  'Aceptado': ['En preparación'],
+  'Pendiente de Confirmación': ['Rechazado'],
+  'Pendiente de Pago': [],
+  'Aceptado': [],
   'En preparación': ['Listo para recoger'],
   'Listo para recoger': [],
   'En camino': [],
