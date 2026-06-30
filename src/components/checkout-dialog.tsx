@@ -8,6 +8,7 @@ import { Loader2, CheckCircle2, MapPin, ShoppingBag, LocateFixed, Crosshair, Ale
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
 import { OrderService } from '@/lib/order-service';
+import { authedFetch } from '@/lib/authed-fetch';
 // ✅ IMPORTANTE: Agregamos useDoc y useMemoFirebase para leer la config
 import { useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore'; 
@@ -172,26 +173,22 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         }
 
         // Enviamos a la API
-        const response = await fetch('/api/orders/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: user.uid,
-                items: cleanItems,
-                storeId: storeId,
-                storeName: storeName,
-                storeAddress: storeAddress,
-                shippingInfo: {
-                    name: userProfile?.name || user.displayName || 'Cliente',
-                    address: address // Enviamos la referencia visual escrita
-                },
-                // ✅ ENVIAMOS LAS COORDENADAS
-                customerCoords: locationCoords, 
-                
-                customerName: userProfile?.name || user.displayName || 'Cliente',
-                customerPhoneNumber: phone || 'Sin teléfono',
-                idempotencyKey
-            })
+        const response = await authedFetch('/api/orders/create', user, {
+            userId: user.uid,
+            items: cleanItems,
+            storeId: storeId,
+            storeName: storeName,
+            storeAddress: storeAddress,
+            shippingInfo: {
+                name: userProfile?.name || user.displayName || 'Cliente',
+                address: address // Enviamos la referencia visual escrita
+            },
+            // ✅ ENVIAMOS LAS COORDENADAS
+            customerCoords: locationCoords,
+
+            customerName: userProfile?.name || user.displayName || 'Cliente',
+            customerPhoneNumber: phone || 'Sin teléfono',
+            idempotencyKey
         });
 
         const result = await response.json();

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { verifyAuthToken } from "@/lib/auth-server";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 const FIXED_SHIPPING_COST = 2000; 
@@ -19,6 +20,16 @@ export async function POST(request: Request) {
 
     if (!userId || !items || !storeId) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
+    }
+
+    // 🔒 El uid del token tiene que ser el mismo userId que dice el body — si no, alguien
+    // está intentando crear un pedido a nombre de otra persona.
+    const callerUid = await verifyAuthToken(request);
+    if (!callerUid) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+    if (callerUid !== userId) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
     // 🔒 Idempotencia: evitar doble pedido por doble click / doble request

@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Home, Loader2, Phone, AlertTriangle, ArrowLeft, Store as StoreIcon, Receipt, CreditCard, Lock, MapPin, Crosshair } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { authedFetch } from '@/lib/authed-fetch';
 import { useEffect, useState, useMemo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { doc, getDoc } from 'firebase/firestore';
@@ -222,18 +223,14 @@ export default function CheckoutPage() {
       }
 
       // 3. CREAR ORDEN VÍA API SEGURA
-      const createResponse = await fetch('/api/orders/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              userId: user.uid,
-              items: cleanItems,
-              storeId: storeId,
-              shippingInfo: { name: values.name, address: values.address }, 
-              paymentMethod: 'mercadopago',
-              customerCoords: coords || undefined,
-              idempotencyKey
-          })
+      const createResponse = await authedFetch('/api/orders/create', user, {
+          userId: user.uid,
+          items: cleanItems,
+          storeId: storeId,
+          shippingInfo: { name: values.name, address: values.address },
+          paymentMethod: 'mercadopago',
+          customerCoords: coords || undefined,
+          idempotencyKey
       });
 
       const orderDataResult = await createResponse.json();
