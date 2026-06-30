@@ -12,13 +12,13 @@ import { OrderStatusUpdater } from './order-status-updater';
 import { useEffect, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth, UserProfile } from '@/context/auth-context'; 
+import { useAuth } from '@/context/auth-context';
 import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'; 
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { CircularProgress } from '@/components/ui/circular-progress';
-import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, Mail, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store, ExternalLink } from 'lucide-react';
+import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent } from '@/components/ui/alert-dialog';
@@ -147,12 +147,13 @@ export default function OrderTrackingPage() {
   const orderRef = useMemoFirebase(() => firestore ? doc(firestore, 'orders', orderId) : null, [firestore, orderId]);
   const { data: order, isLoading: orderLoading } = useDoc<Order>(orderRef);
 
-  const customerProfileRef = useMemoFirebase(() => {
-    if (!firestore || !order?.userId) return null;
-    return doc(firestore, 'users', order.userId);
-  }, [firestore, order?.userId]);
-
-  const { data: customerProfile } = useDoc<UserProfile>(customerProfileRef); 
+  // Nota: antes había acá un useDoc leyendo users/{order.userId} (el perfil del
+  // comprador) para mostrárselo a la tienda/repartidor -- pero las reglas de Firestore
+  // solo dejan que cada usuario lea su propio perfil, así que esa lectura SIEMPRE
+  // fallaba con "Missing or insufficient permissions" para cualquiera que no fuera el
+  // propio comprador (no rompía la página, solo ensuciaba la consola). Se sacó: el
+  // nombre/teléfono del comprador ya están guardados en la orden misma
+  // (customerName/customerPhoneNumber), no hace falta esa lectura cruzada.
 
   const isLoading = authLoading || orderLoading;
 
@@ -357,7 +358,7 @@ export default function OrderTrackingPage() {
 
   const isAvailableToAccept = isDelivery && !order.deliveryPersonId && (order.status === 'En preparación' || order.status === 'Listo para recoger');
   const showRightColumn = isStoreOwner || isDelivery || isBuyer;
-  const phoneToCall = isDeliveryPerson ? (order.customerPhoneNumber || customerProfile?.phoneNumber) : undefined;
+  const phoneToCall = isDeliveryPerson ? order.customerPhoneNumber : undefined;
   const paymentFailed = searchParams.get('retry') === 'true' && isBuyer && order.status === 'Pendiente de Pago';
 
   const handleRetryPayment = async () => {
@@ -556,11 +557,10 @@ export default function OrderTrackingPage() {
                     <Separator/><div className="flex justify-between font-bold text-lg"><p>Total</p><p>${displayTotal.toFixed(2)}</p></div>
                      <Separator/>
                      
-                     {isStoreOwner && customerProfile && (
+                     {isStoreOwner && (
                         <div className="border-t pt-4 space-y-2">
                            <h3 className="font-semibold text-lg">Contacto del Cliente</h3>
-                           <p className="text-sm text-muted-foreground flex items-center"><Phone className="h-4 w-4 mr-2" />Teléfono: {order.customerPhoneNumber || customerProfile.phoneNumber || 'No especificado'}</p>
-                           <p className="text-sm text-muted-foreground flex items-center"><Mail className="h-4 w-4 mr-2" />Email: {customerProfile.email}</p>
+                           <p className="text-sm text-muted-foreground flex items-center"><Phone className="h-4 w-4 mr-2" />Teléfono: {order.customerPhoneNumber || 'No especificado'}</p>
                         </div>
                      )}
                      
