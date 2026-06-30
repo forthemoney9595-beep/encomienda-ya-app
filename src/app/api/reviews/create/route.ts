@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { verifyAuthToken } from "@/lib/auth-server";
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -17,6 +18,17 @@ export async function POST(request: Request) {
     if (!orderId || !userId || !rating) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
+
+    // 🔒 Solo el comprador real (probado por su token) puede dejar la reseña, no
+    // cualquiera que adivine un orderId+userId.
+    const callerUid = await verifyAuthToken(request);
+    if (!callerUid) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+    if (callerUid !== userId) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
     const ratingNum = Number(rating);
     if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
       return NextResponse.json({ error: "La calificación debe ser un número entre 1 y 5." }, { status: 400 });

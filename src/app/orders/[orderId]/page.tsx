@@ -227,11 +227,7 @@ export default function OrderTrackingPage() {
 
     const handleStoreReviewSubmit = async (rating: number, comment: string) => {
         if (!order || !user) return;
-        const res = await fetch('/api/reviews/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId: order.id, userId: user.uid, rating, comment }),
-        });
+        const res = await authedFetch('/api/reviews/create', user, { orderId: order.id, userId: user.uid, rating, comment });
         const data = await res.json();
         if (!res.ok) {
             toast({ variant: 'destructive', title: "Error", description: data.error || 'No se pudo enviar la reseña.' });
