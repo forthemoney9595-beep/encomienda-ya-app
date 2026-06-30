@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Bell, Send } from 'lucide-react';
+import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Bell, Send, Activity, AlertTriangle, CheckCircle2, Pause } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -147,6 +147,28 @@ function AdminDashboard() {
     return [...orders].sort((a,b) => getDate(b.createdAt).getTime() - getDate(a.createdAt).getTime());
   }, [orders]);
 
+  // Estado en tiempo real — snapshot de QUÉ ESTÁ PASANDO AHORA en la plataforma
+  const liveStatus = useMemo(() => {
+    const ACTIVE_STATUSES = [
+      'Pendiente de Confirmación',
+      'Pendiente de Pago',
+      'En preparación',
+      'Listo para recoger',
+      'En camino',
+      'En reparto',
+    ];
+    const byStatus: Record<string, number> = {};
+    (orders || []).forEach(o => {
+      if (ACTIVE_STATUSES.includes(o.status)) byStatus[o.status] = (byStatus[o.status] || 0) + 1;
+    });
+    const totalActive = Object.values(byStatus).reduce((a, b) => a + b, 0);
+    const pausedStores = (stores || []).filter((s: any) => s.manuallyPaused).length;
+    const activeDrivers = (users || []).filter(u => u.role === 'delivery' && u.status === 'Activo').length;
+    const pendingApprovalStores   = (users || []).filter(u => u.role === 'store' && !u.isApproved).length;
+    const pendingApprovalDrivers  = (users || []).filter(u => u.role === 'delivery' && u.status === 'Pendiente').length;
+    return { byStatus, totalActive, pausedStores, activeDrivers, pendingApprovalStores, pendingApprovalDrivers };
+  }, [orders, stores, users]);
+
   // --- Analíticas por tienda y repartidor ---
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'7d'|'30d'|'month'|'all'>('30d');
   const [analyticsSort, setAnalyticsSort] = useState<'revenue'|'orders'>('revenue');
@@ -233,6 +255,78 @@ function AdminDashboard() {
   return (
     <div className="container mx-auto">
       <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
+
+      {/* ── Estado en tiempo real ─────────────────────────────── */}
+      <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
+          </span>
+          <h2 className="text-sm font-semibold">Estado actual</h2>
+          <span className="text-xs text-muted-foreground">— actualización en tiempo real</span>
+        </div>
+
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+          {/* Pedidos activos totales */}
+          <div className="col-span-2 sm:col-span-3 lg:col-span-2 rounded-lg bg-primary/10 border border-primary/20 p-3 flex items-center gap-3">
+            <Activity className="h-8 w-8 text-primary shrink-0" />
+            <div>
+              <div className="text-3xl font-bold text-primary">{liveStatus.totalActive}</div>
+              <div className="text-xs text-muted-foreground">pedidos activos ahora</div>
+            </div>
+          </div>
+
+          {/* Desglose por estado */}
+          {[
+            { status: 'Pendiente de Confirmación', label: 'Esperando tienda',  color: 'text-warning'     },
+            { status: 'Pendiente de Pago',         label: 'Esperando pago',    color: 'text-warning'     },
+            { status: 'En preparación',            label: 'Preparando',        color: 'text-info'        },
+            { status: 'Listo para recoger',        label: 'Listo para retiro', color: 'text-success'     },
+            { status: 'En camino',                 label: 'En camino',         color: 'text-primary'     },
+            { status: 'En reparto',                label: 'En reparto',        color: 'text-primary'     },
+          ].filter(s => (liveStatus.byStatus[s.status] || 0) > 0).map(s => (
+            <div key={s.status} className="rounded-lg bg-muted/40 border border-border p-2.5">
+              <div className={cn('text-2xl font-bold', s.color)}>{liveStatus.byStatus[s.status]}</div>
+              <div className="text-[11px] text-muted-foreground leading-tight">{s.label}</div>
+            </div>
+          ))}
+          {liveStatus.totalActive === 0 && (
+            <div className="col-span-2 sm:col-span-3 lg:col-span-4 rounded-lg bg-muted/40 border border-border p-2.5 flex items-center gap-2 text-muted-foreground text-sm">
+              <CheckCircle2 className="h-4 w-4 text-success" /> Sin pedidos activos en este momento
+            </div>
+          )}
+        </div>
+
+        {/* Segunda fila: tiendas y repartidores */}
+        <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+          <div className="rounded-lg bg-muted/40 border border-border p-2.5">
+            <div className="text-xl font-bold text-success">{(stores?.length || 0) - liveStatus.pausedStores}</div>
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1"><StoreIcon className="h-3 w-3" /> Tiendas abiertas</div>
+          </div>
+          <div className={cn('rounded-lg border p-2.5', liveStatus.pausedStores > 0 ? 'bg-warning/10 border-warning/30' : 'bg-muted/40 border-border')}>
+            <div className={cn('text-xl font-bold', liveStatus.pausedStores > 0 ? 'text-warning' : 'text-muted-foreground')}>{liveStatus.pausedStores}</div>
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Pause className="h-3 w-3" /> Tiendas pausadas</div>
+          </div>
+          <div className="rounded-lg bg-muted/40 border border-border p-2.5">
+            <div className="text-xl font-bold text-primary">{liveStatus.activeDrivers}</div>
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Bike className="h-3 w-3" /> Repartidores activos</div>
+          </div>
+          {(liveStatus.pendingApprovalStores + liveStatus.pendingApprovalDrivers) > 0 ? (
+            <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-2.5">
+              <div className="text-xl font-bold text-destructive">{liveStatus.pendingApprovalStores + liveStatus.pendingApprovalDrivers}</div>
+              <div className="text-[11px] text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-destructive" /> Aprobaciones pendientes</div>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-muted/40 border border-border p-2.5">
+              <div className="text-xl font-bold text-muted-foreground">0</div>
+              <div className="text-[11px] text-muted-foreground flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-success" /> Sin aprobaciones pendientes</div>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* ─────────────────────────────────────────────────────── */}
+
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
