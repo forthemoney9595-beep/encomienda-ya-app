@@ -16,8 +16,12 @@ import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { cn } from '@/lib/utils';
 import { format, subDays, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Search, XCircle, ChevronLeft, ChevronRight, Loader2, ExternalLink, Download } from 'lucide-react';
+import { Search, XCircle, ChevronLeft, ChevronRight, Loader2, ExternalLink, Download, DollarSign } from 'lucide-react';
 import { downloadCsv } from '@/lib/csv-export';
+import { logAdminAction } from '@/lib/admin-audit';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import type { Order } from '@/lib/order-service';
 
@@ -54,6 +58,12 @@ function AdminOrdersPage() {
   const [cursors, setCursors] = useState<(QueryDocumentSnapshot | null)[]>([null]);
   const [pageIndex, setPageIndex] = useState(0);
   const [cancelling, setCancelling] = useState<string | null>(null);
+
+  // Reembolso
+  const [refundOrder, setRefundOrder] = useState<any | null>(null);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [submittingRefund, setSubmittingRefund] = useState(false);
 
   const dateFrom = useMemo(() => getDateFrom(dateFilter), [dateFilter]);
 
@@ -126,6 +136,34 @@ function AdminOrdersPage() {
       toast({ variant: 'destructive', title: 'Error al cancelar', description: e.message });
     } finally {
       setCancelling(null);
+    }
+  };
+
+  const openRefund = (order: any) => {
+    setRefundOrder(order);
+    setRefundAmount(String(order.total || ''));
+    setRefundReason('');
+  };
+
+  const handleRefund = async () => {
+    if (!user || !refundOrder) return;
+    const amount = Number(refundAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({ variant: 'destructive', title: 'Monto inválido' });
+      return;
+    }
+    setSubmittingRefund(true);
+    try {
+      const res = await authedFetch('/api/admin/refund-order', user, { orderId: refundOrder.id, amount, reason: refundReason });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error');
+      if (firestore) logAdminAction(firestore, user.uid, 'refund_order', refundOrder.id, `$${amount}${refundReason ? ' — ' + refundReason : ''}`);
+      toast({ title: 'Reembolso registrado', description: `$${amount.toLocaleString()} — recordá hacer la devolución en MercadoPago.` });
+      setRefundOrder(null);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error al reembolsar', description: e.message });
+    } finally {
+      setSubmittingRefund(false);
     }
   };
 
@@ -217,9 +255,16 @@ function AdminOrdersPage() {
                     <td className="px-4 py-3 text-muted-foreground">{(order as any).storeName || '—'}</td>
                     <td className="px-4 py-3 text-right font-bold">${order.total?.toLocaleString()}</td>
                     <td className="px-4 py-3">
-                      <Badge variant="outline" className={cn('text-[10px] uppercase', orderStatusBadgeClass[kind])}>
-                        {order.status}
-                      </Badge>
+                      <div className="flex flex-col gap-1 items-start">
+                        <Badge variant="outline" className={cn('text-[10px] uppercase', orderStatusBadgeClass[kind])}>
+                          {order.status}
+                        </Badge>
+                        {(order as any).refunded && (
+                          <Badge variant="outline" className="text-[10px] border-warning/40 text-warning">
+                            Reembolsado ${((order as any).refundAmount || 0).toLocaleString()}
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1.5">
@@ -228,12 +273,23 @@ function AdminOrdersPage() {
                             <ExternalLink className="h-3 w-3" /> Ver
                           </Button>
                         </Link>
+                        {(order as any).paymentStatus === 'paid' && !(order as any).refunded && (
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-7 px-2 text-xs text-warning hover:bg-warning/10 gap-1"
+                            onClick={() => openRefund(order)}
+                            title="Reembolsar"
+                          >
+                            <DollarSign className="h-3 w-3" /> Reembolsar
+                          </Button>
+                        )}
                         {CANCELABLE_BY_ADMIN.has(order.status) && (
                           <Button
                             size="sm" variant="ghost"
                             className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10"
                             disabled={cancelling === order.id}
                             onClick={() => handleCancel(order.id, order.userId)}
+                            title="Cancelar"
                           >
                             {cancelling === order.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
                           </Button>
@@ -257,6 +313,38 @@ function AdminOrdersPage() {
           </Button>
         </div>
       </Card>
+
+      {/* Diálogo de reembolso */}
+      <Dialog open={!!refundOrder} onOpenChange={(open) => { if (!open) setRefundOrder(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reembolsar pedido</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="text-sm text-muted-foreground">
+              Pedido de <strong>{refundOrder?.customerName}</strong> · Total ${refundOrder?.total?.toLocaleString()}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Monto a reembolsar</Label>
+              <Input type="number" value={refundAmount} onChange={e => setRefundAmount(e.target.value)} placeholder="Monto en ARS" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Motivo <span className="text-muted-foreground">(lo verá el comprador)</span></Label>
+              <Textarea value={refundReason} onChange={e => setRefundReason(e.target.value)} rows={2} placeholder="Ej: El pedido llegó incompleto." />
+            </div>
+            <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg p-2.5">
+              Esto registra el reembolso y notifica al comprador. La devolución real del dinero
+              la hacés vos desde MercadoPago (igual que las transferencias de retiros).
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setRefundOrder(null)} disabled={submittingRefund}>Cancelar</Button>
+            <Button onClick={handleRefund} disabled={submittingRefund} className="gap-1.5">
+              {submittingRefund && <Loader2 className="h-4 w-4 animate-spin" />} Registrar reembolso
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
