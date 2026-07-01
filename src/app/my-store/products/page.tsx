@@ -24,8 +24,10 @@ import { ImageUpload } from '@/components/image-upload';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // Fallback cuando la tienda todavía no definió sus propias categorías en
-// /my-store/categories — coincide con la lista fija que había antes hardcodeada acá.
-const DEFAULT_CATEGORIES = ['Comida', 'Bebidas', 'Ropa', 'Electrónica', 'Hogar', 'Otros'];
+// /my-store/categories. "Combos" está a propósito: en vez de un tipo de producto
+// estructurado (que tocaría carrito/checkout/stock), un combo se arma como un producto
+// normal con su precio promo y se agrupa en su propia sección del menú.
+const DEFAULT_CATEGORIES = ['Comida', 'Combos', 'Bebidas', 'Ropa', 'Electrónica', 'Hogar', 'Otros'];
 
 interface Product {
   id: string;
@@ -633,7 +635,15 @@ export default function ProductManagementPage() {
           </DialogHeader>
           
           <form onSubmit={handleSave} className="space-y-4 py-2">
-            
+
+            {!editingProduct && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                💡 <strong className="text-foreground">¿Querés armar un combo?</strong> Creá un producto
+                con el precio total del combo (ej: <em>&ldquo;Combo Pizza + Gaseosa&rdquo;</em>) y elegí la categoría
+                <strong> &ldquo;Combos&rdquo;</strong>. Aparece con su propia sección en tu tienda.
+              </div>
+            )}
+
             <div className="grid gap-2">
                 <Label>Imagen del Producto</Label>
                 <ImageUpload
