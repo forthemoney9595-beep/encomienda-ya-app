@@ -478,7 +478,7 @@ del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el r
   el cliente podía entrar a ciegas a una tienda cerrada, aunque la lógica ya existía
   (`store-hours.ts`, Fase P). Badge verde "Abierto" / gris "Cerrado"/"Pausada" + imagen
   en gris si no opera. La pausa manual se evalúa aparte del horario (igual que la tienda
-  pública). NO se reordena "abiertas primero" todavía (queda para v2).
+  pública). Además el listado ordena **abiertas primero** (luego favoritas, luego rating).
 - **Envío real** en la tarjeta — antes decía "$2000" hardcodeado; ahora lee
   `config/platform.deliveryFee` (configurable desde `/admin/settings`, Fase N).
 - **Rubro de tienda unificado (los 3 conceptos de categoría, punto de raíz):** el rubro
@@ -492,8 +492,8 @@ del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el r
   Recordatorio de los 3 conceptos: `store.category` (rubro, home) ≠
   `store.productCategories` (secciones internas, `/my-store/categories`) ≠
   `product.category` (agrupa el menú público).
-- **Diferido a v2 (del análisis, no urgente para Tinogasta):** ordenar "abiertas
-  primero", badge de "Ofertas" en tarjetas con descuento, envío gratis desde $X (toca
+- **Diferido a v2 (del análisis, no urgente para Tinogasta):** badge de "Ofertas" en
+  tarjetas con descuento, envío gratis desde $X (toca
   pago), rehacer el editor de tienda en wizard/secciones, combos/variantes, cupones,
   geo-distancia. El editor de tienda sigue siendo un form largo único — funcional,
   aceptable para MVP; su única deuda real (el rubro) ya se cerró acá.

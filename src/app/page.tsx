@@ -293,9 +293,15 @@ function HomeContent() {
     }
     
     return filtered.sort((a, b) => {
+        // Abiertas primero -- no tiene sentido mostrar arriba una tienda que no puede
+        // recibir pedidos ahora (aunque sea favorita: no vas a poder comprarle igual).
+        const aOpen = storeOpenState(a).isOpen ? 1 : 0;
+        const bOpen = storeOpenState(b).isOpen ? 1 : 0;
+        if (aOpen !== bOpen) return bOpen - aOpen;
+
         const aFav = favoriteIds.has(a.id) ? 1 : 0;
         const bFav = favoriteIds.has(b.id) ? 1 : 0;
-        if (aFav !== bFav) return bFav - aFav; 
+        if (aFav !== bFav) return bFav - aFav;
         return (b.rating || 0) - (a.rating || 0);
     });
 
