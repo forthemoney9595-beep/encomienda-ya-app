@@ -512,10 +512,33 @@ del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el r
   producto (`DEFAULT_CATEGORIES` en `my-store/products`) + un tip en el diálogo de nuevo
   producto. El comercio arma el combo como un producto normal con precio total; se agrupa
   en su propia sección del menú. Cero cambios en el pipeline de pago.
+- **GPS del checkout — reusar la dirección guardada (patrón Rappi/PedidosYa).** Se
+  auditó todo el flujo de geolocalización (tienda, perfil, checkout, mapa de
+  seguimiento, tracking en vivo del repartidor) antes de evaluar geo-distancia. Hallazgo
+  principal: `CheckoutDialog` (el checkout real — es el único alcanzable desde la app;
+  `/checkout` la página completa **no tiene ningún link en toda la app**, es código
+  muerto) exigía capturar el GPS de nuevo en *cada* compra, sin reusar el que el
+  comprador ya tenía guardado en una dirección de `/profile`. Corregido: la dirección
+  guardada con coords se pre-selecciona sola al abrir el diálogo (chips para elegir
+  entre guardadas o "+ Nueva ubicación"); el botón de GPS solo aparece si hace falta
+  (dirección nueva, o una guardada que todavía no tiene coords). De paso se corrigió el
+  mismo bug de envío hardcodeado (`$2000`) que ya se había arreglado en el home (Fase V)
+  pero que `CheckoutDialog` tenía duplicado aparte — ahora lee
+  `config/platform.deliveryFee` en los dos lugares.
+- **Pendiente anotado, no resuelto:** `/checkout` (página completa, distinta de
+  `CheckoutDialog`) es código muerto — nada navega ahí. Tenía su propio comportamiento
+  de GPS (opcional, no bloqueaba) inconsistente con `CheckoutDialog` (obligatorio). Si
+  se reactiva algún día, aplicar el mismo criterio de reuso de dirección guardada.
+  Tampoco se tocó el bloqueo duro de "sin GPS no se puede pedir" — sacarlo es una
+  decisión de producto aparte, no técnica.
 - **Diferido a v2 (del análisis, no urgente para Tinogasta):** envío gratis desde $X (toca
   pago), combo estructurado / variantes de producto (tamaño/extras, la vieja Fase J),
-  cupones, geo-distancia. (Un wizard de *onboarding* en `/signup/store` quedó descartado
-  por ahora; el alta actual es suficiente.)
+  cupones, mostrar distancia en km (bajo valor real en un pueblo chico, además depende
+  de que tienda y comprador tengan GPS cargado, cosa que hoy es opcional en ambos
+  lados). Pin ajustable a mano en el mapa al guardar una dirección (patrón "gold
+  standard" de Rappi/PedidosYa — hoy solo se confía en la lectura cruda del GPS) queda
+  como mejora futura de UX, no urgente. (Un wizard de *onboarding* en `/signup/store`
+  quedó descartado por ahora; el alta actual es suficiente.)
 
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
