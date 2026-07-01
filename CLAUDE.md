@@ -546,10 +546,47 @@ admin — es autenticación y toca a todos los roles.
 - Regenerar el `MP_WEBHOOK_SECRET` (quedó expuesto durante pruebas)
 - Sacar la tabla de cuentas demo visible en `/login` (sirve para pruebas, no para producción)
 - Limpiar datos de prueba (órdenes/notificaciones, reseñas `Cliente de Prueba N` en
-  "DonalPizza" de la Fase Q) antes de abrir a usuarios reales
+  "DonalPizza" de la Fase Q, **y todo el seed masivo de la Fase W** — ver abajo) antes de
+  abrir a usuarios reales
 - Restringir por campo la regla de `users/{uid}` (`allow update`) — hoy cualquier usuario
   logueado puede reescribir cualquier campo de su propio documento, incluido `isApproved`
   (ver hallazgo anotado en la Fase U)
+
+## Fase W (jul 2026): datos de prueba masivos para QA manual pre-lanzamiento
+Antes de la revisión final de seguridad, se pobló la base real (`studio-354048519-4bc1e`)
+con variedad de datos para poder navegar y controlar cada caso a mano. Corrido con dos
+scripts puntuales (Admin SDK, no quedaron en el repo — no se tocó `/api/dev/seed`, que
+sigue siendo el seeder liviano de siempre). Password de **todas** las cuentas nuevas:
+`Test1234!`. No se tocó ninguna cuenta/tienda ya existente.
+- **4 tiendas nuevas**, una por rubro no cubierto todavía: Farmacia San Martín
+  (horario con siesta, dueño `farmacia@test.com`), Supermercado El Sol (horario normal,
+  `super@test.com`), Kiosco 24hs Don Beto (abierto 24hs, `kiosco@test.com`), Boutique Lu
+  (**pendiente de aprobación** + cerrada hoy a propósito, `ropa@test.com`) — para poder
+  probar el flujo de aprobación de tiendas de punta a punta.
+- **3 repartidores nuevos** cubriendo cada estado de aprobación:
+  `repartidor.pendiente@test.com` (Pendiente, con fotos de licencia placeholder),
+  `repartidor.rechazado@test.com` (Rechazado), `repartidor.offline@test.com` (Activo y
+  aprobado, pero `isOnline: false` — para probar que no recibe broadcasts de pedidos).
+- **3 compradores nuevos** cubriendo cada caso de dirección del checkout:
+  `cliente.nueva@test.com` (sin ninguna dirección guardada), `cliente.singps@test.com`
+  (una dirección guardada SIN GPS), `cliente.multi@test.com` (dos direcciones, ambas con
+  GPS) — para probar los 3 caminos del selector de dirección de `CheckoutDialog`.
+- **~25 productos nuevos**: stock bajo, agotados (por `available:false` y por
+  `stock:0`), en oferta (`discountPercent`, dispara el badge del home), y productos
+  "Combos". Incluye 3 productos extra agregados a DonalPizza y Pizzería de Prueba.
+- **18 pedidos en total** cubriendo *todos* los estados reales del flujo: Pendiente de
+  Confirmación, Pendiente de Pago, Listo para recoger (sin repartidor, en el pool), En
+  camino (asignado, sin retirar — sirve para probar "Soltar pedido"), En reparto (con
+  `driverCoords` para el mapa en vivo, y `hasReportedProblem: true` para probar el aviso
+  de "Reportar problema"), y 6 Entregados repartidos en distintos días/horas (para que
+  los gráficos de analíticas de tienda y repartidor tengan datos) con combinaciones de
+  reseña ya hecha / pendiente en ambos lados (tienda y repartidor).
+- **Reseñas, retiros, incidentes**: reseñas de tienda y de repartidor (con los
+  promedios `rating`/`ratingSum`/`ratingCount` actualizados a mano para que cuadren),
+  4 retiros nuevos (pending/approved/rejected, manual y automático), 2
+  `driver_incidents` (uno `released`, uno `problem_reported`) para que la alerta del
+  dashboard de admin tenga contenido real.
+- `config/platform` completado con `deliveryFee`/`settlementDayOfWeek` explícitos.
 
 ## Git workflow
 ```bash
