@@ -55,6 +55,13 @@ También: `Cancelado`, `Rechazado`
 - `src/app/orders/[orderId]/page.tsx` — detalle/seguimiento del pedido (también tiene acciones de repartidor y el botón "Calificar tienda")
 - `src/app/orders/[orderId]/order-status-updater.tsx` — controles de cambio de estado por rol (incluye los mismos checkboxes de stock que store-orders-view)
 - `src/app/orders/[orderId]/order-map.tsx` — mapa en tiempo real con Leaflet
+- `src/app/orders/delivery-orders-view.tsx` — panel operativo del repartidor (`/orders`): pestañas Disponibles/En Curso, tomar/retirar/entregar, "No puedo con este pedido"/"Reportar problema" (Fase T), toggle de disponibilidad (Fase U)
+- `src/app/delivery/page.tsx` — dashboard de repartidor (resumen: disponibles/en curso/entregados hoy/ganancias, rating, accesos). Fase U
+- `src/app/delivery/analytics/page.tsx` — analíticas del repartidor (ganancias por día, horas pico, movimientos). Fase U
+- `src/app/delivery/reviews/page.tsx` — reseñas del repartidor (equivalente a `/my-store/reviews`). Fase S
+- `src/app/api/delivery-reviews/create/route.ts` / `src/app/api/orders/{release,report-problem}/route.ts` — APIs seguras del flujo de repartidor (Fases S/T)
+- `src/components/delivery-online-toggle.tsx` — switch de `users/{uid}.isOnline`, compartido entre `/orders` y `/delivery`
+- `src/lib/analytics-period.ts` / `src/components/pct-badge.tsx` — lógica de período/comparación compartida entre `my-store/analytics` y `delivery/analytics` (Fase U)
 - `src/app/my-store/reviews/page.tsx` — reseñas de la tienda + respuesta opcional del dueño
 - `src/app/my-store/page.tsx` — dashboard de tienda (resumen: métricas, alertas, rating, accesos). El form de edición está en `src/app/my-store/edit/page.tsx` (Fase P)
 - `src/app/my-store/categories/page.tsx` — administra `stores/{id}.productCategories` (feed del selector de categoría del form de productos)
@@ -432,6 +439,37 @@ escritura directa del cliente (ambas van por Admin SDK, sin cambios de reglas pa
   repartidores" en el dashboard de admin, mismo estilo que la de pedidos trabados.
 - **Desplegado a producción** (`firebase deploy --only firestore:rules`).
 
+## Fase U (jul 2026): dashboard, disponible/no-disponible y analíticas del repartidor
+Los últimos 3 pendientes que quedaban anotados de la revisión del panel de repartidor.
+- **Disponible/no disponible:** `users/{uid}.isOnline` (sin valor = disponible, para no
+  dejar de avisarle a nadie que nunca tocó el switch). Nuevo componente compartido
+  `src/components/delivery-online-toggle.tsx`, visible en el panel operativo (`/orders`)
+  y en el dashboard nuevo. `/api/orders/notify-drivers` y `/api/orders/release` ahora
+  excluyen del broadcast a los no aprobados (ya no podían tomar el pedido igual, era el
+  gap anotado en la Fase R) y a los que se marcaron no disponibles — antes avisaban a
+  **todos** los `role:'delivery'` sin ningún filtro.
+- **Nuevo dashboard `/delivery`** (equivalente a `/my-store`, Fase P): resumen de
+  disponibles/en curso/entregados hoy/ganancias de hoy, banner de aprobación pendiente,
+  rating, accesos rápidos. Agregado como "Mi Panel" en el menú.
+- **Nueva `/delivery/analytics`** (equivalente a `/my-store/analytics`): ganancias
+  totales, entregas completadas y ganancia promedio con comparación vs período anterior,
+  gráfico de ganancias por día, horas pico, historial de movimientos. "Hoy"/el día de
+  cada entrega se calcula con `deliveredAt` (no `createdAt`) — un pedido tomado un día y
+  entregado al otro cuenta para el día que se entregó, no el que se creó.
+- Se extrajo la lógica de período/comparación (antes duplicada palabra por palabra) a
+  `src/lib/analytics-period.ts` + `src/components/pct-badge.tsx`, compartida ahora por
+  `my-store/analytics` y `delivery/analytics`.
+- Nuevo índice compuesto `orders(deliveryPersonId, createdAt)` que la consulta de
+  analíticas del repartidor necesita — desplegado a producción junto con lo anterior.
+- **Hallazgo anotado, sin resolver a propósito:** la regla de Firestore que deja a cada
+  usuario editar su propio `users/{uid}` (`allow update: if isAdmin() || isOwner(userId)`)
+  no restringe qué campos puede tocar — en teoría cualquier usuario logueado podría
+  escribirse `isApproved: true` directo desde la consola del navegador y saltarse la
+  aprobación del admin de la Fase O. Arreglarlo bien requiere inventariar todos los
+  campos que cada rol legítimamente auto-edita (perfil, direcciones, vehículo, CBU, FCM,
+  etc.) antes de restringir con `affectedKeys()`, para no romper nada — queda para una
+  revisión dedicada aparte, no se apuró junto con esta fase.
+
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
 recuperación de contraseña ("olvidé mi contraseña"), y login/registro con Google. No es config de
@@ -443,6 +481,9 @@ admin — es autenticación y toca a todos los roles.
 - Sacar la tabla de cuentas demo visible en `/login` (sirve para pruebas, no para producción)
 - Limpiar datos de prueba (órdenes/notificaciones, reseñas `Cliente de Prueba N` en
   "DonalPizza" de la Fase Q) antes de abrir a usuarios reales
+- Restringir por campo la regla de `users/{uid}` (`allow update`) — hoy cualquier usuario
+  logueado puede reescribir cualquier campo de su propio documento, incluido `isApproved`
+  (ver hallazgo anotado en la Fase U)
 
 ## Git workflow
 ```bash
