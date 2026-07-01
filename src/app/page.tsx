@@ -39,6 +39,7 @@ interface Store {
   schedule?: any;
   weeklySchedule?: any;
   manuallyPaused?: boolean;
+  maxDiscountPercent?: number;
 }
 
 // Estado de apertura para la tarjeta del listado. Misma fuente de verdad que la tienda
@@ -463,6 +464,14 @@ function HomeContent() {
                                 <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
                                     {store.category || 'General'}
                                 </span>
+                                {/* Badge de ofertas: mayor descuento vigente de la tienda
+                                    (stores/{id}.maxDiscountPercent, mantenido desde el panel
+                                    de productos — cero lecturas extra acá). */}
+                                {(store.maxDiscountPercent || 0) > 0 && (
+                                    <span className="absolute bottom-2 right-2 bg-success text-success-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                                        Hasta -{store.maxDiscountPercent}%
+                                    </span>
+                                )}
                                 {/* Estado de apertura — badge arriba a la izquierda; si está cerrada/pausada
                                     la imagen va en gris (arriba) para dejarlo claro de un vistazo. */}
                                 <span className={cn(

@@ -67,6 +67,10 @@ export default function ProductManagementPage() {
   // en vez de una lista fija, para que la categoría del producto y el agrupado de la tienda
   // pública (que agrupa por product.category) queden siempre en sync.
   const [storeCategories, setStoreCategories] = useState<string[]>([]);
+  // Máximo descuento vigente guardado hoy en el doc de la tienda (para no reescribirlo si
+  // no cambió). El home muestra un badge de ofertas basado en este campo — ver el efecto
+  // de sincronización más abajo.
+  const [storeMaxDiscount, setStoreMaxDiscount] = useState(0);
   // Filtro por estado de stock + selección para acciones masivas.
   const [stockFilter, setStockFilter] = useState<'all' | 'available' | 'out' | 'low'>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -139,14 +143,33 @@ export default function ProductManagementPage() {
   }, [firestore, userProfile?.storeId]);
 
   // Categorías del dueño (en vivo, así si las edita en /my-store/categories se refleja acá).
+  // Aprovecho la misma suscripción para leer el maxDiscountPercent actual de la tienda.
   useEffect(() => {
     if (!firestore || !userProfile?.storeId) return;
     const unsub = onSnapshot(doc(firestore, 'stores', userProfile.storeId), (snap) => {
-      const cats = snap.data()?.productCategories;
+      const data = snap.data();
+      const cats = data?.productCategories;
       setStoreCategories(Array.isArray(cats) ? cats.filter(Boolean) : []);
+      setStoreMaxDiscount(data?.maxDiscountPercent || 0);
     }, () => setStoreCategories([]));
     return () => unsub();
   }, [firestore, userProfile?.storeId]);
+
+  // Mantiene stores/{id}.maxDiscountPercent = el mayor descuento entre productos que hoy se
+  // pueden comprar (disponibles y con stock). El panel de productos es el único lugar donde
+  // cambia el catálogo, así que alcanza con recalcular acá. El home usa este campo para el
+  // badge de ofertas sin tener que leer los productos de cada tienda (ver Fase V bis).
+  useEffect(() => {
+    if (!firestore || !userProfile?.storeId || productsLoading) return;
+    const computed = products.reduce((max, p) => {
+      const buyable = p.available !== false && (p.stock == null || p.stock > 0);
+      const d = buyable ? (p.discountPercent || 0) : 0;
+      return Math.max(max, d);
+    }, 0);
+    if (computed !== storeMaxDiscount) {
+      updateDoc(doc(firestore, 'stores', userProfile.storeId), { maxDiscountPercent: computed }).catch(() => {});
+    }
+  }, [products, productsLoading, storeMaxDiscount, firestore, userProfile?.storeId]);
 
   // Opciones del selector: las del dueño si definió alguna, si no el fallback. Además nos
   // aseguramos de incluir la categoría del producto que se está editando aunque ya no esté
