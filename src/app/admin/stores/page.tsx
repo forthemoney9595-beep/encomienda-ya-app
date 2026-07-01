@@ -136,11 +136,11 @@ function AdminStoresPage() {
                             </TableCell>
                             <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
-                                    <Link href={`/admin/stores/${store.id}`}>
-                                        <Button size="sm" variant="ghost" title="Ver detalle">
+                                    <Button size="sm" variant="ghost" title="Ver detalle" asChild>
+                                        <Link href={`/admin/stores/${store.id}`}>
                                             <Eye className="h-4 w-4 text-muted-foreground" />
-                                        </Button>
-                                    </Link>
+                                        </Link>
+                                    </Button>
                                     <Button size="sm" variant="ghost" onClick={() => { setSelectedStore(store); setIsDialogOpen(true); }}>
                                         <Edit className="h-4 w-4 text-info" />
                                     </Button>
