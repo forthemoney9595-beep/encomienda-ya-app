@@ -507,9 +507,15 @@ del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el r
   Se eligió **secciones y NO wizard** a propósito: el wizard ayuda al onboarding pero mete
   fricción al editar cambios chicos, que es el uso real de esta página. Mismos campos y
   handlers — reorganización visual, no lógica nueva.
+- **Combos como producto (no estructurado):** se descartó el combo estructurado (tocaría
+  carrito/checkout/stock/pago). En su lugar: "Combos" en las categorías por defecto de
+  producto (`DEFAULT_CATEGORIES` en `my-store/products`) + un tip en el diálogo de nuevo
+  producto. El comercio arma el combo como un producto normal con precio total; se agrupa
+  en su propia sección del menú. Cero cambios en el pipeline de pago.
 - **Diferido a v2 (del análisis, no urgente para Tinogasta):** envío gratis desde $X (toca
-  pago), combos/variantes de producto, cupones, geo-distancia. (Un wizard de *onboarding*
-  en `/signup/store` quedó descartado por ahora; el alta actual es suficiente.)
+  pago), combo estructurado / variantes de producto (tamaño/extras, la vieja Fase J),
+  cupones, geo-distancia. (Un wizard de *onboarding* en `/signup/store` quedó descartado
+  por ahora; el alta actual es suficiente.)
 
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
