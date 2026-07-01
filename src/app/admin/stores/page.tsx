@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Store, Loader2, Plus, Search, MapPin, AlertTriangle, Check, Trash2, Edit } from 'lucide-react';
+import { Store, Loader2, Plus, Search, MapPin, AlertTriangle, Check, Trash2, Edit, Eye } from 'lucide-react';
+import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -135,6 +136,11 @@ function AdminStoresPage() {
                             </TableCell>
                             <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
+                                    <Link href={`/admin/stores/${store.id}`}>
+                                        <Button size="sm" variant="ghost" title="Ver detalle">
+                                            <Eye className="h-4 w-4 text-muted-foreground" />
+                                        </Button>
+                                    </Link>
                                     <Button size="sm" variant="ghost" onClick={() => { setSelectedStore(store); setIsDialogOpen(true); }}>
                                         <Edit className="h-4 w-4 text-info" />
                                     </Button>
