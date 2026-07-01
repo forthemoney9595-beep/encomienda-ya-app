@@ -7,8 +7,9 @@ import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebase/firestore';
+import { normalizeSchedule, getStoreOpenStatus } from '@/lib/store-hours';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -35,7 +36,19 @@ interface Store {
   address?: string;
   isApproved?: boolean;
   available?: boolean;
+  schedule?: any;
+  weeklySchedule?: any;
+  manuallyPaused?: boolean;
 }
+
+// Estado de apertura para la tarjeta del listado. Misma fuente de verdad que la tienda
+// pública (store-hours.ts) + el corte manual, que store-hours no conoce (igual que en
+// stores/[storeId]/page.tsx la pausa se maneja aparte del horario).
+const storeOpenState = (store: Store): { isOpen: boolean; label: string } => {
+  if (store.manuallyPaused) return { isOpen: false, label: 'Pausada' };
+  const s = getStoreOpenStatus(normalizeSchedule(store));
+  return { isOpen: s.isOpen, label: s.label };
+};
 
 // --- FUNCIÓN DE LIMPIEZA VISUAL (NUEVO) ---
 const cleanAddress = (rawAddress: string | undefined) => {
@@ -249,6 +262,11 @@ function HomeContent() {
 
   const { data: rawStores, isLoading: storesLoading } = useCollection<Store>(storesQuery);
 
+  // Fee de envío configurable (Fase N) — antes estaba hardcodeado "$2000" en la tarjeta.
+  const configRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'platform') : null), [firestore]);
+  const { data: platformConfig } = useDoc<{ deliveryFee?: number }>(configRef);
+  const deliveryFee = platformConfig?.deliveryFee ?? 2000;
+
   const favoritesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'users', user.uid, 'favorites');
@@ -410,6 +428,7 @@ function HomeContent() {
         ) : (
             filteredStores.map((store) => {
                 const isFav = favoriteIds.has(store.id);
+                const status = storeOpenState(store);
                 return (
                     <Link href={`/stores/${store.id}`} key={store.id} className="group">
                         <Card className="h-full overflow-hidden hover:shadow-lg transition-all duration-300 border-transparent hover:border-primary/20 relative">
@@ -419,7 +438,10 @@ function HomeContent() {
                                         src={store.imageUrl}
                                         alt={store.name}
                                         fill
-                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                        className={cn(
+                                            "object-cover group-hover:scale-105 transition-transform duration-500",
+                                            !status.isOpen && "grayscale"
+                                        )}
                                     />
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -434,6 +456,15 @@ function HomeContent() {
                                 </button>
                                 <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
                                     {store.category || 'General'}
+                                </span>
+                                {/* Estado de apertura — badge arriba a la izquierda; si está cerrada/pausada
+                                    la imagen va en gris (arriba) para dejarlo claro de un vistazo. */}
+                                <span className={cn(
+                                    "absolute top-2 left-2 text-[10px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm flex items-center gap-1",
+                                    status.isOpen ? "bg-success/90 text-success-foreground" : "bg-black/70 text-white"
+                                )}>
+                                    <span className={cn("h-1.5 w-1.5 rounded-full", status.isOpen ? "bg-white" : "bg-muted-foreground")} />
+                                    {status.label}
                                 </span>
                             </div>
 
@@ -461,7 +492,7 @@ function HomeContent() {
                                         {store.deliveryTime || '30-45 min'}
                                     </div>
                                     <div>
-                                        Envío: $2000
+                                        Envío: ${deliveryFee.toLocaleString()}
                                     </div>
                                 </div>
                             </CardContent>
