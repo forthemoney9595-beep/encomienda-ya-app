@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminAuthGuard from '../../admin-auth-guard';
 import PageHeader from '@/components/page-header';
@@ -30,8 +30,8 @@ const formatDate = (ts: any) => {
     try { return format(ts.toDate ? ts.toDate() : new Date(ts), 'd MMM HH:mm', { locale: es }); } catch { return '—'; }
 };
 
-function AdminStoreDetailPage({ params }: { params: Promise<{ storeId: string }> }) {
-    const { storeId } = use(params);
+function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
+    const { storeId } = params;
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
@@ -331,6 +331,6 @@ function AdminStoreDetailPage({ params }: { params: Promise<{ storeId: string }>
     );
 }
 
-export default function AdminStoreDetailPageGuarded({ params }: { params: Promise<{ storeId: string }> }) {
+export default function AdminStoreDetailPageGuarded({ params }: { params: { storeId: string } }) {
     return <AdminAuthGuard><AdminStoreDetailPage params={params} /></AdminAuthGuard>;
 }
