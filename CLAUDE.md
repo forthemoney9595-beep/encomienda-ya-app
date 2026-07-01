@@ -58,6 +58,8 @@ También: `Cancelado`, `Rechazado`
 - `src/app/my-store/page.tsx` — dashboard de tienda (resumen: métricas, alertas, rating, accesos). El form de edición está en `src/app/my-store/edit/page.tsx` (Fase P)
 - `src/app/my-store/categories/page.tsx` — administra `stores/{id}.productCategories` (feed del selector de categoría del form de productos)
 - `src/lib/store-hours.ts` — helper compartido de horarios (¿abierta?, por día + franjas + cerrado); lo usan tienda pública, dashboard, admin y `/api/orders/create` (Fase P)
+- `src/app/stores/[storeId]/page.tsx` — tienda pública (lo que ve el comprador): info card con rating clickeable a reseñas, buscador, carrusel de destacados, menú agrupado por categoría, reseñas públicas, barra de carrito flotante (Fase Q)
+- `src/components/star-rating.tsx` — estrellas de rating compartidas (tienda pública + `/my-store/reviews`)
 - `src/app/admin/page.tsx` — dashboard admin unificado (estado en vivo, alertas, aprobaciones, métricas, analíticas). `/admin/dashboard` redirige acá
 - `src/app/admin/pending-list.tsx` — componente de solicitudes de aprobación (tiendas/repartidores), con modal que muestra licencia/vehículo
 - `src/app/admin/{orders,finances,communications,settings,reviews,audit-log}/page.tsx` — secciones del admin (ver Fase N)
@@ -300,6 +302,37 @@ saldos SIEMPRE vía `payout-service.ts`; "¿abierta?" SIEMPRE vía `store-hours.
 el chequeo de horario inline); categorías de producto = `stores/{id}.productCategories` (feed del
 form) + `product.category` (agrupado público); rubro de tienda = `stores/{id}.category`.
 
+## Fase Q (jul 2026): rediseño de la tienda pública (`stores/[storeId]/page.tsx`)
+Pedido explícito: "se ve muy básica". Se hizo en 4 pasos chicos y reversibles, comparando
+contra Rappi/PedidosYa como en fases anteriores:
+- **Q1 — Info card pulida.** El rating dejó de ser un badge suelto: ahora es un botón que
+  hace scroll a una nueva sección pública de reseñas al fondo de la página (antes las
+  reseñas solo las veía el dueño en `/my-store/reviews`, protegido). Nuevo
+  `src/components/star-rating.tsx` (antes duplicado inline ahí). Dirección y horario pasan
+  de una línea de texto suelta a tarjetas con ícono+jerarquía. Botón "Compartir" (Web Share
+  API, con fallback a copiar el link al portapapeles).
+- **Q2 — Buscador dentro del menú.** Filtra por nombre/descripción; recalcula destacados y
+  categorías agrupadas sobre el resultado filtrado; estado vacío propio ("Sin resultados
+  para...") distinto del de "la tienda no tiene productos".
+- **Q3 — Carrusel de destacados.** Reemplaza la grilla estática de "Recomendados" por un
+  `Carousel` (shadcn + embla, ya estaba instalado) con swipe nativo en celular y flechas en
+  desktop. Las flechas reflejan `canScrollPrev`/`canScrollNext` de embla — con pocos
+  destacados que ya entran en pantalla, quedan deshabilitadas en vez de parecer rotas.
+- **Q4 — Barra de carrito flotante.** El Sheet del carrito (`components/cart.tsx`) vivía con
+  estado local, montado una sola vez en el header (`app-content.tsx`). Para poder abrirlo
+  desde la tienda pública sin duplicar el Sheet, el estado de apertura subió a
+  `CartContext` (`isCartSheetOpen`/`setCartSheetOpen`). La barra solo aparece si el carrito
+  activo es el de la tienda que se está mirando (misma regla de "una tienda a la vez").
+- **Verificado con datos reales:** dev server local + Firestore real (no mocks). Se
+  encontraron y corrigieron en el camino: falla de `chromium-cli`/Playwright en este
+  entorno Windows (no headless) — la verificación visual la hizo el usuario directamente en
+  el navegador; y un despiste real (4 commits sin pushear que hacían pensar que algo estaba
+  roto, cuando en realidad el sitio desplegado en Vercel simplemente no tenía los cambios
+  todavía).
+- **Datos de prueba:** se agregaron 3 reseñas de prueba a la tienda "DonalPizza"
+  (`userName` con el prefijo `Cliente de Prueba` para identificarlas fácil) — quedan
+  anotadas en el pendiente de limpieza pre-lanzamiento de abajo.
+
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
 recuperación de contraseña ("olvidé mi contraseña"), y login/registro con Google. No es config de
@@ -309,7 +342,8 @@ admin — es autenticación y toca a todos los roles.
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
 - Regenerar el `MP_WEBHOOK_SECRET` (quedó expuesto durante pruebas)
 - Sacar la tabla de cuentas demo visible en `/login` (sirve para pruebas, no para producción)
-- Limpiar datos de prueba (órdenes/notificaciones) antes de abrir a usuarios reales
+- Limpiar datos de prueba (órdenes/notificaciones, reseñas `Cliente de Prueba N` en
+  "DonalPizza" de la Fase Q) antes de abrir a usuarios reales
 
 ## Git workflow
 ```bash
