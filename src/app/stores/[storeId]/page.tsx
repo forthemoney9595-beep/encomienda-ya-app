@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { Badge } from '@/components/ui/badge';
@@ -83,6 +83,23 @@ export default function StorePublicPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [featuredApi, setFeaturedApi] = useState<CarouselApi>();
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+
+  // Las flechas del carrusel de destacados quedan deshabilitadas cuando no hay a dónde
+  // desplazar (ej: solo 2 productos destacados que ya entran completos en pantalla) --
+  // sin esto, tocarlas no hacía nada visible y parecía roto en vez de "ya viste todo".
+  useEffect(() => {
+    if (!featuredApi) return;
+    const update = () => {
+      setCanScrollPrev(featuredApi.canScrollPrev());
+      setCanScrollNext(featuredApi.canScrollNext());
+    };
+    update();
+    featuredApi.on('select', update);
+    featuredApi.on('reInit', update);
+    return () => { featuredApi.off('select', update); featuredApi.off('reInit', update); };
+  }, [featuredApi]);
 
   // 1. Obtener datos de la TIENDA
   const storeRef = useMemoFirebase(() => {
@@ -367,10 +384,10 @@ export default function StorePublicPage() {
                     <Star className="h-5 w-5 text-warning fill-current" /> Recomendados
                 </h2>
                 <div className="hidden sm:flex gap-2">
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => featuredApi?.scrollPrev()}>
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => featuredApi?.scrollPrev()} disabled={!canScrollPrev}>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => featuredApi?.scrollNext()}>
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => featuredApi?.scrollNext()} disabled={!canScrollNext}>
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
