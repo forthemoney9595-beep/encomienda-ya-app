@@ -283,6 +283,13 @@ activos y se sumaron funciones operativas. Cinco bloques:
   (todos / disponibles / agotados-no visibles / stock bajo ≤3) y selección múltiple con barra de
   acciones masivas (marcar disponible/agotado, eliminar) vía `writeBatch`, respetando si el
   producto vive en `items` o en la subcolección legacy `products`.
+- **P5 bis — Perfil de tienda vs `/my-store/edit`.** `/profile` (universal, todos los roles) tenía
+  una pestaña "Configuración Tienda" que escribía horario/descripción en `users/{uid}` — campos
+  que nada lee (todo lo real vive en `stores/{storeId}`, editado desde `/my-store/edit`). Se
+  reemplazó por un link directo a `/my-store/edit`. Además, guardar el form de tienda copiaba el
+  banner a `users/{uid}.photoURL` en cada guardado (intencional en su momento: "que el avatar sea
+  la tienda"), pisando silenciosamente cualquier foto personal subida en `/profile` — se sacó esa
+  copia; el avatar del sidebar/admin ahora es siempre la foto personal, independiente del banner.
 - **P5 — Promos a nivel tienda: DIFERIDO.** Se evaluaron 3 mecanismos (envío gratis desde $X,
   descuento de toda la tienda %, cupones con código) pero se decidió no hacerlos ahora porque
   tocan el pipeline de pago (`/api/orders/create` + `/api/checkout` + preferencia MP). Queda para
