@@ -470,6 +470,34 @@ Los últimos 3 pendientes que quedaban anotados de la revisión del panel de rep
   etc.) antes de restringir con `affectedKeys()`, para no romper nada — queda para una
   revisión dedicada aparte, no se apuró junto con esta fase.
 
+## Fase V (jul 2026): home / listado de tiendas (lo primero que ve el cliente)
+Salió de un análisis de marketplace estilo Rappi/PedidosYa pensado para Tinogasta (pueblo
+chico, marketplace general, MVP sin sobreingeniería). Se atacaron los "bugs de confianza"
+del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el rubro:
+- **Estado abierto/cerrado/pausada en cada tarjeta** — antes el listado no lo mostraba y
+  el cliente podía entrar a ciegas a una tienda cerrada, aunque la lógica ya existía
+  (`store-hours.ts`, Fase P). Badge verde "Abierto" / gris "Cerrado"/"Pausada" + imagen
+  en gris si no opera. La pausa manual se evalúa aparte del horario (igual que la tienda
+  pública). NO se reordena "abiertas primero" todavía (queda para v2).
+- **Envío real** en la tarjeta — antes decía "$2000" hardcodeado; ahora lee
+  `config/platform.deliveryFee` (configurable desde `/admin/settings`, Fase N).
+- **Rubro de tienda unificado (los 3 conceptos de categoría, punto de raíz):** el rubro
+  `stores/{id}.category` tenía 3 fuentes distintas — alta con dropdown gastronómico,
+  editor texto libre, menú "Explorar Tiendas" hardcodeado — que fragmentaban las
+  categorías. Nuevo `src/lib/store-categories.ts` (`STORE_CATEGORIES`, lista canónica
+  general de pueblo). El alta (`/signup/store`) y el editor (`/my-store/edit`, ahora
+  Select con fallback al rubro viejo) usan esa lista; el menú "Explorar Tiendas" del
+  comprador (`main-nav.tsx`) se arma con los rubros REALES de las tiendas aprobadas (no
+  links fijos). Íconos nuevos en `category-style.ts` para Farmacia/Supermercado.
+  Recordatorio de los 3 conceptos: `store.category` (rubro, home) ≠
+  `store.productCategories` (secciones internas, `/my-store/categories`) ≠
+  `product.category` (agrupa el menú público).
+- **Diferido a v2 (del análisis, no urgente para Tinogasta):** ordenar "abiertas
+  primero", badge de "Ofertas" en tarjetas con descuento, envío gratis desde $X (toca
+  pago), rehacer el editor de tienda en wizard/secciones, combos/variantes, cupones,
+  geo-distancia. El editor de tienda sigue siendo un form largo único — funcional,
+  aceptable para MVP; su única deuda real (el rubro) ya se cerró acá.
+
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
 recuperación de contraseña ("olvidé mi contraseña"), y login/registro con Google. No es config de
