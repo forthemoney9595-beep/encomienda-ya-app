@@ -631,7 +631,7 @@ function AdminDashboard() {
                             <TableCell>
                                <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
                             </TableCell>
-                            <TableCell className="text-right font-bold">${order.total.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-bold">${(order.total || 0).toFixed(2)}</TableCell>
                         </TableRow>
                         ))
                     ) : (
