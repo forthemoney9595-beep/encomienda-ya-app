@@ -36,10 +36,15 @@ function AdminDeliveryPage() {
     try {
         const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
         const userRef = doc(firestore, 'users', personnelId);
-        
-        await updateDoc(userRef, { 
+
+        // isApproved SIEMPRE junto con status: la regla de Firestore que deja tomar
+        // pedidos (isApprovedDriver() en firestore.rules) solo lee isApproved, no status.
+        // Si se actualiza uno sin el otro, la cuenta queda "Activa" en la UI pero bloqueada
+        // de verdad (permission-denied silencioso al intentar tomar un pedido).
+        await updateDoc(userRef, {
             status: newStatus,
-            updatedAt: serverTimestamp() 
+            isApproved: status === 'approved',
+            updatedAt: serverTimestamp()
         });
         
         toast({
@@ -69,6 +74,10 @@ function AdminDeliveryPage() {
       const userRef = doc(firestore, 'users', driverData.id);
       await updateDoc(userRef, {
           ...driverData,
+          // Mismo criterio que el detalle individual del repartidor: isApproved siempre
+          // en sync con status, porque la regla de Firestore que habilita tomar pedidos
+          // solo lee isApproved.
+          isApproved: driverData.status === 'Activo',
           updatedAt: serverTimestamp()
       });
 

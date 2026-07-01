@@ -62,8 +62,13 @@ export default function DeliveryOrdersView() {
   const router = useRouter(); 
   const searchParams = useSearchParams();
 
-  // ¿El repartidor está aprobado por el admin? Solo los aprobados pueden tomar pedidos.
-  const isApprovedDriver = (userProfile as any)?.isApproved === true || (userProfile as any)?.status === 'Activo';
+  // ¿El repartidor está aprobado por el admin? Solo isApproved habilita tomar pedidos de
+  // verdad (es el único campo que lee isApprovedDriver() en firestore.rules) -- antes
+  // también aceptaba status === 'Activo' como atajo, lo que hacía que el botón se viera
+  // habilitado aunque isApproved siguiera en false y Firestore fuera a rechazar la
+  // escritura igual (permission-denied silencioso). Ver Fase admin donde se corrigieron
+  // los 3 caminos que podían dejar status y isApproved desincronizados.
+  const isApprovedDriver = (userProfile as any)?.isApproved === true;
 
   // 1. PESTAÑA ACTIVA
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'available');
