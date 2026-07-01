@@ -238,6 +238,17 @@ export default function DeliveryOrdersView() {
         deliveredAt: serverTimestamp()
       });
       toast({ title: "¡Entrega Completada!", description: "Ganancia registrada en tu Billetera." });
+
+      // Este es el flujo real de "marcar entregado" (a diferencia del updateDoc de
+      // arriba, no pasa por OrderService.updateOrderStatus) -- sin esto el comprador
+      // nunca se enteraba de que llegó su pedido ni se lo invitaba a calificar.
+      if (confirmDeliveryOrder.userId) {
+        OrderService.sendNotification(
+          firestore, confirmDeliveryOrder.userId, "🏠 ¡Llegamos!",
+          "Disfruta tu pedido. No olvides calificar.", "order_status", confirmDeliveryOrder.id, user
+        ).catch(console.error);
+      }
+
       setConfirmDeliveryOrder(null);
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo finalizar." });
