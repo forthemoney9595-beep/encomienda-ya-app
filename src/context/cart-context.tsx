@@ -33,6 +33,10 @@ interface CartContextType {
   totalItems: number;
   totalPrice: number;
   storeId: string | null;
+  // Estado del Sheet del carrito (header), para poder abrirlo desde otras partes de la
+  // app -- ej: la barra de carrito flotante de la tienda pública -- sin duplicar el Sheet.
+  isCartSheetOpen: boolean;
+  setCartSheetOpen: (open: boolean) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -41,6 +45,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [storeId, setStoreId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [isCartSheetOpen, setCartSheetOpen] = useState(false);
 
   // Cargar desde LocalStorage al inicio
   useEffect(() => {
@@ -134,6 +139,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     totalItems: isClient ? totalItems : 0,
     totalPrice,
     storeId,
+    isCartSheetOpen,
+    setCartSheetOpen,
   };
 
   return (

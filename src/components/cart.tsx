@@ -15,8 +15,7 @@ import { getPlaceholderImage } from "@/lib/placeholder-images";
 import { CheckoutDialog } from "@/components/checkout-dialog";
 
 export function Cart() {
-  const { cart, totalItems, totalPrice, removeFromCart, updateQuantity, clearCart } = useCart();
-  const [isOpen, setIsOpen] = useState(false); // Controla el carrito lateral (Sheet)
+  const { cart, totalItems, totalPrice, removeFromCart, updateQuantity, clearCart, isCartSheetOpen: isOpen, setCartSheetOpen: setIsOpen } = useCart();
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false); // Controla el modal de pago (Dialog)
 
   return (

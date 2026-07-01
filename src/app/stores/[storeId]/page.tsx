@@ -6,7 +6,7 @@ import { doc, collection, query, orderBy, where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X } from 'lucide-react';
+import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X, ShoppingBag } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useMemo, useState } from 'react';
@@ -78,7 +78,7 @@ export default function StorePublicPage() {
   const storeId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   
   const firestore = useFirestore();
-  const { addToCart } = useCart();
+  const { addToCart, storeId: cartStoreId, totalItems, totalPrice, setCartSheetOpen } = useCart();
   const { toast } = useToast();
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
@@ -235,8 +235,11 @@ export default function StorePublicPage() {
     }
   };
 
+  const showCartBar = cartStoreId === storeId && totalItems > 0;
+
   return (
-    <div className="container mx-auto">
+    <>
+    <div className={cn('container mx-auto', showCartBar && 'pb-24')}>
       {/* BANNER */}
       <div className="relative -mx-4 sm:mx-0 sm:mt-4 mb-6">
         <div className="relative aspect-[2.5/1] sm:rounded-2xl overflow-hidden bg-muted">
@@ -464,6 +467,23 @@ export default function StorePublicPage() {
           )}
       </div>
     </div>
+
+    {/* BARRA DE CARRITO FLOTANTE — solo si el carrito activo es el de esta tienda.
+        bottom-nav (celular, solo compradores) ocupa 4rem + safe-area, por eso el
+        offset en mobile; en desktop no hay bottom-nav, así que va pegada abajo. */}
+    {showCartBar && (
+        <button
+            onClick={() => setCartSheetOpen(true)}
+            className="fixed inset-x-4 z-40 mx-auto flex max-w-md items-center justify-between rounded-full bg-primary px-5 py-3.5 text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 bottom-[calc(4rem+env(safe-area-inset-bottom)+12px)] md:bottom-6"
+        >
+            <span className="flex items-center gap-2 font-semibold">
+                <ShoppingBag className="h-5 w-5" />
+                {totalItems} {totalItems === 1 ? 'producto' : 'productos'}
+            </span>
+            <span className="font-bold">Ver carrito · ${totalPrice.toLocaleString()}</span>
+        </button>
+    )}
+    </>
   );
 }
 
