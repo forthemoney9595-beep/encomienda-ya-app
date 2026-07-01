@@ -492,8 +492,16 @@ del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el r
   Recordatorio de los 3 conceptos: `store.category` (rubro, home) ≠
   `store.productCategories` (secciones internas, `/my-store/categories`) ≠
   `product.category` (agrupa el menú público).
-- **Diferido a v2 (del análisis, no urgente para Tinogasta):** badge de "Ofertas" en
-  tarjetas con descuento, envío gratis desde $X (toca
+- **Badge de "Ofertas" en el home (Opción A, denormalizada):** en vez de leer los
+  productos de cada tienda en el home (N×2 lecturas por visita, escala mal), se guarda
+  `stores/{id}.maxDiscountPercent` y el home lo lee del doc que ya trae (cero lecturas
+  extra). Lo mantiene `/my-store/products` con un efecto que recalcula el mayor descuento
+  entre productos comprables (disponibles + con stock) y lo escribe si cambió — el panel
+  de productos es el único punto donde muta el catálogo. El home muestra "Hasta -X%" si
+  `maxDiscountPercent > 0`. Backfill único ya corrido (0 tiendas con descuento activo a
+  la fecha; el mecanismo queda listo). Evolución futura posible: una fila "Ofertas" con
+  productos reales vía `collectionGroup('items')` (más vendedor, pero otro alcance).
+- **Diferido a v2 (del análisis, no urgente para Tinogasta):** envío gratis desde $X (toca
   pago), rehacer el editor de tienda en wizard/secciones, combos/variantes, cupones,
   geo-distancia. El editor de tienda sigue siendo un form largo único — funcional,
   aceptable para MVP; su única deuda real (el rubro) ya se cerró acá.
