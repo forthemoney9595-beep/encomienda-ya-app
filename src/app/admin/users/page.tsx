@@ -13,27 +13,42 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Search, MoreHorizontal, Shield, Trash2, Users } from 'lucide-react';
+import { Loader2, Search, MoreHorizontal, Shield, Trash2, Users, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import AdminAuthGuard from '../admin-auth-guard';
 import { logAdminAction } from '@/lib/admin-audit';
+import { UserDetailDialog } from './user-detail-dialog';
 
 function AdminUsersPage() {
   const { user: currentUser } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'buyer' | 'store' | 'delivery' | 'admin'>('all');
+  const [detailUser, setDetailUser] = useState<any | null>(null);
 
   // 1. Cargar TODOS los usuarios
   const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
   const { data: users, isLoading } = useCollection<any>(usersQuery);
 
-  // 2. Filtrar por búsqueda
-  const filteredUsers = users?.filter(u => 
-    u.email?.toLowerCase().includes(search.toLowerCase()) || 
-    u.displayName?.toLowerCase().includes(search.toLowerCase()) ||
-    u.name?.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  // 2. Filtrar por búsqueda + rol
+  const filteredUsers = users?.filter(u => {
+    if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+    const q = search.toLowerCase();
+    return !q ||
+      u.email?.toLowerCase().includes(q) ||
+      u.displayName?.toLowerCase().includes(q) ||
+      u.name?.toLowerCase().includes(q);
+  }) || [];
+
+  const roleCounts = {
+    all: users?.length ?? 0,
+    buyer: users?.filter(u => u.role === 'buyer').length ?? 0,
+    store: users?.filter(u => u.role === 'store').length ?? 0,
+    delivery: users?.filter(u => u.role === 'delivery').length ?? 0,
+    admin: users?.filter(u => u.role === 'admin').length ?? 0,
+  };
 
   // --- ACCIONES ---
 
@@ -108,13 +123,29 @@ function AdminUsersPage() {
                 </div>
                 <div className="relative w-full sm:w-72">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                        placeholder="Buscar por nombre o email..." 
-                        className="pl-8" 
+                    <Input
+                        placeholder="Buscar por nombre o email..."
+                        className="pl-8"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
+            </div>
+            <div className="flex gap-1.5 flex-wrap mt-3">
+                {([
+                    { k: 'all',      label: 'Todos' },
+                    { k: 'buyer',    label: 'Clientes' },
+                    { k: 'store',    label: 'Tiendas' },
+                    { k: 'delivery', label: 'Repartidores' },
+                    { k: 'admin',    label: 'Admins' },
+                ] as const).map(({ k, label }) => (
+                    <button key={k} onClick={() => setRoleFilter(k)}
+                        className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
+                            roleFilter === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                        )}>
+                        {label} ({roleCounts[k]})
+                    </button>
+                ))}
             </div>
         </CardHeader>
         <CardContent>
@@ -162,6 +193,9 @@ function AdminUsersPage() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex items-center justify-end gap-2">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalle" onClick={() => setDetailUser(user)}>
+                                            <Eye className="h-4 w-4 text-muted-foreground" />
+                                        </Button>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
@@ -202,6 +236,8 @@ function AdminUsersPage() {
             </div>
         </CardContent>
       </Card>
+
+      <UserDetailDialog user={detailUser} onClose={() => setDetailUser(null)} />
     </div>
   );
 }
