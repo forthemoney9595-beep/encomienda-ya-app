@@ -536,10 +536,38 @@ del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el r
   como mejora futura de UX, no urgente. (Un wizard de *onboarding* en `/signup/store`
   quedó descartado por ahora; el alta actual es suficiente.)
 
-## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
-Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
-recuperación de contraseña ("olvidé mi contraseña"), y login/registro con Google. No es config de
-admin — es autenticación y toca a todos los roles.
+## Fase X (jul 2026): registro más real — teléfono/DNI/CUIT + bug de Google
+Se corrigió esta nota, que estaba desactualizada: "olvidé mi contraseña" **ya existía**
+(`/forgot-password`, `sendPasswordResetEmail` de Firebase) y el botón de login con Google
+**ya existía** — pero tenía un bug real, no solo faltaba hacerlo.
+- **Bug de Google corregido:** cuando alguien nuevo entraba con Google,
+  `auth-context.tsx` armaba un perfil "buyer" **solo en memoria**, sin escribirlo nunca en
+  Firestore. Esa cuenta quedaba a medias: no podía guardar cambios en `/profile`
+  (`updateDoc` falla si el documento no existe) y cualquier lectura de `users/{uid}` en
+  el server podía fallar en silencio. Ahora, en el mismo lugar (`onSnapshot` sobre el
+  perfil), si el documento no existe se crea de verdad con `setDoc` (rol `buyer` por
+  defecto, igual que el alta normal) — corregido en el único punto central en vez de
+  parchear el botón, así cubre cualquier método de login futuro que termine en un
+  usuario sin perfil.
+- **Comparación con Rappi/PedidosYa** (investigado antes de decidir el alcance): esas
+  apps piden teléfono verificado por SMS a todos, y a repartidores DNI + fecha de
+  nacimiento + patente/cédula del vehículo + a veces antecedentes penales; a tiendas
+  CUIT + a veces habilitación municipal. Se decidió sumar lo que tiene costo cero (campos
+  de texto) y dejar la verificación por SMS para más adelante (requiere proveedor
+  externo pago tipo Twilio, no se justifica todavía para el volumen de Tinogasta).
+- **`/signup/buyer`:** teléfono ahora obligatorio.
+- **`/signup/delivery`:** teléfono, **DNI** (regex 7-8 dígitos) y **fecha de nacimiento**
+  (con validación de mayoría de edad, ≥18 años) ahora obligatorios. De paso se agregó
+  `isApproved: false` explícito (antes solo se seteaba `status: 'Pendiente'` y quedaba
+  implícito — funcionaba igual porque la regla trata "no es true" como no aprobado, pero
+  quedaba inconsistente con el resto del código que sí lo setea explícito).
+- **`/signup/store`:** teléfono del dueño y **CUIT** del negocio (regex con o sin
+  guiones) ahora obligatorios; `cuit` se guarda en `stores/{id}`.
+- **Tipos actualizados:** `UserProfile` (`dni`, `birthDate`) en `auth-context.tsx`,
+  `Store` (`cuit`) en `placeholder-data.ts`.
+- **Pendiente, anotado para otra vuelta (no se tocó):** que el admin pueda editar
+  datos/contraseña de otras cuentas; verificación real de teléfono por SMS; signup
+  (no solo login) con Google.
 
 ## Pendientes pre-lanzamiento
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
