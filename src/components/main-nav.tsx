@@ -177,7 +177,7 @@ export function MainNav({
             </Button>
           </Link>
           <Link href="/my-store">
-             <Button variant={pathname === '/my-store' ? 'secondary' : 'ghost'} className="w-full justify-start">
+             <Button variant={pathname === '/my-store' || pathname === '/my-store/edit' ? 'secondary' : 'ghost'} className="w-full justify-start">
                <Store className="mr-2 h-4 w-4" />
                Mi Tienda
              </Button>
