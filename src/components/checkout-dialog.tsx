@@ -11,12 +11,13 @@ import { OrderService } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 // ✅ IMPORTANTE: Agregamos useDoc y useMemoFirebase para leer la config
 import { useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore'; 
+import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
-// ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Igual que en checkout/page.tsx)
-const FIXED_SHIPPING_COST = 2000; 
+// Fallback si config/platform.deliveryFee no está cargado (mismo default que el resto
+// de la app, ver DEFAULT_DELIVERY_FEE en /api/orders/create).
+const DEFAULT_SHIPPING_COST = 2000;
 
 interface CheckoutDialogProps {
   open: boolean;
@@ -39,6 +40,14 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [isLocating, setIsLocating] = useState(false);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
+  // Direcciones guardadas en el perfil (con su GPS ya cargado desde /profile) -- así,
+  // igual que Rappi/PedidosYa, no hace falta volver a pedir GPS en cada compra: se
+  // reusa el de la dirección elegida. 'new' = cargar una ubicación nueva a mano (flujo
+  // de siempre: GPS en el momento + referencia escrita).
+  const savedAddresses = (userProfile as any)?.addresses as
+    { id: string; street: string; city?: string; coords?: { latitude: number; longitude: number } }[] | undefined;
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('new');
+
   // Estados de Tienda
   const [storeName, setStoreName] = useState('Tienda');
   const [storeAddress, setStoreAddress] = useState('Dirección de la tienda');
@@ -59,20 +68,20 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   // --- 💰 LOGICA FINANCIERA (NUEVA) ---
   // 1. Obtener Configuración Global (Fee %)
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
-  const { data: globalConfig } = useDoc<{ serviceFee?: number; maintenanceMode?: boolean }>(configRef);
+  const { data: globalConfig } = useDoc<{ serviceFee?: number; maintenanceMode?: boolean; deliveryFee?: number }>(configRef);
+  const shippingCost = globalConfig?.deliveryFee ?? DEFAULT_SHIPPING_COST;
 
   // 2. Calcular Totales Exactos
   const { serviceFeeAmount, finalTotal } = useMemo(() => {
     const feePercentage = globalConfig?.serviceFee || 0;
     const fee = (cartSubtotal * feePercentage) / 100;
-    const shipping = FIXED_SHIPPING_COST; 
-    const total = cartSubtotal + fee + shipping;
-    
+    const total = cartSubtotal + fee + shippingCost;
+
     return {
         serviceFeeAmount: fee,
         finalTotal: total
     };
-  }, [cartSubtotal, globalConfig]);
+  }, [cartSubtotal, globalConfig, shippingCost]);
 
 
   useEffect(() => {
@@ -94,6 +103,42 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
 
     if (open) fetchStoreDetails();
   }, [storeId, firestore, open]);
+
+  // Al abrir el diálogo, si hay una dirección guardada con GPS, la pre-seleccionamos --
+  // así el caso común (comprar a la dirección de siempre) no pide nada extra.
+  useEffect(() => {
+    if (!open) return;
+    const firstWithCoords = savedAddresses?.find(a => a.coords);
+    if (firstWithCoords) {
+      selectAddress(firstWithCoords.id);
+    } else {
+      selectAddress('new');
+    }
+    // Solo al abrir -- no queremos pisar la elección del usuario mientras completa el form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const selectAddress = (id: string) => {
+    setSelectedAddressId(id);
+    if (id === 'new') {
+      setAddress('');
+      setLocationCoords(null);
+      setLocationStatus('idle');
+      return;
+    }
+    const saved = savedAddresses?.find(a => a.id === id);
+    if (!saved) return;
+    setAddress(saved.street + (saved.city ? `, ${saved.city}` : ''));
+    if (saved.coords) {
+      setLocationCoords(saved.coords);
+      setLocationStatus('success');
+    } else {
+      // Dirección guardada sin GPS (se pudo guardar así desde /profile) -- todavía hace
+      // falta capturarlo una vez, pero al menos no perdemos la referencia escrita.
+      setLocationCoords(null);
+      setLocationStatus('idle');
+    }
+  };
 
   // ✅ FUNCION: Obtener GPS del navegador
   const handleGetLocation = () => {
@@ -256,24 +301,66 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
           {/* SECCIÓN DE DIRECCIÓN Y GPS */}
           <div className="space-y-3 bg-muted/20 p-4 rounded-xl border">
             <h4 className="font-semibold text-sm flex items-center gap-2"><MapPin className="h-4 w-4 text-primary"/> ¿Dónde entregamos?</h4>
-            
-            {/* BOTÓN GPS */}
-            <Button 
-                type="button" 
-                onClick={handleGetLocation} 
-                disabled={isLocating || locationStatus === 'success'}
-                variant={locationStatus === 'success' ? 'outline' : 'default'}
-                className={`w-full justify-start ${locationStatus === 'success' ? 'border-success/50 bg-success/10 text-success hover:bg-success/15' : 'bg-info hover:bg-info/90 text-info-foreground'}`}
-            >
-                {isLocating ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
-                ) : locationStatus === 'success' ? (
-                    <><CheckCircle2 className="mr-2 h-4 w-4"/> Ubicación Guardada Correctamente</>
-                ) : (
-                    <><Crosshair className="mr-2 h-4 w-4"/> 📍 Usar mi ubicación actual (Obligatorio)</>
-                )}
-            </Button>
-            
+
+            {/* DIRECCIONES GUARDADAS: si ya tenés una con GPS cargado, no hace falta
+                volver a pedirlo -- mismo patrón que Rappi/PedidosYa (la dirección
+                guardada es la fuente de verdad, el GPS solo se usa para armarla). */}
+            {savedAddresses && savedAddresses.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {savedAddresses.map(addr => (
+                        <button
+                            key={addr.id}
+                            type="button"
+                            onClick={() => selectAddress(addr.id)}
+                            className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5 ${
+                                selectedAddressId === addr.id
+                                    ? 'border-primary bg-primary/10 text-primary font-medium'
+                                    : 'border-border hover:border-primary/50'
+                            }`}
+                        >
+                            <MapPin className="h-3 w-3" />
+                            {addr.street}
+                            {!addr.coords && <AlertTriangle className="h-3 w-3 text-warning" />}
+                        </button>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => selectAddress('new')}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                            selectedAddressId === 'new'
+                                ? 'border-primary bg-primary/10 text-primary font-medium'
+                                : 'border-border hover:border-primary/50'
+                        }`}
+                    >
+                        + Nueva ubicación
+                    </button>
+                </div>
+            )}
+
+            {/* BOTÓN GPS: solo hace falta si la dirección elegida no trae GPS ya cargado
+                (ubicación nueva, o una guardada sin coords). */}
+            {locationStatus !== 'success' && (
+                <Button
+                    type="button"
+                    onClick={handleGetLocation}
+                    disabled={isLocating}
+                    variant="default"
+                    className="w-full justify-start bg-info hover:bg-info/90 text-info-foreground"
+                >
+                    {isLocating ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
+                    ) : (
+                        <><Crosshair className="mr-2 h-4 w-4"/> 📍 Usar mi ubicación actual (Obligatorio)</>
+                    )}
+                </Button>
+            )}
+            {locationStatus === 'success' && (
+                <div className="flex items-center gap-2 text-sm text-success bg-success/10 border border-success/30 rounded-md px-3 py-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    {selectedAddressId !== 'new' ? 'Usando el GPS de tu dirección guardada.' : 'Ubicación guardada correctamente.'}
+                </div>
+            )}
+
             {locationStatus === 'error' && (
                 <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No pudimos obtener tu ubicación. Activa el GPS.</p>
             )}
@@ -313,7 +400,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
              </div>
              <div className="flex justify-between text-muted-foreground">
                 <span>Envío</span>
-                <span>${FIXED_SHIPPING_COST.toLocaleString()}</span>
+                <span>${shippingCost.toLocaleString()}</span>
              </div>
              {serviceFeeAmount > 0 && (
                  <div className="flex justify-between text-muted-foreground">
