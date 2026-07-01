@@ -16,6 +16,7 @@ import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { createStoreForUser } from '@/lib/user-service';
+import { STORE_CATEGORIES } from '@/lib/store-categories';
 import { Loader2 } from 'lucide-react';
 
 
@@ -147,14 +148,9 @@ export default function SignupStorePage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="italiana">Italiana</SelectItem>
-                        <SelectItem value="comida-rapida">Comida Rápida</SelectItem>
-                        <SelectItem value="japonesa">Japonesa</SelectItem>
-                        <SelectItem value="mexicana">Mexicana</SelectItem>
-                        <SelectItem value="saludable">Saludable</SelectItem>
-                        <SelectItem value="dulces">Dulces</SelectItem>
-                        <SelectItem value="Ropa">Ropa</SelectItem>
-                        <SelectItem value="Otros">Otros</SelectItem>
+                        {STORE_CATEGORIES.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />

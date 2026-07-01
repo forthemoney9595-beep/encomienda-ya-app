@@ -15,9 +15,11 @@ import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
 import { useRouter } from 'next/navigation';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   type WeeklySchedule, normalizeSchedule, defaultWeeklySchedule, DAY_LABELS, DISPLAY_ORDER,
 } from '@/lib/store-hours';
+import { STORE_CATEGORIES } from '@/lib/store-categories';
 
 // Deriva un {open,close} representativo (primera franja de un día abierto) para mantener
 // vivos lectores legacy que todavía no usan el helper store-hours.
@@ -348,15 +350,23 @@ export default function EditStorePage() {
 
           <div className="space-y-2">
             <Label htmlFor="category">Rubro / Categoría de la tienda</Label>
-            <Input
-                id="category"
-                name="category"
-                value={formData.category}
-                onChange={handleChange}
-                placeholder="Ej. Comida Rápida, Kiosco, Farmacia"
-            />
+            <Select value={formData.category} onValueChange={(val) => setFormData(prev => ({ ...prev, category: val }))}>
+                <SelectTrigger id="category">
+                    <SelectValue placeholder="Elegí tu rubro" />
+                </SelectTrigger>
+                <SelectContent>
+                    {/* Incluye el rubro actual si es uno viejo que no está en la lista canónica,
+                        para no perderlo silenciosamente al abrir el form. */}
+                    {formData.category && !STORE_CATEGORIES.includes(formData.category as any) && (
+                        <SelectItem value={formData.category}>{formData.category} (actual)</SelectItem>
+                    )}
+                    {STORE_CATEGORIES.map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
             <p className="text-[0.8rem] text-muted-foreground">
-                Con esto los clientes te filtran desde la pantalla de inicio. Usá el mismo nombre que otras tiendas del mismo rubro.
+                Con esto los clientes te filtran desde la pantalla de inicio.
             </p>
           </div>
 

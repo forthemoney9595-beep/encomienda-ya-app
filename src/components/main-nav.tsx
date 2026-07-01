@@ -15,10 +15,7 @@ import {
   Bike, 
   Store,
   Package,
-  LayoutDashboard, 
-  Utensils,
-  Shirt,
-  MoreHorizontal,
+  LayoutDashboard,
   Users,
   Wallet,
   Star,
@@ -30,6 +27,7 @@ import {
   Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getCategoryStyle } from '@/lib/category-style';
 
 export function MainNav({
   className,
@@ -57,6 +55,21 @@ export function MainNav({
   const pendingStoresCount = (allUsers || []).filter((u: any) => u.role === 'store' && !u.isApproved).length;
   const pendingDriversCount = (allUsers || []).filter((u: any) => u.role === 'delivery' && !u.isApproved).length;
   const pendingWithdrawalsCount = pendingWithdrawals?.length ?? 0;
+
+  // "Explorar Tiendas" (solo comprador): se arma con los rubros REALES de las tiendas
+  // aprobadas, no con links hardcodeados. Antes eran 3 links fijos (comida-rapida/Ropa/
+  // Otros) que podían llevar a listas vacías o no coincidir con los rubros cargados.
+  const isBuyer = userProfile?.role === 'buyer';
+  const storesQuery = useMemoFirebase(
+    () => (firestore && isBuyer ? collection(firestore, 'stores') : null),
+    [firestore, isBuyer]
+  );
+  const { data: buyerStores } = useCollection<any>(storesQuery);
+  const buyerCategories = Array.from(
+    new Set((buyerStores || [])
+      .filter((s: any) => s.isApproved !== false && s.category)
+      .map((s: any) => s.category as string))
+  ).slice(0, 8);
 
   const NavBadge = ({ count }: { count: number }) => (
     count > 0
@@ -238,31 +251,26 @@ export function MainNav({
           </Link>
         </div>
       </div>
-      <div className="px-3 py-2">
-        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
-          Explorar Tiendas
-        </h2>
-        <div className="space-y-1">
-          <Link href="/?category=comida-rapida">
-            <Button variant="ghost" className="w-full justify-start">
-                <Utensils className="mr-2 h-4 w-4" />
-                Comida Rápida
-            </Button>
-          </Link>
-          <Link href="/?category=Ropa">
-            <Button variant="ghost" className="w-full justify-start">
-                <Shirt className="mr-2 h-4 w-4" />
-                Ropa
-            </Button>
-          </Link>
-          <Link href="/?category=Otros">
-            <Button variant="ghost" className="w-full justify-start">
-                <MoreHorizontal className="mr-2 h-4 w-4" />
-                Otros
-            </Button>
-          </Link>
+      {buyerCategories.length > 0 && (
+        <div className="px-3 py-2">
+          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+            Explorar Tiendas
+          </h2>
+          <div className="space-y-1">
+            {buyerCategories.map((cat, i) => {
+              const Icon = getCategoryStyle(cat, i).icon;
+              return (
+                <Link key={cat} href={`/?category=${encodeURIComponent(cat)}`}>
+                  <Button variant="ghost" className="w-full justify-start">
+                    <Icon className="mr-2 h-4 w-4" />
+                    {cat}
+                  </Button>
+                </Link>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 
