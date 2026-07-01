@@ -17,6 +17,7 @@ import {
   Package, Tag, ListOrdered, Star, Wallet, BarChart3,
   AlertTriangle, PauseCircle, ShoppingBag, Pencil, ArrowRight, ExternalLink, Bell
 } from 'lucide-react';
+import { normalizeSchedule, getStoreOpenStatus, describeSchedule } from '@/lib/store-hours';
 
 const PRODUCT_STATES = ['Pendiente de Pago', 'En preparación', 'En reparto', 'En camino'];
 
@@ -111,6 +112,7 @@ export default function StoreDashboardPage() {
   }
 
   const paused = !!store?.manuallyPaused;
+  const openStatus = getStoreOpenStatus(normalizeSchedule(store));
 
   return (
     <div className="container mx-auto space-y-6 pb-20">
@@ -145,9 +147,7 @@ export default function StoreDashboardPage() {
               <p className="text-sm text-muted-foreground">
                 {paused
                   ? 'No te llegan pedidos nuevos aunque estés en horario.'
-                  : store?.schedule
-                    ? `Horario: ${store.schedule.open} - ${store.schedule.close} hs`
-                    : 'Sin horario configurado.'}
+                  : `${openStatus.isOpen ? 'Abierta ahora' : 'Cerrada ahora'} · ${describeSchedule(store)}`}
               </p>
             </div>
           </div>

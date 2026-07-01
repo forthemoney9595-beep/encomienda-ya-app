@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { UserProfile } from '@/context/auth-context';
+import { describeSchedule } from '@/lib/store-hours';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,6 +25,7 @@ export interface PendingUser extends UserProfile {
   description?: string;
   address?: string;
   schedule?: any;
+  weeklySchedule?: any;
 }
 
 interface PendingListProps {
@@ -155,7 +157,7 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                 <div className="grid gap-2 text-sm">
                   <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" /> {selectedUser.address || 'Sin dirección'}</div>
                   <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-success" />
-                    {selectedUser.schedule ? `${selectedUser.schedule.open} - ${selectedUser.schedule.close}` : 'Horario no definido'}
+                    {(selectedUser.weeklySchedule || selectedUser.schedule) ? describeSchedule(selectedUser) : 'Horario no definido'}
                   </div>
                 </div>
               </>

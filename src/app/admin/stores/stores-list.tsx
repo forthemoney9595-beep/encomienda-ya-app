@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Store } from '@/lib/placeholder-data';
+import { describeSchedule } from '@/lib/store-hours';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -136,9 +137,9 @@ export function StoresList({ stores, onStatusUpdate, onEdit, onDelete }: StoresL
                       <h4 className="font-semibold text-sm flex items-center gap-2">
                           <Clock className="h-4 w-4 text-success" /> Horarios
                       </h4>
-                      {(selectedStore as any)?.schedule ? (
+                      {((selectedStore as any)?.weeklySchedule || (selectedStore as any)?.schedule) ? (
                           <Badge variant="outline" className="text-sm">
-                              {(selectedStore as any).schedule.open} - {(selectedStore as any).schedule.close}
+                              {describeSchedule(selectedStore)}
                           </Badge>
                       ) : (
                           <span className="text-xs text-muted-foreground">No definidos</span>

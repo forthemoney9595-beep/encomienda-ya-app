@@ -3,6 +3,7 @@ import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
+import { normalizeSchedule, getStoreOpenStatus, nowInArgentina } from "@/lib/store-hours";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 // Valor fallback si config/platform.deliveryFee no está configurado en Firestore
@@ -61,6 +62,14 @@ export async function POST(request: Request) {
     // tienda pausada/cerrada (solo era un filtro visual del cliente).
     if (storeData?.manuallyPaused) {
         return NextResponse.json({ error: "Esta tienda pausó temporalmente los pedidos." }, { status: 400 });
+    }
+
+    // También validamos el horario de atención server-side (antes solo era un filtro visual
+    // del cliente; por API directa se podía pedir con la tienda cerrada). nowInArgentina()
+    // porque Vercel corre en UTC.
+    const openStatus = getStoreOpenStatus(normalizeSchedule(storeData), nowInArgentina());
+    if (!openStatus.isOpen) {
+        return NextResponse.json({ error: "La tienda está cerrada en este horario." }, { status: 400 });
     }
 
     // Obtener configuración global

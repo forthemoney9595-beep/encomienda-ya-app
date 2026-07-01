@@ -10,11 +10,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle, PauseCircle } from 'lucide-react';
+import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle, PauseCircle, Plus, X } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
 import { useRouter } from 'next/navigation';
 import { Switch } from '@/components/ui/switch';
+import {
+  type WeeklySchedule, normalizeSchedule, defaultWeeklySchedule, DAY_LABELS, DISPLAY_ORDER,
+} from '@/lib/store-hours';
+
+// Deriva un {open,close} representativo (primera franja de un día abierto) para mantener
+// vivos lectores legacy que todavía no usan el helper store-hours.
+function legacyScheduleMirror(week: WeeklySchedule): { open: string; close: string } {
+  const day = week.find(d => !d.closed && d.ranges.length > 0);
+  const r = day?.ranges[0];
+  return r ? { open: r.open, close: r.close } : { open: '09:00', close: '22:00' };
+}
 
 export default function EditStorePage() {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -28,8 +39,8 @@ export default function EditStorePage() {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
-  // Estado para Horarios
-  const [schedule, setSchedule] = useState({ open: '09:00', close: '22:00' });
+  // Estado para Horarios (por día, con franjas múltiples — ej: mañana/tarde)
+  const [weeklySchedule, setWeeklySchedule] = useState<WeeklySchedule>(defaultWeeklySchedule());
 
   // Pausa manual: se guarda al toque (no espera a "Guardar Cambios") porque es una
   // acción de emergencia ("me quedé sin stock/personal"), no un dato de perfil.
@@ -69,10 +80,8 @@ export default function EditStorePage() {
               setCoords(data.coords);
           }
 
-          // Cargar Horarios si existen
-          if (data.schedule) {
-              setSchedule(data.schedule);
-          }
+          // Cargar Horarios (formato nuevo por día o el viejo {open,close} vía normalizeSchedule)
+          setWeeklySchedule(normalizeSchedule(data) || defaultWeeklySchedule());
 
           setManuallyPaused(!!data.manuallyPaused);
         }
@@ -100,6 +109,31 @@ export default function EditStorePage() {
 
   const handleImageUploaded = (url: string) => {
     setFormData(prev => ({ ...prev, imageUrl: url }));
+  };
+
+  // --- Edición de horarios por día ---
+  const setDayClosed = (dayIdx: number, closed: boolean) => {
+    setWeeklySchedule(prev => prev.map((d, i) => {
+      if (i !== dayIdx) return d;
+      // Al reabrir un día sin franjas, sembramos una por defecto para que no quede vacío.
+      const ranges = !closed && d.ranges.length === 0 ? [{ open: '09:00', close: '22:00' }] : d.ranges;
+      return { ...d, closed, ranges };
+    }));
+  };
+  const updateRange = (dayIdx: number, rangeIdx: number, field: 'open' | 'close', value: string) => {
+    setWeeklySchedule(prev => prev.map((d, i) =>
+      i !== dayIdx ? d : { ...d, ranges: d.ranges.map((r, ri) => ri === rangeIdx ? { ...r, [field]: value } : r) }
+    ));
+  };
+  const addRange = (dayIdx: number) => {
+    setWeeklySchedule(prev => prev.map((d, i) =>
+      i !== dayIdx ? d : { ...d, ranges: [...d.ranges, { open: '17:00', close: '21:00' }] }
+    ));
+  };
+  const removeRange = (dayIdx: number, rangeIdx: number) => {
+    setWeeklySchedule(prev => prev.map((d, i) =>
+      i !== dayIdx ? d : { ...d, ranges: d.ranges.filter((_, ri) => ri !== rangeIdx) }
+    ));
   };
 
   // ✅ FUNCIÓN GPS CORREGIDA (NO INSERTA TEXTO FEO)
@@ -154,7 +188,10 @@ export default function EditStorePage() {
         imageUrl: formData.imageUrl,
         deliveryTime: formData.deliveryTime,
 
-        schedule: schedule,
+        weeklySchedule: weeklySchedule,
+        // Espejo legacy {open,close} por si quedó algún lector viejo sin migrar (usa la
+        // primera franja de un día abierto). normalizeSchedule igual prioriza weeklySchedule.
+        schedule: legacyScheduleMirror(weeklySchedule),
         coords: coords,
 
         updatedAt: new Date()
@@ -331,31 +368,68 @@ export default function EditStorePage() {
             </p>
           </div>
 
-          {/* SECCIÓN DE HORARIOS */}
-          <div className="grid gap-4 md:grid-cols-2 border p-4 rounded-lg bg-muted/20">
-             <div className="md:col-span-2">
-                <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+          {/* SECCIÓN DE HORARIOS (por día, con franjas múltiples) */}
+          <div className="border p-4 rounded-lg bg-muted/20 space-y-3">
+             <div>
+                <h4 className="text-sm font-semibold flex items-center gap-2">
                     <Clock className="h-4 w-4 text-primary" /> Horarios de Atención
                 </h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                    Podés cargar más de una franja por día (ej: mañana y tarde) o marcar un día como cerrado.
+                </p>
              </div>
-             <div className="space-y-2">
-                <Label htmlFor="openTime">Apertura</Label>
-                <Input
-                    id="openTime"
-                    type="time"
-                    value={schedule.open}
-                    onChange={(e) => setSchedule({...schedule, open: e.target.value})}
-                />
-             </div>
-             <div className="space-y-2">
-                <Label htmlFor="closeTime">Cierre</Label>
-                <Input
-                    id="closeTime"
-                    type="time"
-                    value={schedule.close}
-                    onChange={(e) => setSchedule({...schedule, close: e.target.value})}
-                />
-             </div>
+
+             {DISPLAY_ORDER.map((dayIdx) => {
+                const day = weeklySchedule[dayIdx];
+                return (
+                    <div key={dayIdx} className="border rounded-md p-3 bg-background space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm">{DAY_LABELS[dayIdx]}</span>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-xs ${day.closed ? 'text-muted-foreground' : 'text-success'}`}>
+                                    {day.closed ? 'Cerrado' : 'Abierto'}
+                                </span>
+                                <Switch checked={!day.closed} onCheckedChange={(v) => setDayClosed(dayIdx, !v)} />
+                            </div>
+                        </div>
+
+                        {!day.closed && (
+                            <div className="space-y-2">
+                                {day.ranges.map((r, ri) => (
+                                    <div key={ri} className="flex items-center gap-2">
+                                        <Input
+                                            type="time"
+                                            value={r.open}
+                                            onChange={(e) => updateRange(dayIdx, ri, 'open', e.target.value)}
+                                            className="w-32"
+                                        />
+                                        <span className="text-muted-foreground text-sm">a</span>
+                                        <Input
+                                            type="time"
+                                            value={r.close}
+                                            onChange={(e) => updateRange(dayIdx, ri, 'close', e.target.value)}
+                                            className="w-32"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-muted-foreground hover:text-destructive"
+                                            onClick={() => removeRange(dayIdx, ri)}
+                                            title="Quitar franja"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button type="button" variant="outline" size="sm" onClick={() => addRange(dayIdx)}>
+                                    <Plus className="mr-2 h-3 w-3" /> Agregar franja
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                );
+             })}
           </div>
 
           <div className="space-y-2">

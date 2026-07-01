@@ -13,6 +13,7 @@ import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getCategoryStyle } from '@/lib/category-style';
+import { normalizeSchedule, getStoreOpenStatus, formatRanges, type WeeklySchedule } from '@/lib/store-hours';
 
 interface StoreData {
   name: string;
@@ -20,6 +21,7 @@ interface StoreData {
   address?: string;
   imageUrl?: string;
   schedule?: { open: string; close: string };
+  weeklySchedule?: WeeklySchedule;
   rating?: number;
   manuallyPaused?: boolean;
 }
@@ -95,36 +97,16 @@ export default function StorePublicPage() {
       .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   }, [rawProducts, rawLegacyProducts]);
 
-  // 4. Estado de Apertura
+  // 4. Estado de Apertura (helper compartido: soporta horario por día + franjas de siesta)
   const storeStatus = useMemo((): { isOpen: boolean; label: string; timeRange?: string; paused?: boolean } => {
       if (store?.manuallyPaused) {
           return { isOpen: false, label: 'Pausada temporalmente', paused: true };
       }
-      if (!store?.schedule) return { isOpen: true, label: 'Abierto' };
-
-      const now = new Date();
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      
-      const [openHour, openMin] = store.schedule.open.split(':').map(Number);
-      const [closeHour, closeMin] = store.schedule.close.split(':').map(Number);
-      
-      const openMinutes = openHour * 60 + openMin;
-      const closeMinutes = closeHour * 60 + closeMin;
-      
-      let isOpen = false;
-
-      if (closeMinutes < openMinutes) {
-          // Turno Nocturno
-          isOpen = currentMinutes >= openMinutes || currentMinutes < closeMinutes;
-      } else {
-          // Turno Normal
-          isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
-      }
-      
+      const status = getStoreOpenStatus(normalizeSchedule(store));
       return {
-          isOpen,
-          label: isOpen ? 'Abierto' : 'Cerrado',
-          timeRange: `${store.schedule.open} - ${store.schedule.close}`
+          isOpen: status.isOpen,
+          label: status.label,
+          timeRange: status.closedToday ? 'Hoy cerrado' : formatRanges(status.todayRanges),
       };
   }, [store]);
 
@@ -137,7 +119,7 @@ export default function StorePublicPage() {
             title: storeStatus.paused ? "Tienda en pausa" : "Tienda Cerrada",
             description: storeStatus.paused
                 ? "La tienda pausó los pedidos temporalmente. Probá más tarde."
-                : `El local abre a las ${store?.schedule?.open}. No se aceptan pedidos ahora.`
+                : "El local está cerrado en este horario. No se aceptan pedidos ahora."
         });
         return;
     }
@@ -224,9 +206,9 @@ export default function StorePublicPage() {
                       {cleanAddress(store.address)}
                   </div>
               )}
-              {store.schedule && (
+              {(store.weeklySchedule || store.schedule) && (
                    <div className="flex items-center gap-1 font-medium text-foreground">
-                      <Clock className="h-4 w-4 text-primary" /> {storeStatus.timeRange} hs
+                      <Clock className="h-4 w-4 text-primary" /> {storeStatus.timeRange}
                   </div>
               )}
           </div>
