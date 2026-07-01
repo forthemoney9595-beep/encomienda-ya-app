@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle, PauseCircle, Plus, X } from 'lucide-react';
+import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle, PauseCircle, Plus, X, Truck } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
 import { useRouter } from 'next/navigation';
@@ -262,19 +262,17 @@ export default function EditStorePage() {
         </CardContent>
       </Card>
 
+      {/* SECCIÓN 1: DATOS DEL NEGOCIO */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <StoreIcon className="h-5 w-5" /> Información del Negocio
+            <StoreIcon className="h-5 w-5" /> Datos del negocio
           </CardTitle>
           <CardDescription>
-            Esta información será visible para todos los clientes en la app.
+            Lo que ven los clientes en la app.
           </CardDescription>
         </CardHeader>
-
         <CardContent className="space-y-6">
-
-          {/* SECCIÓN DE IMAGEN */}
           <div className="space-y-2">
             <Label>Portada de la Tienda</Label>
             <div className="flex justify-center">
@@ -291,61 +289,15 @@ export default function EditStorePage() {
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-                <Label htmlFor="name">Nombre de la Tienda</Label>
-                <Input
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Ej. Pizzería Don Mario"
-                />
-            </div>
-
-            {/* SECCIÓN DIRECCIÓN MEJORADA */}
-            <div className="space-y-2">
-                <Label htmlFor="address">Dirección del Local</Label>
-                <div className="flex gap-2">
-                    <Input
-                        id="address"
-                        name="address"
-                        value={formData.address}
-                        onChange={handleChange}
-                        // Placeholder educativo
-                        placeholder="Calle, Número y Barrio (Texto visible)"
-                        className="flex-1"
-                    />
-                    <Button
-                        type="button"
-                        variant={coords ? "default" : "outline"} // Verde si ya tiene GPS
-                        size="icon"
-                        onClick={handleGetLocation}
-                        disabled={isLocating}
-                        title="Actualizar ubicación GPS del mapa"
-                        className={coords ? "bg-success hover:bg-success/90 text-success-foreground" : ""}
-                    >
-                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> :
-                         coords ? <CheckCircle2 className="h-4 w-4" /> : <LocateFixed className="h-4 w-4 text-info" />}
-                    </Button>
-                </div>
-
-                {/* Feedback Visual Claro */}
-                {coords ? (
-                    <div className="flex justify-between items-center text-xs">
-                        <span className="text-success flex items-center gap-1 font-medium">
-                            <MapPin className="h-3 w-3"/> Mapa configurado correctamente
-                        </span>
-                        <span className="text-muted-foreground text-[10px]">
-                            Lat: {coords.latitude.toFixed(4)}, Lng: {coords.longitude.toFixed(4)}
-                        </span>
-                    </div>
-                ) : (
-                    <p className="text-xs text-warning flex items-center gap-1 font-medium">
-                        <AlertTriangle className="h-3 w-3"/> Importante: Presiona el botón GPS para activar el mapa.
-                    </p>
-                )}
-            </div>
+          <div className="space-y-2">
+              <Label htmlFor="name">Nombre de la Tienda</Label>
+              <Input
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="Ej. Pizzería Don Mario"
+              />
           </div>
 
           <div className="space-y-2">
@@ -370,70 +322,6 @@ export default function EditStorePage() {
             </p>
           </div>
 
-          {/* SECCIÓN DE HORARIOS (por día, con franjas múltiples) */}
-          <div className="border p-4 rounded-lg bg-muted/20 space-y-3">
-             <div>
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-primary" /> Horarios de Atención
-                </h4>
-                <p className="text-xs text-muted-foreground mt-1">
-                    Podés cargar más de una franja por día (ej: mañana y tarde) o marcar un día como cerrado.
-                </p>
-             </div>
-
-             {DISPLAY_ORDER.map((dayIdx) => {
-                const day = weeklySchedule[dayIdx];
-                return (
-                    <div key={dayIdx} className="border rounded-md p-3 bg-background space-y-2">
-                        <div className="flex items-center justify-between">
-                            <span className="font-medium text-sm">{DAY_LABELS[dayIdx]}</span>
-                            <div className="flex items-center gap-2">
-                                <span className={`text-xs ${day.closed ? 'text-muted-foreground' : 'text-success'}`}>
-                                    {day.closed ? 'Cerrado' : 'Abierto'}
-                                </span>
-                                <Switch checked={!day.closed} onCheckedChange={(v) => setDayClosed(dayIdx, !v)} />
-                            </div>
-                        </div>
-
-                        {!day.closed && (
-                            <div className="space-y-2">
-                                {day.ranges.map((r, ri) => (
-                                    <div key={ri} className="flex items-center gap-2">
-                                        <Input
-                                            type="time"
-                                            value={r.open}
-                                            onChange={(e) => updateRange(dayIdx, ri, 'open', e.target.value)}
-                                            className="w-32"
-                                        />
-                                        <span className="text-muted-foreground text-sm">a</span>
-                                        <Input
-                                            type="time"
-                                            value={r.close}
-                                            onChange={(e) => updateRange(dayIdx, ri, 'close', e.target.value)}
-                                            className="w-32"
-                                        />
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="text-muted-foreground hover:text-destructive"
-                                            onClick={() => removeRange(dayIdx, ri)}
-                                            title="Quitar franja"
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ))}
-                                <Button type="button" variant="outline" size="sm" onClick={() => addRange(dayIdx)}>
-                                    <Plus className="mr-2 h-3 w-3" /> Agregar franja
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                );
-             })}
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="description">Descripción</Label>
             <Textarea
@@ -445,26 +333,156 @@ export default function EditStorePage() {
                 rows={3}
             />
           </div>
-
-          <div className="space-y-2">
-                <Label htmlFor="deliveryTime">Tiempo de Entrega (Estimado)</Label>
-                <Input
-                    id="deliveryTime"
-                    name="deliveryTime"
-                    value={formData.deliveryTime}
-                    onChange={handleChange}
-                    placeholder="Ej. 30-45 min"
-                />
-          </div>
-
         </CardContent>
-        <CardFooter className="flex justify-between border-t px-6 py-4 bg-muted/20">
-            <Button variant="ghost" onClick={() => router.push('/my-store')}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={isSaving}>
-              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> Guardar Cambios</>}
-            </Button>
-        </CardFooter>
       </Card>
+
+      {/* SECCIÓN 2: UBICACIÓN */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" /> Ubicación
+          </CardTitle>
+          <CardDescription>
+            La dirección visible + el GPS que usa el mapa de seguimiento del repartidor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="address">Dirección del Local</Label>
+            <div className="flex gap-2">
+                <Input
+                    id="address"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    placeholder="Calle, Número y Barrio (Texto visible)"
+                    className="flex-1"
+                />
+                <Button
+                    type="button"
+                    variant={coords ? "default" : "outline"}
+                    size="icon"
+                    onClick={handleGetLocation}
+                    disabled={isLocating}
+                    title="Actualizar ubicación GPS del mapa"
+                    className={coords ? "bg-success hover:bg-success/90 text-success-foreground" : ""}
+                >
+                    {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> :
+                     coords ? <CheckCircle2 className="h-4 w-4" /> : <LocateFixed className="h-4 w-4 text-info" />}
+                </Button>
+            </div>
+            {coords ? (
+                <div className="flex justify-between items-center text-xs">
+                    <span className="text-success flex items-center gap-1 font-medium">
+                        <MapPin className="h-3 w-3"/> Mapa configurado correctamente
+                    </span>
+                    <span className="text-muted-foreground text-[10px]">
+                        Lat: {coords.latitude.toFixed(4)}, Lng: {coords.longitude.toFixed(4)}
+                    </span>
+                </div>
+            ) : (
+                <p className="text-xs text-warning flex items-center gap-1 font-medium">
+                    <AlertTriangle className="h-3 w-3"/> Importante: Presiona el botón GPS para activar el mapa.
+                </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* SECCIÓN 3: HORARIOS */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" /> Horarios de atención
+          </CardTitle>
+          <CardDescription>
+            Podés cargar más de una franja por día (ej: mañana y tarde) o marcar un día como cerrado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {DISPLAY_ORDER.map((dayIdx) => {
+            const day = weeklySchedule[dayIdx];
+            return (
+                <div key={dayIdx} className="border rounded-md p-3 bg-muted/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">{DAY_LABELS[dayIdx]}</span>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-xs ${day.closed ? 'text-muted-foreground' : 'text-success'}`}>
+                                {day.closed ? 'Cerrado' : 'Abierto'}
+                            </span>
+                            <Switch checked={!day.closed} onCheckedChange={(v) => setDayClosed(dayIdx, !v)} />
+                        </div>
+                    </div>
+
+                    {!day.closed && (
+                        <div className="space-y-2">
+                            {day.ranges.map((r, ri) => (
+                                <div key={ri} className="flex items-center gap-2">
+                                    <Input
+                                        type="time"
+                                        value={r.open}
+                                        onChange={(e) => updateRange(dayIdx, ri, 'open', e.target.value)}
+                                        className="w-32"
+                                    />
+                                    <span className="text-muted-foreground text-sm">a</span>
+                                    <Input
+                                        type="time"
+                                        value={r.close}
+                                        onChange={(e) => updateRange(dayIdx, ri, 'close', e.target.value)}
+                                        className="w-32"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-muted-foreground hover:text-destructive"
+                                        onClick={() => removeRange(dayIdx, ri)}
+                                        title="Quitar franja"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                            <Button type="button" variant="outline" size="sm" onClick={() => addRange(dayIdx)}>
+                                <Plus className="mr-2 h-3 w-3" /> Agregar franja
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* SECCIÓN 4: ENTREGA */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="h-5 w-5" /> Entrega
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="deliveryTime">Tiempo de Entrega (Estimado)</Label>
+            <Input
+                id="deliveryTime"
+                name="deliveryTime"
+                value={formData.deliveryTime}
+                onChange={handleChange}
+                placeholder="Ej. 30-45 min"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Barra de guardado fija: siempre a mano en un form largo (el rol tienda no tiene
+          bottom-nav, así que no se pisa con nada). */}
+      <div className="sticky bottom-0 z-20 -mx-4 sm:mx-0 flex justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 rounded-b-lg">
+        <Button variant="ghost" onClick={() => router.push('/my-store')}>Cancelar</Button>
+        <Button onClick={handleSubmit} disabled={isSaving}>
+          {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> Guardar Cambios</>}
+        </Button>
+      </div>
     </div>
   );
 }
