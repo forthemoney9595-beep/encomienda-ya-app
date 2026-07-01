@@ -87,11 +87,16 @@ export async function POST(request: Request) {
       });
     }
 
-    // Re-broadcast a todos los repartidores (mismo patrón que /api/orders/notify-drivers).
-    const driversSnap = await adminDb.collection("users").where("role", "==", "delivery").get();
-    if (!driversSnap.empty) {
+    // Re-broadcast a repartidores aprobados y disponibles (mismo criterio que
+    // /api/orders/notify-drivers).
+    const driversSnap = await adminDb.collection("users")
+      .where("role", "==", "delivery")
+      .where("isApproved", "==", true)
+      .get();
+    const onlineDrivers = driversSnap.docs.filter(d => d.data().isOnline !== false);
+    if (onlineDrivers.length > 0) {
       const batch = adminDb.batch();
-      driversSnap.forEach((driverDoc) => {
+      onlineDrivers.forEach((driverDoc) => {
         if (driverDoc.id === callerUid) return; // no re-notificar a quien lo soltó
         const notifRef = adminDb.collection("notifications").doc();
         batch.set(notifRef, {

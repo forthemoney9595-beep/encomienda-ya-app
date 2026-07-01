@@ -9,14 +9,16 @@ import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import type { Order } from '@/lib/order-service';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ShoppingBag, User, XCircle, TrendingUp, Package, TrendingDown, Minus, Clock, Star } from 'lucide-react';
-import { format, subDays, startOfMonth, subMonths, eachDayOfInterval, isSameDay } from 'date-fns';
+import { ShoppingBag, User, XCircle, TrendingUp, Package, Clock, Star } from 'lucide-react';
+import { format, eachDayOfInterval, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { type Period, PERIOD_LABELS, getPeriodBounds } from '@/lib/analytics-period';
+import { PctBadge } from '@/components/pct-badge';
 
 const formatDate = (date: any) => {
     if (!date) return '';
@@ -25,30 +27,6 @@ const formatDate = (date: any) => {
         return format(d, "d MMM, HH:mm", { locale: es });
     } catch (e) { return '' }
 };
-
-type Period = '7d' | '30d' | 'month' | 'all';
-
-const PERIOD_LABELS: Record<Period, string> = {
-    '7d':    'Últimos 7 días',
-    '30d':   'Últimos 30 días',
-    'month': 'Este mes',
-    'all':   'Todo',
-};
-
-function getPeriodBounds(period: Period): { from: Date | null; prevFrom: Date | null; prevTo: Date | null } {
-    const now = new Date();
-    if (period === 'all') return { from: null, prevFrom: null, prevTo: null };
-    if (period === '7d') {
-        return { from: subDays(now, 7), prevFrom: subDays(now, 14), prevTo: subDays(now, 7) };
-    }
-    if (period === '30d') {
-        return { from: subDays(now, 30), prevFrom: subDays(now, 60), prevTo: subDays(now, 30) };
-    }
-    // 'month' = current calendar month, vs same period last month
-    const thisMonthStart = startOfMonth(now);
-    const prevMonthStart = subMonths(thisMonthStart, 1);
-    return { from: thisMonthStart, prevFrom: prevMonthStart, prevTo: thisMonthStart };
-}
 
 function computeStats(orders: Order[], from: Date | null, to?: Date | null) {
     const filtered = orders.filter(o => {
@@ -62,27 +40,6 @@ function computeStats(orders: Order[], from: Date | null, to?: Date | null) {
     const totalRevenue = completed.reduce((sum, o) => sum + (o.total || 0), 0);
     const avgTicket = completed.length > 0 ? totalRevenue / completed.length : 0;
     return { totalRevenue, totalOrders: filtered.length, completedOrders: completed.length, rejectedCount: rejected.length, avgTicket, orders: filtered };
-}
-
-function pct(current: number, prev: number): { value: number; up: boolean; zero: boolean } {
-    const v = ((current - prev) / prev) * 100;
-    return { value: Math.abs(v), up: v >= 0, zero: v === 0 };
-}
-
-function PctBadge({ current, prev }: { current: number; prev: number }) {
-    // Sin pedidos en el período anterior no hay con qué comparar -- mostrar "100%" ahí
-    // sería engañoso (parecería un crecimiento real cuando en realidad no hay dato base).
-    if (prev === 0) {
-        if (current === 0) return null;
-        return <span className="text-xs font-medium text-muted-foreground">Sin datos previos</span>;
-    }
-    const p = pct(current, prev);
-    return (
-        <span className={cn('flex items-center gap-0.5 text-xs font-medium', p.up ? 'text-success' : 'text-destructive')}>
-            {p.zero ? <Minus className="h-3 w-3" /> : p.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {p.value.toFixed(0)}%
-        </span>
-    );
 }
 
 export default function StoreAnalyticsPage() {

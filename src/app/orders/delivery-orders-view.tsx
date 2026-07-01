@@ -6,6 +6,7 @@ import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { OrderService } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
+import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -278,9 +279,12 @@ export default function DeliveryOrdersView() {
   return (
     <div className="container mx-auto pb-24">
       
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3">
           <h2 className="text-2xl font-bold tracking-tight">Panel de Repartidor</h2>
-          <Badge variant="outline" className="hidden sm:flex">{isApprovedDriver ? 'Zona Activa' : 'Pendiente'}</Badge>
+          <div className="flex items-center gap-3">
+              <Badge variant="outline" className="hidden sm:flex">{isApprovedDriver ? 'Zona Activa' : 'Pendiente'}</Badge>
+              {isApprovedDriver && <DeliveryOnlineToggle />}
+          </div>
       </div>
 
       {!isApprovedDriver && (

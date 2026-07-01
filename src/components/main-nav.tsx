@@ -277,6 +277,12 @@ export function MainNav({
               Principal
             </Button>
           </Link>
+          <Link href="/delivery">
+            <Button variant={pathname === '/delivery' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              Mi Panel
+            </Button>
+          </Link>
           <Link href="/orders">
             <Button variant={pathname === '/orders' ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Bike className="mr-2 h-4 w-4" />
@@ -294,6 +300,12 @@ export function MainNav({
             <Button variant={pathname.startsWith('/delivery/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Star className="mr-2 h-4 w-4" />
               Mis Reseñas
+            </Button>
+          </Link>
+          <Link href="/delivery/analytics">
+            <Button variant={pathname.startsWith('/delivery/analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Analíticas
             </Button>
           </Link>
         </div>

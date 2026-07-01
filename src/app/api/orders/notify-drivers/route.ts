@@ -38,13 +38,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
-    const driversSnap = await adminDb.collection("users").where("role", "==", "delivery").get();
-    if (driversSnap.empty) {
-      return NextResponse.json({ notified: 0, message: "No hay repartidores registrados" });
+    // Solo aprobados (los pendientes no pueden tomar pedidos igual, per isApprovedDriver()
+    // en firestore.rules) y no explícitamente desconectados (isOnline !== false -- el
+    // default es "disponible" para no dejar de avisarle a nadie que nunca tocó el switch).
+    const driversSnap = await adminDb.collection("users")
+      .where("role", "==", "delivery")
+      .where("isApproved", "==", true)
+      .get();
+    const onlineDrivers = driversSnap.docs.filter(d => d.data().isOnline !== false);
+    if (onlineDrivers.length === 0) {
+      return NextResponse.json({ notified: 0, message: "No hay repartidores disponibles" });
     }
 
     const batch = adminDb.batch();
-    driversSnap.forEach((driverDoc) => {
+    onlineDrivers.forEach((driverDoc) => {
       const notifRef = adminDb.collection("notifications").doc();
       batch.set(notifRef, {
         userId: driverDoc.id,
@@ -59,7 +66,7 @@ export async function POST(request: Request) {
     });
     await batch.commit();
 
-    return NextResponse.json({ notified: driversSnap.size });
+    return NextResponse.json({ notified: onlineDrivers.length });
   } catch (error: any) {
     console.error("❌ [Notify Drivers] Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
