@@ -147,6 +147,38 @@ function AdminDashboard() {
     return [...orders].sort((a,b) => getDate(b.createdAt).getTime() - getDate(a.createdAt).getTime());
   }, [orders]);
 
+  // Umbrales en horas: cuánto tiempo puede estar un pedido en cada estado antes de alertar
+  const STUCK_THRESHOLDS_H: Record<string, number> = {
+    'Pendiente de Confirmación': 1,   // la tienda debería confirmar en ≤1h
+    'Pendiente de Pago':         2,   // el cliente debería pagar en ≤2h
+    'En preparación':            3,   // la tienda debería tenerlo listo en ≤3h
+    'Listo para recoger':        2,   // un repartidor debería tomarlo en ≤2h
+    'En camino':                 3,   // el repartidor debería entregarlo en ≤3h
+    'En reparto':                4,
+  };
+
+  const stuckOrders = useMemo(() => {
+    if (!orders) return [];
+    const now = Date.now();
+    return orders
+      .filter(o => {
+        const threshold = STUCK_THRESHOLDS_H[o.status];
+        if (!threshold) return false;
+        const ts = (o as any).updatedAt ?? o.createdAt;
+        if (!ts) return false;
+        const date: Date = ts.toDate ? ts.toDate() : new Date(ts);
+        const hoursElapsed = (now - date.getTime()) / 3_600_000;
+        return hoursElapsed >= threshold;
+      })
+      .map(o => {
+        const ts = (o as any).updatedAt ?? o.createdAt;
+        const date: Date = ts.toDate ? ts.toDate() : new Date(ts);
+        const hoursElapsed = (Date.now() - date.getTime()) / 3_600_000;
+        return { ...o, hoursElapsed };
+      })
+      .sort((a, b) => b.hoursElapsed - a.hoursElapsed);
+  }, [orders]);
+
   // Estado en tiempo real — snapshot de QUÉ ESTÁ PASANDO AHORA en la plataforma
   const liveStatus = useMemo(() => {
     const ACTIVE_STATUSES = [
@@ -325,6 +357,51 @@ function AdminDashboard() {
           )}
         </div>
       </div>
+      {/* ─────────────────────────────────────────────────────── */}
+
+      {/* ── Alertas de pedidos trabados ───────────────────────── */}
+      {stuckOrders.length > 0 && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+            <h2 className="text-sm font-semibold text-destructive">
+              Atención requerida — {stuckOrders.length} pedido{stuckOrders.length !== 1 ? 's' : ''} sin movimiento
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {stuckOrders.map((o: any) => {
+              const h = Math.floor(o.hoursElapsed);
+              const m = Math.round((o.hoursElapsed - h) * 60);
+              const timeLabel = h >= 1 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
+              return (
+                <Link key={o.id} href={`/orders/${o.id}`}
+                  className="flex items-center justify-between gap-3 rounded-lg bg-background/60 border border-border px-3 py-2.5 hover:bg-muted/40 transition-colors group">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Badge variant="outline" className={cn('text-[10px] shrink-0',
+                      ['En preparación','Listo para recoger','En camino','En reparto'].includes(o.status)
+                        ? 'border-info/40 text-info'
+                        : 'border-warning/40 text-warning'
+                    )}>
+                      {o.status}
+                    </Badge>
+                    <span className="text-sm font-medium truncate">{o.customerName}</span>
+                    <span className="text-xs text-muted-foreground truncate hidden sm:block">
+                      {(o as any).storeName || ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-semibold text-destructive">hace {timeLabel}</span>
+                    <span className="text-xs text-muted-foreground font-mono">#{o.id.slice(0,6)}</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Umbrales: confirmación ≥1h · pago ≥2h · preparación ≥3h · retiro ≥2h · entrega ≥3h
+          </p>
+        </div>
+      )}
       {/* ─────────────────────────────────────────────────────── */}
 
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
