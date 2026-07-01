@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
-import { collection, doc, addDoc, updateDoc, deleteDoc, query, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, query, serverTimestamp, onSnapshot, writeBatch } from 'firebase/firestore';
 import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,10 +15,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Loader2, Star, ExternalLink, Eye, EyeOff, Search, Bug, AlertTriangle } from 'lucide-react'; 
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Loader2, Star, ExternalLink, Eye, EyeOff, Search, Bug, AlertTriangle, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ImageUpload } from '@/components/image-upload';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -66,6 +67,10 @@ export default function ProductManagementPage() {
   // en vez de una lista fija, para que la categoría del producto y el agrupado de la tienda
   // pública (que agrupa por product.category) queden siempre en sync.
   const [storeCategories, setStoreCategories] = useState<string[]>([]);
+  // Filtro por estado de stock + selección para acciones masivas.
+  const [stockFilter, setStockFilter] = useState<'all' | 'available' | 'out' | 'low'>('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkWorking, setIsBulkWorking] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -152,12 +157,84 @@ export default function ProductManagementPage() {
     return current && !base.includes(current) ? [current, ...base] : base;
   })();
 
+  const matchesStock = (p: Product) => {
+    switch (stockFilter) {
+      case 'available': return p.available !== false;
+      case 'out': return p.available === false || (p.stock != null && p.stock <= 0);
+      case 'low': return p.stock != null && p.stock > 0 && p.stock <= 3;
+      default: return true;
+    }
+  };
+
   const filteredProducts = products.filter(product => {
     const name = (product.name || '').toLowerCase();
     const category = (product.category || '').toLowerCase();
     const search = searchTerm.toLowerCase();
-    return name.includes(search) || category.includes(search);
+    const matchesSearch = name.includes(search) || category.includes(search);
+    return matchesSearch && matchesStock(product);
   });
+
+  // --- Selección + acciones masivas ---
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+  const allVisibleSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p.id));
+  const toggleSelectAllVisible = () => {
+    setSelectedIds(prev => {
+      if (filteredProducts.every(p => prev.has(p.id))) {
+        const next = new Set(prev);
+        filteredProducts.forEach(p => next.delete(p.id));
+        return next;
+      }
+      const next = new Set(prev);
+      filteredProducts.forEach(p => next.add(p.id));
+      return next;
+    });
+  };
+
+  const selectedProducts = products.filter(p => selectedIds.has(p.id));
+
+  const bulkSetAvailability = async (available: boolean) => {
+    if (!firestore || !userProfile?.storeId || selectedProducts.length === 0) return;
+    setIsBulkWorking(true);
+    try {
+      const batch = writeBatch(firestore);
+      selectedProducts.forEach(p => {
+        batch.update(doc(firestore, 'stores', userProfile.storeId!, p.sourceCollection || 'items', p.id), { available });
+      });
+      await batch.commit();
+      toast({ title: available ? 'Marcados como disponibles' : 'Marcados como agotados', description: `${selectedProducts.length} producto(s).` });
+      clearSelection();
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo aplicar la acción.' });
+    } finally {
+      setIsBulkWorking(false);
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (!firestore || !userProfile?.storeId || selectedProducts.length === 0) return;
+    if (!confirm(`¿Eliminar ${selectedProducts.length} producto(s) permanentemente?`)) return;
+    setIsBulkWorking(true);
+    try {
+      const batch = writeBatch(firestore);
+      selectedProducts.forEach(p => {
+        batch.delete(doc(firestore, 'stores', userProfile.storeId!, p.sourceCollection || 'items', p.id));
+      });
+      await batch.commit();
+      toast({ title: 'Productos eliminados', description: `${selectedProducts.length} producto(s).` });
+      clearSelection();
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron eliminar.' });
+    } finally {
+      setIsBulkWorking(false);
+    }
+  };
 
   const openDialog = (product?: Product) => {
     if (product) {
@@ -354,15 +431,59 @@ export default function ProductManagementPage() {
            </Card>
        )}
 
-      <div className="mb-6 max-w-md relative">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input 
-          placeholder="Buscar producto..." 
-          className="pl-9"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar producto..."
+            className="pl-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as any)}>
+          <SelectTrigger className="w-full sm:w-52">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="available">Disponibles</SelectItem>
+            <SelectItem value="out">Agotados / no visibles</SelectItem>
+            <SelectItem value="low">Stock bajo (≤3)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+
+      {/* Barra de acciones masivas */}
+      {filteredProducts.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <Checkbox checked={allVisibleSelected} onCheckedChange={toggleSelectAllVisible} />
+            Seleccionar todos
+          </label>
+          {selectedIds.size > 0 ? (
+            <>
+              <span className="text-sm text-muted-foreground">{selectedIds.size} seleccionado(s)</span>
+              <div className="flex flex-wrap gap-2 ml-auto">
+                <Button size="sm" variant="outline" disabled={isBulkWorking} onClick={() => bulkSetAvailability(true)}>
+                  <Eye className="mr-2 h-4 w-4" /> Disponible
+                </Button>
+                <Button size="sm" variant="outline" disabled={isBulkWorking} onClick={() => bulkSetAvailability(false)}>
+                  <EyeOff className="mr-2 h-4 w-4" /> Agotado
+                </Button>
+                <Button size="sm" variant="destructive" disabled={isBulkWorking} onClick={bulkDelete}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                </Button>
+                <Button size="sm" variant="ghost" disabled={isBulkWorking} onClick={clearSelection}>
+                  <X className="mr-2 h-4 w-4" /> Limpiar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">Tildá productos para acciones masivas</span>
+          )}
+        </div>
+      )}
 
       {(!filteredProducts || filteredProducts.length === 0) ? (
         <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed">
@@ -375,8 +496,15 @@ export default function ProductManagementPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
-            <Card key={product.id} className={`flex flex-col overflow-hidden group hover:shadow-lg transition-shadow ${!product.available ? 'opacity-75 border-dashed' : ''} ${product.isFeatured ? 'ring-2 ring-warning' : ''}`}>
+            <Card key={product.id} className={`flex flex-col overflow-hidden group hover:shadow-lg transition-shadow ${!product.available ? 'opacity-75 border-dashed' : ''} ${selectedIds.has(product.id) ? 'ring-2 ring-primary' : product.isFeatured ? 'ring-2 ring-warning' : ''}`}>
               <div className="relative h-48 w-full bg-muted flex items-center justify-center overflow-hidden">
+                <div className="absolute top-2 left-2 z-10">
+                  <Checkbox
+                    checked={selectedIds.has(product.id)}
+                    onCheckedChange={() => toggleSelect(product.id)}
+                    className="bg-background/80 border-2 shadow-sm"
+                  />
+                </div>
                 {product.imageUrl ? (
                   <img 
                     src={product.imageUrl} 
