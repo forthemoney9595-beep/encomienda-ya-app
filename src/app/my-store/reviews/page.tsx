@@ -8,7 +8,8 @@ import { collection, doc, query, where, orderBy, updateDoc, serverTimestamp } fr
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Star, MessageSquare } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
+import { StarRating } from '@/components/star-rating';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -22,16 +23,6 @@ interface Review {
   comment?: string;
   ownerReply?: string;
   createdAt?: any;
-}
-
-function Stars({ rating }: { rating: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map(star => (
-        <Star key={star} className={`h-4 w-4 ${rating >= star ? 'fill-warning text-warning' : 'text-muted-foreground/30'}`} />
-      ))}
-    </div>
-  );
 }
 
 function ReviewReplyForm({ review, storeId }: { review: Review; storeId: string }) {
@@ -127,7 +118,7 @@ export default function StoreReviewsPage() {
         <CardContent className="flex items-center gap-4 py-5">
           <div className="text-3xl font-bold text-warning">{(store?.rating || 0).toFixed(1)}</div>
           <div>
-            <Stars rating={Math.round(store?.rating || 0)} />
+            <StarRating rating={Math.round(store?.rating || 0)} />
             <p className="text-sm text-muted-foreground mt-1">{store?.ratingCount || 0} reseña{store?.ratingCount === 1 ? '' : 's'}</p>
           </div>
         </CardContent>
@@ -144,7 +135,7 @@ export default function StoreReviewsPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">{review.userName}</CardTitle>
-                  <Stars rating={review.rating} />
+                  <StarRating rating={review.rating} />
                 </div>
                 {review.createdAt?.seconds && (
                   <p className="text-xs text-muted-foreground">{format(new Date(review.createdAt.seconds * 1000), "d MMM yyyy, HH:mm", { locale: es })}</p>

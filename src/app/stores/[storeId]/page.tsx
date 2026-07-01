@@ -2,18 +2,22 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/lib/firebase';
-import { doc, collection, query } from 'firebase/firestore';
-import { Card, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { doc, collection, query, orderBy, where } from 'firebase/firestore';
+import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info } from 'lucide-react';
+import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, Search, X } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getCategoryStyle } from '@/lib/category-style';
 import { normalizeSchedule, getStoreOpenStatus, formatRanges, type WeeklySchedule } from '@/lib/store-hours';
+import { StarRating } from '@/components/star-rating';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface StoreData {
   name: string;
@@ -23,8 +27,20 @@ interface StoreData {
   schedule?: { open: string; close: string };
   weeklySchedule?: WeeklySchedule;
   rating?: number;
+  ratingCount?: number;
   manuallyPaused?: boolean;
 }
+
+interface Review {
+  id: string;
+  userName: string;
+  rating: number;
+  comment?: string;
+  ownerReply?: string;
+  createdAt?: any;
+}
+
+const REVIEWS_ANCHOR = 'reviews';
 
 interface Product {
   id: string;
@@ -64,6 +80,7 @@ export default function StorePublicPage() {
   const { addToCart } = useCart();
   const { toast } = useToast();
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState('');
 
   // 1. Obtener datos de la TIENDA
   const storeRef = useMemoFirebase(() => {
@@ -88,6 +105,14 @@ export default function StorePublicPage() {
   }, [firestore, storeId]);
 
   const { data: rawLegacyProducts, isLoading: legacyProductsLoading } = useCollection<Product>(legacyProductsQuery);
+
+  // 2b. Reseñas públicas (misma colección que usa el dueño en /my-store/reviews,
+  // pero de solo lectura acá — sin form de respuesta).
+  const reviewsQuery = useMemoFirebase(() => {
+    if (!firestore || !storeId) return null;
+    return query(collection(firestore, 'reviews'), where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
+  }, [firestore, storeId]);
+  const { data: reviews } = useCollection<Review>(reviewsQuery);
 
   // 3. Filtrar y Ordenar
   const products = useMemo(() => {
@@ -145,8 +170,13 @@ export default function StorePublicPage() {
   if (storeLoading || productsLoading || legacyProductsLoading) return <LoadingSkeleton />;
   if (!store) return <StoreNotFound router={router} />;
 
-  const featuredProducts = products.filter(p => p.isFeatured);
-  const regularProducts = products.filter(p => !p.isFeatured);
+  const search = searchTerm.trim().toLowerCase();
+  const visibleProducts = search
+    ? products.filter(p => (p.name || '').toLowerCase().includes(search) || (p.description || '').toLowerCase().includes(search))
+    : products;
+
+  const featuredProducts = visibleProducts.filter(p => p.isFeatured);
+  const regularProducts = visibleProducts.filter(p => !p.isFeatured);
 
   // Agrupar por categoría real del producto (selector fijo en el panel de tienda) para que
   // el "Menú Completo" deje de ser una sola grilla con todo mezclado.
@@ -167,6 +197,25 @@ export default function StorePublicPage() {
     document.getElementById(categorySlug(category))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const scrollToReviews = () => {
+    document.getElementById(REVIEWS_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleShare = async () => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const shareData = { title: store?.name || 'Tienda', text: `Mirá ${store?.name} en EncomiendaYA`, url };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast({ title: 'Enlace copiado', description: 'Compartilo donde quieras.' });
+      }
+    } catch {
+      // El usuario canceló el share nativo o el navegador no soporta nada de esto -- silencioso.
+    }
+  };
+
   return (
     <div className="container mx-auto">
       {/* BANNER */}
@@ -183,33 +232,90 @@ export default function StorePublicPage() {
       </div>
 
       {/* INFO */}
-      <div className="px-4 sm:px-0 mb-8 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight">{store.name}</h1>
-              <Badge variant={storeStatus.isOpen ? "default" : "destructive"} className={`gap-1 ${storeStatus.isOpen ? 'bg-success hover:bg-success/90 text-success-foreground' : ''}`}>
-                  {storeStatus.isOpen ? <Clock className="h-3 w-3" /> : <Info className="h-3 w-3" />}
-                  {storeStatus.label}
-              </Badge>
-              {(store.rating || 0) > 0 && (
-                  <div className="flex items-center gap-1 text-sm font-medium bg-warning/15 text-warning px-2 py-0.5 rounded-full">
-                      <Star className="h-3.5 w-3.5 fill-current" /> {store.rating?.toFixed(1)}
-                  </div>
-              )}
+      <div className="px-4 sm:px-0 mb-8 space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight">{store.name}</h1>
+                  <Badge variant={storeStatus.isOpen ? "default" : "destructive"} className={`gap-1 ${storeStatus.isOpen ? 'bg-success hover:bg-success/90 text-success-foreground' : ''}`}>
+                      {storeStatus.isOpen ? <Clock className="h-3 w-3" /> : <Info className="h-3 w-3" />}
+                      {storeStatus.label}
+                  </Badge>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleShare} className="shrink-0">
+                  <Share2 className="h-4 w-4 mr-2" /> Compartir
+              </Button>
           </div>
 
           <p className="text-muted-foreground max-w-2xl">{store.description || 'Sin descripción disponible.'}</p>
 
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground pt-1">
-                {store.address && (
-                  <div className="flex items-center gap-1">
-                      <MapPin className="h-4 w-4" />
-                      {cleanAddress(store.address)}
+          {/* Tarjeta de info: rating clickeable + dirección + horario, con más jerarquía que una línea de texto suelta */}
+          <div className="rounded-xl border bg-card divide-y sm:divide-y-0 sm:divide-x sm:flex">
+              {(store.rating || 0) > 0 ? (
+                  <button
+                      onClick={scrollToReviews}
+                      className="flex items-center gap-2 p-3 sm:flex-1 text-left hover:bg-muted/40 transition-colors group"
+                  >
+                      <div className="h-9 w-9 rounded-lg bg-warning/15 text-warning flex items-center justify-center shrink-0">
+                          <Star className="h-4.5 w-4.5 fill-current" />
+                      </div>
+                      <div className="min-w-0">
+                          <p className="font-semibold text-sm flex items-center gap-1">
+                              {store.rating?.toFixed(1)}
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                          </p>
+                          <p className="text-xs text-muted-foreground">{store.ratingCount || 0} reseña{store.ratingCount === 1 ? '' : 's'}</p>
+                      </div>
+                  </button>
+              ) : (
+                  <div className="flex items-center gap-2 p-3 sm:flex-1">
+                      <div className="h-9 w-9 rounded-lg bg-muted text-muted-foreground flex items-center justify-center shrink-0">
+                          <Star className="h-4.5 w-4.5" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Todavía sin reseñas</p>
                   </div>
               )}
-              {(store.weeklySchedule || store.schedule) && (
-                   <div className="flex items-center gap-1 font-medium text-foreground">
-                      <Clock className="h-4 w-4 text-primary" /> {storeStatus.timeRange}
+
+              {store.address && (
+                  <div className="flex items-center gap-2 p-3 sm:flex-1 min-w-0">
+                      <div className="h-9 w-9 rounded-lg bg-info/15 text-info flex items-center justify-center shrink-0">
+                          <MapPin className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="min-w-0">
+                          <p className="font-semibold text-sm truncate">{cleanAddress(store.address)}</p>
+                          <p className="text-xs text-muted-foreground">Dirección</p>
+                      </div>
                   </div>
+              )}
+
+              {(store.weeklySchedule || store.schedule) && (
+                  <div className="flex items-center gap-2 p-3 sm:flex-1 min-w-0">
+                      <div className="h-9 w-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                          <Clock className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="min-w-0">
+                          <p className="font-semibold text-sm truncate">{storeStatus.timeRange}</p>
+                          <p className="text-xs text-muted-foreground">Horario de hoy</p>
+                      </div>
+                  </div>
+              )}
+          </div>
+
+          <div className="relative max-w-md">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={`Buscar en ${store.name}...`}
+                  className="pl-9 pr-9"
+              />
+              {searchTerm && (
+                  <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                      aria-label="Limpiar búsqueda"
+                  >
+                      <X className="h-4 w-4" />
+                  </button>
               )}
           </div>
       </div>
@@ -266,7 +372,12 @@ export default function StorePublicPage() {
       )}
 
       {/* MENU COMPLETO, AGRUPADO POR CATEGORÍA */}
-      {products.length > 0 ? (
+      {search && visibleProducts.length === 0 ? (
+        <div className="text-center py-12 bg-muted/10 rounded-lg border border-dashed">
+            <p className="text-muted-foreground">Sin resultados para &quot;{searchTerm}&quot;.</p>
+            <button onClick={() => setSearchTerm('')} className="text-sm text-primary underline mt-2">Limpiar búsqueda</button>
+        </div>
+      ) : products.length > 0 ? (
         groupedProducts.map(([category, items]) => (
             <div key={category} id={categorySlug(category)} className="mb-10 scroll-mt-32 sm:scroll-mt-20">
                 <h2 className="font-headline text-xl font-bold mb-2">{category}</h2>
@@ -282,6 +393,43 @@ export default function StorePublicPage() {
             <p className="text-muted-foreground">Esta tienda aún no tiene productos disponibles.</p>
         </div>
       )}
+
+      {/* RESEÑAS PÚBLICAS */}
+      <div id={REVIEWS_ANCHOR} className="mb-10 scroll-mt-32 sm:scroll-mt-20 px-4 sm:px-0">
+          <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-primary" /> Reseñas de la tienda
+          </h2>
+          {(!reviews || reviews.length === 0) ? (
+              <div className="text-center py-10 bg-muted/10 rounded-lg border border-dashed">
+                  <p className="text-muted-foreground">Todavía no hay reseñas. Sé el primero en calificar después de tu pedido.</p>
+              </div>
+          ) : (
+              <div className="space-y-4">
+                  {reviews.slice(0, 10).map(review => (
+                      <Card key={review.id}>
+                          <CardContent className="py-4 space-y-2">
+                              <div className="flex items-center justify-between">
+                                  <span className="font-medium text-sm">{review.userName}</span>
+                                  <StarRating rating={review.rating} />
+                              </div>
+                              {review.createdAt?.seconds && (
+                                  <p className="text-xs text-muted-foreground">
+                                      {format(new Date(review.createdAt.seconds * 1000), "d MMM yyyy", { locale: es })}
+                                  </p>
+                              )}
+                              {review.comment && <p className="text-sm text-foreground">{review.comment}</p>}
+                              {review.ownerReply && (
+                                  <div className="mt-2 bg-muted/30 border-l-2 border-primary/40 rounded-r-md p-3">
+                                      <p className="text-xs font-semibold text-primary mb-1">Respuesta de la tienda</p>
+                                      <p className="text-sm text-muted-foreground">{review.ownerReply}</p>
+                                  </div>
+                              )}
+                          </CardContent>
+                      </Card>
+                  ))}
+              </div>
+          )}
+      </div>
     </div>
   );
 }
