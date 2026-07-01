@@ -5,7 +5,7 @@ import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { OrderService } from '@/lib/order-service';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -22,8 +22,6 @@ import {
   Map as MapIcon, 
   PackageCheck 
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Dialog,
@@ -51,8 +49,6 @@ interface Order {
   storeOwnerId?: string | null;
   storeId?: string;
   deliveryPersonId?: string;
-  deliveryPayoutStatus?: 'pending' | 'paid';
-  payoutDate?: any;
 }
 
 export default function DeliveryOrdersView() {
@@ -110,39 +106,6 @@ export default function DeliveryOrdersView() {
   const myActiveOrders = useMemo(() => {
       // Filtramos los que están activos en mi posesión
       return allMyOrders?.filter(o => ['En camino', 'En reparto', 'En preparación', 'Listo para recoger'].includes(o.status)) || [];
-  }, [allMyOrders]);
-
-  // 5. 💰 CÁLCULOS FINANCIEROS (BILLETERA)
-  const financeStats = useMemo(() => {
-    const emptyStats = { 
-        pendingBalance: 0, 
-        lastPayoutDate: null as Date | null, 
-        totalPaid: 0, 
-        unpaidOrders: [] as Order[] 
-    };
-
-    if (!allMyOrders) return emptyStats;
-
-    // A. Saldo Pendiente: Entregados Y NO pagados
-    const unpaidOrders = allMyOrders.filter(o => o.status === 'Entregado' && o.deliveryPayoutStatus !== 'paid');
-    const pendingBalance = unpaidOrders.reduce((acc, order) => acc + (Number(order.deliveryFee) || 0), 0);
-
-    // B. Historial de Pagos
-    const paidOrders = allMyOrders.filter(o => o.deliveryPayoutStatus === 'paid');
-    const totalPaid = paidOrders.reduce((acc, order) => acc + (Number(order.deliveryFee) || 0), 0);
-    
-    let lastPayoutDate: Date | null = null;
-    if (paidOrders.length > 0) {
-        const sortedPaid = [...paidOrders].sort((a, b) => {
-           const dateA = a.payoutDate?.seconds || a.createdAt?.seconds || 0;
-           const dateB = b.payoutDate?.seconds || b.createdAt?.seconds || 0;
-           return dateB - dateA;
-        });
-        const lastOrder = sortedPaid[0];
-        lastPayoutDate = lastOrder.payoutDate ? lastOrder.payoutDate.toDate() : (lastOrder.createdAt?.toDate ? lastOrder.createdAt.toDate() : new Date());
-    }
-
-    return { pendingBalance, lastPayoutDate, totalPaid, unpaidOrders };
   }, [allMyOrders]);
 
   // --- ACCIONES DEL PROCESO ---
@@ -292,15 +255,12 @@ export default function DeliveryOrdersView() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-6">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
           <TabsTrigger value="available">
             Disponibles ({availableOrders?.length || 0})
           </TabsTrigger>
           <TabsTrigger value="active">
             En Curso ({myActiveOrders?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="wallet" className="text-primary font-semibold data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-             <Wallet className="h-4 w-4 mr-2"/> Billetera
           </TabsTrigger>
         </TabsList>
 
@@ -452,76 +412,6 @@ export default function DeliveryOrdersView() {
                     </Card>
                 ))
             )}
-        </TabsContent>
-
-        {/* --- PESTAÑA: BILLETERA --- */}
-        <TabsContent value="wallet" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
-             <div className="grid gap-4 md:grid-cols-2">
-                <Card className="border-l-4 border-l-info shadow-md">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Clock className="h-4 w-4" /> Saldo Pendiente de Cobro
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-info">${financeStats.pendingBalance.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Ganancias por envíos entregados (no pagados).
-                        </p>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-l-4 border-l-success shadow-sm bg-success/5">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-success" /> Último Pago Recibido
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {financeStats.lastPayoutDate ? (
-                            <>
-                                <div className="text-xl font-bold text-success">
-                                    {format(financeStats.lastPayoutDate, "d 'de' MMMM", { locale: es })}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Total histórico ganado: <strong>${financeStats.totalPaid.toLocaleString()}</strong>
-                                </p>
-                            </>
-                        ) : (
-                            <div className="text-sm text-muted-foreground italic">Aún no has recibido pagos.</div>
-                        )}
-                    </CardContent>
-                </Card>
-             </div>
-
-             <Card>
-                <CardHeader>
-                    <CardTitle>Historial Reciente</CardTitle>
-                    <CardDescription>Detalle de tus ganancias por entrega.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {financeStats.unpaidOrders.length === 0 && financeStats.totalPaid === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <Wallet className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-                            <p>No tienes movimientos aún.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {financeStats.unpaidOrders.map((order: any) => (
-                                <div key={order.id} className="flex justify-between items-center border-b pb-2 last:border-0">
-                                    <div>
-                                        <p className="font-medium text-sm">Pedido #{order.id.substring(0,6)}</p>
-                                        <Badge variant="outline" className="text-[10px] border-warning/30 text-warning">Pendiente</Badge>
-                                    </div>
-                                    <div className="font-bold text-info">
-                                        +${(order.deliveryFee || 0).toLocaleString()}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-             </Card>
         </TabsContent>
       </Tabs>
 

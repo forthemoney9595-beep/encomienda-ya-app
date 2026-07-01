@@ -67,12 +67,6 @@ export interface Order {
   deliveryReview?: string;
   storeReviewed?: boolean;
 
-  // ✅ NUEVOS CAMPOS FINANCIEROS (SEPARADOS)
-  storePayoutStatus?: 'pending' | 'paid'; 
-  deliveryPayoutStatus?: 'pending' | 'paid'; 
-  
-  payoutDate?: any; 
-  
   // Datos del driver para el mapa en tiempo real
   driverCoords?: { latitude: number; longitude: number };
 }
