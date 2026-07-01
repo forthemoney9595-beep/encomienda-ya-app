@@ -284,10 +284,16 @@ export function MainNav({
             </Button>
           </Link>
           {/* ✅ CORREGIDO: Apunta a la nueva página de ganancias */}
-          <Link href="/delivery/earnings"> 
+          <Link href="/delivery/earnings">
             <Button variant={pathname.startsWith('/delivery/earnings') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Wallet className="mr-2 h-4 w-4" />
               Mis Ganancias
+            </Button>
+          </Link>
+          <Link href="/delivery/reviews">
+            <Button variant={pathname.startsWith('/delivery/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Star className="mr-2 h-4 w-4" />
+              Mis Reseñas
             </Button>
           </Link>
         </div>

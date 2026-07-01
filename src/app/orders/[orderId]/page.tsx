@@ -219,11 +219,14 @@ export default function OrderTrackingPage() {
     };
 
     const handleDeliveryReviewSubmit = async (rating: number, review: string) => {
-        if (!order || !orderRef) return;
-        try {
-            await updateDoc(orderRef, { deliveryRating: rating, deliveryReview: review });
-            toast({ title: "¡Reseña enviada!", description: "Se ha valorado al repartidor." });
-        } catch (error) { toast({ variant: 'destructive', title: "Error" }); }
+        if (!order || !user) return;
+        const res = await authedFetch('/api/delivery-reviews/create', user, { orderId: order.id, userId: user.uid, rating, comment: review });
+        const data = await res.json();
+        if (!res.ok) {
+            toast({ variant: 'destructive', title: "Error", description: data.error || 'No se pudo enviar la reseña.' });
+            throw new Error(data.error);
+        }
+        toast({ title: "¡Reseña enviada!", description: "Se ha valorado al repartidor." });
     };
 
     const handleStoreReviewSubmit = async (rating: number, comment: string) => {
@@ -607,7 +610,7 @@ export default function OrderTrackingPage() {
             )}
 
             {isBuyer && order.status === 'Entregado' && order.deliveryPersonName && (
-                order.deliveryRating ? (
+                order.deliveryReviewed ? (
                     <Card><CardHeader><CardTitle>Tu Valoración de la Entrega</CardTitle></CardHeader><CardContent className="space-y-2"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30')} />))}<span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span></div>{order.deliveryReview && (<blockquote className="border-l-2 pl-4 italic text-muted-foreground">&quot;{order.deliveryReview}&quot;</blockquote>)}<p className="text-xs text-muted-foreground pt-2">Valoración para {order.deliveryPersonName}.</p></CardContent></Card>
                 ) : (
                     <DeliveryReviewCard order={order} onSubmit={handleDeliveryReviewSubmit} />

@@ -20,7 +20,7 @@ import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useDoc, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import AdminAuthGuard from '../../admin-auth-guard';
-import { collection, query, where, doc, updateDoc, CollectionReference } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, orderBy, limit, CollectionReference } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { type Order as OrderType } from '@/lib/order-service';
@@ -72,24 +72,30 @@ function DriverProfilePage() {
   );
   const { data: withdrawals } = useCollection<any>(withdrawalsQuery);
 
+  // Reseñas: colección dedicada (vía /api/delivery-reviews/create), no un escaneo de
+  // pedidos -- mismo patrón que las reseñas de tienda en admin/stores/[storeId].
+  const reviewsQuery = useMemoFirebase(() =>
+    firestore ? query(collection(firestore, 'deliveryReviews'), where('driverId', '==', driverId), orderBy('createdAt', 'desc'), limit(10)) : null,
+    [firestore, driverId]
+  );
+  const { data: reviews } = useCollection<any>(reviewsQuery);
+
   const stats = useMemo(() => {
     const delivered = (orders || []).filter(o => o.status === 'Entregado');
-    const reviewed = delivered.filter(o => o.deliveryRating);
     const totalEarned = delivered.reduce((s, o) => s + (o.deliveryFee || 0), 0);
     const totalWithdrawn = (withdrawals || [])
       .filter(w => w.status !== 'rejected')
       .reduce((s, w) => s + (w.amount || 0), 0);
-    const avgRating = reviewed.length > 0
-      ? reviewed.reduce((s, o) => s + (o.deliveryRating || 0), 0) / reviewed.length
-      : 0;
     return {
       totalDeliveries: delivered.length,
-      avgRating,
-      ratingCount: reviewed.length,
+      // El promedio real vive en users/{driverId}.rating (mantenido por una transacción
+      // en /api/delivery-reviews/create), no se recalcula acá.
+      avgRating: driver?.rating || 0,
+      ratingCount: driver?.ratingCount || 0,
       totalEarned,
       availableBalance: Math.max(0, totalEarned - totalWithdrawn),
     };
-  }, [orders, withdrawals]);
+  }, [orders, withdrawals, driver]);
 
   const recentOrders = useMemo(() => {
     return [...(orders || [])]
@@ -99,16 +105,6 @@ function DriverProfilePage() {
         return db.getTime() - da.getTime();
       })
       .slice(0, 15);
-  }, [orders]);
-
-  const reviews = useMemo(() => {
-    return (orders || []).filter(o => o.deliveryRating).map(o => ({
-      id: o.id,
-      rating: o.deliveryRating!,
-      review: o.deliveryReview || '',
-      customerName: o.customerName,
-      createdAt: o.createdAt,
-    }));
   }, [orders]);
 
   const handleSaveCbu = async () => {
@@ -234,8 +230,8 @@ function DriverProfilePage() {
             <CardTitle className="flex items-center gap-2 text-base"><Star className="h-4 w-4 text-warning" /> Reseñas de clientes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {reviews.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin reseñas todavía.</p>}
-            {reviews.slice(0, 8).map(r => (
+            {(!reviews || reviews.length === 0) && <p className="text-sm text-muted-foreground text-center py-4">Sin reseñas todavía.</p>}
+            {(reviews || []).map(r => (
               <div key={r.id} className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <div className="flex gap-0.5">
@@ -243,10 +239,10 @@ function DriverProfilePage() {
                       <Star key={s} className={cn('h-3 w-3', r.rating >= s ? 'fill-warning text-warning' : 'text-muted-foreground/30')} />
                     ))}
                   </div>
-                  <span className="text-xs font-medium">{r.customerName}</span>
+                  <span className="text-xs font-medium">{r.userName}</span>
                   <span className="text-xs text-muted-foreground ml-auto">{formatDate(r.createdAt)}</span>
                 </div>
-                {r.review && <p className="text-xs text-muted-foreground pl-0.5 line-clamp-2 italic">&quot;{r.review}&quot;</p>}
+                {r.comment && <p className="text-xs text-muted-foreground pl-0.5 line-clamp-2 italic">&quot;{r.comment}&quot;</p>}
               </div>
             ))}
           </CardContent>

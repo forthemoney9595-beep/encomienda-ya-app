@@ -257,9 +257,12 @@ function AdminDashboard() {
       if (!map[did]) map[did] = { name, deliveries: 0, earnings: 0, rating: 0, ratingCount: 0 };
       map[did].deliveries += 1;
       map[did].earnings += o.deliveryFee || 0;
-      if ((o as any).deliveryRating) { map[did].rating += (o as any).deliveryRating; map[did].ratingCount += 1; }
     });
-    Object.values(map).forEach(d => { if (d.ratingCount > 0) d.rating = d.rating / d.ratingCount; });
+    // Rating from user docs (mismo criterio que storeAnalytics con stores/{id}.rating).
+    Object.keys(map).forEach(did => {
+      const driver = users?.find(u => u.id === did) as any;
+      if (driver?.rating) { map[did].rating = driver.rating; map[did].ratingCount = driver.ratingCount || 0; }
+    });
     return Object.values(map).sort((a, b) => analyticsSort === 'revenue' ? b.earnings - a.earnings : b.deliveries - a.deliveries);
   }, [filteredOrders, users, analyticsSort]);
 

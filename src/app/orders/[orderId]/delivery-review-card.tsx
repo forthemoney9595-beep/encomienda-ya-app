@@ -10,7 +10,7 @@ import type { Order } from '@/lib/order-service';
 
 interface DeliveryReviewCardProps {
     order: Order;
-    onSubmit: (rating: number, review: string) => void;
+    onSubmit: (rating: number, review: string) => Promise<void>;
 }
 
 export function DeliveryReviewCard({ order, onSubmit }: DeliveryReviewCardProps) {
@@ -19,13 +19,16 @@ export function DeliveryReviewCard({ order, onSubmit }: DeliveryReviewCardProps)
     const [review, setReview] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (rating === 0) return;
         setIsSubmitting(true);
-        setTimeout(() => {
-            onSubmit(rating, review);
+        try {
+            await onSubmit(rating, review);
+        } catch (error) {
+            console.error(error);
+        } finally {
             setIsSubmitting(false);
-        }, 800);
+        }
     };
 
     return (

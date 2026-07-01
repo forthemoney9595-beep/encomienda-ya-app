@@ -32,6 +32,8 @@ export interface DeliveryPersonnel {
   licenseSelfieUrl?: string;
   joinedDate?: string;
   zone?: string;
+  rating?: number;
+  ratingCount?: number;
 }
 
 interface DeliveryPersonnelListProps {

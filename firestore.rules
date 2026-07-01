@@ -113,10 +113,24 @@ service cloud.firestore {
             .hasOnly(['deliveryPersonId', 'deliveryPersonName', 'status', 'takenAt']) &&
           request.resource.data.status == 'En camino') ||
 
-        // CLIENTE: solo puede calificar (productos y/o repartidor), no otros campos
+        // CLIENTE: solo puede calificar productos (rating por item), no otros campos.
+        // Calificar al repartidor ya NO es un campo de escritura directa -- va por
+        // /api/delivery-reviews/create (mismo criterio que calificar la tienda), que
+        // valida Entregado y evita calificar dos veces antes de tocar la orden.
         (resource.data.userId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items', 'deliveryRating', 'deliveryReview']))
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items']))
       );
+    }
+
+    // 5b. RESEÑAS DE REPARTIDOR — solo vía /api/delivery-reviews/create (Admin SDK).
+    // A diferencia de /reviews (tienda), no son públicas: no hay perfil público de
+    // repartidor donde mostrarlas: solo el propio repartidor calificado y el admin
+    // necesitan leerlas.
+    match /deliveryReviews/{reviewId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.driverId == request.auth.uid);
+      allow create: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // 6. NOTIFICACIONES
