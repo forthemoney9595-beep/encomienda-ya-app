@@ -62,6 +62,9 @@ export default function DeliveryOrdersView() {
   const router = useRouter(); 
   const searchParams = useSearchParams();
 
+  // ¿El repartidor está aprobado por el admin? Solo los aprobados pueden tomar pedidos.
+  const isApprovedDriver = (userProfile as any)?.isApproved === true || (userProfile as any)?.status === 'Activo';
+
   // 1. PESTAÑA ACTIVA
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'available');
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
@@ -142,6 +145,14 @@ export default function DeliveryOrdersView() {
   // A. TOMAR PEDIDO -> Pasa a 'En camino'
   const handleTakeOrder = async (order: Order) => {
     if (!user || !firestore) return;
+    if (!isApprovedDriver) {
+      toast({
+        variant: 'destructive',
+        title: 'Cuenta pendiente de aprobación',
+        description: 'Un administrador debe aprobar tu cuenta antes de que puedas tomar pedidos.',
+      });
+      return;
+    }
     try {
       const driverName = userProfile?.name || user.displayName || 'Un repartidor';
       const orderRef = doc(firestore, 'orders', order.id);
@@ -247,8 +258,22 @@ export default function DeliveryOrdersView() {
       
       <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold tracking-tight">Panel de Repartidor</h2>
-          <Badge variant="outline" className="hidden sm:flex">Zona Activa</Badge>
+          <Badge variant="outline" className="hidden sm:flex">{isApprovedDriver ? 'Zona Activa' : 'Pendiente'}</Badge>
       </div>
+
+      {!isApprovedDriver && (
+        <div className="mb-6 rounded-xl border border-warning/40 bg-warning/10 p-4 flex items-start gap-3">
+          <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-sm text-warning">Tu cuenta está pendiente de aprobación</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Un administrador tiene que revisar y aprobar tus datos (vehículo y licencia) antes de que
+              puedas tomar pedidos. Mientras tanto podés ver los pedidos disponibles, pero no aceptarlos.
+              Asegurate de haber subido las 3 fotos de tu licencia en tu perfil.
+            </p>
+          </div>
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-6">
@@ -310,8 +335,8 @@ export default function DeliveryOrdersView() {
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button className="w-full" size="lg" onClick={() => handleTakeOrder(order)}>
-                        Tomar Pedido
+                    <Button className="w-full" size="lg" onClick={() => handleTakeOrder(order)} disabled={!isApprovedDriver}>
+                        {isApprovedDriver ? 'Tomar Pedido' : 'Cuenta pendiente de aprobación'}
                     </Button>
                 </CardFooter>
               </Card>
