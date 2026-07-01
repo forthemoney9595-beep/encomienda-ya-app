@@ -6,11 +6,12 @@ import { doc, collection, query, orderBy, where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, Search, X } from 'lucide-react';
+import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getCategoryStyle } from '@/lib/category-style';
@@ -81,6 +82,7 @@ export default function StorePublicPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
+  const [featuredApi, setFeaturedApi] = useState<CarouselApi>();
 
   // 1. Obtener datos de la TIENDA
   const storeRef = useMemoFirebase(() => {
@@ -357,17 +359,31 @@ export default function StorePublicPage() {
           </div>
       )}
 
-      {/* DESTACADOS */}
+      {/* DESTACADOS — carrusel horizontal (swipe en celular, flechas en desktop) */}
       {featuredProducts.length > 0 && (
-        <div className="mb-10">
-            <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
-                <Star className="h-5 w-5 text-warning fill-current" /> Recomendados
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {featuredProducts.map(product => (
-                    <ProductCard key={product.id} product={product} onAdd={handleAddToCart} isFeatured isDisabled={!storeStatus.isOpen} />
-                ))}
+        <div className="mb-10 px-4 sm:px-0">
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="font-headline text-xl font-bold flex items-center gap-2">
+                    <Star className="h-5 w-5 text-warning fill-current" /> Recomendados
+                </h2>
+                <div className="hidden sm:flex gap-2">
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => featuredApi?.scrollPrev()}>
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => featuredApi?.scrollNext()}>
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
+            <Carousel opts={{ align: 'start', dragFree: true }} setApi={setFeaturedApi}>
+                <CarouselContent>
+                    {featuredProducts.map(product => (
+                        <CarouselItem key={product.id} className="basis-[78%] sm:basis-1/2 lg:basis-1/3">
+                            <ProductCard product={product} onAdd={handleAddToCart} isFeatured isDisabled={!storeStatus.isOpen} />
+                        </CarouselItem>
+                    ))}
+                </CarouselContent>
+            </Carousel>
         </div>
       )}
 
