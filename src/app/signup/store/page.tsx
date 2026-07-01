@@ -25,6 +25,9 @@ const formSchema = z.object({
   category: z.string({ required_error: "Por favor selecciona una categoría." }),
   address: z.string().min(5, "La dirección debe tener al menos 5 caracteres."),
   ownerName: z.string().min(2, "Tu nombre debe tener al menos 2 caracteres."),
+  phoneNumber: z.string().min(8, "Ingresá un teléfono válido (con código de área).").regex(/^[0-9+\s-]+$/, "Solo números, espacios, + y -."),
+  // CUIT: 11 dígitos, con o sin guiones (XX-XXXXXXXX-X) -- se guarda solo el número.
+  cuit: z.string().regex(/^\d{2}-?\d{8}-?\d{1}$/, "Formato de CUIT inválido (ej: 20-12345678-9)."),
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
 });
@@ -42,6 +45,8 @@ export default function SignupStorePage() {
       storeName: "",
       address: "",
       ownerName: "",
+      phoneNumber: "",
+      cuit: "",
       email: "",
       password: "",
     },
@@ -63,6 +68,7 @@ export default function SignupStorePage() {
             name: values.storeName,
             category: values.category,
             address: values.address,
+            cuit: values.cuit, // Para poder facturar el día que haga falta
             maintenanceMode: false, // CRUCIAL: Para que la regla isNotMaintenanceMode pase
             isApproved: false,      // Requiere aprobación del admin
             rating: 0,
@@ -80,6 +86,7 @@ export default function SignupStorePage() {
             uid: user.uid,
             name: values.ownerName,
             email: values.email,
+            phoneNumber: values.phoneNumber,
             role: 'store' as const,
             storeId: newStoreRef.id,
             isApproved: false // El usuario también nace como no aprobado
@@ -170,6 +177,19 @@ export default function SignupStorePage() {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="cuit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CUIT del negocio</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej. 20-12345678-9" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <hr className="my-2" />
               <FormField
                 control={form.control}
@@ -179,6 +199,19 @@ export default function SignupStorePage() {
                     <FormLabel>Tu Nombre</FormLabel>
                     <FormControl>
                       <Input placeholder="Tu Nombre" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phoneNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tu Teléfono / WhatsApp</FormLabel>
+                    <FormControl>
+                      <Input type="tel" placeholder="Ej. 3834123456" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

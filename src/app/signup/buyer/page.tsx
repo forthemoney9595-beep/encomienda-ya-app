@@ -22,6 +22,9 @@ const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
+  // El repartidor necesita poder contactarte para coordinar la entrega -- antes el
+  // teléfono ni se pedía en el alta (se agregaba, si acaso, mucho después en /profile).
+  phoneNumber: z.string().min(8, "Ingresá un teléfono válido (con código de área).").regex(/^[0-9+\s-]+$/, "Solo números, espacios, + y -."),
 });
 
 export default function SignupBuyerPage() {
@@ -37,6 +40,7 @@ export default function SignupBuyerPage() {
       name: "",
       email: "",
       password: "",
+      phoneNumber: "",
     },
   });
 
@@ -56,6 +60,7 @@ export default function SignupBuyerPage() {
             uid: user.uid,
             name: values.name,
             email: values.email,
+            phoneNumber: values.phoneNumber,
             role: 'buyer' as const,
             addresses: [] as Address[],
         };
@@ -131,6 +136,19 @@ export default function SignupBuyerPage() {
                     <FormLabel>Correo Electrónico</FormLabel>
                     <FormControl>
                       <Input type="email" placeholder="nombre@ejemplo.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phoneNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Teléfono / WhatsApp</FormLabel>
+                    <FormControl>
+                      <Input type="tel" placeholder="Ej. 3834123456" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

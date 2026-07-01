@@ -6,7 +6,7 @@ import {
     User, 
     signInWithCustomToken 
 } from 'firebase/auth';
-import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore'; // ✅ Agregamos updateDoc y arrayUnion
+import { doc, onSnapshot, updateDoc, arrayUnion, setDoc, serverTimestamp } from 'firebase/firestore'; // ✅ Agregamos updateDoc y arrayUnion
 import { getToken } from 'firebase/messaging'; // ✅ Importamos getToken
 // ✅ Importamos messaging también
 import { auth, db, messaging } from '@/lib/firebase';
@@ -30,7 +30,9 @@ export interface UserProfile {
   }[];
   favoriteStores?: string[];
   favoriteProducts?: string[];
-  isApproved?: boolean; 
+  isApproved?: boolean;
+  dni?: string; // Repartidor, cargado en /signup/delivery
+  birthDate?: string; // Repartidor, cargado en /signup/delivery
 }
 
 interface AuthContextType {
@@ -117,14 +119,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (docSnap.exists()) {
             setUserProfile({ ...docSnap.data() as UserProfile, id: docSnap.id });
           } else {
-            setUserProfile({
+            // Alguien se autenticó (típicamente login con Google) pero todavía no tiene
+            // perfil en Firestore -- antes acá solo se simulaba un perfil en memoria sin
+            // escribir nada, así que la cuenta quedaba "a medias": no podía guardar
+            // cambios en /profile (updateDoc falla si el documento no existe) y cualquier
+            // lugar del server que espera users/{uid} podía fallar en silencio. Ahora se
+            // crea de verdad como comprador (mismo rol por defecto que el signup normal
+            // de /signup/buyer) -- este onSnapshot se va a disparar de nuevo solo, con
+            // docSnap.exists() en true, una vez que el setDoc se complete.
+            const fallbackProfile: UserProfile = {
                 id: currentUser.uid,
                 role: 'buyer',
                 name: currentUser.displayName || 'Usuario',
                 email: currentUser.email || '',
                 displayName: currentUser.displayName || 'Usuario',
                 profileImageUrl: currentUser.photoURL || '',
-            });
+                addresses: [],
+            };
+            setUserProfile(fallbackProfile);
+            setDoc(profileRef, {
+                uid: currentUser.uid,
+                role: 'buyer',
+                name: currentUser.displayName || 'Usuario',
+                email: currentUser.email || '',
+                displayName: currentUser.displayName || 'Usuario',
+                profileImageUrl: currentUser.photoURL || '',
+                addresses: [],
+                createdAt: serverTimestamp(),
+            }).catch((err) => console.error('Error creando perfil para login social:', err));
           }
           setLoading(false);
         }, (error) => {

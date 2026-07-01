@@ -35,6 +35,8 @@ export interface Store {
 
   // ✅ NUEVO: Comisión que la plataforma le cobra a ESTA tienda (ej: 10)
   commissionRate?: number;
+
+  cuit?: string; // Cargado en /signup/store
 }
 
 export interface DeliveryPersonnel {

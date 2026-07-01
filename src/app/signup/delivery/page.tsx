@@ -17,10 +17,22 @@ import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
+// Repartidor: el alta que más datos reales necesita (es quien maneja plata en efectivo
+// y entra a la casa de un cliente) -- antes solo pedía nombre/email/contraseña/vehículo,
+// sin nada objetivo para identificar a la persona (el DNI/fecha de nacimiento recién se
+// verían, indirectamente, en la foto del carnet que se sube después en /profile).
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
+  phoneNumber: z.string().min(8, "Ingresá un teléfono válido (con código de área).").regex(/^[0-9+\s-]+$/, "Solo números, espacios, + y -."),
+  dni: z.string().regex(/^\d{7,8}$/, "El DNI debe tener 7 u 8 números, sin puntos."),
+  birthDate: z.string().refine((val) => {
+    if (!val) return false;
+    const birth = new Date(val);
+    const age = (Date.now() - birth.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    return age >= 18;
+  }, "Tenés que ser mayor de 18 años para ser repartidor."),
   vehicleType: z.enum(["motocicleta", "automovil", "bicicleta"], {
     required_error: "Debes seleccionar un tipo de vehículo.",
   }),
@@ -39,6 +51,9 @@ export default function SignupDeliveryPage() {
       name: "",
       email: "",
       password: "",
+      phoneNumber: "",
+      dni: "",
+      birthDate: "",
     },
   });
 
@@ -58,9 +73,13 @@ export default function SignupDeliveryPage() {
             uid: user.uid,
             name: values.name,
             email: values.email,
+            phoneNumber: values.phoneNumber,
+            dni: values.dni,
+            birthDate: values.birthDate,
             role: 'delivery' as const,
             vehicle: values.vehicleType,
             status: 'Pendiente', // Delivery personnel needs approval
+            isApproved: false,
         };
         
         await setDoc(doc(firestore, "users", user.uid), userProfile);
@@ -137,6 +156,47 @@ export default function SignupDeliveryPage() {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="phoneNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Teléfono / WhatsApp</FormLabel>
+                    <FormControl>
+                      <Input type="tel" placeholder="Ej. 3834123456" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="dni"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>DNI</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Sin puntos" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="birthDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fecha de nacimiento</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               <FormField
                 control={form.control}
                 name="vehicleType"
