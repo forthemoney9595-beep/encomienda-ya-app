@@ -397,10 +397,40 @@ nota en ningún lado. Se llevó al mismo nivel que el sistema de reseñas de tie
   corrido contra `studio-354048519-4bc1e` (incluye el índice compuesto nuevo
   `deliveryReviews(driverId, createdAt)`).
 - **Quedó pendiente para más adelante** (el usuario pidió arrancar solo por reseñas):
-  dashboard de aterrizaje para el repartidor (equivalente a `/my-store` Fase P), soltar/
-  cancelar un pedido ya tomado, toggle disponible/no-disponible (hoy `notify-drivers`
-  broadcastea a *todos* los `role:'delivery'`, incluso pendientes de aprobación), y
-  analíticas del repartidor (equivalente a `/my-store/analytics`).
+  dashboard de aterrizaje para el repartidor (equivalente a `/my-store` Fase P), toggle
+  disponible/no-disponible (hoy `notify-drivers` broadcastea a *todos* los
+  `role:'delivery'`, incluso pendientes de aprobación), y analíticas del repartidor
+  (equivalente a `/my-store/analytics`).
+
+## Fase T (jul 2026): soltar pedido antes de retirar + reportar problema después
+Seguía pendiente de la Fase S: si un repartidor tomaba un pedido y no podía completarlo,
+quedaba pegado a su cuenta para siempre (solo un admin interviniendo a mano en Firestore
+lo destrababa). Antes de implementar se analizó el riesgo de abuso intencional:
+- **"Soltar" libre y gratis permite acaparar pedidos** — tomar todos los disponibles,
+  quedarse con el mejor (más cerca/mejor propina) y soltar el resto recién ahí, dejando a
+  otros repartidores sin verlos mientras tanto.
+- **Dejar "cancelar" directo *después* de retirar el pedido de la tienda es el riesgo
+  grave** — un repartidor podría quedarse con el producto físico sin entregarlo y borrar
+  el pedido del sistema para taparlo (sin rastro, y si ya estaba pagado por MercadoPago,
+  la plata del cliente queda en el limbo).
+
+Por eso se separaron dos acciones con guardas muy distintas, ninguna de las dos es una
+escritura directa del cliente (ambas van por Admin SDK, sin cambios de reglas para
+`orders` más allá de lo que ya había):
+- **`/api/orders/release`** — solo si `status === 'En camino'` (todavía no retiró nada).
+  Exige un motivo, devuelve el pedido al pool (`deliveryPersonId: null`, vuelve a "Listo
+  para recoger"), re-notifica a los demás repartidores (mismo patrón que
+  `notify-drivers`), y deja un registro en la nueva colección `driver_incidents`.
+- **`/api/orders/report-problem`** — solo si `status === 'En reparto'` (ya retiró). A
+  propósito **no cambia el estado ni libera al repartidor de la orden** — no puede
+  resolverlo por su cuenta, solo escalarlo. Marca `order.hasReportedProblem` y deja el
+  mismo tipo de registro en `driver_incidents` para que el admin decida (cancelar +
+  reembolsar vía `/admin/orders`, reasignar, contactar al cliente).
+- **`firestore.rules`:** nueva colección `driver_incidents`, lectura solo de admin.
+- **UI:** botones "No puedo con este pedido" / "Reportar problema" + diálogo de motivo
+  (con atajos comunes) en `delivery-orders-view.tsx`. Alerta "Incidentes recientes de
+  repartidores" en el dashboard de admin, mismo estilo que la de pedidos trabados.
+- **Desplegado a producción** (`firebase deploy --only firestore:rules`).
 
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
