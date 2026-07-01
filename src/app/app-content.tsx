@@ -100,7 +100,7 @@ function UserMenu() {
 
                 {isAdmin && (
                     <DropdownMenuItem asChild>
-                        <Link href="/admin/dashboard" className="cursor-pointer w-full flex items-center">
+                        <Link href="/admin" className="cursor-pointer w-full flex items-center">
                             <Shield className="mr-2 h-4 w-4" />
                             <span>Panel Admin</span>
                         </Link>

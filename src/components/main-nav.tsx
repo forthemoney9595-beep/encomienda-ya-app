@@ -21,7 +21,10 @@ import {
   Wallet,
   Star,
   Shield,
-  MessageSquare
+  MessageSquare,
+  Bell,
+  Settings,
+  DollarSign
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -44,8 +47,8 @@ export function MainNav({
           Supervisión
         </h2>
         <div className="space-y-1">
-          <Link href="/admin/dashboard">
-            <Button variant={pathname === '/admin/dashboard' ? 'secondary' : 'ghost'} className="w-full justify-start">
+          <Link href="/admin">
+            <Button variant={pathname === '/admin' || pathname === '/admin/dashboard' ? 'secondary' : 'ghost'} className="w-full justify-start">
               <LayoutDashboard className="mr-2 h-4 w-4" />
               Dashboard
             </Button>
@@ -74,6 +77,18 @@ export function MainNav({
               Gestión Usuarios
             </Button>
           </Link>
+          <Link href="/admin/finances">
+            <Button variant={pathname.startsWith('/admin/finances') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <DollarSign className="mr-2 h-4 w-4" />
+              Finanzas y Pagos
+            </Button>
+          </Link>
+          <Link href="/admin/communications">
+            <Button variant={pathname.startsWith('/admin/communications') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Bell className="mr-2 h-4 w-4" />
+              Comunicaciones
+            </Button>
+          </Link>
           <Link href="/admin/reviews">
             <Button variant={pathname.startsWith('/admin/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <MessageSquare className="mr-2 h-4 w-4" />
@@ -84,6 +99,12 @@ export function MainNav({
             <Button variant={pathname.startsWith('/admin/audit-log') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Shield className="mr-2 h-4 w-4" />
               Log de Acciones
+            </Button>
+          </Link>
+          <Link href="/admin/settings">
+            <Button variant={pathname.startsWith('/admin/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Settings className="mr-2 h-4 w-4" />
+              Configuración
             </Button>
           </Link>
           <Link href="/">

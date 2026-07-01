@@ -2,15 +2,16 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Bell, Send, Activity, AlertTriangle, CheckCircle2, Pause, Download } from 'lucide-react';
+import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download } from 'lucide-react';
 import { downloadCsv } from '@/lib/csv-export';
+import { PendingList } from './pending-list';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
-import { collection, query, where, CollectionReference, Timestamp } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, CollectionReference, Timestamp } from 'firebase/firestore';
 import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Legend, Cell } from 'recharts';
 import { subDays, format, startOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -20,10 +21,6 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import AdminAuthGuard from './admin-auth-guard';
-import { useAuth } from '@/context/auth-context';
-import { authedFetch } from '@/lib/authed-fetch';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
@@ -56,36 +53,21 @@ const getStatusVariant = (status: any) => {
 function AdminDashboard() {
   const firestore = useFirestore();
   const router = useRouter();
-  const { user } = useAuth();
   const { toast } = useToast();
 
-  // Estado del panel de notificaciones
-  const [notifTarget, setNotifTarget] = useState<'all'|'stores'|'drivers'|'user'>('all');
-  const [notifUserId, setNotifUserId] = useState('');
-  const [notifUserSearch, setNotifUserSearch] = useState('');
-  const [notifTitle, setNotifTitle] = useState('');
-  const [notifBody, setNotifBody] = useState('');
-  const [sendingNotif, setSendingNotif] = useState(false);
-
-  const handleSendBroadcast = async () => {
-    if (!user || !notifTitle.trim() || !notifBody.trim()) return;
-    const target = notifTarget === 'user' ? `user:${notifUserId}` : notifTarget;
-    if (notifTarget === 'user' && !notifUserId) {
-      toast({ variant: 'destructive', title: 'Seleccioná un usuario destino' });
-      return;
-    }
-    if (!confirm(`¿Enviar notificación a "${notifTarget === 'all' ? 'todos' : notifTarget === 'stores' ? 'todas las tiendas' : notifTarget === 'drivers' ? 'todos los repartidores' : 'este usuario'}"?`)) return;
-    setSendingNotif(true);
+  // Aprobar / rechazar solicitudes de tiendas y repartidores
+  const handleUpdateUserStatus = async (userId: string, isApproved: boolean) => {
+    if (!firestore) return;
     try {
-      const res = await authedFetch('/api/admin/notify-broadcast', user, { target, title: notifTitle, body: notifBody });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      toast({ title: `Notificación enviada`, description: `${data.notified} destinatarios, ${data.sent} push.` });
-      setNotifTitle(''); setNotifBody('');
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Error al enviar', description: e.message });
-    } finally {
-      setSendingNotif(false);
+      await updateDoc(doc(firestore, 'users', userId), { isApproved });
+      const relatedStore = (stores as any[])?.find((s: any) => s.ownerId === userId);
+      if (relatedStore) {
+        await updateDoc(doc(firestore, 'stores', relatedStore.id), { isApproved });
+      }
+      toast({ title: isApproved ? 'Usuario aprobado' : 'Usuario rechazado' });
+    } catch (error) {
+      console.error(error);
+      toast({ variant: 'destructive', title: 'Error al actualizar' });
     }
   };
 
@@ -99,6 +81,20 @@ function AdminDashboard() {
   const { data: users, isLoading: usersLoading } = useCollection<any>(usersQuery);
   
   const dashboardLoading = ordersLoading || storesLoading || usersLoading;
+
+  // Solicitudes pendientes de aprobación (tiendas y repartidores)
+  const pendingStores = useMemo(() => {
+    return (users || [])
+      .filter((u: any) => u.role === 'store' && !u.isApproved)
+      .map((u: any) => {
+        const storeData = (stores as any[])?.find((s: any) => s.ownerId === u.id);
+        return { ...u, ...storeData, id: u.id };
+      });
+  }, [users, stores]);
+
+  const pendingDelivery = useMemo(() => {
+    return (users || []).filter((u: any) => u.role === 'delivery' && !u.isApproved);
+  }, [users]);
 
   const stats = useMemo(() => {
     if (!orders || !stores || !users) return { totalRevenue: 0, totalUsers: 0, completedOrders: 0, totalStores: 0 };
@@ -405,6 +401,28 @@ function AdminDashboard() {
       )}
       {/* ─────────────────────────────────────────────────────── */}
 
+      {/* Solicitudes de aprobación pendientes */}
+      {(pendingStores.length > 0 || pendingDelivery.length > 0) && (
+        <div className="grid gap-6 md:grid-cols-2">
+          <PendingList
+            title="Solicitudes: Tiendas"
+            icon={StoreIcon}
+            users={pendingStores}
+            isLoading={usersLoading}
+            onApprove={(id) => handleUpdateUserStatus(id, true)}
+            onReject={(id) => handleUpdateUserStatus(id, false)}
+          />
+          <PendingList
+            title="Solicitudes: Repartidores"
+            icon={Bike}
+            users={pendingDelivery}
+            isLoading={usersLoading}
+            onApprove={(id) => handleUpdateUserStatus(id, true)}
+            onReject={(id) => handleUpdateUserStatus(id, false)}
+          />
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -626,66 +644,6 @@ function AdminDashboard() {
                     </TableBody>
                 </Table>
             </CardContent>
-        </Card>
-      </div>
-
-      {/* Panel de comunicaciones */}
-      <div className="mt-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-primary" /> Comunicaciones</CardTitle>
-            <CardDescription>Enviar notificaciones a usuarios de la plataforma (máx. 5 por hora).</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Destino */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Destino</label>
-              <div className="flex gap-2 flex-wrap">
-                {(['all','stores','drivers','user'] as const).map(t => (
-                  <button key={t} onClick={() => setNotifTarget(t)}
-                    className={cn('px-3 py-1.5 rounded-full text-sm font-medium transition-all',
-                      notifTarget === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
-                    )}>
-                    {t === 'all' ? 'Todos' : t === 'stores' ? 'Todas las tiendas' : t === 'drivers' ? 'Todos los repartidores' : 'Un usuario'}
-                  </button>
-                ))}
-              </div>
-              {notifTarget === 'user' && (
-                <div className="space-y-2">
-                  <Input placeholder="Buscar usuario por nombre o email..." value={notifUserSearch}
-                    onChange={e => setNotifUserSearch(e.target.value)} />
-                  {notifUserSearch.trim() && (
-                    <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
-                      {(users || []).filter(u =>
-                        u.displayName?.toLowerCase().includes(notifUserSearch.toLowerCase()) ||
-                        u.email?.toLowerCase().includes(notifUserSearch.toLowerCase())
-                      ).slice(0,8).map((u: any) => (
-                        <button key={u.id} className={cn('w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors',
-                          notifUserId === u.id ? 'bg-primary/10 font-medium' : ''
-                        )} onClick={() => { setNotifUserId(u.id); setNotifUserSearch(u.displayName || u.email || ''); }}>
-                          {u.displayName || u.name || '(sin nombre)'} — {u.email}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Título y cuerpo */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Título <span className="text-muted-foreground">({notifTitle.length}/60)</span></label>
-              <Input maxLength={60} value={notifTitle} onChange={e => setNotifTitle(e.target.value)} placeholder="Ej: Actualización importante" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Mensaje <span className="text-muted-foreground">({notifBody.length}/160)</span></label>
-              <Textarea maxLength={160} value={notifBody} onChange={e => setNotifBody(e.target.value)} placeholder="Ej: Hoy operamos con horario reducido hasta las 20hs." rows={3} />
-            </div>
-
-            <Button onClick={handleSendBroadcast} disabled={sendingNotif || !notifTitle.trim() || !notifBody.trim()} className="gap-2">
-              {sendingNotif ? <><span className="animate-spin">⋯</span> Enviando...</> : <><Send className="h-4 w-4" /> Enviar notificación</>}
-            </Button>
-          </CardContent>
         </Card>
       </div>
     </div>
