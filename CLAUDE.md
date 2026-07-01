@@ -55,6 +55,9 @@ También: `Cancelado`, `Rechazado`
 - `src/app/orders/[orderId]/order-status-updater.tsx` — controles de cambio de estado por rol (incluye los mismos checkboxes de stock que store-orders-view)
 - `src/app/orders/[orderId]/order-map.tsx` — mapa en tiempo real con Leaflet
 - `src/app/my-store/reviews/page.tsx` — reseñas de la tienda + respuesta opcional del dueño
+- `src/app/my-store/page.tsx` — dashboard de tienda (resumen: métricas, alertas, rating, accesos). El form de edición está en `src/app/my-store/edit/page.tsx` (Fase P)
+- `src/app/my-store/categories/page.tsx` — administra `stores/{id}.productCategories` (feed del selector de categoría del form de productos)
+- `src/lib/store-hours.ts` — helper compartido de horarios (¿abierta?, por día + franjas + cerrado); lo usan tienda pública, dashboard, admin y `/api/orders/create` (Fase P)
 - `src/app/admin/page.tsx` — dashboard admin unificado (estado en vivo, alertas, aprobaciones, métricas, analíticas). `/admin/dashboard` redirige acá
 - `src/app/admin/pending-list.tsx` — componente de solicitudes de aprobación (tiendas/repartidores), con modal que muestra licencia/vehículo
 - `src/app/admin/{orders,finances,communications,settings,reviews,audit-log}/page.tsx` — secciones del admin (ver Fase N)
@@ -248,6 +251,47 @@ operativas. Se reestructuró y completó:
   `users/{uid}.isApproved`); la regla de autoasignación de pedidos lo exige. Cliente: botón
   deshabilitado + banner "cuenta pendiente". **Verificado en vivo:** no aprobado → permission-denied,
   aprobado → OK. Antes la aprobación del admin era decorativa.
+
+## Fase P (jul 2026): mejoras del panel de tienda
+Revisión a fondo del rol/panel de tienda. Se arreglaron desincronizaciones que eran bugs
+activos y se sumaron funciones operativas. Cinco bloques:
+- **P1 — Sincronización (bugs).** (a) Se sacó la pestaña "Billetera" de gestión de pedidos
+  (`store-orders-view.tsx`): calculaba con una fórmula muerta (`storePayoutStatus`/`payoutDate`,
+  campos que ningún código escribe) y contradecía a `/my-store/wallet`. La billetera real ya
+  está en el menú. (b) El `<Select>` de categoría del form de productos
+  (`my-store/products/page.tsx`) ahora usa `stores/{id}.productCategories` (con fallback a los
+  defaults), así la gestión de categorías dejó de ser decorativa y queda en sync con el agrupado
+  por `product.category` de la tienda pública. (c) Se agregó "Categorías" al menú de tienda
+  (`main-nav.tsx`) — era una página huérfana sin link. (d) `stores/{id}.category` (rubro, filtro
+  del inicio) ahora es editable en `/my-store/edit`; antes se cargaba pero nunca se guardaba.
+- **P2 — Dashboard de tienda.** `/my-store` pasó a ser una landing con resumen (estado + pausa
+  rápida, métricas: pedidos nuevos / en curso / entregados hoy / ventas de hoy, alertas de
+  pedidos pendientes y stock bajo, rating, accesos rápidos). El formulario de edición se movió
+  intacto a `/my-store/edit`. **El dashboard NO recalcula el saldo** (evita re-duplicar la
+  fórmula de `payout-service.ts`): muestra ventas del día y enlaza a la billetera real.
+- **P3 — Horario avanzado.** Nuevo `src/lib/store-hours.ts` = fuente de verdad única de "¿está
+  abierta?" (`normalizeSchedule`/`getStoreOpenStatus`/`describeSchedule`/`nowInArgentina`).
+  Soporta horario **por día**, **varias franjas por día** (siesta mañana/tarde) y **días
+  cerrados**. Retrocompatible con el viejo `stores/{id}.schedule` = `{open,close}` (se aplica a
+  todos los días) y con "sin horario = siempre abierta". El editor por día vive en
+  `/my-store/edit` y guarda `stores/{id}.weeklySchedule` (+ un espejo legacy `schedule` por si
+  queda algún lector viejo). La tienda pública, el dashboard y las vistas de admin
+  (`pending-list.tsx`, `stores-list.tsx`) usan el helper. **`/api/orders/create` ahora valida el
+  horario server-side** (antes solo era visual en el cliente); usa `nowInArgentina()` porque
+  Vercel corre en UTC.
+- **P4 — Inventario + acciones masivas** (`my-store/products/page.tsx`): filtro por estado
+  (todos / disponibles / agotados-no visibles / stock bajo ≤3) y selección múltiple con barra de
+  acciones masivas (marcar disponible/agotado, eliminar) vía `writeBatch`, respetando si el
+  producto vive en `items` o en la subcolección legacy `products`.
+- **P5 — Promos a nivel tienda: DIFERIDO.** Se evaluaron 3 mecanismos (envío gratis desde $X,
+  descuento de toda la tienda %, cupones con código) pero se decidió no hacerlos ahora porque
+  tocan el pipeline de pago (`/api/orders/create` + `/api/checkout` + preferencia MP). Queda para
+  organizarlo mejor a futuro (probablemente como fase aparte, tipo Fase J de variantes).
+
+**Puntos de sincronización del panel de tienda (respetar al tocar tienda/repartidor/admin):**
+saldos SIEMPRE vía `payout-service.ts`; "¿abierta?" SIEMPRE vía `store-hours.ts` (no reimplementar
+el chequeo de horario inline); categorías de producto = `stores/{id}.productCategories` (feed del
+form) + `product.category` (agrupado público); rubro de tienda = `stores/{id}.category`.
 
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
