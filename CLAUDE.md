@@ -370,9 +370,8 @@ Mismo tipo de revisión que Fases P/Q, esta vez sobre `delivery-orders-view.tsx`
   le faltaba. El comprador nunca se enteraba de que su pedido había llegado ni se lo
   invitaba a calificar, pegándole al embudo de reseñas de la tienda (Fase G). Se agregó
   el `sendNotification` que faltaba.
-- **Pendiente anotado (no bug, feature ausente):** una vez que el repartidor toma un
-  pedido, no hay forma de soltarlo/cancelarlo desde su panel si no puede completarlo —
-  queda pegado hasta que un admin intervenga a mano.
+- ~~Pendiente anotado: sin forma de soltar un pedido ya tomado~~ — **resuelto en la Fase T**
+  (`/api/orders/release` + `/api/orders/report-problem`).
 
 ## Fase S (jul 2026): sistema de reseñas del repartidor a la par del de tienda
 Análisis de "qué le falta al panel de repartidor" (post Fase R). El hallazgo principal:
@@ -403,11 +402,8 @@ nota en ningún lado. Se llevó al mismo nivel que el sistema de reseñas de tie
 - **Desplegado a producción:** `firebase deploy --only firestore:rules,firestore:indexes`
   corrido contra `studio-354048519-4bc1e` (incluye el índice compuesto nuevo
   `deliveryReviews(driverId, createdAt)`).
-- **Quedó pendiente para más adelante** (el usuario pidió arrancar solo por reseñas):
-  dashboard de aterrizaje para el repartidor (equivalente a `/my-store` Fase P), toggle
-  disponible/no-disponible (hoy `notify-drivers` broadcastea a *todos* los
-  `role:'delivery'`, incluso pendientes de aprobación), y analíticas del repartidor
-  (equivalente a `/my-store/analytics`).
+- ~~Quedó pendiente: dashboard, toggle online/offline, analíticas del repartidor~~ —
+  **resuelto en la Fase U.**
 
 ## Fase T (jul 2026): soltar pedido antes de retirar + reportar problema después
 Seguía pendiente de la Fase S: si un repartidor tomaba un pedido y no podía completarlo,
