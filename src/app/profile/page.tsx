@@ -58,7 +58,9 @@ export default function ProfilePage() {
 
     // Estados Repartidor (Solo Delivery)
     const [vehicleInfo, setVehicleInfo] = useState({ plate: '', model: '', color: '', type: 'Moto' });
-    const [licenseUrl, setLicenseUrl] = useState('');
+    const [licenseUrl, setLicenseUrl] = useState('');          // frente del carnet (compat con el campo viejo)
+    const [licenseBackUrl, setLicenseBackUrl] = useState('');   // dorso del carnet
+    const [licenseSelfieUrl, setLicenseSelfieUrl] = useState(''); // selfie sosteniendo el carnet
 
     const userDocRef = useMemo(() => {
         if (!firestore || !user?.uid) return null;
@@ -84,6 +86,8 @@ export default function ProfilePage() {
             if (userProfile.role === 'delivery') {
                 setVehicleInfo((userProfile as any).vehicle || { plate: '', model: '', color: '', type: 'Moto' });
                 setLicenseUrl((userProfile as any).licenseUrl || '');
+                setLicenseBackUrl((userProfile as any).licenseBackUrl || '');
+                setLicenseSelfieUrl((userProfile as any).licenseSelfieUrl || '');
             }
         }
     }, [userProfile]);
@@ -110,7 +114,7 @@ export default function ProfilePage() {
             if (userProfile?.role === 'store') {
                 extraData = { schedule: storeSchedule, description: storeDescription };
             } else if (userProfile?.role === 'delivery') {
-                extraData = { vehicle: vehicleInfo, licenseUrl: licenseUrl };
+                extraData = { vehicle: vehicleInfo, licenseUrl, licenseBackUrl, licenseSelfieUrl };
             }
 
             await updateDoc(userDocRef, { ...baseData, ...extraData });
@@ -453,28 +457,44 @@ export default function ProfilePage() {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2 pt-4 border-t">
+                                        <div className="space-y-3 pt-4 border-t">
                                             <Label className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4" /> Licencia de Conducir (Foto)
+                                                <FileText className="h-4 w-4" /> Verificación de Licencia de Conducir
                                             </Label>
-                                            <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center bg-muted/20">
-                                                {licenseUrl ? (
-                                                    <div className="relative w-full h-40">
-                                                        <img src={licenseUrl} alt="Licencia" className="w-full h-full object-contain rounded-md" />
-                                                        <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6" onClick={() => setLicenseUrl('')}>
-                                                            <Trash2 className="h-3 w-3" />
-                                                        </Button>
+                                            <p className="text-xs text-muted-foreground -mt-1">
+                                                Subí las 3 fotos para agilizar tu aprobación. Deben ser claras y legibles.
+                                            </p>
+                                            <div className="grid gap-3 sm:grid-cols-3">
+                                                {([
+                                                    { label: 'Frente del carnet', value: licenseUrl, set: setLicenseUrl },
+                                                    { label: 'Dorso del carnet', value: licenseBackUrl, set: setLicenseBackUrl },
+                                                    { label: 'Selfie con el carnet', value: licenseSelfieUrl, set: setLicenseSelfieUrl },
+                                                ]).map(({ label, value, set }) => (
+                                                    <div key={label} className="space-y-1.5">
+                                                        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                                                        <div className="border-2 border-dashed rounded-lg p-3 flex flex-col items-center justify-center bg-muted/20 min-h-[140px]">
+                                                            {value ? (
+                                                                <div className="relative w-full h-32">
+                                                                    <img src={value} alt={label} className="w-full h-full object-contain rounded-md" />
+                                                                    <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => set('')}>
+                                                                        <Trash2 className="h-3 w-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <ImageUpload
+                                                                    onImageUploaded={set}
+                                                                    folder="licenses"
+                                                                    ownerId={user!.uid}
+                                                                    variant="banner"
+                                                                />
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                ) : (
-                                                    <ImageUpload
-                                                        onImageUploaded={setLicenseUrl}
-                                                        folder="licenses"
-                                                        ownerId={user!.uid}
-                                                        variant="banner"
-                                                    />
-                                                )}
-                                                {!licenseUrl && <p className="text-xs text-muted-foreground mt-2">Sube una foto clara de tu carnet.</p>}
+                                                ))}
                                             </div>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                💡 La selfie sirve para confirmar que el carnet es tuyo. Sostené el carnet junto a tu cara.
+                                            </p>
                                         </div>
 
                                         <Button className="w-full" onClick={handleSaveProfile}>

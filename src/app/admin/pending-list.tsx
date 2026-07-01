@@ -18,6 +18,8 @@ export interface PendingUser extends UserProfile {
   profileImageUrl?: string;
   vehicle?: any;
   licenseUrl?: string;
+  licenseBackUrl?: string;
+  licenseSelfieUrl?: string;
   imageUrl?: string;
   description?: string;
   address?: string;
@@ -117,13 +119,28 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                 </div>
                 <div className="bg-muted/30 p-3 rounded-lg border">
                   <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
-                    <FileText className="h-4 w-4 text-info" /> Licencia
+                    <FileText className="h-4 w-4 text-info" /> Licencia de conducir
                   </h4>
-                  {selectedUser.licenseUrl ? (
-                    <div className="relative h-32 w-full rounded-md overflow-hidden border bg-muted">
-                      <img src={selectedUser.licenseUrl} alt="Licencia" className="h-full w-full object-contain" />
+                  {(selectedUser.licenseUrl || selectedUser.licenseBackUrl || selectedUser.licenseSelfieUrl) ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { label: 'Frente', url: selectedUser.licenseUrl },
+                        { label: 'Dorso', url: selectedUser.licenseBackUrl },
+                        { label: 'Selfie', url: selectedUser.licenseSelfieUrl },
+                      ]).map(({ label, url }) => (
+                        <div key={label} className="space-y-1">
+                          <p className="text-[10px] text-muted-foreground text-center">{label}</p>
+                          {url ? (
+                            <a href={url} target="_blank" rel="noreferrer" className="block relative h-20 rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition">
+                              <img src={url} alt={label} className="h-full w-full object-cover" />
+                            </a>
+                          ) : (
+                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-destructive text-center px-1">Falta</div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ) : <p className="text-sm text-destructive">⚠️ No subió foto de licencia.</p>}
+                  ) : <p className="text-sm text-destructive">⚠️ No subió fotos de licencia.</p>}
                 </div>
               </>
             )}

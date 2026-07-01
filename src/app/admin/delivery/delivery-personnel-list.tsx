@@ -28,6 +28,8 @@ export interface DeliveryPersonnel {
   vehicle?: string | { type: string; model: string; plate: string; color: string };
   profileImageUrl?: string;
   licenseUrl?: string;
+  licenseBackUrl?: string;
+  licenseSelfieUrl?: string;
   joinedDate?: string;
   zone?: string;
 }
@@ -166,17 +168,28 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                     <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
                         <FileText className="h-4 w-4 text-info" /> Licencia de Conducir
                     </h4>
-                    {selectedDriver?.licenseUrl ? (
-                        <div className="relative h-40 w-full rounded-md overflow-hidden border bg-muted">
-                             <img 
-                                src={selectedDriver.licenseUrl} 
-                                alt="Licencia" 
-                                className="h-full w-full object-contain"
-                             />
+                    {(selectedDriver?.licenseUrl || selectedDriver?.licenseBackUrl || selectedDriver?.licenseSelfieUrl) ? (
+                        <div className="grid grid-cols-3 gap-2">
+                            {([
+                                { label: 'Frente', url: selectedDriver?.licenseUrl },
+                                { label: 'Dorso', url: selectedDriver?.licenseBackUrl },
+                                { label: 'Selfie', url: selectedDriver?.licenseSelfieUrl },
+                            ]).map(({ label, url }) => (
+                                <div key={label} className="space-y-1">
+                                    <p className="text-[10px] text-muted-foreground text-center">{label}</p>
+                                    {url ? (
+                                        <a href={url} target="_blank" rel="noreferrer" className="block relative h-24 rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition">
+                                            <img src={url} alt={label} className="h-full w-full object-cover" />
+                                        </a>
+                                    ) : (
+                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-destructive text-center px-1">Falta</div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     ) : (
                         <p className="text-sm text-destructive italic flex items-center gap-1">
-                            ⚠️ No ha subido foto de licencia.
+                            ⚠️ No ha subido fotos de licencia.
                         </p>
                     )}
                 </div>
