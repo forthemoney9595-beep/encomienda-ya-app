@@ -501,10 +501,15 @@ del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el r
   `maxDiscountPercent > 0`. Backfill único ya corrido (0 tiendas con descuento activo a
   la fecha; el mecanismo queda listo). Evolución futura posible: una fila "Ofertas" con
   productos reales vía `collectionGroup('items')` (más vendedor, pero otro alcance).
+- **Editor de tienda reorganizado en secciones** (`/my-store/edit`): era un form largo
+  único (el remanente más claro del "ABM viejo"). Ahora son 4 Cards con título/ícono
+  (Datos del negocio / Ubicación / Horarios / Entrega) + barra de guardado sticky abajo.
+  Se eligió **secciones y NO wizard** a propósito: el wizard ayuda al onboarding pero mete
+  fricción al editar cambios chicos, que es el uso real de esta página. Mismos campos y
+  handlers — reorganización visual, no lógica nueva.
 - **Diferido a v2 (del análisis, no urgente para Tinogasta):** envío gratis desde $X (toca
-  pago), rehacer el editor de tienda en wizard/secciones, combos/variantes, cupones,
-  geo-distancia. El editor de tienda sigue siendo un form largo único — funcional,
-  aceptable para MVP; su única deuda real (el rubro) ya se cerró acá.
+  pago), combos/variantes de producto, cupones, geo-distancia. (Un wizard de *onboarding*
+  en `/signup/store` quedó descartado por ahora; el alta actual es suficiente.)
 
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
