@@ -67,6 +67,7 @@ export interface Order {
   deliveryReview?: string;
   deliveryReviewed?: boolean;
   storeReviewed?: boolean;
+  hasReportedProblem?: boolean;
 
   // Datos del driver para el mapa en tiempo real
   driverCoords?: { latitude: number; longitude: number };

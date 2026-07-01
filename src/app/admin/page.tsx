@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
-import { collection, query, where, doc, updateDoc, CollectionReference, Timestamp } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, orderBy, limit, CollectionReference, Timestamp } from 'firebase/firestore';
 import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Legend, Cell } from 'recharts';
 import { subDays, format, startOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -75,10 +75,14 @@ function AdminDashboard() {
   const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<StoreType> : null, [firestore]);
   // Usamos 'any' para usersQuery para evitar errores de importación de tipos
   const usersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) : null, [firestore]);
+  // Incidentes de repartidor (soltar pedido / reportar problema) -- ver Fase de "no
+  // puedo con este pedido" en /orders para el repartidor.
+  const incidentsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'driver_incidents'), orderBy('createdAt', 'desc'), limit(8)) : null, [firestore]);
 
   const { data: orders, isLoading: ordersLoading } = useCollection<OrderType>(ordersQuery);
   const { data: stores, isLoading: storesLoading } = useCollection<StoreType>(storesQuery);
   const { data: users, isLoading: usersLoading } = useCollection<any>(usersQuery);
+  const { data: driverIncidents } = useCollection<any>(incidentsQuery);
   
   const dashboardLoading = ordersLoading || storesLoading || usersLoading;
 
@@ -403,6 +407,35 @@ function AdminDashboard() {
         </div>
       )}
       {/* ─────────────────────────────────────────────────────── */}
+
+      {/* ── Incidentes de repartidor (soltar pedido / reportar problema) ── */}
+      {driverIncidents && driverIncidents.length > 0 && (
+        <div className="rounded-xl border border-warning/40 bg-warning/5 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+            <h2 className="text-sm font-semibold text-warning">
+              Incidentes recientes de repartidores
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {driverIncidents.map((inc: any) => (
+              <Link key={inc.id} href={`/orders/${inc.orderId}`}
+                className="flex items-center justify-between gap-3 rounded-lg bg-background/60 border border-border px-3 py-2.5 hover:bg-muted/40 transition-colors group">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Badge variant="outline" className={cn('text-[10px] shrink-0',
+                    inc.type === 'released' ? 'border-destructive/40 text-destructive' : 'border-warning/40 text-warning'
+                  )}>
+                    {inc.type === 'released' ? 'Soltó pedido' : 'Reportó problema'}
+                  </Badge>
+                  <span className="text-sm font-medium truncate">{inc.driverName}</span>
+                  <span className="text-xs text-muted-foreground truncate hidden sm:block">{inc.reason}</span>
+                </div>
+                <span className="text-xs text-muted-foreground font-mono shrink-0">#{inc.orderId?.slice(0,6)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Solicitudes de aprobación pendientes */}
       {(pendingStores.length > 0 || pendingDelivery.length > 0) && (

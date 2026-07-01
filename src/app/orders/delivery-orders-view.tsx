@@ -5,22 +5,27 @@ import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { OrderService } from '@/lib/order-service';
+import { authedFetch } from '@/lib/authed-fetch';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  MapPin, 
-  Navigation, 
-  CheckCircle2, 
-  DollarSign, 
-  Truck, 
-  CreditCard, 
-  Wallet, 
-  Clock, 
-  Map as MapIcon, 
-  PackageCheck 
+import {
+  MapPin,
+  Navigation,
+  CheckCircle2,
+  DollarSign,
+  Truck,
+  CreditCard,
+  Wallet,
+  Clock,
+  Map as MapIcon,
+  PackageCheck,
+  Loader2,
+  XCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -31,6 +36,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+const RELEASE_REASONS = ['Se me rompió el vehículo', 'Emergencia personal', 'No pude ubicar la dirección'];
+const PROBLEM_REASONS = ['El cliente no responde', 'Dirección incorrecta/inaccesible', 'El cliente rechazó el pedido'];
 
 // Definimos la interfaz localmente
 interface Order {
@@ -49,6 +57,7 @@ interface Order {
   storeOwnerId?: string | null;
   storeId?: string;
   deliveryPersonId?: string;
+  hasReportedProblem?: boolean;
 }
 
 export default function DeliveryOrdersView() {
@@ -69,6 +78,12 @@ export default function DeliveryOrdersView() {
   // 1. PESTAÑA ACTIVA
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'available');
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
+
+  // Soltar pedido (antes de retirar) / Reportar problema (después de retirar) -- un
+  // mismo diálogo para las dos, ver /api/orders/release y /api/orders/report-problem.
+  const [incidentDialog, setIncidentDialog] = useState<{ order: Order; kind: 'release' | 'report' } | null>(null);
+  const [incidentReason, setIncidentReason] = useState('');
+  const [isSubmittingIncident, setIsSubmittingIncident] = useState(false);
 
   // 2. QUERY: PEDIDOS DISPONIBLES
   // Solo los 2 estados en los que de verdad tiene sentido que un repartidor "tome" un
@@ -221,6 +236,34 @@ export default function DeliveryOrdersView() {
   // NAVEGACIÓN AL DETALLE (GPS/CHAT)
   const goToDetails = (orderId: string) => {
       router.push(`/orders/${orderId}`);
+  };
+
+  // D. SOLTAR PEDIDO (antes de retirar) / REPORTAR PROBLEMA (después de retirar)
+  const openIncidentDialog = (order: Order, kind: 'release' | 'report') => {
+    setIncidentReason('');
+    setIncidentDialog({ order, kind });
+  };
+
+  const submitIncident = async () => {
+    if (!incidentDialog || !user || !incidentReason.trim()) return;
+    setIsSubmittingIncident(true);
+    try {
+      const endpoint = incidentDialog.kind === 'release' ? '/api/orders/release' : '/api/orders/report-problem';
+      const res = await authedFetch(endpoint, user, { orderId: incidentDialog.order.id, reason: incidentReason.trim() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo procesar.');
+      toast({
+        title: incidentDialog.kind === 'release' ? 'Pedido liberado' : 'Problema reportado',
+        description: incidentDialog.kind === 'release'
+          ? 'Avisamos a otros repartidores. Ya no es tu responsabilidad.'
+          : 'El admin fue notificado y va a decidir cómo seguir.',
+      });
+      setIncidentDialog(null);
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'No se pudo procesar.' });
+    } finally {
+      setIsSubmittingIncident(false);
+    }
   };
 
   // ✅ FUNCIÓN DE LIMPIEZA VISUAL (NUEVO)
@@ -404,9 +447,27 @@ export default function DeliveryOrdersView() {
                                 </Button>
                             ) : (
                                 <Button className={`w-full text-lg h-12 ${order.paymentMethod === 'Efectivo' ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : 'bg-success hover:bg-success/90 text-success-foreground'}`} onClick={() => handleFinishDeliveryClick(order)}>
-                                    <CheckCircle2 className="mr-2 h-5 w-5" /> 
+                                    <CheckCircle2 className="mr-2 h-5 w-5" />
                                     {order.paymentMethod === 'Efectivo' ? 'Ya cobré y Entregué' : 'Confirmar Entrega'}
                                 </Button>
+                            )}
+
+                            {/* Soltar (solo antes de retirar) / Reportar problema (solo después de retirar) */}
+                            {order.status === 'En camino' && (
+                                <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => openIncidentDialog(order, 'release')}>
+                                    <XCircle className="mr-2 h-4 w-4" /> No puedo con este pedido
+                                </Button>
+                            )}
+                            {order.status === 'En reparto' && (
+                                order.hasReportedProblem ? (
+                                    <p className="text-xs text-center text-warning font-medium flex items-center justify-center gap-1.5">
+                                        <AlertTriangle className="h-3.5 w-3.5" /> Problema reportado — esperando al admin
+                                    </p>
+                                ) : (
+                                    <Button variant="outline" size="sm" className="w-full text-warning border-warning/30 hover:bg-warning/10" onClick={() => openIncidentDialog(order, 'report')}>
+                                        <AlertTriangle className="mr-2 h-4 w-4" /> Reportar problema
+                                    </Button>
+                                )
                             )}
                         </CardFooter>
                     </Card>
@@ -435,6 +496,54 @@ export default function DeliveryOrdersView() {
                 <Button variant="outline" onClick={() => setConfirmDeliveryOrder(null)}>Cancelar</Button>
                 <Button className="bg-success hover:bg-success/90 text-success-foreground" onClick={confirmFinishDelivery}>
                     Sí, Entregado
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!incidentDialog} onOpenChange={(open) => !open && setIncidentDialog(null)}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>
+                    {incidentDialog?.kind === 'release' ? 'Soltar este pedido' : 'Reportar un problema'}
+                </DialogTitle>
+                <DialogDescription>
+                    {incidentDialog?.kind === 'release'
+                        ? 'El pedido vuelve al pool para que otro repartidor lo tome. Contanos por qué.'
+                        : 'El admin va a revisar esto y decidir cómo seguir (no cancela el pedido por vos).'}
+                </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-1">
+                <div className="flex flex-wrap gap-2">
+                    {(incidentDialog?.kind === 'release' ? RELEASE_REASONS : PROBLEM_REASONS).map(preset => (
+                        <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setIncidentReason(preset)}
+                            className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary hover:text-primary transition-colors"
+                        >
+                            {preset}
+                        </button>
+                    ))}
+                </div>
+                <Textarea
+                    value={incidentReason}
+                    onChange={(e) => setIncidentReason(e.target.value)}
+                    placeholder="Contanos qué pasó..."
+                    rows={3}
+                />
+            </div>
+
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIncidentDialog(null)} disabled={isSubmittingIncident}>Cancelar</Button>
+                <Button
+                    variant={incidentDialog?.kind === 'release' ? 'destructive' : 'default'}
+                    onClick={submitIncident}
+                    disabled={isSubmittingIncident || !incidentReason.trim()}
+                >
+                    {isSubmittingIncident && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {incidentDialog?.kind === 'release' ? 'Soltar pedido' : 'Enviar reporte'}
                 </Button>
             </DialogFooter>
         </DialogContent>

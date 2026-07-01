@@ -133,6 +133,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 5c. INCIDENTES DE REPARTIDOR — soltar pedido / reportar problema, solo vía
+    // /api/orders/release y /api/orders/report-problem (Admin SDK). Solo el admin las
+    // lee (para detectar acaparamiento o repartidores problemáticos); el repartidor no
+    // necesita ver su propio historial de incidentes acá.
+    match /driver_incidents/{incidentId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
     // 6. NOTIFICACIONES
     // create: cualquier usuario logueado puede crear (tienda notifica al delivery, etc.)
     // read/update/delete: solo el destinatario puede ver/marcar sus propias notificaciones
