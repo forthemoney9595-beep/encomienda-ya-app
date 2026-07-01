@@ -49,6 +49,7 @@ También: `Cancelado`, `Rechazado`
 - `src/app/api/orders/confirm-payment/route.ts` — confirmación manual de pago
 - `src/app/api/orders/confirm-stock/route.ts` — la tienda confirma un pedido (puede sacar ítems puntuales); recalcula subtotal/serviceFee/total siempre server-side
 - `src/app/api/reviews/create/route.ts` — reseña de tienda (Admin SDK): verifica pedido `Entregado` del comprador, evita duplicados (`order.storeReviewed`), actualiza `stores/{id}.rating` con una transacción (`ratingSum`/`ratingCount`), notifica al dueño
+- `src/app/api/delivery-reviews/create/route.ts` — reseña de repartidor (Fase S), mismo criterio que la de tienda: colección `deliveryReviews`, actualiza `users/{driverId}.rating`; la lee el propio repartidor en `/delivery/reviews`
 - `src/app/orders/delivery-orders-view.tsx` — panel real del repartidor (disponibles / en curso / billetera) en `/orders`
 - `src/app/orders/store-orders-view.tsx` — panel de la tienda (`/orders`): pestaña "Nuevos" con checkboxes por ítem para confirmar con cambios, alerta sonora (Web Audio API) cuando entra un pedido
 - `src/app/orders/[orderId]/page.tsx` — detalle/seguimiento del pedido (también tiene acciones de repartidor y el botón "Calificar tienda")
@@ -365,6 +366,41 @@ Mismo tipo de revisión que Fases P/Q, esta vez sobre `delivery-orders-view.tsx`
 - **Pendiente anotado (no bug, feature ausente):** una vez que el repartidor toma un
   pedido, no hay forma de soltarlo/cancelarlo desde su panel si no puede completarlo —
   queda pegado hasta que un admin intervenga a mano.
+
+## Fase S (jul 2026): sistema de reseñas del repartidor a la par del de tienda
+Análisis de "qué le falta al panel de repartidor" (post Fase R). El hallazgo principal:
+calificar al repartidor era un `updateDoc` directo del comprador sobre la propia orden
+(`deliveryRating`/`deliveryReview`) — sin validar `Entregado`, sin evitar duplicados, sin
+ningún promedio mantenido (el admin lo recalculaba escaneando *todos* los pedidos del
+repartidor cada vez que abría su ficha), y el repartidor no tenía forma de ver su propia
+nota en ningún lado. Se llevó al mismo nivel que el sistema de reseñas de tienda (Fase G):
+- **Nueva `/api/delivery-reviews/create`** (mismo criterio que `/api/reviews/create`):
+  verifica token, que el pedido sea del comprador, `Entregado`, con repartidor asignado, y
+  no calificado ya (`order.deliveryReviewed`). Escribe en la nueva colección
+  `deliveryReviews` (`{driverId, orderId, userId, userName, rating, comment, createdAt}`)
+  y actualiza `users/{driverId}.rating`/`ratingSum`/`ratingCount` con una transacción
+  (idéntico patrón a `stores/{id}.rating`). Notifica al repartidor (campana + push). Sigue
+  escribiendo `order.deliveryRating`/`deliveryReview` (ahora desde el servidor, no del
+  cliente) para no romper las vistas que ya los leían.
+- **`firestore.rules`:** la orden ya no acepta `deliveryRating`/`deliveryReview` como
+  campos de escritura directa del comprador (solo queda `items`, para calificar
+  productos). Nueva colección `deliveryReviews`: lectura solo del propio repartidor
+  calificado o admin — **no es pública** como `reviews` de tienda, porque no existe un
+  perfil público de repartidor donde mostrarla.
+- **Nueva página `/delivery/reviews`** (equivalente a `/my-store/reviews`): el repartidor
+  ve su propio promedio + la lista de reseñas. Agregada al menú.
+- **`admin/delivery/[driverId]`** y la tabla de analíticas por repartidor del dashboard
+  (`admin/page.tsx`) ahora leen el rating real de `users/{id}` y las reseñas de
+  `deliveryReviews` en vez de recalcular escaneando pedidos cada vez — mismo criterio que
+  ya usaban sus equivalentes de tienda con `stores/{id}.rating`.
+- **Desplegado a producción:** `firebase deploy --only firestore:rules,firestore:indexes`
+  corrido contra `studio-354048519-4bc1e` (incluye el índice compuesto nuevo
+  `deliveryReviews(driverId, createdAt)`).
+- **Quedó pendiente para más adelante** (el usuario pidió arrancar solo por reseñas):
+  dashboard de aterrizaje para el repartidor (equivalente a `/my-store` Fase P), soltar/
+  cancelar un pedido ya tomado, toggle disponible/no-disponible (hoy `notify-drivers`
+  broadcastea a *todos* los `role:'delivery'`, incluso pendientes de aprobación), y
+  analíticas del repartidor (equivalente a `/my-store/analytics`).
 
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
