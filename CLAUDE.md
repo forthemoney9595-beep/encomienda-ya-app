@@ -55,6 +55,16 @@ También: `Cancelado`, `Rechazado`
 - `src/app/orders/[orderId]/order-status-updater.tsx` — controles de cambio de estado por rol (incluye los mismos checkboxes de stock que store-orders-view)
 - `src/app/orders/[orderId]/order-map.tsx` — mapa en tiempo real con Leaflet
 - `src/app/my-store/reviews/page.tsx` — reseñas de la tienda + respuesta opcional del dueño
+- `src/app/admin/page.tsx` — dashboard admin unificado (estado en vivo, alertas, aprobaciones, métricas, analíticas). `/admin/dashboard` redirige acá
+- `src/app/admin/pending-list.tsx` — componente de solicitudes de aprobación (tiendas/repartidores), con modal que muestra licencia/vehículo
+- `src/app/admin/{orders,finances,communications,settings,reviews,audit-log}/page.tsx` — secciones del admin (ver Fase N)
+- `src/app/admin/dashboard/finance-view.tsx` — tabla de retiros (métricas + filtros + aprobar/rechazar); usada en `/admin/finances`
+- `src/app/admin/{stores/[storeId],delivery/[driverId]}/page.tsx` — detalle de tienda/repartidor (métricas, CBU, reseñas, pedidos, acciones)
+- `src/lib/payout-service.ts` — `computeStoreBalance`/`computeDriverBalance` (saldo real, server-side)
+- `src/lib/admin-audit.ts` — `logAdminAction` → colección `admin_audit_log`
+- `src/lib/csv-export.ts` — descarga CSV client-side (retiros, pedidos, tiendas)
+- `src/app/api/admin/{approve-withdrawal,delete-user,delete-review,notify-broadcast,refund-order}/route.ts` — rutas admin-only (verifican token + `roles_admin`)
+- `src/app/api/cron/generate-settlements/route.ts` — cron de liquidación semi-automática (Vercel, protegido por `CRON_SECRET`)
 - `src/lib/category-style.ts` — ícono+color por categoría (chips de Inicio y de cada tienda)
 - `src/app/error.tsx` / `src/app/not-found.tsx` — páginas de error y 404 globales
 - `firestore.indexes.json` — índices compuestos (incluye notifications userId+createdAt, reviews storeId+createdAt); refleja lo desplegado
@@ -171,6 +181,78 @@ pegarle a `/api/notify` — si no se pasa, el push no sale pero la notificación
   para tienda/repartidor esa lectura siempre fallaba (no rompía nada, solo ensuciaba la
   consola). Se sacó esa lectura cruzada: el nombre/teléfono del comprador ya estaban en la
   propia orden (`customerName`/`customerPhoneNumber`).
+
+## Fase M (jul 2026): billetera y analíticas (seguridad + valor real)
+Revisión de la billetera y las analíticas de tienda/repartidor (estaban armadas hace tiempo
+sin tocar). Cuatro sub-fases:
+- **M1 — Aprobar retiro recalcula el saldo real server-side.** Antes `finance-view.tsx`
+  aprobaba con `updateDoc` directo confiando en el monto guardado. Nuevo
+  `src/lib/payout-service.ts` centraliza la fórmula de saldo (`computeStoreBalance` /
+  `computeDriverBalance`, antes duplicada en `my-store/wallet` y `delivery/earnings`). Nueva
+  ruta admin-only `/api/admin/approve-withdrawal` (verifica token + `roles_admin`): recalcula
+  el saldo real y **rechaza** si el monto pedido lo supera.
+- **M2 — Analíticas de tienda con gráficos** (`my-store/analytics/page.tsx`): barras de ventas
+  por día, top 5 productos, horas pico. Usa Recharts (ya instalado) + `components/ui/chart.tsx`.
+- **M3 — Filtro de fecha + comparación vs período anterior** en analíticas de tienda: selector
+  7d/30d/mes/todo con `where('createdAt','>=',...)`. Trae el doble del período para comparar sin
+  segunda consulta; cada tarjeta muestra el % de cambio. OJO: si el período anterior tiene 0
+  pedidos NO muestra % (evita el "100%" engañoso).
+- **M4 — Liquidación semi-automática.** Cron de Vercel (`vercel.json`,
+  `/api/cron/generate-settlements`, diario 14:00) que el día configurado en
+  `config/platform.settlementDayOfWeek` (default viernes) genera solos los `withdrawals`
+  (`source:'auto'`) para tiendas/repartidores con CBU guardado y saldo > 0. El CBU se guarda la
+  primera vez que hacen un retiro manual (`stores/{id}.payoutCbu` / `users/{uid}.payoutCbu`).
+  El admin sigue transfiriendo a mano. **Requiere `CRON_SECRET` en las env vars de Vercel.**
+
+## Fase N (jul 2026): panel de admin completo + reestructuración
+El panel de admin tenía DOS dashboards solapados y le faltaba la mayoría de las funciones
+operativas. Se reestructuró y completó:
+- **Reestructuración:** había `/admin` ("Panel de Administración", con lo nuevo pero sin link en
+  el menú) y `/admin/dashboard` ("Panel de Control", lo que el sidebar abría). Se unificó todo en
+  `/admin`; `/admin/dashboard` ahora **redirige** a `/admin`. Finanzas, Comunicaciones y
+  Configuración salieron de pestañas a rutas propias. El componente de aprobaciones se extrajo a
+  `src/app/admin/pending-list.tsx`.
+- **Dashboard unificado** (`src/app/admin/page.tsx`): estado en tiempo real (pedidos activos por
+  estado, tiendas abiertas/pausadas, repartidores activos, aprobaciones pendientes), **alertas de
+  pedidos trabados** (pedidos sin movimiento según umbral por estado), solicitudes de aprobación,
+  métricas, gráficos, analíticas por tienda/repartidor, historial.
+- **Rutas nuevas del admin:** `/admin/orders` (gestión de pedidos: tabla paginada + filtros +
+  cancelar + reembolsar + CSV), `/admin/finances` (retiros con métricas, filtros, aprobar/rechazar
+  con modal, CSV), `/admin/communications` (broadcast a todos/tiendas/repartidores/un usuario vía
+  `/api/admin/notify-broadcast`), `/admin/settings` (config: serviceFee, deliveryFee, día de
+  liquidación, mantenimiento), `/admin/reviews` (moderar reseñas vía `/api/admin/delete-review`),
+  `/admin/audit-log` (log de acciones), `/admin/stores/[storeId]` y `/admin/delivery/[driverId]`
+  (detalles con métricas, CBU editable, reseñas, pedidos, pausar/aprobar).
+- **Reembolsos** (`/api/admin/refund-order` + botón en `/admin/orders`): registra el reembolso en
+  `refunds`, marca la orden (`refunded`/`refundAmount`), notifica al comprador. NO transfiere plata
+  (el admin devuelve por MP, igual que los retiros).
+- **Borrado real de usuarios** (`/api/admin/delete-user`): borra de Firebase Auth + Firestore
+  (antes solo Firestore, la cuenta seguía pudiendo loguear).
+- **Log de acciones admin** (`src/lib/admin-audit.ts` → colección `admin_audit_log`): registra
+  aprobar/rechazar retiro, cambiar rol, eliminar usuario, eliminar reseña, reembolsar.
+- **Detalle de usuario + filtro por rol** en `/admin/users`; **badges de pendientes** en el
+  sidebar (`main-nav.tsx`: tiendas/repartidores sin aprobar, retiros pendientes).
+- **Fee de envío configurable** (`config/platform.deliveryFee`, default 2000, leído en
+  `/api/orders/create`) — antes hardcodeado.
+- **Bug corregido:** el dashboard crasheaba por `order.total.toFixed()` sobre pedidos sin `total`
+  (estados pre-pago). Guardado con `(order.total || 0)`.
+
+## Fase O (jul 2026): verificación de repartidores (licencia + gate de aprobación)
+- **Licencia con 3 fotos** (`profile/page.tsx`): frente (`licenseUrl`, compat), dorso
+  (`licenseBackUrl`) y selfie con el carnet (`licenseSelfieUrl`). El admin las ve en grilla al
+  aprobar (`pending-list.tsx`, `delivery-personnel-list.tsx`). Sigue siendo revisión manual, pero
+  con más info para detectar fraude. Verificación automática vía proveedor KYC queda anotada para
+  cuando haya volumen (requiere cuenta B2B paga + Ley 25.326 de datos).
+- **Gate de aprobación REAL** (`firestore.rules` + `delivery-orders-view.tsx`): un repartidor
+  `Pendiente` NO puede tomar pedidos. Nuevo helper `isApprovedDriver()` en las reglas (lee
+  `users/{uid}.isApproved`); la regla de autoasignación de pedidos lo exige. Cliente: botón
+  deshabilitado + banner "cuenta pendiente". **Verificado en vivo:** no aprobado → permission-denied,
+  aprobado → OK. Antes la aprobación del admin era decorativa.
+
+## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
+Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
+recuperación de contraseña ("olvidé mi contraseña"), y login/registro con Google. No es config de
+admin — es autenticación y toca a todos los roles.
 
 ## Pendientes pre-lanzamiento
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
