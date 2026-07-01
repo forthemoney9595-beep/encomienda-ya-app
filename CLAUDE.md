@@ -333,6 +333,39 @@ contra Rappi/PedidosYa como en fases anteriores:
   (`userName` con el prefijo `Cliente de Prueba` para identificarlas fácil) — quedan
   anotadas en el pendiente de limpieza pre-lanzamiento de abajo.
 
+## Fase R (jul 2026): panel de repartidor — 3 bugs confirmados y resueltos
+Mismo tipo de revisión que Fases P/Q, esta vez sobre `delivery-orders-view.tsx`
+(`/orders` para rol `delivery`) y su relación con `/admin/delivery`.
+- **R1 (seguridad, el más grave) — aprobar repartidor desde el admin no lo dejaba operar
+  de verdad.** De los 4 caminos para aprobar/editar un repartidor en `/admin/delivery`,
+  3 escribían `status: 'Activo'` sin tocar `isApproved` (el botón "Aprobar" del modal de
+  ficha, el mismo botón del menú desplegable, y el diálogo "Editar"). La regla de
+  Firestore que habilita tomar pedidos (`isApprovedDriver()`, Fase O) solo lee
+  `isApproved`. Resultado: el admin aprobaba, la UI decía "Activo", pero el repartidor
+  seguía bloqueado (`permission-denied` silencioso al tocar "Tomar Pedido"). Solo
+  `/admin/delivery/[driverId]` (el detalle individual) los mantenía sincronizados. Se
+  corrigieron los 3 caminos rotos para que `isApproved` viaje siempre junto con
+  `status`, y se sacó el atajo `|| status === 'Activo'` del lado del repartidor
+  (`delivery-orders-view.tsx`) que ocultaba la desincronización — ahora solo confía en
+  `isApproved`, el mismo campo que la regla real.
+- **R2 — pestaña "Billetera" del panel operativo, otra vez con números fantasma.** Mismo
+  patrón que se arregló en `store-orders-view.tsx` (Fase P): calculaba todo con
+  `deliveryPayoutStatus`/`payoutDate`, campos que ningún código escribe. Contradecía a
+  `/delivery/earnings` (la billetera real). Se sacó la pestaña; de paso se eliminaron
+  `storePayoutStatus`/`deliveryPayoutStatus`/`payoutDate` del tipo `Order` compartido
+  (`order-service.ts`) — eran esos mismos campos fantasma los que indujeron el bug dos
+  veces (tienda y repartidor).
+- **R3 — "Entregado" desde el flujo principal no avisaba al comprador.**
+  `confirmFinishDelivery()` (el botón real que usan los repartidores día a día) hacía un
+  `updateDoc` directo en vez de pasar por `OrderService.updateOrderStatus`. Las otras dos
+  transiciones (tomar pedido, retirar) sí notificaban a mano en el mismo archivo; a esta
+  le faltaba. El comprador nunca se enteraba de que su pedido había llegado ni se lo
+  invitaba a calificar, pegándole al embudo de reseñas de la tienda (Fase G). Se agregó
+  el `sendNotification` que faltaba.
+- **Pendiente anotado (no bug, feature ausente):** una vez que el repartidor toma un
+  pedido, no hay forma de soltarlo/cancelarlo desde su panel si no puede completarlo —
+  queda pegado hasta que un admin intervenga a mano.
+
 ## Auth — PENDIENTE (transversal, todos los roles, aún no hecho)
 Anotado para un workstream futuro: que el admin pueda editar datos/contraseña de otras cuentas,
 recuperación de contraseña ("olvidé mi contraseña"), y login/registro con Google. No es config de
