@@ -197,14 +197,6 @@ export default function EditStorePage() {
         updatedAt: new Date()
       });
 
-      if (formData.imageUrl) {
-          const userRef = doc(firestore, 'users', user.uid);
-          await updateDoc(userRef, {
-              profileImageUrl: formData.imageUrl,
-              photoURL: formData.imageUrl
-          });
-      }
-
       toast({
         title: "Tienda actualizada",
         description: "Tu información está lista para recibir pedidos.",

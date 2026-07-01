@@ -13,7 +13,8 @@ import { useFirestore } from '@/lib/firebase';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth'; 
 // ✅ CORREGIDO: Agregamos 'Save' y 'Clock' que faltaban
-import { User, Phone, Trash2, Loader2, Store, Bike, FileText, Car, Plus, MapPin, LocateFixed, CheckCircle2, Save, Clock } from 'lucide-react';
+import { User, Phone, Trash2, Loader2, Store, Bike, FileText, Car, Plus, MapPin, LocateFixed, CheckCircle2, Save, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { ImageUpload } from '@/components/image-upload';
@@ -52,10 +53,6 @@ export default function ProfilePage() {
     const [tempCoords, setTempCoords] = useState<{ latitude: number; longitude: number } | undefined>(undefined);
     const [isLocating, setIsLocating] = useState(false);
 
-    // Estados Tienda (Solo Stores)
-    const [storeSchedule, setStoreSchedule] = useState({ open: "09:00", close: "22:00" });
-    const [storeDescription, setStoreDescription] = useState('');
-
     // Estados Repartidor (Solo Delivery)
     const [vehicleInfo, setVehicleInfo] = useState({ plate: '', model: '', color: '', type: 'Moto' });
     const [licenseUrl, setLicenseUrl] = useState('');          // frente del carnet (compat con el campo viejo)
@@ -78,10 +75,6 @@ export default function ProfilePage() {
             
             if (userProfile.role === 'buyer') {
                 setAddresses(userProfile.addresses as Address[] || []);
-            }
-            if (userProfile.role === 'store') {
-                setStoreSchedule((userProfile as any).schedule || { open: "09:00", close: "22:00" });
-                setStoreDescription((userProfile as any).description || '');
             }
             if (userProfile.role === 'delivery') {
                 setVehicleInfo((userProfile as any).vehicle || { plate: '', model: '', color: '', type: 'Moto' });
@@ -111,9 +104,7 @@ export default function ProfilePage() {
             };
 
             let extraData = {};
-            if (userProfile?.role === 'store') {
-                extraData = { schedule: storeSchedule, description: storeDescription };
-            } else if (userProfile?.role === 'delivery') {
+            if (userProfile?.role === 'delivery') {
                 extraData = { vehicle: vehicleInfo, licenseUrl, licenseBackUrl, licenseSelfieUrl };
             }
 
@@ -266,7 +257,7 @@ export default function ProfilePage() {
                         <TabsList className="grid w-full grid-cols-2 mb-6">
                             <TabsTrigger value="info">Información Detallada</TabsTrigger>
                             {userProfile.role === 'buyer' && <TabsTrigger value="addresses">Mis Direcciones</TabsTrigger>}
-                            {userProfile.role === 'store' && <TabsTrigger value="store">Configuración Tienda</TabsTrigger>}
+                            {userProfile.role === 'store' && <TabsTrigger value="store">Mi Tienda</TabsTrigger>}
                             {userProfile.role === 'delivery' && <TabsTrigger value="vehicle">Vehículo y Licencia</TabsTrigger>}
                         </TabsList>
 
@@ -385,33 +376,19 @@ export default function ProfilePage() {
                             <TabsContent value="store">
                                 <Card>
                                     <CardHeader>
-                                        <CardTitle>Configuración del Comercio</CardTitle>
-                                        <CardDescription>Horarios y descripción pública.</CardDescription>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Store className="h-5 w-5" /> Configuración de tu tienda
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Horario, descripción, banner, rubro y dirección se gestionan desde el panel de tu tienda, no desde tu perfil personal.
+                                        </CardDescription>
                                     </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>Apertura</Label>
-                                                <div className="relative">
-                                                    <Clock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                                    <Input type="time" value={storeSchedule.open} onChange={(e) => setStoreSchedule({...storeSchedule, open: e.target.value})} className="pl-9" />
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Cierre</Label>
-                                                <div className="relative">
-                                                    <Clock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                                    <Input type="time" value={storeSchedule.close} onChange={(e) => setStoreSchedule({...storeSchedule, close: e.target.value})} className="pl-9" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Descripción Corta (Slogan)</Label>
-                                            <Input placeholder="Ej: Las mejores hamburguesas..." value={storeDescription} onChange={(e) => setStoreDescription(e.target.value)} />
-                                        </div>
-                                        <Button className="w-full" variant="outline" onClick={handleSaveProfile}>
-                                            Actualizar Datos de Tienda
-                                        </Button>
+                                    <CardContent>
+                                        <Link href="/my-store/edit">
+                                            <Button className="w-full">
+                                                Ir a editar mi tienda <ArrowRight className="ml-2 h-4 w-4" />
+                                            </Button>
+                                        </Link>
                                     </CardContent>
                                 </Card>
                             </TabsContent>
