@@ -17,8 +17,9 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
     Loader2, CheckCircle2, DollarSign, XCircle,
-    Clock, TrendingUp, Wallet, Ban
+    Clock, TrendingUp, Wallet, Ban, Download
 } from 'lucide-react';
+import { downloadCsv } from '@/lib/csv-export';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Order } from '@/lib/order-service';
@@ -83,6 +84,23 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
             return true;
         });
     }, [withdrawals, statusFilter, roleFilter]);
+
+    // Exportar CSV
+    const handleExportCsv = () => {
+        const rows = displayed.map((w: any) => ({
+            'Fecha solicitud': w.createdAt?.seconds ? format(w.createdAt.toDate(), 'dd/MM/yyyy HH:mm', { locale: es }) : '',
+            'Fecha procesado': w.processedAt?.seconds ? format(w.processedAt.toDate(), 'dd/MM/yyyy HH:mm', { locale: es }) : '',
+            'Usuario':         w.userName || '',
+            'Rol':             w.userRole === 'store' ? 'Tienda' : 'Repartidor',
+            'Monto':           w.amount ?? 0,
+            'CBU/Alias':       w.cbu || '',
+            'Estado':          w.status === 'pending' ? 'Pendiente' : w.status === 'approved' ? 'Pagado' : 'Rechazado',
+            'Origen':          w.source === 'auto' ? 'Automático' : 'Manual',
+            'Motivo rechazo':  w.rejectionReason || '',
+        }));
+        const now = format(new Date(), 'yyyy-MM-dd', { locale: es });
+        downloadCsv(rows, `retiros_${now}.csv`);
+    };
 
     // Aprobar
     const handleApprove = async (withdrawalId: string) => {
@@ -215,10 +233,17 @@ export function FinanceView({ orders, stores, users }: FinanceViewProps) {
             {/* Tabla */}
             <Card className="shadow-md overflow-hidden">
                 <CardHeader className="border-b py-3 px-4">
-                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <DollarSign className="h-4 w-4" />
-                        {withdrawalsLoading ? 'Cargando...' : `${displayed.length} solicitud${displayed.length !== 1 ? 'es' : ''}`}
-                    </CardTitle>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <DollarSign className="h-4 w-4" />
+                            {withdrawalsLoading ? 'Cargando...' : `${displayed.length} solicitud${displayed.length !== 1 ? 'es' : ''}`}
+                        </CardTitle>
+                        {displayed.length > 0 && (
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1.5" onClick={handleExportCsv}>
+                                <Download className="h-3.5 w-3.5" /> Exportar CSV
+                            </Button>
+                        )}
+                    </div>
                 </CardHeader>
                 <div className="overflow-x-auto">
                     <Table>

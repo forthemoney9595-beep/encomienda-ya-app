@@ -16,7 +16,8 @@ import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { cn } from '@/lib/utils';
 import { format, subDays, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Search, XCircle, ChevronLeft, ChevronRight, Loader2, ExternalLink } from 'lucide-react';
+import { Search, XCircle, ChevronLeft, ChevronRight, Loader2, ExternalLink, Download } from 'lucide-react';
+import { downloadCsv } from '@/lib/csv-export';
 import Link from 'next/link';
 import type { Order } from '@/lib/order-service';
 
@@ -78,6 +79,22 @@ function AdminOrdersPage() {
       o.id?.toLowerCase().includes(q)
     );
   }, [orders, search]);
+
+  const handleExportCsv = () => {
+    const rows = displayed.map(o => ({
+      'ID':           o.id,
+      'Fecha':        formatDt(o.createdAt),
+      'Cliente':      o.customerName || '',
+      'Tienda':       (o as any).storeName || '',
+      'Estado':       o.status,
+      'Total':        o.total ?? 0,
+      'Envío':        o.deliveryFee ?? 0,
+      'Service Fee':  (o as any).serviceFee ?? 0,
+      'Pago':         (o as any).paymentMethod || '',
+    }));
+    const now = format(new Date(), 'yyyy-MM-dd', { locale: es });
+    downloadCsv(rows, `pedidos_${now}.csv`);
+  };
 
   const handleNextPage = () => {
     if (!orders || orders.length < PAGE_SIZE) return;
@@ -159,9 +176,16 @@ function AdminOrdersPage() {
       {/* Tabla de pedidos */}
       <Card className="shadow-md overflow-hidden">
         <CardHeader className="border-b py-3 px-4">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {isLoading ? 'Cargando...' : `${displayed.length} pedidos ${orders && orders.length >= PAGE_SIZE ? '(página ' + (pageIndex + 1) + ')' : ''}`}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {isLoading ? 'Cargando...' : `${displayed.length} pedidos ${orders && orders.length >= PAGE_SIZE ? '(página ' + (pageIndex + 1) + ')' : ''}`}
+            </CardTitle>
+            {!isLoading && displayed.length > 0 && (
+              <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1.5" onClick={handleExportCsv}>
+                <Download className="h-3.5 w-3.5" /> Exportar CSV
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

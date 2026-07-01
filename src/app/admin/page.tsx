@@ -2,7 +2,8 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Bell, Send, Activity, AlertTriangle, CheckCircle2, Pause } from 'lucide-react';
+import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Bell, Send, Activity, AlertTriangle, CheckCircle2, Pause, Download } from 'lucide-react';
+import { downloadCsv } from '@/lib/csv-export';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -502,7 +503,21 @@ function AdminDashboard() {
           {/* Por tienda */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base"><StoreIcon className="h-4 w-4 text-info" /> Por tienda</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base"><StoreIcon className="h-4 w-4 text-info" /> Por tienda</CardTitle>
+                {storeAnalytics.length > 0 && (
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1.5" onClick={() => {
+                    const period = analyticsPeriod === '7d' ? 'ultimos7d' : analyticsPeriod === '30d' ? 'ultimos30d' : analyticsPeriod === 'month' ? 'estemes' : 'todo';
+                    downloadCsv(storeAnalytics.map(s => ({
+                      'Tienda': s.name, 'Ventas brutas': s.revenue, 'Entregados': s.delivered,
+                      'Cancelados': s.cancelled, 'Comisión': Math.round(s.commission),
+                      'Rating': s.ratingCount > 0 ? s.rating.toFixed(1) : '',
+                    })), `tiendas_${period}.csv`);
+                  }}>
+                    <Download className="h-3.5 w-3.5" /> CSV
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
