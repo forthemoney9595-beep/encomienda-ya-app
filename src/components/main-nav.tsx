@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
+import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { collection, query, where } from 'firebase/firestore';
 import { 
   Home, 
   ShoppingBag, 
@@ -34,7 +36,33 @@ export function MainNav({
 }: React.HTMLAttributes<HTMLElement>) {
   const pathname = usePathname();
   const { userProfile } = useAuth();
-  
+  const firestore = useFirestore();
+
+  const isAdminUser = userProfile?.role === 'admin';
+
+  // Contadores de pendientes (solo se consultan si es admin)
+  const usersQuery = useMemoFirebase(
+    () => (firestore && isAdminUser ? collection(firestore, 'users') : null),
+    [firestore, isAdminUser]
+  );
+  const { data: allUsers } = useCollection<any>(usersQuery);
+
+  const withdrawalsQuery = useMemoFirebase(
+    () => (firestore && isAdminUser ? query(collection(firestore, 'withdrawals'), where('status', '==', 'pending')) : null),
+    [firestore, isAdminUser]
+  );
+  const { data: pendingWithdrawals } = useCollection<any>(withdrawalsQuery);
+
+  const pendingStoresCount = (allUsers || []).filter((u: any) => u.role === 'store' && !u.isApproved).length;
+  const pendingDriversCount = (allUsers || []).filter((u: any) => u.role === 'delivery' && !u.isApproved).length;
+  const pendingWithdrawalsCount = pendingWithdrawals?.length ?? 0;
+
+  const NavBadge = ({ count }: { count: number }) => (
+    count > 0
+      ? <span className="ml-auto inline-flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold h-5 min-w-[20px] px-1.5">{count}</span>
+      : null
+  );
+
   if (!userProfile) {
     return null;
   }
@@ -63,12 +91,14 @@ export function MainNav({
             <Button variant={pathname.startsWith('/admin/stores') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Store className="mr-2 h-4 w-4" />
               Gestión Tiendas
+              <NavBadge count={pendingStoresCount} />
             </Button>
           </Link>
           <Link href="/admin/delivery">
             <Button variant={pathname.startsWith('/admin/delivery') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Bike className="mr-2 h-4 w-4" />
               Gestión Repartidores
+              <NavBadge count={pendingDriversCount} />
             </Button>
           </Link>
           <Link href="/admin/users">
@@ -81,6 +111,7 @@ export function MainNav({
             <Button variant={pathname.startsWith('/admin/finances') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <DollarSign className="mr-2 h-4 w-4" />
               Finanzas y Pagos
+              <NavBadge count={pendingWithdrawalsCount} />
             </Button>
           </Link>
           <Link href="/admin/communications">
