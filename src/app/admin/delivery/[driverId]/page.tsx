@@ -2,346 +2,316 @@
 
 import { notFound, useParams } from 'next/navigation';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Car, Mail, Phone, Star, PackageCheck, Bot, TrendingUp, TrendingDown } from 'lucide-react';
-import { getPlaceholderImage } from '@/lib/placeholder-images';
-import { useEffect, useState, useMemo } from 'react';
-import type { DeliveryPersonnel } from '../delivery-personnel-list';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Car, Mail, Phone, Star, PackageCheck, Wallet, TrendingUp, DollarSign,
+  Check, XCircle, Save, Loader2, ExternalLink, AlertTriangle
+} from 'lucide-react';
+import { getPlaceholderImage } from '@/lib/placeholder-images';
+import { useState, useMemo } from 'react';
+import type { DeliveryPersonnel } from '../delivery-personnel-list';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { useAuth, useDoc, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import AdminAuthGuard from '../../admin-auth-guard';
-import { collection, query, where, doc, CollectionReference } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, CollectionReference } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { type Order as OrderType } from '@/lib/order-service';
+import Link from 'next/link';
 
 function getStatusVariant(status: string) {
-    switch (status) {
-        case 'Activo': return 'secondary';
-        case 'Pendiente': return 'default';
-        case 'Inactivo':
-        case 'Rechazado': return 'destructive';
-        default: return 'outline';
-    }
+  switch (status) {
+    case 'Activo': return 'secondary';
+    case 'Pendiente': return 'default';
+    case 'Inactivo':
+    case 'Rechazado': return 'destructive';
+    default: return 'outline';
+  }
 }
 
-type Review = {
-    orderId: string;
-    rating: number;
-    review: string;
-    date: Date;
-    customerName: string;
+const formatDate = (ts: any) => {
+  if (!ts) return '—';
+  try { return format(ts.toDate ? ts.toDate() : new Date(ts), 'd MMM HH:mm', { locale: es }); } catch { return '—'; }
 };
-
-// Simulación de un análisis de IA para un conductor específico
-const simulateAiAnalysis = (reviews: Review[]) => {
-  if (reviews.length < 2) {
-      return {
-          summary: 'No hay suficientes datos para generar un análisis detallado. Se necesitan más reseñas.',
-          strengths: [],
-          weaknesses: []
-      }
-  }
-
-  const positiveKeywords = ['rápido', 'amable', 'excelente', 'bien', 'sonrisa', 'impecable', 'perfecto'];
-  const negativeKeywords = ['tardó', 'lento', 'esperado', 'no encontraba', 'buscarlo', 'grosero', 'mal'];
-  
-  let positiveMentions = 0;
-  let negativeMentions = 0;
-
-  reviews.forEach(review => {
-    const commentLower = review.review.toLowerCase();
-    if (positiveKeywords.some(kw => commentLower.includes(kw))) {
-      positiveMentions++;
-    }
-    if (negativeKeywords.some(kw => commentLower.includes(kw))) {
-      negativeMentions++;
-    }
-  });
-
-  const totalRating = reviews.reduce((acc, r) => acc + r.rating, 0);
-  const avgRating = totalRating / reviews.length;
-
-  let summary;
-  if (avgRating > 4) {
-      summary = `El análisis muestra un sentimiento predominantemente positivo. ${
-          positiveMentions > 0 ? 'Frecuentemente elogiado por su amabilidad y rapidez.' : ''
-      }`;
-  } else if (avgRating < 3) {
-      summary = `El análisis sugiere áreas de mejora. ${
-          negativeMentions > 0 ? 'Los comentarios mencionan problemas con la navegación y la gestión del tiempo.' : ''
-      }`;
-  } else {
-      summary = 'El sentimiento general es mixto, con una combinación de comentarios positivos y negativos.';
-  }
-
-  return {
-    summary,
-    strengths: [
-      'Alta satisfacción del cliente (calificación promedio alta).',
-      'Velocidad de entrega consistentemente valorada positivamente.',
-    ].slice(0, Math.min(2, positiveMentions)),
-    weaknesses: [
-      'Dificultades ocasionales con la navegación a la dirección de entrega.',
-      'Retrasos menores en algunas entregas.',
-    ].slice(0, Math.min(2, negativeMentions))
-  }
-};
-
-
-function DriverReviews({ reviews }: { reviews: Review[] }) {
-    const [analysis, setAnalysis] = useState<any>(null);
-    const [loadingAnalysis, setLoadingAnalysis] = useState(true);
-
-    useEffect(() => {
-        setLoadingAnalysis(true);
-        const timer = setTimeout(() => {
-            setAnalysis(simulateAiAnalysis(reviews));
-            setLoadingAnalysis(false);
-        }, 1500);
-        return () => clearTimeout(timer);
-    }, [reviews]);
-    
-    if (reviews.length === 0) {
-        return (
-            <div className="text-center text-muted-foreground py-10">
-                <p>Este repartidor aún no ha recibido ninguna reseña.</p>
-            </div>
-        );
-    }
-    
-    return (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader className="flex-row items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                        <Bot className="h-6 w-6 text-primary" />
-                        Resumen de IA
-                    </CardTitle>
-                    <Badge variant={loadingAnalysis ? 'outline' : 'secondary'}>{loadingAnalysis ? 'Analizando...' : 'Completo'}</Badge>
-                </CardHeader>
-                <CardContent>
-                    {loadingAnalysis ? (
-                        <div className="space-y-4">
-                            <Skeleton className="h-5 w-full" />
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                                <Skeleton className="h-20 w-full" />
-                                <Skeleton className="h-20 w-full" />
-                            </div>
-                        </div>
-                    ) : (
-                         <div className="space-y-4">
-                            <p className="text-sm text-muted-foreground">{analysis.summary}</p>
-                            {(analysis.strengths.length > 0 || analysis.weaknesses.length > 0) && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {analysis.strengths.length > 0 && <Card className="bg-secondary/30">
-                                        <CardHeader className="p-4">
-                                            <CardTitle className="flex items-center text-base gap-2 text-success">
-                                                <TrendingUp className="h-5 w-5" />
-                                                Puntos Fuertes
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-4 pt-0">
-                                            <ul className="list-disc pl-5 space-y-1 text-xs">
-                                                {analysis.strengths.map((item: string, index: number) => <li key={index}>{item}</li>)}
-                                            </ul>
-                                        </CardContent>
-                                    </Card>}
-                                    {analysis.weaknesses.length > 0 && <Card className="bg-destructive/10">
-                                        <CardHeader className="p-4">
-                                            <CardTitle className="flex items-center text-base gap-2 text-destructive">
-                                                <TrendingDown className="h-5 w-5" />
-                                                Áreas de Mejora
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-4 pt-0">
-                                            <ul className="list-disc pl-5 space-y-1 text-xs">
-                                                {analysis.weaknesses.map((item: string, index: number) => <li key={index}>{item}</li>)}
-                                            </ul>
-                                        </CardContent>
-                                    </Card>}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            <div>
-                <h3 className="text-lg font-semibold mb-4">Comentarios de Clientes</h3>
-                <div className="space-y-4">
-                {reviews.map(review => (
-                    <Card key={review.orderId}>
-                        <CardContent className="p-4">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="font-semibold">{review.customerName}</p>
-                                    <p className="text-sm text-muted-foreground">{format(review.date, "d 'de' MMMM, yyyy", { locale: es })}</p>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    {[1, 2, 3, 4, 5].map(star => (
-                                        <Star key={star} className={cn('h-4 w-4', review.rating >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30')} />
-                                    ))}
-                                </div>
-                            </div>
-                            {review.review && (
-                                <blockquote className="mt-3 border-l-2 pl-4 italic text-muted-foreground">
-                                    &quot;{review.review}&quot;
-                                </blockquote>
-                            )}
-                        </CardContent>
-                    </Card>
-                ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
 
 function DriverProfilePage() {
-    const params = useParams();
-    const driverId = params.driverId as string;
-    const firestore = useFirestore();
-    
-    const driverRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
-    const { data: driver, isLoading: driverLoading } = useDoc<DeliveryPersonnel>(driverRef);
-    
-    const ordersQuery = useMemoFirebase(() => 
-        firestore ? query(collection(firestore, 'orders'), where('deliveryPersonId', '==', driverId)) as CollectionReference<OrderType> : null,
-        [firestore, driverId]
-    );
-    const { data: orders, isLoading: ordersLoading } = useCollection<OrderType>(ordersQuery);
+  const params = useParams();
+  const driverId = params.driverId as string;
+  const firestore = useFirestore();
+  const { toast } = useToast();
 
-    const reviews: Review[] = useMemo(() => {
-        if (!orders) return [];
-        return orders
-            .filter(order => order.deliveryRating)
-            .map(order => ({
-                orderId: order.id,
-                rating: order.deliveryRating!,
-                review: order.deliveryReview || '',
-                date: order.createdAt instanceof Date ? order.createdAt : order.createdAt.toDate(),
-                customerName: order.customerName,
-            }));
-    }, [orders]);
+  const [cbuInput, setCbuInput] = useState('');
+  const [cbuLoaded, setCbuLoaded] = useState(false);
+  const [savingCbu, setSavingCbu] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
-    const driverStats = useMemo(() => {
-        if (!orders) return { avgRating: 0, totalDeliveries: 0 };
+  const driverRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
+  const { data: driver, isLoading: driverLoading } = useDoc<DeliveryPersonnel>(driverRef);
 
-        const completedDeliveries = orders.filter(o => o.status === 'Entregado');
-        const reviewedDeliveries = completedDeliveries.filter(o => o.deliveryRating);
-        
-        if (reviewedDeliveries.length === 0) {
-            return {
-                avgRating: 0,
-                totalDeliveries: completedDeliveries.length
-            }
-        }
-        
-        const totalRating = reviewedDeliveries.reduce((sum, order) => sum + order.deliveryRating!, 0);
-        
-        return {
-            avgRating: totalRating / reviewedDeliveries.length,
-            totalDeliveries: completedDeliveries.length
-        }
-    }, [orders]);
-    
-    const isLoading = driverLoading || ordersLoading;
+  if (driver && !cbuLoaded) {
+    setCbuInput((driver as any).payoutCbu || '');
+    setCbuLoaded(true);
+  }
 
-    if (isLoading) {
-        return (
-            <div className="container mx-auto">
-                <PageHeader title={<Skeleton className="h-8 w-48" />} description={<Skeleton className="h-5 w-64" />} />
-                <div className="grid gap-8 md:grid-cols-3">
-                    <div className="md:col-span-1">
-                        <Skeleton className="h-[270px] w-full" />
-                    </div>
-                     <div className="md:col-span-2 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                           <Skeleton className="h-24 w-full" />
-                           <Skeleton className="h-24 w-full" />
-                        </div>
-                        <Skeleton className="h-80 w-full" />
-                    </div>
-                </div>
-            </div>
-        )
+  const ordersQuery = useMemoFirebase(() =>
+    firestore ? query(collection(firestore, 'orders'), where('deliveryPersonId', '==', driverId)) as CollectionReference<OrderType> : null,
+    [firestore, driverId]
+  );
+  const { data: orders, isLoading: ordersLoading } = useCollection<OrderType>(ordersQuery);
+
+  const withdrawalsQuery = useMemoFirebase(() =>
+    firestore ? query(collection(firestore, 'withdrawals'), where('userId', '==', driverId), where('userRole', '==', 'delivery')) : null,
+    [firestore, driverId]
+  );
+  const { data: withdrawals } = useCollection<any>(withdrawalsQuery);
+
+  const stats = useMemo(() => {
+    const delivered = (orders || []).filter(o => o.status === 'Entregado');
+    const reviewed = delivered.filter(o => o.deliveryRating);
+    const totalEarned = delivered.reduce((s, o) => s + (o.deliveryFee || 0), 0);
+    const totalWithdrawn = (withdrawals || [])
+      .filter(w => w.status !== 'rejected')
+      .reduce((s, w) => s + (w.amount || 0), 0);
+    const avgRating = reviewed.length > 0
+      ? reviewed.reduce((s, o) => s + (o.deliveryRating || 0), 0) / reviewed.length
+      : 0;
+    return {
+      totalDeliveries: delivered.length,
+      avgRating,
+      ratingCount: reviewed.length,
+      totalEarned,
+      availableBalance: Math.max(0, totalEarned - totalWithdrawn),
+    };
+  }, [orders, withdrawals]);
+
+  const recentOrders = useMemo(() => {
+    return [...(orders || [])]
+      .sort((a, b) => {
+        const da = (a.createdAt as any)?.toDate ? (a.createdAt as any).toDate() : new Date(a.createdAt as any);
+        const db = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate() : new Date(b.createdAt as any);
+        return db.getTime() - da.getTime();
+      })
+      .slice(0, 15);
+  }, [orders]);
+
+  const reviews = useMemo(() => {
+    return (orders || []).filter(o => o.deliveryRating).map(o => ({
+      id: o.id,
+      rating: o.deliveryRating!,
+      review: o.deliveryReview || '',
+      customerName: o.customerName,
+      createdAt: o.createdAt,
+    }));
+  }, [orders]);
+
+  const handleSaveCbu = async () => {
+    if (!driverRef) return;
+    setSavingCbu(true);
+    try {
+      await updateDoc(driverRef, { payoutCbu: cbuInput.trim() });
+      toast({ title: 'CBU guardado', description: 'La liquidación automática lo usará.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error al guardar' });
+    } finally {
+      setSavingCbu(false);
     }
+  };
 
-    if (!driver) {
-        return notFound();
+  const handleUpdateStatus = async (status: string) => {
+    if (!driverRef) return;
+    setUpdatingStatus(true);
+    try {
+      await updateDoc(driverRef, { status, isApproved: status === 'Activo' });
+      toast({ title: status === 'Activo' ? 'Repartidor activado' : `Estado: ${status}` });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error al cambiar estado' });
+    } finally {
+      setUpdatingStatus(false);
     }
+  };
 
+  const isLoading = driverLoading || ordersLoading;
+
+  if (isLoading) {
     return (
-        <div className="container mx-auto">
-            <PageHeader title={`Perfil de ${driver.name}`} description="Ver detalles y el historial de reseñas del conductor." />
-
-            <div className="grid gap-8 md:grid-cols-3">
-                <div className="md:col-span-1 space-y-6">
-                    <Card>
-                        <CardHeader className="items-center text-center">
-                            <Avatar className="h-24 w-24 mb-4 border-2 border-primary">
-                                <AvatarImage src={getPlaceholderImage(driver.id, 128, 128)} alt={driver.name} />
-                                <AvatarFallback className="text-3xl">{driver.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <CardTitle className="text-2xl">{driver.name}</CardTitle>
-                            <Badge variant={getStatusVariant(driver.status)} className="mt-1">{driver.status}</Badge>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex items-center gap-3 text-sm">
-                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                <span>{driver.email}</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-sm">
-                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                <span>{driver.phoneNumber || (driver as any).phone || 'No especificado'}</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-sm">
-                                <Car className="h-4 w-4 text-muted-foreground" />
-                                <span className="capitalize">{typeof driver.vehicle === 'string' ? driver.vehicle : driver.vehicle?.type || 'N/A'}</span>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Métricas de Rendimiento</CardTitle>
-                        </CardHeader>
-                        <CardContent className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-muted">
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-2xl font-bold">{driverStats.avgRating.toFixed(1)}</span>
-                                    <Star className="h-4 w-4 text-warning" />
-                                </div>
-                                <p className="text-xs text-muted-foreground text-center">Calificación Promedio</p>
-                            </div>
-                             <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-muted">
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-2xl font-bold">{driverStats.totalDeliveries}</span>
-                                     <PackageCheck className="h-4 w-4 text-primary" />
-                                </div>
-                                <p className="text-xs text-muted-foreground text-center">Entregas Totales</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div className="md:col-span-2">
-                    <DriverReviews reviews={reviews} />
-                </div>
-            </div>
-        </div>
+      <div className="container mx-auto pb-20 space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid gap-4 md:grid-cols-3"><Skeleton className="h-48" /><Skeleton className="h-48 md:col-span-2" /></div>
+      </div>
     );
+  }
+
+  if (!driver) return notFound();
+
+  const cbuSaved = (driver as any).payoutCbu;
+
+  return (
+    <div className="container mx-auto pb-20 space-y-6">
+      {/* Header */}
+      <div className="flex items-start gap-4">
+        <Avatar className="h-16 w-16 rounded-xl border-2 border-primary">
+          <AvatarImage src={getPlaceholderImage(driver.id, 128, 128)} alt={driver.name} />
+          <AvatarFallback className="text-2xl">{driver.name?.charAt(0)}</AvatarFallback>
+        </Avatar>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold">{driver.name}</h1>
+            <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
+          </div>
+          <div className="flex flex-col gap-1 mt-1 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {driver.email}</span>
+            <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> {driver.phoneNumber || (driver as any).phone || 'No especificado'}</span>
+            <span className="flex items-center gap-1.5 capitalize"><Car className="h-3.5 w-3.5" /> {typeof driver.vehicle === 'string' ? driver.vehicle : driver.vehicle?.type || 'N/A'}</span>
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {driver.status !== 'Activo' && (
+            <Button size="sm" variant="outline" onClick={() => handleUpdateStatus('Activo')} disabled={updatingStatus} className="gap-1.5">
+              <Check className="h-3.5 w-3.5 text-success" /> Activar
+            </Button>
+          )}
+          {driver.status === 'Activo' && (
+            <Button size="sm" variant="outline" onClick={() => handleUpdateStatus('Inactivo')} disabled={updatingStatus} className="gap-1.5">
+              <XCircle className="h-3.5 w-3.5 text-destructive" /> Desactivar
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Métricas */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+        {[
+          { label: 'Entregas', value: stats.totalDeliveries, icon: PackageCheck, color: 'text-info' },
+          { label: 'Rating', value: stats.ratingCount > 0 ? `${stats.avgRating.toFixed(1)} ★` : '—', icon: Star, color: 'text-warning' },
+          { label: 'Ganancias totales', value: `$${stats.totalEarned.toLocaleString()}`, icon: TrendingUp, color: 'text-success' },
+          { label: 'Saldo disponible', value: `$${stats.availableBalance.toLocaleString()}`, icon: DollarSign, color: 'text-primary' },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <Card key={label} className="shadow-sm">
+            <CardContent className="pt-3 pb-3">
+              <Icon className={cn('h-4 w-4 mb-1', color)} />
+              <div className={cn('text-xl font-bold', color)}>{value}</div>
+              <div className="text-[11px] text-muted-foreground">{label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* CBU */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-4 w-4 text-primary" /> CBU para liquidaciones</CardTitle>
+            <CardDescription>
+              {cbuSaved ? 'CBU/alias guardado — la liquidación automática lo usará.' : 'Sin CBU guardado — la liquidación automática omitirá a este repartidor.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!cbuSaved && (
+              <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg p-2.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                No recibirá liquidaciones automáticas hasta que se configure un CBU.
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input value={cbuInput} onChange={e => setCbuInput(e.target.value)} placeholder="CBU, CVU o alias de MercadoPago" />
+              <Button onClick={handleSaveCbu} disabled={savingCbu || cbuInput.trim() === (cbuSaved || '')} className="gap-1.5 shrink-0">
+                {savingCbu ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Guardar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Reseñas */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base"><Star className="h-4 w-4 text-warning" /> Reseñas de clientes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {reviews.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin reseñas todavía.</p>}
+            {reviews.slice(0, 8).map(r => (
+              <div key={r.id} className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <Star key={s} className={cn('h-3 w-3', r.rating >= s ? 'fill-warning text-warning' : 'text-muted-foreground/30')} />
+                    ))}
+                  </div>
+                  <span className="text-xs font-medium">{r.customerName}</span>
+                  <span className="text-xs text-muted-foreground ml-auto">{formatDate(r.createdAt)}</span>
+                </div>
+                {r.review && <p className="text-xs text-muted-foreground pl-0.5 line-clamp-2 italic">&quot;{r.review}&quot;</p>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Entregas recientes */}
+      <Card className="shadow-md">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <PackageCheck className="h-4 w-4 text-info" /> Entregas recientes
+            <span className="text-xs font-normal text-muted-foreground">({orders?.length ?? 0} totales)</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/30">
+                <tr>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Fecha</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Cliente</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Tienda</th>
+                  <th className="text-right px-4 py-2 font-medium text-muted-foreground">Ganó</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Estado</th>
+                  <th className="px-4 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {recentOrders.length === 0 && (
+                  <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Sin entregas.</td></tr>
+                )}
+                {recentOrders.map(o => {
+                  const kind = getOrderStatusKind(o.status);
+                  return (
+                    <tr key={o.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(o.createdAt)}</td>
+                      <td className="px-4 py-2.5 font-medium">{o.customerName}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{(o as any).storeName || '—'}</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-success">
+                        {o.status === 'Entregado' ? `$${(o.deliveryFee || 0).toLocaleString()}` : '—'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge variant="outline" className={cn('text-[10px] uppercase', orderStatusBadgeClass[kind])}>{o.status}</Badge>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Link href={`/orders/${o.id}`} target="_blank">
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0"><ExternalLink className="h-3 w-3" /></Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
-
 export default function GuardedDriverProfilePage() {
-    return (
-        <AdminAuthGuard>
-            <DriverProfilePage />
-        </AdminAuthGuard>
-    )
+  return (
+    <AdminAuthGuard>
+      <DriverProfilePage />
+    </AdminAuthGuard>
+  );
 }
