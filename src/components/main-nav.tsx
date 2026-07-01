@@ -26,7 +26,8 @@ import {
   MessageSquare,
   Bell,
   Settings,
-  DollarSign
+  DollarSign,
+  Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -167,6 +168,12 @@ export function MainNav({
             <Button variant={pathname === '/my-store/products' ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Package className="mr-2 h-4 w-4" />
               Gestionar Productos
+            </Button>
+          </Link>
+          <Link href="/my-store/categories">
+            <Button variant={pathname === '/my-store/categories' ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Tag className="mr-2 h-4 w-4" />
+              Categorías
             </Button>
           </Link>
           <Link href="/my-store">

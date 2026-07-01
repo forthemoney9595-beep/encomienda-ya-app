@@ -149,6 +149,7 @@ export default function MyStorePage() {
       await updateDoc(storeRef, {
         name: formData.name,
         description: formData.description,
+        category: formData.category, // Rubro editable (filtro del inicio)
         address: formData.address, // Guardamos lo que escribió el usuario
         imageUrl: formData.imageUrl,
         deliveryTime: formData.deliveryTime,
@@ -314,6 +315,20 @@ export default function MyStorePage() {
                     </p>
                 )}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">Rubro / Categoría de la tienda</Label>
+            <Input
+                id="category"
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+                placeholder="Ej. Comida Rápida, Kiosco, Farmacia"
+            />
+            <p className="text-[0.8rem] text-muted-foreground">
+                Con esto los clientes te filtran desde la pantalla de inicio. Usá el mismo nombre que otras tiendas del mismo rubro.
+            </p>
           </div>
 
           {/* SECCIÓN DE HORARIOS */}

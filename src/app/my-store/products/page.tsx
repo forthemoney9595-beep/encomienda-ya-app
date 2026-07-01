@@ -22,6 +22,10 @@ import { Switch } from '@/components/ui/switch';
 import { ImageUpload } from '@/components/image-upload';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
+// Fallback cuando la tienda todavía no definió sus propias categorías en
+// /my-store/categories — coincide con la lista fija que había antes hardcodeada acá.
+const DEFAULT_CATEGORIES = ['Comida', 'Bebidas', 'Ropa', 'Electrónica', 'Hogar', 'Otros'];
+
 interface Product {
   id: string;
   name: string;
@@ -58,6 +62,10 @@ export default function ProductManagementPage() {
   
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
+  // Categorías definidas por el dueño en /my-store/categories. El <Select> de abajo las usa
+  // en vez de una lista fija, para que la categoría del producto y el agrupado de la tienda
+  // pública (que agrupa por product.category) queden siempre en sync.
+  const [storeCategories, setStoreCategories] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -125,6 +133,25 @@ export default function ProductManagementPage() {
     return () => { unsubItems(); unsubProducts(); };
   }, [firestore, userProfile?.storeId]);
 
+  // Categorías del dueño (en vivo, así si las edita en /my-store/categories se refleja acá).
+  useEffect(() => {
+    if (!firestore || !userProfile?.storeId) return;
+    const unsub = onSnapshot(doc(firestore, 'stores', userProfile.storeId), (snap) => {
+      const cats = snap.data()?.productCategories;
+      setStoreCategories(Array.isArray(cats) ? cats.filter(Boolean) : []);
+    }, () => setStoreCategories([]));
+    return () => unsub();
+  }, [firestore, userProfile?.storeId]);
+
+  // Opciones del selector: las del dueño si definió alguna, si no el fallback. Además nos
+  // aseguramos de incluir la categoría del producto que se está editando aunque ya no esté
+  // en la lista, para no perderla silenciosamente al guardar.
+  const categoryOptions = (() => {
+    const base = storeCategories.length > 0 ? storeCategories : DEFAULT_CATEGORIES;
+    const current = editingProduct?.category?.trim();
+    return current && !base.includes(current) ? [current, ...base] : base;
+  })();
+
   const filteredProducts = products.filter(product => {
     const name = (product.name || '').toLowerCase();
     const category = (product.category || '').toLowerCase();
@@ -152,7 +179,7 @@ export default function ProductManagementPage() {
         name: '',
         description: '',
         price: '',
-        category: 'Comida',
+        category: (storeCategories.length > 0 ? storeCategories : DEFAULT_CATEGORIES)[0],
         imageUrl: '',
         available: true,
         isFeatured: false,
@@ -493,22 +520,24 @@ export default function ProductManagementPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="category">Categoría</Label>
-                <Select 
-                  value={formData.category} 
+                <Select
+                  value={formData.category}
                   onValueChange={(val) => setFormData({...formData, category: val})}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Comida">Comida</SelectItem>
-                    <SelectItem value="Bebidas">Bebidas</SelectItem>
-                    <SelectItem value="Ropa">Ropa</SelectItem>
-                    <SelectItem value="Electrónica">Electrónica</SelectItem>
-                    <SelectItem value="Hogar">Hogar</SelectItem>
-                    <SelectItem value="Otros">Otros</SelectItem>
+                    {categoryOptions.map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {storeCategories.length === 0 && (
+                  <p className="text-[0.7rem] text-muted-foreground">
+                    Definí tus propias categorías en <Link href="/my-store/categories" className="underline">Categorías</Link>.
+                  </p>
+                )}
               </div>
             </div>
 
