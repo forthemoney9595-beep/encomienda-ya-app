@@ -39,12 +39,18 @@ export function MainNav({
 
   const isAdminUser = userProfile?.role === 'admin';
 
-  // Contadores de pendientes (solo se consultan si es admin)
-  const usersQuery = useMemoFirebase(
-    () => (firestore && isAdminUser ? collection(firestore, 'users') : null),
+  // Contadores de pendientes (solo se consultan si es admin).
+  // OJO escala: esta consulta corre en CADA página del panel admin. Antes bajaba la
+  // colección `users` ENTERA (dominada por compradores, crece sin techo) solo para contar
+  // dos badges. Ahora filtra server-side a `isApproved == false`, que devuelve únicamente
+  // tiendas/repartidores sin aprobar (un puñado de docs). Como signup/store y signup/delivery
+  // siempre setean `isApproved: false` explícito (ver Fase X), el filtro no se pierde ninguno;
+  // los rechazados también quedan en false, igual que los contaba el filtro cliente anterior.
+  const pendingUsersQuery = useMemoFirebase(
+    () => (firestore && isAdminUser ? query(collection(firestore, 'users'), where('isApproved', '==', false)) : null),
     [firestore, isAdminUser]
   );
-  const { data: allUsers } = useCollection<any>(usersQuery);
+  const { data: pendingUsers } = useCollection<any>(pendingUsersQuery);
 
   const withdrawalsQuery = useMemoFirebase(
     () => (firestore && isAdminUser ? query(collection(firestore, 'withdrawals'), where('status', '==', 'pending')) : null),
@@ -52,22 +58,25 @@ export function MainNav({
   );
   const { data: pendingWithdrawals } = useCollection<any>(withdrawalsQuery);
 
-  const pendingStoresCount = (allUsers || []).filter((u: any) => u.role === 'store' && !u.isApproved).length;
-  const pendingDriversCount = (allUsers || []).filter((u: any) => u.role === 'delivery' && !u.isApproved).length;
+  const pendingStoresCount = (pendingUsers || []).filter((u: any) => u.role === 'store').length;
+  const pendingDriversCount = (pendingUsers || []).filter((u: any) => u.role === 'delivery').length;
   const pendingWithdrawalsCount = pendingWithdrawals?.length ?? 0;
 
   // "Explorar Tiendas" (solo comprador): se arma con los rubros REALES de las tiendas
   // aprobadas, no con links hardcodeados. Antes eran 3 links fijos (comida-rapida/Ropa/
   // Otros) que podían llevar a listas vacías o no coincidir con los rubros cargados.
   const isBuyer = userProfile?.role === 'buyer';
+  // Solo tiendas aprobadas: filtra server-side (antes traía todas y filtraba en el cliente).
+  // La colección `stores` es acotada (pueblo chico), así que el ahorro es menor que el de los
+  // usuarios, pero además evita que una tienda sin aprobar aporte su rubro al menú.
   const storesQuery = useMemoFirebase(
-    () => (firestore && isBuyer ? collection(firestore, 'stores') : null),
+    () => (firestore && isBuyer ? query(collection(firestore, 'stores'), where('isApproved', '==', true)) : null),
     [firestore, isBuyer]
   );
   const { data: buyerStores } = useCollection<any>(storesQuery);
   const buyerCategories = Array.from(
     new Set((buyerStores || [])
-      .filter((s: any) => s.isApproved !== false && s.category)
+      .filter((s: any) => s.category)
       .map((s: any) => s.category as string))
   ).slice(0, 8);
 

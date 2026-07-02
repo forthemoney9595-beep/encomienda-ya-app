@@ -581,6 +581,34 @@ Se corrigió esta nota, que estaba desactualizada: "olvidé mi contraseña" **ya
   datos/contraseña de otras cuentas; verificación real de teléfono por SMS; signup
   (no solo login) con Google.
 
+## Fase Y (jul 2026): consultas acotadas — primer fix de escala en `main-nav.tsx`
+Salió de una charla sobre cómo escalar (usuarios/tiendas/pedidos creciendo con el tiempo)
+sin que Firestore/Vercel se disparen de costo. Se identificaron 3 consultas que bajan
+colecciones enteras sin filtrar; se atacó la más barata y de mayor impacto primero.
+- **`main-nav.tsx` — conteo de pendientes:** corría en CADA página del panel admin y bajaba
+  la colección `users` ENTERA (dominada por compradores, crece sin techo) solo para dos badges.
+  Ahora consulta `where('isApproved','==',false)` — solo tiendas/repartidores sin aprobar (set
+  chico y acotado). Índice de un solo campo = automático, sin deploy. **Verificado contra
+  Firestore real:** viejo vs nuevo dan el mismo conteo (tiendas 1/1, repartidores 2/2); la
+  query bajó de 18 docs a 3.
+- **`main-nav.tsx` — rubros del comprador:** ídem, ahora `where('isApproved','==',true)` en vez
+  de traer todas las tiendas. La colección `stores` es acotada (pueblo chico), así que el ahorro
+  es menor, pero además evita que una tienda sin aprobar aporte su rubro. Rubros idénticos antes
+  y después.
+- **Bug de dato del seed corregido en el camino:** 3 tiendas del seed (Fase W: `super@`,
+  `farmacia@`, `kiosco@`) tenían el doc de tienda aprobado pero el doc de **usuario sin el campo
+  `isApproved`** — estado que el flujo real de aprobación (`admin/page.tsx:handleUpdateUserStatus`,
+  escribe el campo en AMBOS docs) nunca produce. El filtro viejo (`!u.isApproved`) las contaba mal
+  como pendientes (badge decía 4, real 1); el dashboard de admin sufría lo mismo. Se seteó
+  `isApproved:true` en esos 3 docs de usuario (script Admin SDK puntual, no quedó en el repo) para
+  que el dato refleje un estado de producción válido; ahora badge y dashboard coinciden en 1.
+- **Regla nueva a respetar:** NINGUNA consulta de cliente debe bajar una colección que crece sin
+  techo (`users`, `orders`) sin `where`/`limit`. **Todavía pendiente** (más grande, ver charla de
+  Cloud Functions): el dashboard de admin (`admin/page.tsx`) baja `orders`/`users`/`stores`
+  enteras porque calcula agregados sobre TODO (facturación histórica, distribución por estado,
+  analíticas) — no se arregla con `limit()`; requiere ventana de tiempo o contadores
+  denormalizados (territorio de Cloud Functions). Queda para pensarse como un solo tema.
+
 ## Pendientes pre-lanzamiento
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
 - Regenerar el `MP_WEBHOOK_SECRET` (quedó expuesto durante pruebas)
