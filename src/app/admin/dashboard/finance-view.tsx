@@ -22,14 +22,6 @@ import {
 import { downloadCsv } from '@/lib/csv-export';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Order } from '@/lib/order-service';
-import type { Store } from '@/lib/placeholder-data';
-
-interface FinanceViewProps {
-    orders: Order[];
-    stores: Store[];
-    users: any[];
-}
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 type RoleFilter  = 'all' | 'store' | 'delivery';
@@ -41,7 +33,7 @@ const formatDate = (ts: any, full = false) => {
     } catch { return '—'; }
 };
 
-export function FinanceView({ orders, stores, users }: FinanceViewProps) {
+export function FinanceView() {
     const firestore = useFirestore();
     const { user } = useAuth();
     const { toast } = useToast();

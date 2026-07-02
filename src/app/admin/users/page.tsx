@@ -1,12 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { useCountFromServer } from '@/lib/firebase-aggregate';
+import {
+  collection, query, where, orderBy, limit, startAfter, getDocs, documentId,
+  doc, updateDoc, deleteDoc, setDoc, serverTimestamp, type QueryDocumentSnapshot,
+} from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,35 +24,106 @@ import AdminAuthGuard from '../admin-auth-guard';
 import { logAdminAction } from '@/lib/admin-audit';
 import { UserDetailDialog } from './user-detail-dialog';
 
+const PAGE_SIZE = 25;
+
 function AdminUsersPage() {
   const { user: currentUser } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'buyer' | 'store' | 'delivery' | 'admin'>('all');
   const [detailUser, setDetailUser] = useState<any | null>(null);
 
-  // 1. Cargar TODOS los usuarios
-  const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const { data: users, isLoading } = useCollection<any>(usersQuery);
+  // Lista paginada (getDocs + cursor). No usamos useCollection porque necesitamos el snapshot
+  // del último doc para startAfter, y el hook compartido lo descarta.
+  const [rows, setRows] = useState<any[]>([]);
+  const [lastSnap, setLastSnap] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  // 2. Filtrar por búsqueda + rol
-  const filteredUsers = users?.filter(u => {
-    if (roleFilter !== 'all' && u.role !== roleFilter) return false;
-    const q = search.toLowerCase();
-    return !q ||
-      u.email?.toLowerCase().includes(q) ||
-      u.displayName?.toLowerCase().includes(q) ||
-      u.name?.toLowerCase().includes(q);
-  }) || [];
-
+  // Conteos por rol vía aggregation server-side (antes se contaban bajando TODA la colección).
+  const allCountQ      = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const buyerCountQ    = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'buyer')) : null, [firestore]);
+  const storeCountQ    = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'store')) : null, [firestore]);
+  const deliveryCountQ = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'delivery')) : null, [firestore]);
+  const adminCountQ    = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'admin')) : null, [firestore]);
+  const { count: cAll, refresh: rAll }           = useCountFromServer(allCountQ, { refreshOnFocus: true });
+  const { count: cBuyer, refresh: rBuyer }       = useCountFromServer(buyerCountQ, { refreshOnFocus: true });
+  const { count: cStore, refresh: rStore }       = useCountFromServer(storeCountQ, { refreshOnFocus: true });
+  const { count: cDelivery, refresh: rDelivery } = useCountFromServer(deliveryCountQ, { refreshOnFocus: true });
+  const { count: cAdmin, refresh: rAdmin }       = useCountFromServer(adminCountQ, { refreshOnFocus: true });
   const roleCounts = {
-    all: users?.length ?? 0,
-    buyer: users?.filter(u => u.role === 'buyer').length ?? 0,
-    store: users?.filter(u => u.role === 'store').length ?? 0,
-    delivery: users?.filter(u => u.role === 'delivery').length ?? 0,
-    admin: users?.filter(u => u.role === 'admin').length ?? 0,
+    all: cAll ?? 0, buyer: cBuyer ?? 0, store: cStore ?? 0, delivery: cDelivery ?? 0, admin: cAdmin ?? 0,
   };
+  const refreshCounts = () => { rAll(); rBuyer(); rStore(); rDelivery(); rAdmin(); };
+
+  // Debounce del buscador.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Arma la query según el modo: búsqueda por prefijo de email, filtro por rol, o todos.
+  // Ninguna combinación necesita índice compuesto: búsqueda = rango sobre un solo campo (email);
+  // filtro por rol = igualdad + orderBy(documentId) (servido por el índice de un solo campo).
+  const buildQuery = useCallback((cursor: QueryDocumentSnapshot | null) => {
+    if (!firestore) return null;
+    const col = collection(firestore, 'users');
+    const cons: any[] = [];
+    if (debouncedSearch) {
+      cons.push(where('email', '>=', debouncedSearch), where('email', '<=', debouncedSearch + ''), orderBy('email'));
+    } else if (roleFilter !== 'all') {
+      cons.push(where('role', '==', roleFilter), orderBy(documentId()));
+    } else {
+      cons.push(orderBy(documentId()));
+    }
+    cons.push(limit(PAGE_SIZE));
+    if (cursor) cons.push(startAfter(cursor));
+    return query(col, ...cons);
+  }, [firestore, debouncedSearch, roleFilter]);
+
+  const resetLoad = useCallback(async () => {
+    const q = buildQuery(null);
+    if (!q) return;
+    setIsLoading(true);
+    try {
+      const snap = await getDocs(q);
+      setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLastSnap(snap.docs[snap.docs.length - 1] || null);
+      setHasMore(snap.docs.length === PAGE_SIZE);
+    } catch (e) {
+      console.error(e);
+      toast({ variant: 'destructive', title: 'Error al cargar usuarios' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [buildQuery, toast]);
+
+  useEffect(() => { resetLoad(); }, [resetLoad]);
+
+  const loadMore = async () => {
+    const q = buildQuery(lastSnap);
+    if (!q || !lastSnap) return;
+    setLoadingMore(true);
+    try {
+      const snap = await getDocs(q);
+      setRows(prev => [...prev, ...snap.docs.map(d => ({ id: d.id, ...d.data() }))]);
+      setLastSnap(snap.docs[snap.docs.length - 1] || lastSnap);
+      setHasMore(snap.docs.length === PAGE_SIZE);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // En modo búsqueda el filtro por rol se aplica en cliente sobre la página traída (evita un
+  // índice compuesto email+role). En modo navegación la query ya filtra por rol.
+  const displayed = (debouncedSearch && roleFilter !== 'all')
+    ? rows.filter(u => u.role === roleFilter)
+    : rows;
 
   // --- ACCIONES ---
 
@@ -80,6 +155,8 @@ function AdminUsersPage() {
 
         toast({ title: 'Rol actualizado', description: `El usuario ahora es ${newRole}.` });
         if (firestore && currentUser) logAdminAction(firestore, currentUser.uid, 'change_role', userId, `${oldRole} → ${newRole}`);
+        resetLoad();
+        refreshCounts();
     } catch (error) {
         console.error(error);
         toast({ variant: 'destructive', title: 'Error al cambiar rol' });
@@ -96,21 +173,19 @@ function AdminUsersPage() {
         if (!res.ok) throw new Error(data.error || 'Error al eliminar');
         toast({ title: 'Usuario eliminado', description: 'La cuenta fue borrada de Auth y Firestore.' });
         if (firestore && currentUser) logAdminAction(firestore, currentUser.uid, 'delete_user', userId);
+        resetLoad();
+        refreshCounts();
     } catch (error: any) {
         console.error(error);
         toast({ variant: 'destructive', title: 'Error al eliminar', description: error.message });
     }
   };
 
-  if (isLoading) {
-    return <div className="flex justify-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
-  }
-
   return (
     <div className="container mx-auto space-y-6">
-      <PageHeader 
-        title="Gestión de Usuarios" 
-        description="Administra clientes, asigna roles y mantén limpia la base de datos." 
+      <PageHeader
+        title="Gestión de Usuarios"
+        description="Administra clientes, asigna roles y mantén limpia la base de datos."
       />
 
       <Card>
@@ -118,13 +193,13 @@ function AdminUsersPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                     <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5" /> Base de Usuarios ({filteredUsers.length})
+                        <Users className="h-5 w-5" /> Base de Usuarios ({roleCounts.all})
                     </CardTitle>
                 </div>
                 <div className="relative w-full sm:w-72">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Buscar por nombre o email..."
+                        placeholder="Buscar por email (prefijo)..."
                         className="pl-8"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -160,7 +235,13 @@ function AdminUsersPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredUsers.map((user) => (
+                        {isLoading ? (
+                            <TableRow>
+                                <TableCell colSpan={4} className="text-center py-10">
+                                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                                </TableCell>
+                            </TableRow>
+                        ) : displayed.map((user) => (
                             <TableRow key={user.id}>
                                 <TableCell className="flex items-center gap-3">
                                     <Avatar className="h-9 w-9 border">
@@ -214,7 +295,7 @@ function AdminUsersPage() {
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
-                                        
+
                                         {user.id !== currentUser?.uid && (
                                             <Button variant="destructive" size="icon" className="h-8 w-8 opacity-70 hover:opacity-100" onClick={() => handleDeleteUser(user.id)} title="Eliminar Usuario">
                                                 <Trash2 className="h-4 w-4" />
@@ -224,16 +305,25 @@ function AdminUsersPage() {
                                 </TableCell>
                             </TableRow>
                         ))}
-                        {filteredUsers.length === 0 && (
+                        {!isLoading && displayed.length === 0 && (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                    No se encontraron usuarios que coincidan con &quot;{search}&quot;.
+                                    {debouncedSearch
+                                        ? <>No se encontraron usuarios con el email &quot;{debouncedSearch}&quot;.</>
+                                        : 'No hay usuarios para mostrar.'}
                                 </TableCell>
                             </TableRow>
                         )}
                     </TableBody>
                 </Table>
             </div>
+            {hasMore && !debouncedSearch && (
+                <div className="flex justify-center mt-4">
+                    <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                        {loadingMore ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cargando...</> : 'Cargar más'}
+                    </Button>
+                </div>
+            )}
         </CardContent>
       </Card>
 

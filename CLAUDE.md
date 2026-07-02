@@ -62,6 +62,7 @@ También: `Cancelado`, `Rechazado`
 - `src/app/api/delivery-reviews/create/route.ts` / `src/app/api/orders/{release,report-problem}/route.ts` — APIs seguras del flujo de repartidor (Fases S/T)
 - `src/components/delivery-online-toggle.tsx` — switch de `users/{uid}.isOnline`, compartido entre `/orders` y `/delivery`
 - `src/lib/analytics-period.ts` / `src/components/pct-badge.tsx` — lógica de período/comparación compartida entre `my-store/analytics` y `delivery/analytics` (Fase U)
+- `src/lib/firebase-aggregate.ts` — `useAggregate`/`useCountFromServer`: aggregation queries de Firestore (sum/count server-side, one-shot, con `refreshOnFocus`). Reemplazan el patrón caro de bajar la colección entera y sumar/contar en el cliente. Usado por el panel admin (Fase Z)
 - `src/app/my-store/reviews/page.tsx` — reseñas de la tienda + respuesta opcional del dueño
 - `src/app/my-store/page.tsx` — dashboard de tienda (resumen: métricas, alertas, rating, accesos). El form de edición está en `src/app/my-store/edit/page.tsx` (Fase P)
 - `src/app/my-store/categories/page.tsx` — administra `stores/{id}.productCategories` (feed del selector de categoría del form de productos)
@@ -603,11 +604,50 @@ colecciones enteras sin filtrar; se atacó la más barata y de mayor impacto pri
   `isApproved:true` en esos 3 docs de usuario (script Admin SDK puntual, no quedó en el repo) para
   que el dato refleje un estado de producción válido; ahora badge y dashboard coinciden en 1.
 - **Regla nueva a respetar:** NINGUNA consulta de cliente debe bajar una colección que crece sin
-  techo (`users`, `orders`) sin `where`/`limit`. **Todavía pendiente** (más grande, ver charla de
-  Cloud Functions): el dashboard de admin (`admin/page.tsx`) baja `orders`/`users`/`stores`
-  enteras porque calcula agregados sobre TODO (facturación histórica, distribución por estado,
-  analíticas) — no se arregla con `limit()`; requiere ventana de tiempo o contadores
-  denormalizados (territorio de Cloud Functions). Queda para pensarse como un solo tema.
+  techo (`users`, `orders`, `reviews`) sin `where`/`limit`. ~~Todavía pendiente: el dashboard de
+  admin...~~ — **resuelto en la Fase Z** (abajo).
+
+## Fase Z (jul 2026): reestructura del panel admin con aggregation queries (sin Cloud Functions)
+Continuación directa de la Fase Y. El resto de las pantallas admin bajaban colecciones enteras que
+crecen sin techo (dashboard/finanzas/usuarios/reseñas) porque calculaban agregados en el cliente.
+Salió de una charla sobre escala: la clave fue notar que **Firebase v11 trae aggregation queries
+nativas** (`getCountFromServer`, `getAggregateFromServer` con `sum`/`count`), que hacen los totales
+server-side sin bajar documentos y **sin necesidad de Cloud Functions ni contadores denormalizados**.
+- **Helper nuevo `src/lib/firebase-aggregate.ts`:** `useAggregate` (sum/count) y `useCountFromServer`,
+  ambos one-shot (no `onSnapshot`) con `refresh()` y opción `refreshOnFocus` (recalculan al volver a
+  la pestaña — así los totales se sienten "vivos" sin listener permanente).
+- **Principio de diseño (respetar):** datos "en vivo" (pedidos activos ahora, set chico) = listener
+  `useCollection` acotado con `where('status','in',[activos])`; totales históricos = aggregation
+  (`sum`/`count`); analíticas por período = bajar solo el período (`where('createdAt','>=')`,
+  acotado); listas de historial = paginar con `getDocs`+`limit`+cursor.
+- **Dashboard (`admin/page.tsx`):** headline cards (Ingresos/Completados via `sum('total')`+`count()`
+  sobre Entregado; Usuarios via `count` role!=admin) con botón "Refrescar" + refreshOnFocus; estado
+  en vivo/alertas de trabados sobre un listener acotado a estados activos; distribución y analíticas
+  sobre el período (se quitó la opción "Todo", único caso sin techo); "Historial de Pedidos" (bajaba
+  TODAS) → "Pedidos Recientes" (limit 10) + link a `/admin/orders` (que ya está paginado). Constantes
+  `ACTIVE_STATUSES`/`STUCK_THRESHOLDS_H` subidas a nivel de módulo.
+- **`admin/finances` + `finance-view.tsx`:** bajaba `orders`+`users`+`stores` ENTERAS solo para
+  pasárselas a `FinanceView`, que **no las usaba** (props muertos). Se eliminaron esas 3 queries y
+  los props; `FinanceView` ya traía sus `withdrawals` solo.
+- **`admin/users`:** conteos por rol via `useCountFromServer` (5 counts); tabla paginada con
+  `getDocs`+cursor ("Cargar más") — NO usa `useCollection` porque el hook descarta el snapshot que
+  `startAfter` necesita; búsqueda por **prefijo de email server-side**
+  (`where('email','>=',t)`+`where('email','<=',t+)`, `String.fromCharCode(0xf8ff)`), no fuzzy.
+- **`admin/reviews`:** paginación `getDocs`+cursor + conteo total via aggregation; la búsqueda por
+  substring quedó client-side sobre las páginas ya cargadas (Firestore no hace substring server-side).
+- **`admin/communications`:** el picker de "un usuario" destino bajaba TODOS los usuarios; ahora
+  busca on-demand por prefijo de email (mismo patrón que `admin/users`). El broadcast a
+  todos/tiendas/repartidores ya iba server-side (`/api/admin/notify-broadcast`), no toca esto.
+- **Índice nuevo:** `orders (status, total)` en `firestore.indexes.json` — lo exige la aggregation
+  `sum('total')` filtrada por `status`. **Desplegado a producción** (`firebase deploy --only
+  firestore:indexes` contra `studio-354048519-4bc1e`). El resto (counts de un solo campo, prefijo de
+  email, orderBy(documentId)) usa índices automáticos, sin deploy.
+- **Verificado end-to-end** (Playwright headless + login admin real + Firestore real): los 3 totales
+  del dashboard dieron idéntico al scan manual (Ingresos $29.850, Usuarios 19, Completados 6), y las
+  5 pantallas renderizan sin errores de consola.
+- **Cloud Functions: NO se usaron** — este enfoque las hace innecesarias para el panel. Único
+  trade-off aceptado: los totales históricos se refrescan al abrir/enfocar, no tironean en vivo (los
+  pedidos activos sí siguen live). `maxDiscountPercent` (badge del home) queda igual, fuera de alcance.
 
 ## Pendientes pre-lanzamiento
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla

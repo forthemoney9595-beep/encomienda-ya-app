@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AdminAuthGuard from '../admin-auth-guard';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { useFirestore } from '@/lib/firebase';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -20,15 +20,32 @@ function AdminCommunicationsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const usersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) : null, [firestore]);
-  const { data: users } = useCollection<any>(usersQuery);
-
   const [target, setTarget] = useState<'all' | 'stores' | 'drivers' | 'user'>('all');
   const [userId, setUserId] = useState('');
   const [userSearch, setUserSearch] = useState('');
+  const [userResults, setUserResults] = useState<any[]>([]);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+
+  // Buscador de usuario destino: prefijo de email server-side (antes bajaba TODA la colección
+  // de usuarios solo para este picker). Debounced; solo consulta si hay término.
+  useEffect(() => {
+    const term = userSearch.trim().toLowerCase();
+    if (!firestore || !term || target !== 'user') { setUserResults([]); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const snap = await getDocs(query(
+          collection(firestore, 'users'),
+          where('email', '>=', term), where('email', '<=', term + String.fromCharCode(0xf8ff)),
+          orderBy('email'), limit(8),
+        ));
+        if (!cancelled) setUserResults(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (e) { console.error(e); }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [firestore, userSearch, target]);
 
   const handleSend = async () => {
     if (!user || !title.trim() || !body.trim()) return;
@@ -77,19 +94,19 @@ function AdminCommunicationsPage() {
             </div>
             {target === 'user' && (
               <div className="space-y-2">
-                <Input placeholder="Buscar usuario por nombre o email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+                <Input placeholder="Buscar usuario por email (prefijo)..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
                 {userSearch.trim() && (
                   <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
-                    {(users || []).filter(u =>
-                      u.displayName?.toLowerCase().includes(userSearch.toLowerCase()) ||
-                      u.email?.toLowerCase().includes(userSearch.toLowerCase())
-                    ).slice(0, 8).map((u: any) => (
+                    {userResults.map((u: any) => (
                       <button key={u.id} className={cn('w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors',
                         userId === u.id ? 'bg-primary/10 font-medium' : ''
-                      )} onClick={() => { setUserId(u.id); setUserSearch(u.displayName || u.email || ''); }}>
+                      )} onClick={() => { setUserId(u.id); setUserSearch(u.email || u.displayName || ''); }}>
                         {u.displayName || u.name || '(sin nombre)'} — {u.email}
                       </button>
                     ))}
+                    {userResults.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">Sin resultados para ese email.</div>
+                    )}
                   </div>
                 )}
               </div>

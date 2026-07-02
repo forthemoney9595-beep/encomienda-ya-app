@@ -2,16 +2,17 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download } from 'lucide-react';
+import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw } from 'lucide-react';
 import { downloadCsv } from '@/lib/csv-export';
 import { PendingList } from './pending-list';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { useAggregate, useCountFromServer } from '@/lib/firebase-aggregate';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
-import { collection, query, where, doc, updateDoc, orderBy, limit, CollectionReference, Timestamp } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, orderBy, limit, sum, count, CollectionReference, Timestamp } from 'firebase/firestore';
 import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Legend, Cell } from 'recharts';
 import { subDays, format, startOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -25,6 +26,26 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+
+// Estados "activos": pedidos en curso ahora. Set chico por naturaleza -> se escucha en vivo.
+const ACTIVE_STATUSES = [
+  'Pendiente de Confirmación',
+  'Pendiente de Pago',
+  'En preparación',
+  'Listo para recoger',
+  'En camino',
+  'En reparto',
+];
+
+// Umbrales en horas: cuánto tiempo puede estar un pedido en cada estado antes de alertar.
+const STUCK_THRESHOLDS_H: Record<string, number> = {
+  'Pendiente de Confirmación': 1,   // la tienda debería confirmar en ≤1h
+  'Pendiente de Pago':         2,   // el cliente debería pagar en ≤2h
+  'En preparación':            3,   // la tienda debería tenerlo listo en ≤3h
+  'Listo para recoger':        2,   // un repartidor debería tomarlo en ≤2h
+  'En camino':                 3,   // el repartidor debería entregarlo en ≤3h
+  'En reparto':                4,
+};
 
 // Helper seguro para obtener Date desde Timestamp o String
 const getDate = (date: any): Date => {
@@ -71,97 +92,140 @@ function AdminDashboard() {
     }
   };
 
-  const ordersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'orders') as CollectionReference<OrderType> : null, [firestore]);
-  const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<StoreType> : null, [firestore]);
-  // Usamos 'any' para usersQuery para evitar errores de importación de tipos
-  const usersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) : null, [firestore]);
-  // Incidentes de repartidor (soltar pedido / reportar problema) -- ver Fase de "no
-  // puedo con este pedido" en /orders para el repartidor.
-  const incidentsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'driver_incidents'), orderBy('createdAt', 'desc'), limit(8)) : null, [firestore]);
+  // Controles de período (se declaran arriba porque la query del período los usa).
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<'7d'|'30d'|'month'>('30d');
+  const [analyticsSort, setAnalyticsSort] = useState<'revenue'|'orders'>('revenue');
 
-  const { data: orders, isLoading: ordersLoading } = useCollection<OrderType>(ordersQuery);
+  const analyticsFrom = useMemo(() => {
+    if (analyticsPeriod === '7d') return subDays(new Date(), 7);
+    if (analyticsPeriod === '30d') return subDays(new Date(), 30);
+    return startOfMonth(new Date());
+  }, [analyticsPeriod]);
+
+  // La query del período cubre SIEMPRE al menos los últimos 7 días, para que el gráfico de
+  // "últimos 7 días" salga del mismo set aunque el período elegido sea más corto (ej. "este mes"
+  // recién empezado).
+  const ordersFrom = useMemo(() => {
+    const sevenDaysAgo = subDays(new Date(), 7);
+    return analyticsFrom < sevenDaysAgo ? analyticsFrom : sevenDaysAgo;
+  }, [analyticsFrom]);
+
+  // ── Consultas ──────────────────────────────────────────────
+  // Totales históricos: aggregation server-side (no baja documentos). refreshOnFocus para que se
+  // sientan "vivos" sin mantener un listener permanente sobre TODAS las órdenes.
+  const deliveredAggQuery = useMemoFirebase(
+    () => firestore ? query(collection(firestore, 'orders'), where('status', '==', 'Entregado')) : null,
+    [firestore]
+  );
+  const { data: deliveredAgg, refresh: refreshDelivered } = useAggregate(
+    deliveredAggQuery,
+    { revenue: sum('total'), completed: count() },
+    { refreshOnFocus: true }
+  );
+
+  const usersCountQuery = useMemoFirebase(
+    () => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) : null,
+    [firestore]
+  );
+  const { count: totalUsers, refresh: refreshUsers } = useCountFromServer(usersCountQuery, { refreshOnFocus: true });
+
+  // Pedidos activos ahora (set chico) -> en vivo.
+  const activeOrdersQuery = useMemoFirebase(
+    () => firestore ? query(collection(firestore, 'orders'), where('status', 'in', ACTIVE_STATUSES)) as CollectionReference<OrderType> : null,
+    [firestore]
+  );
+  const { data: activeOrders, isLoading: activeLoading } = useCollection<OrderType>(activeOrdersQuery);
+
+  // Pedidos del período (acotado por fecha) -> gráfico 7 días + analíticas por tienda/repartidor.
+  const periodOrdersQuery = useMemoFirebase(
+    () => firestore ? query(collection(firestore, 'orders'), where('createdAt', '>=', Timestamp.fromDate(ordersFrom))) as CollectionReference<OrderType> : null,
+    [firestore, ordersFrom]
+  );
+  const { data: periodOrders } = useCollection<OrderType>(periodOrdersQuery);
+
+  // Pedidos recientes para el mini-historial (el historial completo vive paginado en /admin/orders).
+  const recentOrdersQuery = useMemoFirebase(
+    () => firestore ? query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(10)) as CollectionReference<OrderType> : null,
+    [firestore]
+  );
+  const { data: recentOrders } = useCollection<OrderType>(recentOrdersQuery);
+
+  const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<StoreType> : null, [firestore]);
   const { data: stores, isLoading: storesLoading } = useCollection<StoreType>(storesQuery);
-  const { data: users, isLoading: usersLoading } = useCollection<any>(usersQuery);
+
+  // Repartidores (acotado: son pocos) -> conteo de activos + lookup de nombres en analíticas.
+  const driversQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'delivery')) : null, [firestore]);
+  const { data: drivers } = useCollection<any>(driversQuery);
+
+  // Usuarios pendientes de aprobación (isApproved==false: set chico) -> listas + conteos.
+  const pendingUsersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('isApproved', '==', false)) : null, [firestore]);
+  const { data: pendingUsers, isLoading: pendingLoading } = useCollection<any>(pendingUsersQuery);
+
+  // Incidentes de repartidor (soltar pedido / reportar problema).
+  const incidentsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'driver_incidents'), orderBy('createdAt', 'desc'), limit(8)) : null, [firestore]);
   const { data: driverIncidents } = useCollection<any>(incidentsQuery);
-  
-  const dashboardLoading = ordersLoading || storesLoading || usersLoading;
+
+  const refreshTotals = () => { refreshDelivered(); refreshUsers(); };
+  const dashboardLoading = activeLoading || storesLoading || pendingLoading;
 
   // Solicitudes pendientes de aprobación (tiendas y repartidores)
   const pendingStores = useMemo(() => {
-    return (users || [])
-      .filter((u: any) => u.role === 'store' && !u.isApproved)
+    return (pendingUsers || [])
+      .filter((u: any) => u.role === 'store')
       .map((u: any) => {
         const storeData = (stores as any[])?.find((s: any) => s.ownerId === u.id);
         return { ...u, ...storeData, id: u.id };
       });
-  }, [users, stores]);
+  }, [pendingUsers, stores]);
 
   const pendingDelivery = useMemo(() => {
-    return (users || []).filter((u: any) => u.role === 'delivery' && !u.isApproved);
-  }, [users]);
+    return (pendingUsers || []).filter((u: any) => u.role === 'delivery');
+  }, [pendingUsers]);
 
-  const stats = useMemo(() => {
-    if (!orders || !stores || !users) return { totalRevenue: 0, totalUsers: 0, completedOrders: 0, totalStores: 0 };
-    
-    const completed = orders.filter(o => o.status === 'Entregado');
-    const totalRevenue = completed.reduce((sum, order) => sum + order.total, 0);
-    
-    return {
-      totalRevenue,
-      totalUsers: users.length,
-      completedOrders: completed.length,
-      totalStores: stores.length,
-    }
+  // Totales históricos vía aggregation server-side (revenue/completados) + conteo de usuarios.
+  const stats = useMemo(() => ({
+    totalRevenue: deliveredAgg?.revenue ?? 0,
+    totalUsers: totalUsers ?? 0,
+    completedOrders: deliveredAgg?.completed ?? 0,
+    totalStores: stores?.length ?? 0,
+  }), [deliveredAgg, totalUsers, stores]);
 
-  }, [orders, stores, users]);
+  // Pedidos del período filtrados al rango elegido (periodOrders cubre >= 7 días, se recorta acá).
+  const filteredOrders = useMemo(() => {
+    return (periodOrders || []).filter(o => getDate(o.createdAt) >= analyticsFrom);
+  }, [periodOrders, analyticsFrom]);
 
   const salesData = useMemo(() => {
     const last7Days = Array.from({ length: 7 }, (_, i) => startOfDay(subDays(new Date(), i))).reverse();
-    const completedOrders = orders?.filter(o => o.status === 'Entregado') || [];
-    
+    const completedOrders = (periodOrders || []).filter(o => o.status === 'Entregado');
+
     return last7Days.map(day => {
         const dayString = format(day, 'yyyy-MM-dd');
         const salesForDay = completedOrders
             .filter(order => format(getDate(order.createdAt), 'yyyy-MM-dd') === dayString)
-            .reduce((sum, order) => sum + order.total, 0);
+            .reduce((acc, order) => acc + (order.total || 0), 0);
 
         return {
             date: format(day, 'EEE', { locale: es }),
             Ventas: salesForDay,
         };
     });
-  }, [orders]);
+  }, [periodOrders]);
 
+  // Distribución de pedidos del PERÍODO seleccionado (antes era sobre TODOS los pedidos).
   const orderStatusData = useMemo(() => {
-    if (!orders) return [];
-    const statusCounts = orders.reduce((acc, order) => {
+    const statusCounts = filteredOrders.reduce((acc, order) => {
         const status = order.status || 'Desconocido';
         acc[status] = (acc[status] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
 
     return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
-  }, [orders]);
-
-  const allOrdersSorted = useMemo(() => {
-    if (!orders) return [];
-    return [...orders].sort((a,b) => getDate(b.createdAt).getTime() - getDate(a.createdAt).getTime());
-  }, [orders]);
-
-  // Umbrales en horas: cuánto tiempo puede estar un pedido en cada estado antes de alertar
-  const STUCK_THRESHOLDS_H: Record<string, number> = {
-    'Pendiente de Confirmación': 1,   // la tienda debería confirmar en ≤1h
-    'Pendiente de Pago':         2,   // el cliente debería pagar en ≤2h
-    'En preparación':            3,   // la tienda debería tenerlo listo en ≤3h
-    'Listo para recoger':        2,   // un repartidor debería tomarlo en ≤2h
-    'En camino':                 3,   // el repartidor debería entregarlo en ≤3h
-    'En reparto':                4,
-  };
+  }, [filteredOrders]);
 
   const stuckOrders = useMemo(() => {
-    if (!orders) return [];
     const now = Date.now();
-    return orders
+    return (activeOrders || [])
       .filter(o => {
         const threshold = STUCK_THRESHOLDS_H[o.status];
         if (!threshold) return false;
@@ -178,46 +242,21 @@ function AdminDashboard() {
         return { ...o, hoursElapsed };
       })
       .sort((a, b) => b.hoursElapsed - a.hoursElapsed);
-  }, [orders]);
+  }, [activeOrders]);
 
   // Estado en tiempo real — snapshot de QUÉ ESTÁ PASANDO AHORA en la plataforma
   const liveStatus = useMemo(() => {
-    const ACTIVE_STATUSES = [
-      'Pendiente de Confirmación',
-      'Pendiente de Pago',
-      'En preparación',
-      'Listo para recoger',
-      'En camino',
-      'En reparto',
-    ];
     const byStatus: Record<string, number> = {};
-    (orders || []).forEach(o => {
+    (activeOrders || []).forEach(o => {
       if (ACTIVE_STATUSES.includes(o.status)) byStatus[o.status] = (byStatus[o.status] || 0) + 1;
     });
     const totalActive = Object.values(byStatus).reduce((a, b) => a + b, 0);
     const pausedStores = (stores || []).filter((s: any) => s.manuallyPaused).length;
-    const activeDrivers = (users || []).filter(u => u.role === 'delivery' && u.status === 'Activo').length;
-    const pendingApprovalStores   = (users || []).filter(u => u.role === 'store' && !u.isApproved).length;
-    const pendingApprovalDrivers  = (users || []).filter(u => u.role === 'delivery' && u.status === 'Pendiente').length;
+    const activeDrivers = (drivers || []).filter((u: any) => u.status === 'Activo').length;
+    const pendingApprovalStores   = (pendingUsers || []).filter((u: any) => u.role === 'store').length;
+    const pendingApprovalDrivers  = (pendingUsers || []).filter((u: any) => u.role === 'delivery').length;
     return { byStatus, totalActive, pausedStores, activeDrivers, pendingApprovalStores, pendingApprovalDrivers };
-  }, [orders, stores, users]);
-
-  // --- Analíticas por tienda y repartidor ---
-  const [analyticsPeriod, setAnalyticsPeriod] = useState<'7d'|'30d'|'month'|'all'>('30d');
-  const [analyticsSort, setAnalyticsSort] = useState<'revenue'|'orders'>('revenue');
-
-  const analyticsFrom = useMemo(() => {
-    if (analyticsPeriod === 'all') return null;
-    if (analyticsPeriod === '7d') return subDays(new Date(), 7);
-    if (analyticsPeriod === '30d') return subDays(new Date(), 30);
-    return startOfMonth(new Date());
-  }, [analyticsPeriod]);
-
-  const filteredOrders = useMemo(() => {
-    if (!orders) return [];
-    if (!analyticsFrom) return orders;
-    return orders.filter(o => getDate(o.createdAt) >= analyticsFrom);
-  }, [orders, analyticsFrom]);
+  }, [activeOrders, stores, drivers, pendingUsers]);
 
   const storeAnalytics = useMemo(() => {
     const map: Record<string, { name: string; revenue: number; delivered: number; cancelled: number; commission: number; rating: number; ratingCount: number }> = {};
@@ -256,7 +295,7 @@ function AdminDashboard() {
     const map: Record<string, { name: string; deliveries: number; earnings: number; rating: number; ratingCount: number }> = {};
     filteredOrders.filter(o => o.status === 'Entregado' && o.deliveryPersonId).forEach(o => {
       const did = o.deliveryPersonId!;
-      const driver = users?.find(u => u.id === did);
+      const driver = drivers?.find(u => u.id === did);
       const name = (o as any).deliveryPersonName || driver?.displayName || driver?.name || did.slice(0,8);
       if (!map[did]) map[did] = { name, deliveries: 0, earnings: 0, rating: 0, ratingCount: 0 };
       map[did].deliveries += 1;
@@ -264,11 +303,11 @@ function AdminDashboard() {
     });
     // Rating from user docs (mismo criterio que storeAnalytics con stores/{id}.rating).
     Object.keys(map).forEach(did => {
-      const driver = users?.find(u => u.id === did) as any;
+      const driver = drivers?.find(u => u.id === did) as any;
       if (driver?.rating) { map[did].rating = driver.rating; map[did].ratingCount = driver.ratingCount || 0; }
     });
     return Object.values(map).sort((a, b) => analyticsSort === 'revenue' ? b.earnings - a.earnings : b.deliveries - a.deliveries);
-  }, [filteredOrders, users, analyticsSort]);
+  }, [filteredOrders, drivers, analyticsSort]);
 
   
   if (dashboardLoading) {
@@ -290,7 +329,12 @@ function AdminDashboard() {
 
   return (
     <div className="container mx-auto">
-      <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
+        <Button variant="outline" size="sm" onClick={refreshTotals} className="mt-1 shrink-0 gap-1.5">
+          <RefreshCw className="h-3.5 w-3.5" /> Refrescar
+        </Button>
+      </div>
 
       {/* ── Estado en tiempo real ─────────────────────────────── */}
       <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
@@ -444,7 +488,7 @@ function AdminDashboard() {
             title="Solicitudes: Tiendas"
             icon={StoreIcon}
             users={pendingStores}
-            isLoading={usersLoading}
+            isLoading={pendingLoading}
             onApprove={(id) => handleUpdateUserStatus(id, true)}
             onReject={(id) => handleUpdateUserStatus(id, false)}
           />
@@ -452,7 +496,7 @@ function AdminDashboard() {
             title="Solicitudes: Repartidores"
             icon={Bike}
             users={pendingDelivery}
-            isLoading={usersLoading}
+            isLoading={pendingLoading}
             onApprove={(id) => handleUpdateUserStatus(id, true)}
             onReject={(id) => handleUpdateUserStatus(id, false)}
           />
@@ -534,12 +578,12 @@ function AdminDashboard() {
         {/* Controles de período y orden */}
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium text-muted-foreground">Período:</span>
-          {(['7d','30d','month','all'] as const).map(p => (
+          {(['7d','30d','month'] as const).map(p => (
             <button key={p} onClick={() => setAnalyticsPeriod(p)}
               className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
                 analyticsPeriod === p ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
               )}>
-              {p === '7d' ? '7 días' : p === '30d' ? '30 días' : p === 'month' ? 'Este mes' : 'Todo'}
+              {p === '7d' ? '7 días' : p === '30d' ? '30 días' : 'Este mes'}
             </button>
           ))}
           <span className="ml-4 text-sm font-medium text-muted-foreground">Ordenar por:</span>
@@ -638,9 +682,14 @@ function AdminDashboard() {
 
       <div className="mt-6">
         <Card>
-            <CardHeader>
-                <CardTitle>Historial de Pedidos</CardTitle>
-                <CardDescription>Todos los pedidos realizados en la plataforma.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Pedidos Recientes</CardTitle>
+                    <CardDescription>Los últimos 10 pedidos. El historial completo está en Gestión de Pedidos.</CardDescription>
+                </div>
+                <Link href="/admin/orders">
+                    <Button variant="outline" size="sm">Ver todos</Button>
+                </Link>
             </CardHeader>
             <CardContent>
                  <Table>
@@ -655,8 +704,8 @@ function AdminDashboard() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                    {allOrdersSorted.length > 0 ? (
-                        allOrdersSorted.map((order) => (
+                    {(recentOrders && recentOrders.length > 0) ? (
+                        recentOrders.map((order) => (
                         <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
                             <TableCell className="font-medium">
                                 <Link href={`/orders/${order.id}`} className="hover:underline">#{order.id.substring(0, 7)}</Link>

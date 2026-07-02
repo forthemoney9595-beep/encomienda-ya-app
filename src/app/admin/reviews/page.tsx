@@ -1,15 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AdminAuthGuard from '../admin-auth-guard';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { useCountFromServer } from '@/lib/firebase-aggregate';
+import { collection, query, orderBy, limit, startAfter, getDocs, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
 import { logAdminAction } from '@/lib/admin-audit';
 import { useToast } from '@/hooks/use-toast';
@@ -40,14 +41,45 @@ function AdminReviewsPage() {
   const [search, setSearch] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const reviewsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'reviews'), orderBy('createdAt', 'desc'));
-  }, [firestore]);
+  const PAGE_SIZE = 25;
+  const [rows, setRows] = useState<any[]>([]);
+  const [lastSnap, setLastSnap] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const { data: reviews, isLoading } = useCollection<any>(reviewsQuery);
+  const totalQ = useMemoFirebase(() => firestore ? collection(firestore, 'reviews') : null, [firestore]);
+  const { count: totalReviews, refresh: refreshTotal } = useCountFromServer(totalQ, { refreshOnFocus: true });
 
-  const displayed = reviews?.filter(r => {
+  const resetLoad = useCallback(async () => {
+    if (!firestore) return;
+    setIsLoading(true);
+    try {
+      const snap = await getDocs(query(collection(firestore, 'reviews'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE)));
+      setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLastSnap(snap.docs[snap.docs.length - 1] || null);
+      setHasMore(snap.docs.length === PAGE_SIZE);
+    } catch (e) { console.error(e); toast({ variant: 'destructive', title: 'Error al cargar reseñas' }); }
+    finally { setIsLoading(false); }
+  }, [firestore, toast]);
+
+  useEffect(() => { resetLoad(); }, [resetLoad]);
+
+  const loadMore = async () => {
+    if (!firestore || !lastSnap) return;
+    setLoadingMore(true);
+    try {
+      const snap = await getDocs(query(collection(firestore, 'reviews'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE), startAfter(lastSnap)));
+      setRows(prev => [...prev, ...snap.docs.map(d => ({ id: d.id, ...d.data() }))]);
+      setLastSnap(snap.docs[snap.docs.length - 1] || lastSnap);
+      setHasMore(snap.docs.length === PAGE_SIZE);
+    } catch (e) { console.error(e); }
+    finally { setLoadingMore(false); }
+  };
+
+  // Búsqueda por substring (cliente): Firestore no la hace server-side. Filtra sobre las reseñas
+  // ya cargadas (las páginas traídas), no sobre toda la colección.
+  const displayed = rows.filter(r => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -55,7 +87,7 @@ function AdminReviewsPage() {
       r.storeName?.toLowerCase().includes(q) ||
       r.comment?.toLowerCase().includes(q)
     );
-  }) ?? [];
+  });
 
   const handleDelete = async (reviewId: string, storeName: string) => {
     if (!user || !firestore) return;
@@ -67,6 +99,8 @@ function AdminReviewsPage() {
       if (!res.ok) throw new Error(data.error || 'Error al eliminar');
       logAdminAction(firestore, user.uid, 'delete_review', reviewId, storeName);
       toast({ title: 'Reseña eliminada', description: 'El rating de la tienda fue recalculado.' });
+      resetLoad();
+      refreshTotal();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally {
@@ -78,7 +112,7 @@ function AdminReviewsPage() {
     <div className="container mx-auto pb-20 space-y-6">
       <PageHeader
         title="Moderación de Reseñas"
-        description={`${reviews?.length ?? 0} reseñas en la plataforma.`}
+        description={`${totalReviews ?? 0} reseñas en la plataforma.`}
       />
 
       <div className="relative">
@@ -147,6 +181,14 @@ function AdminReviewsPage() {
           </Card>
         ))}
       </div>
+
+      {hasMore && !search.trim() && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cargando...</> : 'Cargar más'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
