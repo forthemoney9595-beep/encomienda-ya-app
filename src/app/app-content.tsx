@@ -168,7 +168,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
     
     // Si estás en cualquier otra página (incluyendo /login, /signup) o estás logueado, muestra el layout completo
     return (
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen min-w-0">
             <Sidebar side="left" className="w-64" collapsible="icon">
                 <SidebarHeader>
                     <Link href="/" className="flex items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center">
@@ -223,7 +223,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                 {user && !user.emailVerified && !isLoginPage && (
                     <EmailVerificationBanner user={user} />
                 )}
-                <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
+                <main className="flex-1 min-w-0 p-4 md:p-6 pb-20 md:pb-6">
                     {children}
                 </main>
                 {user && !loading && !isLoginPage && <BottomNav />}

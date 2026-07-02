@@ -134,6 +134,18 @@ El archivo `.env.local` con los valores reales NO va a git. Hay que copiarlo man
 - **Navegación:** PC = sidebar (`main-nav.tsx`); celular = bottom nav (`bottom-nav.tsx`, solo buyer por ahora). Tienda/repartidor/admin en celular siguen con el Sheet lateral
 - **OJO Tailwind:** ignora clases inexistentes en silencio (`bg-sucess` no pinta nada) → verificar SIEMPRE visual, no solo el build
 - **Rediseño en fases:** cliente, tienda, repartidor y admin ✅ hechos (mismos tokens). También Fase F: tienda/producto reestructurados (banner en vez de logo circular, chips de categoría con scroll-to-section, productos agrupados por categoría en filas en vez de una grilla plana, control de cantidad compartido). Pendiente: Fase J — variantes/modificadores de producto (tamaño, extras), queda anotada aparte por el alcance (toca producto+carrito+checkout a la vez)
+- **Bug corregido (jul 2026) — overflow horizontal por carrusel de destacados:** cualquier
+  carrusel horizontal (`components/ui/carousel.tsx`, usado por "Recomendados" en
+  `stores/[storeId]/page.tsx`) hacía que TODA la página se desplazara horizontalmente en
+  mobile cuando había productos `isFeatured`. Causa raíz: `min-width: auto` (el default) en
+  tres contenedores flex anidados del layout general — el `<div className="flex
+  min-h-screen">` de `app-content.tsx` (ítem flex del `SidebarProvider`), el `<main>` de
+  `SidebarInset` (`components/ui/sidebar.tsx`) y el `<main className="flex-1">` de
+  `app-content.tsx` — ninguno se dejaba encoger por debajo del ancho mínimo del contenido del
+  carrusel, aunque el carrusel en sí tenga `overflow-hidden`. Se agregó `min-w-0` a los tres.
+  Podía pasar en CUALQUIER página con un carrusel u otro contenido ancho dentro del layout con
+  sidebar, no solo en la tienda pública, por eso el fix fue en el shell compartido. Verificado
+  con Playwright headless (viewport 430px): `scrollWidth` de `<html>` pasó de 759px a 430px.
 
 ## Seguridad — Fase K (jul 2026): 4 hallazgos graves de la auditoría pre-lanzamiento, ya resueltos
 Auditoría completa (3 agentes en paralelo) encontró ~20 hallazgos; se resolvieron los 4 más
