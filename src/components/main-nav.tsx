@@ -262,16 +262,21 @@ export function MainNav({
       </div>
       {buyerCategories.length > 0 && (
         <div className="px-3 py-2">
-          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+          <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Explorar Tiendas
           </h2>
           <div className="space-y-1">
-            {buyerCategories.map((cat, i) => {
-              const Icon = getCategoryStyle(cat, i).icon;
+            {buyerCategories.map((cat) => {
+              const style = getCategoryStyle(cat);
+              const Icon = style.icon;
               return (
                 <Link key={cat} href={`/?category=${encodeURIComponent(cat)}`}>
-                  <Button variant="ghost" className="w-full justify-start">
-                    <Icon className="mr-2 h-4 w-4" />
+                  <Button variant="ghost" className="w-full justify-start gap-2">
+                    {/* Ícono con el color del rubro: mismo lenguaje visual que los chips
+                        del inicio y los del menú de una tienda (antes era monocromo). */}
+                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md', style.bg)}>
+                      <Icon className={cn('h-3.5 w-3.5', style.text)} />
+                    </span>
                     {cat}
                   </Button>
                 </Link>

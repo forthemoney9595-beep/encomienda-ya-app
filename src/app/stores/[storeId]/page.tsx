@@ -12,13 +12,14 @@ import { StoreImage } from '@/components/store-image';
 import { StoreCard } from '@/components/store-card';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getCategoryStyle } from '@/lib/category-style';
-import { normalizeSchedule, getStoreOpenStatus, formatRanges, type WeeklySchedule } from '@/lib/store-hours';
+import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLAY_ORDER, type WeeklySchedule } from '@/lib/store-hours';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { StarRating } from '@/components/star-rating';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -86,7 +87,11 @@ export default function StorePublicPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('menu');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [featuredApi, setFeaturedApi] = useState<CarouselApi>();
+  const isProgrammaticScroll = useRef(false);
+  const scrollSpyTimeout = useRef<number | undefined>(undefined);
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
 
@@ -212,6 +217,33 @@ export default function StorePublicPage() {
     });
   };
 
+  // Scroll-spy: resalta el chip de la categoría que se está mirando (antes ningún chip se
+  // marcaba nunca como activo). Va ANTES de los returns tempranos de abajo: los hooks
+  // tienen que ejecutarse en el mismo orden en cada render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (activeTab !== 'menu') return;
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-category-section]'));
+    if (sections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (isProgrammaticScroll.current) return;
+        const visible = entries.filter(e => e.isIntersecting);
+        if (visible.length === 0) return;
+        const top = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b));
+        setActiveCategory(top.target.getAttribute('data-category-section'));
+      },
+      // 120px = header (56) + tira de chips; el -70% de abajo hace que se marque la
+      // sección cuyo encabezado entra en el tercio superior de la pantalla.
+      { rootMargin: '-120px 0px -70% 0px', threshold: 0 },
+    );
+    sections.forEach(s => observer.observe(s));
+    return () => observer.disconnect();
+  }, [activeTab, searchTerm, products]);
+
+  useEffect(() => () => window.clearTimeout(scrollSpyTimeout.current), []);
+
   if (storeLoading || productsLoading || legacyProductsLoading) return <LoadingSkeleton />;
   if (!store) return <StoreNotFound router={router} />;
 
@@ -239,11 +271,20 @@ export default function StorePublicPage() {
   });
 
   const scrollToCategory = (category: string) => {
+    // Marcamos el destino a mano y silenciamos el observador mientras dura el scroll:
+    // si no, al pasar por las secciones intermedias el chip activo iría parpadeando.
+    isProgrammaticScroll.current = true;
+    setActiveCategory(category);
     document.getElementById(categorySlug(category))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.clearTimeout(scrollSpyTimeout.current);
+    scrollSpyTimeout.current = window.setTimeout(() => { isProgrammaticScroll.current = false; }, 800);
   };
 
+  // Con pestañas, las reseñas ya no están en el mismo scroll: hay que cambiar de pestaña.
+  // Si esto siguiera haciendo scrollIntoView, el botón de rating quedaría muerto.
   const scrollToReviews = () => {
-    document.getElementById(REVIEWS_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActiveTab('reviews');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleShare = async () => {
@@ -362,7 +403,42 @@ export default function StorePublicPage() {
               )}
           </div>
 
-          <div className="relative max-w-md">
+      </div>
+
+      {/* El aviso de cerrado queda FUERA de las pestañas: tiene que verse siempre. */}
+      {!storeStatus.isOpen && (
+          <div className="bg-destructive/10 border border-destructive/30 text-foreground p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
+              <p className="font-semibold">
+                  {storeStatus.paused ? '⏸️ Este local pausó temporalmente los pedidos.' : '🔴 Este local se encuentra cerrado en este momento.'}
+              </p>
+              <p className="text-sm">
+                  {storeStatus.paused
+                      ? 'Puedes ver el menú, pero la tienda no está aceptando pedidos en este momento.'
+                      : 'Puedes ver el menú, pero no podrás realizar pedidos hasta que abra.'}
+              </p>
+          </div>
+      )}
+
+      {/* PESTAÑAS — antes las reseñas quedaban al fondo de todo el scroll del menú. */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="px-4 sm:px-0">
+        <TabsList className="mb-6 h-auto rounded-full bg-muted/60 p-1">
+          {[
+            { v: 'menu', label: 'Menú' },
+            { v: 'info', label: 'Info' },
+            { v: 'reviews', label: `Reseñas${reviews?.length ? ` (${reviews.length})` : ''}` },
+          ].map(t => (
+            <TabsTrigger
+              key={t.v}
+              value={t.v}
+              className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-brand-gradient data-[state=active]:text-white data-[state=active]:shadow-glow-sm"
+            >
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <TabsContent value="menu" className="mt-0">
+          <div className="relative max-w-md mb-6">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                   value={searchTerm}
@@ -380,20 +456,6 @@ export default function StorePublicPage() {
                   </button>
               )}
           </div>
-      </div>
-
-      {!storeStatus.isOpen && (
-          <div className="bg-destructive/10 border border-destructive/30 text-foreground p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
-              <p className="font-semibold">
-                  {storeStatus.paused ? '⏸️ Este local pausó temporalmente los pedidos.' : '🔴 Este local se encuentra cerrado en este momento.'}
-              </p>
-              <p className="text-sm">
-                  {storeStatus.paused
-                      ? 'Puedes ver el menú, pero la tienda no está aceptando pedidos en este momento.'
-                      : 'Puedes ver el menú, pero no podrás realizar pedidos hasta que abra.'}
-              </p>
-          </div>
-      )}
 
       {/* NAVEGACIÓN POR CATEGORÍA — top-14 en TODOS los tamaños: el header del shell ahora
           es sticky también en escritorio (antes ahí se volvía transparente, de ahí el
@@ -401,19 +463,29 @@ export default function StorePublicPage() {
       {groupedProducts.length > 1 && (
           <div className="sticky top-14 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 py-3 mb-6 border-b sm:border-b-0">
               <div className="flex gap-4 overflow-x-auto no-scrollbar">
-                  {groupedProducts.map(([category], i) => {
-                      const style = getCategoryStyle(category, i);
+                  {groupedProducts.map(([category]) => {
+                      const style = getCategoryStyle(category);
                       const Icon = style.icon;
+                      const isActive = activeCategory === category;
                       return (
                           <button
                               key={category}
                               onClick={() => scrollToCategory(category)}
-                              className="flex flex-col items-center gap-1.5 shrink-0 opacity-80 hover:opacity-100 transition-opacity"
+                              aria-current={isActive ? 'true' : undefined}
+                              className="flex flex-col items-center gap-1.5 shrink-0 transition-all duration-300 ease-spring"
                           >
-                              <div className={cn('h-11 w-11 rounded-2xl flex items-center justify-center shadow-sm', style.bg)}>
-                                  <Icon className={cn('h-5 w-5', style.text)} />
+                              <div className={cn(
+                                  'h-11 w-11 rounded-2xl flex items-center justify-center transition-all duration-300 ease-spring ring-2',
+                                  isActive
+                                    ? cn('scale-110 shadow-glow ring-offset-2 ring-offset-background', style.solid, style.ring)
+                                    : cn('ring-transparent opacity-80 hover:opacity-100', style.bg),
+                              )}>
+                                  <Icon className={cn('h-5 w-5', isActive ? '' : style.text)} />
                               </div>
-                              <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">{category}</span>
+                              <span className={cn(
+                                'text-[11px] font-medium whitespace-nowrap',
+                                isActive ? 'text-foreground' : 'text-muted-foreground',
+                              )}>{category}</span>
                           </button>
                       );
                   })}
@@ -457,7 +529,7 @@ export default function StorePublicPage() {
         </div>
       ) : products.length > 0 ? (
         groupedProducts.map(([category, items]) => (
-            <div key={category} id={categorySlug(category)} className="mb-10 scroll-mt-32 sm:scroll-mt-20">
+            <div key={category} id={categorySlug(category)} data-category-section={category} className="mb-10 scroll-mt-[8.5rem]">
                 <h2 className="font-headline text-xl font-bold mb-2">{category}</h2>
                 <div>
                     {items.map(product => (
@@ -471,9 +543,63 @@ export default function StorePublicPage() {
             <p className="text-muted-foreground">Esta tienda aún no tiene productos disponibles.</p>
         </div>
       )}
+        </TabsContent>
 
-      {/* RESEÑAS PÚBLICAS */}
-      <div id={REVIEWS_ANCHOR} className="mb-10 scroll-mt-32 sm:scroll-mt-20 px-4 sm:px-0">
+        {/* --- INFO --- */}
+        <TabsContent value="info" className="mt-0 space-y-6">
+          {store.description && (
+            <div>
+              <h3 className="font-headline text-lg font-bold mb-2">Sobre la tienda</h3>
+              <p className="text-muted-foreground">{store.description}</p>
+            </div>
+          )}
+          <div>
+            <h3 className="font-headline text-lg font-bold mb-2 flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-info" /> Dirección
+            </h3>
+            <p className="text-muted-foreground">{cleanAddress(store.address)}</p>
+          </div>
+          <div>
+            <h3 className="font-headline text-lg font-bold mb-2 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" /> Horarios
+            </h3>
+            {/* Semana completa: hasta ahora la página solo mostraba el horario de HOY.
+                Se arma con los helpers que ya expone store-hours.ts. */}
+            {(() => {
+              const weekly = normalizeSchedule(store);
+              if (!weekly) return <p className="text-sm text-muted-foreground">Siempre abierta.</p>;
+              const todayIdx = new Date().getDay();
+              return (
+                <ul className="max-w-md text-sm">
+                  {DISPLAY_ORDER.map(idx => {
+                    const day = weekly[idx];
+                    const isToday = idx === todayIdx;
+                    return (
+                      <li key={idx} className={cn(
+                        'flex justify-between gap-4 border-b border-border/40 py-1.5',
+                        isToday && 'font-semibold text-foreground',
+                      )}>
+                        <span className={cn(!isToday && 'text-muted-foreground')}>
+                          {DAY_LABELS[idx]}{isToday && ' (hoy)'}
+                        </span>
+                        <span className={cn(day?.closed && 'text-muted-foreground')}>
+                          {day?.closed || !day?.ranges?.length ? 'Cerrado' : formatRanges(day.ranges)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
+          </div>
+          <Button variant="outline" onClick={handleShare} className="gap-2">
+            <Share2 className="h-4 w-4" /> Compartir tienda
+          </Button>
+        </TabsContent>
+
+        {/* --- RESEÑAS --- */}
+        <TabsContent value="reviews" className="mt-0">
+      <div id={REVIEWS_ANCHOR} className="mb-10">
           <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" /> Reseñas de la tienda
           </h2>
@@ -508,6 +634,8 @@ export default function StorePublicPage() {
               </div>
           )}
       </div>
+        </TabsContent>
+      </Tabs>
 
       {/* MÁS TIENDAS DEL MISMO RUBRO — permite saltar de tienda en tienda sin volver al
           inicio. Se oculta si no hay otras (no tiene sentido una fila de uno). */}

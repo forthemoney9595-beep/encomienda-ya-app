@@ -79,7 +79,11 @@ También: `Cancelado`, `Rechazado`
 - `src/lib/csv-export.ts` — descarga CSV client-side (retiros, pedidos, tiendas)
 - `src/app/api/admin/{approve-withdrawal,delete-user,delete-review,notify-broadcast,refund-order}/route.ts` — rutas admin-only (verifican token + `roles_admin`)
 - `src/app/api/cron/generate-settlements/route.ts` — cron de liquidación semi-automática (Vercel, protegido por `CRON_SECRET`)
-- `src/lib/category-style.ts` — ícono+color por categoría (chips de Inicio y de cada tienda)
+- `src/lib/category-style.ts` — ícono + color + degradé por RUBRO (chips de Inicio, de cada tienda, sidebar y placeholders). OJO: define nombres de clase, por eso `src/lib` está en el `content` de `tailwind.config.ts` (Fase AA)
+- `src/components/store-image.tsx` — imagen de tienda con fallback de degradé por rubro + iniciales (Fase AA)
+- `src/components/store-card.tsx` — tarjeta de tienda compartida (variantes grid/carousel, fila en celular)
+- `src/components/breadcrumbs.tsx` — volver + migas de pan (visible también en escritorio)
+- `src/components/global-search.tsx` — buscador global ⌘K (tiendas + rubros + accesos; carga perezosa con getDocs)
 - `src/app/error.tsx` / `src/app/not-found.tsx` — páginas de error y 404 globales
 - `firestore.indexes.json` — índices compuestos (incluye notifications userId+createdAt, reviews storeId+createdAt); refleja lo desplegado
 
@@ -133,7 +137,8 @@ El archivo `.env.local` con los valores reales NO va a git. Hay que copiarlo man
 - **Colores semánticos** (tokens en `globals.css` + `tailwind.config.ts`): `success`/`info`/`warning`/`destructive` con su `-foreground`. Regla: naranja/violeta = marca/CTA; verde=éxito/dinero; azul=info/en tránsito; amarillo=aviso/rating; rojo=error. Para paneles suaves usar opacidad del token (`bg-success/10`, etc.), NO los `*-50/*-100` de Tailwind (se ven lavados en oscuro)
 - **Tarjetas elevadas:** `--card` es más claro que `--background` para que se despeguen; `--radius: 1rem`; `<Card>` trae sombra suave por defecto
 - **Navegación:** PC = sidebar (`main-nav.tsx`); celular = bottom nav (`bottom-nav.tsx`, solo buyer por ahora). Tienda/repartidor/admin en celular siguen con el Sheet lateral
-- **OJO Tailwind:** ignora clases inexistentes en silencio (`bg-sucess` no pinta nada) → verificar SIEMPRE visual, no solo el build
+- **OJO Tailwind:** ignora clases inexistentes en silencio (`bg-sucess` no pinta nada) → verificar SIEMPRE visual, no solo el build. Dos formas de que pase, ambas ya mordieron: (a) clase mal escrita o inexistente (`h-4.5`); (b) archivo fuera del `content` de `tailwind.config.ts`, o clase armada por concatenación (`` `from-cat-${key}` ``) — el JIT escanea texto, no evalúa
+- **Colores de RUBRO** (`--cat-*` en globals.css + `category-style.ts`): escala separada de los semánticos a propósito. No usar `success`/`destructive` como color de categoría: pisan el significado (verde=dinero, rojo=error) en toda la app
 - **Rediseño en fases:** cliente, tienda, repartidor y admin ✅ hechos (mismos tokens). También Fase F: tienda/producto reestructurados (banner en vez de logo circular, chips de categoría con scroll-to-section, productos agrupados por categoría en filas en vez de una grilla plana, control de cantidad compartido). Pendiente: Fase J — variantes/modificadores de producto (tamaño, extras), queda anotada aparte por el alcance (toca producto+carrito+checkout a la vez)
 - **Bug corregido (jul 2026) — overflow horizontal por carrusel de destacados:** cualquier
   carrusel horizontal (`components/ui/carousel.tsx`, usado por "Recomendados" en
@@ -648,6 +653,76 @@ server-side sin bajar documentos y **sin necesidad de Cloud Functions ni contado
 - **Cloud Functions: NO se usaron** — este enfoque las hace innecesarias para el panel. Único
   trade-off aceptado: los totales históricos se refrescan al abrir/enfocar, no tironean en vivo (los
   pedidos activos sí siguen live). `maxDiscountPercent` (badge del home) queda igual, fuera de alcance.
+
+## Fase AA (jul 2026): rediseño visual + navegación del comprador
+Pedido del usuario: "que se vea todo mucho más bonito, más colores" + mejorar la navegación de
+tienda a tienda. Se auditó el código Y se miró la app corriendo (capturas reales a 430px y 1440px).
+
+**Diagnóstico — el problema #1 no era el layout, eran las fotos faltantes:** 5 de 7 tiendas no
+tienen banner, y la tarjeta mostraba un `aspect-video` gris con un ícono → el inicio era una pared
+de cajas grises. Ningún rediseño luce mientras eso siga así.
+
+- **`src/components/store-image.tsx` (nuevo, la pieza de mayor impacto):** si la tienda no tiene
+  foto (o falla al cargar) pinta un **degradé del rubro + ícono + iniciales**. Cada tienda tiene
+  identidad visual aunque nunca suba una imagen. El `onError` además vuelve seguro usar
+  `next/image` con URLs de hosts que no están en `remotePatterns` (next.config.js).
+- **Escala `--cat-*` dedicada** (globals.css) en vez de reciclar los semánticos: usar
+  `destructive` para Farmacia y `success` para Supermercado (como estaba) ensuciaba el lenguaje
+  de color de toda la app (verde=éxito/dinero, rojo=error). 10 matices bien separados.
+- **`category-style.ts` v2 — el fix real de los colores repetidos era el ORDEN del matcher:**
+  `"comida-rapida".includes('comida')` es `true`, así que lo rápido tiene que evaluarse ANTES que
+  comida (ídem kiosco antes que supermercado). El fallback pasó de posición en el array a **hash
+  estable**: antes el color de un rubro cambiaba según qué tiendas hubiera antes en la lista.
+  Ahora expone `ring`/`solid`/`gradient` además de `bg`/`text`.
+- **Inicio (`page.tsx`):** hero con degradé + globos difuminados + mini-stats, chips con contador y
+  estado activo real, secciones "Con descuento"/"Tus favoritas", y **tarjeta en fila en celular**
+  (`store-card.tsx` nuevo, un solo markup responsive). Se eliminó el `<Select>` de categoría, que
+  duplicaba exactamente los chips. El estado de apertura se precomputa una vez en vez de
+  recalcularse dentro del comparador del sort.
+- **Navegación (lo pedido explícito):** `breadcrumbs.tsx` (volver + migas, visible **también en
+  escritorio** — antes `PageHeader` lo restringía a móvil y la tienda pública ni lo usaba);
+  carrusel **"Más de {rubro}"** al final de la tienda (consulta acotada `isApproved` + `category`
+  + `limit(8)`); **buscador global ⌘K** (`global-search.tsx`); bottom-nav con indicador de
+  gradiente y tab "Carrito" (reemplaza a "Más", que solo abría el menú lateral que el header ya
+  abre).
+- **Tienda pública:** pestañas **Menú / Info / Reseñas** (antes las reseñas estaban al fondo de
+  todo el scroll), **scroll-spy** en los chips de categoría (nunca se marcaban como activos), y la
+  pestaña Info con el **horario semanal completo** (antes solo el de hoy).
+- **Header del shell:** en escritorio era `sm:static sm:bg-transparent`, o sea desaparecía y
+  dejaba dos íconos flotando. Ahora es sticky siempre, con el buscador; el botón de colapsar el
+  sidebar también se ve en escritorio (era `sm:hidden` pese a que el sidebar es `collapsible`).
+
+**Bugs encontrados y corregidos en el camino:**
+- 🚨 **`src/lib` NO estaba en el `content` de `tailwind.config.ts`.** `lib/category-style.ts`
+  define nombres de clase; los que no aparecieran en otro archivo **no se generaban, en silencio
+  y sin error de build**. Misma familia que el bug `h-4.5`. **Regla: si un archivo de `src/lib`
+  define clases de Tailwind, tiene que estar en `content`, y los nombres deben ser literales
+  (nunca `` `from-cat-${key}` ``, el JIT escanea texto, no evalúa).**
+- `h-4.5 w-4.5` no existe en Tailwind → los 4 íconos de la info card de la tienda quedaban sin
+  tamaño aplicado. Ahora `h-[18px]`.
+- La consulta de `reviews` de la tienda **no tenía `limit`**: bajaba TODAS las reseñas para
+  mostrar 10 (viola la regla de escala de la Fase Y). Ahora `limit(20)`.
+- Los chips de rubro del inicio se armaban desde las tiendas **sin filtrar**, así que una tienda
+  pendiente de aprobación aportaba un chip que después daba 0 resultados.
+- El `hover:shadow-lg` de la tarjeta no hacía nada: `<Card>` ya trae `shadow-lg` por defecto.
+- Al meter pestañas, `scrollToReviews()` (el botón de rating de la info card) habría quedado
+  muerto: ahora cambia de pestaña en vez de hacer scroll a un ancla oculta.
+- Apilamiento sticky: los chips de categoría usaban `sticky top-14 sm:top-0` asumiendo que en
+  escritorio no había header sticky. Corregido a `top-14` en todos los tamaños.
+
+**Decisiones de costo (respetan las Fases Y/Z):** las secciones del inicio son particiones en
+memoria del array ya cargado (**0 lecturas nuevas**); el ⌘K trae las tiendas con `getDocs` **una
+sola vez al abrirlo por primera vez**, nunca con `onSnapshot` (vive en el shell = todas las
+páginas); "Más de {rubro}" va con `where`+`limit`. **A propósito el ⌘K NO busca productos**: eso
+necesitaría `collectionGroup('items')`, colección sin techo.
+
+**Sin librerías nuevas:** todo con `tailwindcss-animate` (ya instalado) + keyframes CSS. No se
+instaló `framer-motion` (≈35 kB de JS en el cliente, para un público que abre la app en Android
+de gama baja). Se agregó un bloque `prefers-reduced-motion` que apaga las animaciones.
+
+**Verificado a 430px y 1440px con datos reales:** sin overflow horizontal (430/430), sin errores
+de consola; el scroll del inicio en celular bajó de **3.183px a 1.854px**; ⌘K abre con el atajo,
+lista 18 ítems y filtra bien; las 3 pestañas de la tienda funcionan.
 
 ## Pendientes pre-lanzamiento
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
