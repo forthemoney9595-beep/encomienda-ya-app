@@ -23,8 +23,11 @@ interface StoreCardProps {
   isFavorite: boolean;
   isOpen: boolean;
   statusLabel: string;
-  deliveryFee: number;
+  /** Sin valor no se muestra la fila de envío (mejor omitirla que inventar un precio). */
+  deliveryFee?: number;
   onToggleFavorite: (e: React.MouseEvent, store: StoreCardStore) => void;
+  /** Oculta el corazón donde no hay acción de favorito. */
+  hideFavorite?: boolean;
   /** 'grid' = fila en celular / tarjeta en desktop. 'carousel' = tarjeta de ancho fijo. */
   variant?: 'grid' | 'carousel';
   /** Para la aparición escalonada. */
@@ -34,7 +37,7 @@ interface StoreCardProps {
 
 export function StoreCard({
   store, isFavorite, isOpen, statusLabel, deliveryFee, onToggleFavorite,
-  variant = 'grid', index = 0, cleanAddress,
+  variant = 'grid', index = 0, cleanAddress, hideFavorite,
 }: StoreCardProps) {
   const catStyle = getCategoryStyle(store.category || '');
   const isCarousel = variant === 'carousel';
@@ -122,14 +125,17 @@ export function StoreCard({
               <Clock className="h-3 w-3" />
               {store.deliveryTime || '30-45 min'}
             </span>
-            <span className="flex items-center gap-1">
-              <Bike className="h-3 w-3" />
-              ${deliveryFee.toLocaleString()}
-            </span>
+            {deliveryFee !== undefined && (
+              <span className="flex items-center gap-1">
+                <Bike className="h-3 w-3" />
+                ${deliveryFee.toLocaleString()}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Favorito */}
+        {!hideFavorite && (
         <button
           type="button"
           onClick={(e) => onToggleFavorite(e, store)}
@@ -138,6 +144,7 @@ export function StoreCard({
         >
           <Heart className={cn('h-4 w-4 transition-colors', isFavorite ? 'fill-primary text-primary' : 'text-muted-foreground')} />
         </button>
+        )}
       </Card>
     </Link>
   );

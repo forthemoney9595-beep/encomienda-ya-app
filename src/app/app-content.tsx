@@ -12,6 +12,7 @@ import Link from 'next/link';
 // ✅ CORRECCIÓN: Importación desde la ruta absoluta correcta (components)
 import { Notifications } from '@/components/notifications';
 import { Cart } from '@/components/cart';
+import { GlobalSearch, GlobalSearchTrigger, useGlobalSearchShortcut } from '@/components/global-search';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { User, LogOut, Shield, Loader2, ChevronsUpDown, Store, MailWarning } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -157,6 +158,8 @@ function EmailVerificationBanner({ user }: { user: any }) {
 function AppContentLayout({ children }: { children: React.ReactNode }) {
     const { user, loading } = useAuth();
     const pathname = usePathname();
+    const [searchOpen, setSearchOpen] = useState(false);
+    useGlobalSearchShortcut(setSearchOpen);
 
     const isLoginPage = pathname.startsWith('/login') || pathname.startsWith('/signup');
     const isLandingPage = pathname === '/';
@@ -199,10 +202,21 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                 </SidebarFooter>
             </Sidebar>
             <SidebarInset>
-                <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-                    <SidebarTrigger variant="outline" className="sm:hidden h-9 w-9 rounded-full" />
+                {/* Header sticky en TODOS los tamaños. Antes en escritorio se volvía
+                    transparente y sin borde (sm:static sm:bg-transparent), así que quedaban
+                    dos íconos flotando sueltos arriba a la derecha. */}
+                <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-6">
+                    {/* Visible también en escritorio: el sidebar es collapsible="icon" pero
+                        antes no había forma de colapsarlo desde ahí. */}
+                    <SidebarTrigger variant="outline" className="h-9 w-9 shrink-0 rounded-full" />
+
+                    {/* SOLO PARA USUARIOS LOGUEADOS */}
+                    {user && !loading && (
+                        <GlobalSearchTrigger onClick={() => setSearchOpen(true)} className="h-9 w-full max-w-xs sm:max-w-sm" />
+                    )}
+
                     <div className="ml-auto flex items-center gap-2 sm:gap-4">
-                        
+
                         {/* SOLO PARA USUARIOS LOGUEADOS */}
                         {user && !loading && (
                             <>
@@ -228,6 +242,9 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                 </main>
                 {user && !loading && !isLoginPage && <BottomNav />}
             </SidebarInset>
+
+            {/* Buscador global (⌘K). Trae las tiendas recién la primera vez que se abre. */}
+            {user && !loading && <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />}
         </div>
     );
 }

@@ -6,7 +6,10 @@ import { doc, collection, query, orderBy, where, limit } from 'firebase/firestor
 import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X, ShoppingBag } from 'lucide-react';
+import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X, ShoppingBag, Home } from 'lucide-react';
+import { Breadcrumbs } from '@/components/breadcrumbs';
+import { StoreImage } from '@/components/store-image';
+import { StoreCard } from '@/components/store-card';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useMemo, useState } from 'react';
@@ -22,6 +25,7 @@ import { es } from 'date-fns/locale';
 
 interface StoreData {
   name: string;
+  category?: string;
   description?: string;
   address?: string;
   imageUrl?: string;
@@ -135,6 +139,26 @@ export default function StorePublicPage() {
   }, [firestore, storeId]);
   const { data: reviews } = useCollection<Review>(reviewsQuery);
 
+  const storeCategory = store?.category;
+
+  // 2c. Otras tiendas del mismo rubro, para poder saltar de una tienda a otra sin tener
+  // que volver al inicio. Consulta acotada (igualdad + limit) sobre `stores`, que es una
+  // colección chica; no requiere índice compuesto (Firestore combina igualdades solo).
+  const relatedQuery = useMemoFirebase(() => {
+    if (!firestore || !storeCategory) return null;
+    return query(
+      collection(firestore, 'stores'),
+      where('isApproved', '==', true),
+      where('category', '==', storeCategory),
+      limit(8),
+    );
+  }, [firestore, storeCategory]);
+  const { data: relatedRaw } = useCollection<any>(relatedQuery);
+  const relatedStores = useMemo(
+    () => (relatedRaw || []).filter(s => s.id !== storeId),
+    [relatedRaw, storeId],
+  );
+
   // 3. Filtrar y Ordenar
   const products = useMemo(() => {
     const all = [...(rawProducts || []), ...(rawLegacyProducts || [])];
@@ -242,16 +266,30 @@ export default function StorePublicPage() {
   return (
     <>
     <div className={cn('container mx-auto', showCartBar && 'pb-24')}>
+      {/* Volver + migas: antes desde acá no había forma de retroceder en escritorio. */}
+      <Breadcrumbs
+        items={[
+          { label: 'Inicio', href: '/', icon: Home },
+          ...(storeCategory ? [{ label: storeCategory, href: `/?category=${encodeURIComponent(storeCategory)}` }] : []),
+          { label: store.name },
+        ]}
+      />
+
       {/* BANNER */}
-      <div className="relative -mx-4 sm:mx-0 sm:mt-4 mb-6">
-        <div className="relative aspect-[2.5/1] sm:rounded-2xl overflow-hidden bg-muted">
-            {store.imageUrl ? (
-                <img src={store.imageUrl} alt={store.name} className="h-full w-full object-cover" />
-            ) : (
-                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-                    <StoreIcon className="h-16 w-16 text-primary/40" />
-                </div>
-            )}
+      <div className="relative -mx-4 sm:mx-0 mb-6">
+        <div className="relative aspect-[2.5/1] sm:aspect-[3.5/1] sm:rounded-2xl overflow-hidden">
+            <StoreImage
+              src={store.imageUrl}
+              name={store.name}
+              category={storeCategory}
+              seed={storeId}
+              grayscale={!storeStatus.isOpen}
+              sizes="(max-width: 640px) 100vw, 1100px"
+              priority
+              initialsClassName="text-5xl"
+            />
+            {/* Velo inferior para que el nombre se lea sobre cualquier foto */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
         </div>
       </div>
 
@@ -357,9 +395,11 @@ export default function StorePublicPage() {
           </div>
       )}
 
-      {/* NAVEGACIÓN POR CATEGORÍA */}
+      {/* NAVEGACIÓN POR CATEGORÍA — top-14 en TODOS los tamaños: el header del shell ahora
+          es sticky también en escritorio (antes ahí se volvía transparente, de ahí el
+          sm:top-0 original). */}
       {groupedProducts.length > 1 && (
-          <div className="sticky top-14 sm:top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 py-3 mb-6 border-b sm:border-b-0">
+          <div className="sticky top-14 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 py-3 mb-6 border-b sm:border-b-0">
               <div className="flex gap-4 overflow-x-auto no-scrollbar">
                   {groupedProducts.map(([category], i) => {
                       const style = getCategoryStyle(category, i);
@@ -468,6 +508,40 @@ export default function StorePublicPage() {
               </div>
           )}
       </div>
+
+      {/* MÁS TIENDAS DEL MISMO RUBRO — permite saltar de tienda en tienda sin volver al
+          inicio. Se oculta si no hay otras (no tiene sentido una fila de uno). */}
+      {relatedStores.length > 0 && (
+        <div className="mb-10 px-4 sm:px-0">
+          <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
+            <StoreIcon className="h-5 w-5 text-primary" /> Más de {storeCategory}
+          </h2>
+          <div className="min-w-0">
+            <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+              {relatedStores.map((s: any, i: number) => {
+                // Mismo criterio que el inicio: la pausa manual se evalúa aparte del horario.
+                const st = s.manuallyPaused
+                  ? { isOpen: false, label: 'Pausada' }
+                  : getStoreOpenStatus(normalizeSchedule(s));
+                return (
+                  <StoreCard
+                    key={s.id}
+                    store={s}
+                    isFavorite={false}
+                    hideFavorite
+                    isOpen={st.isOpen}
+                    statusLabel={st.label}
+                    onToggleFavorite={() => {}}
+                    variant="carousel"
+                    index={i}
+                    cleanAddress={cleanAddress}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
 
     {/* BARRA DE CARRITO FLOTANTE — solo si el carrito activo es el de esta tienda.
