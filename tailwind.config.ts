@@ -6,6 +6,10 @@ export default {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // OJO: `src/lib` tiene que estar acá. `lib/category-style.ts` define nombres de clase
+    // (colores y gradientes por rubro) que no aparecen en ningún otro archivo; sin este
+    // patrón, el JIT no los genera y salen SIN COLOR, en silencio y sin error de build.
+    './src/lib/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
@@ -67,6 +71,20 @@ export default {
           '4': 'hsl(var(--chart-4))',
           '5': 'hsl(var(--chart-5))',
         },
+        // Colores por rubro (ver --cat-* en globals.css). Separados de los semánticos
+        // a propósito, para no pisar el significado de success/warning/destructive.
+        cat: {
+          brand: 'hsl(var(--cat-brand))',
+          food: 'hsl(var(--cat-food))',
+          fast: 'hsl(var(--cat-fast))',
+          drink: 'hsl(var(--cat-drink))',
+          kiosk: 'hsl(var(--cat-kiosk))',
+          market: 'hsl(var(--cat-market))',
+          pharma: 'hsl(var(--cat-pharma))',
+          cloth: 'hsl(var(--cat-cloth))',
+          home: 'hsl(var(--cat-home))',
+          other: 'hsl(var(--cat-other))',
+        },
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar-background))',
           foreground: 'hsl(var(--sidebar-foreground))',
@@ -82,6 +100,17 @@ export default {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+      },
+      backgroundImage: {
+        'brand-gradient': 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-5)))',
+        sheen: 'linear-gradient(120deg, rgba(255,255,255,0.14), transparent 60%)',
+      },
+      boxShadow: {
+        glow: '0 10px 30px -8px hsl(var(--primary) / 0.45)',
+        'glow-sm': '0 4px 14px -4px hsl(var(--primary) / 0.5)',
+      },
+      transitionTimingFunction: {
+        spring: 'cubic-bezier(.34,1.56,.64,1)',
       },
       keyframes: {
         'accordion-down': {
@@ -100,10 +129,27 @@ export default {
             height: '0',
           },
         },
+        // Brillo que recorre un elemento — para skeletons "vivos" (ver .shimmer en globals.css).
+        shimmer: {
+          '100%': { transform: 'translateX(100%)' },
+        },
+        // Flotación suave para los blobs decorativos del hero.
+        float: {
+          '0%, 100%': { transform: 'translateY(0) scale(1)' },
+          '50%': { transform: 'translateY(-14px) scale(1.04)' },
+        },
+        // Latido de resplandor para acentos (badges de oferta, punto de "abierto").
+        'pulse-glow': {
+          '0%, 100%': { opacity: '1', boxShadow: '0 0 0 0 hsl(var(--primary) / 0.45)' },
+          '50%': { opacity: '0.92', boxShadow: '0 0 0 8px hsl(var(--primary) / 0)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        shimmer: 'shimmer 1.8s infinite',
+        float: 'float 7s ease-in-out infinite',
+        'pulse-glow': 'pulse-glow 2.4s ease-in-out infinite',
       },
     },
   },

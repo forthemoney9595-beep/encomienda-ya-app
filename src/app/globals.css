@@ -89,6 +89,22 @@
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 240 15% 20%;
     --sidebar-ring: 258 90% 66%;
+
+    /* Escala de RUBROS (Fase AA) — deliberadamente separada de los semánticos.
+       Los semánticos tienen significado fijo en toda la app (verde=éxito/dinero,
+       rojo=error, amarillo=aviso); usarlos como color de categoría (farmacia=rojo,
+       supermercado=verde, como estaba antes) rompía ese lenguaje. Matices bien
+       espaciados y L 45-66% para que contrasten sobre --background (240 24% 11%). */
+    --cat-brand: 258 90% 66%;   /* violeta      — Todas */
+    --cat-food: 25 92% 58%;     /* naranja      — Comida */
+    --cat-fast: 355 85% 62%;    /* rojo coral   — Comida rápida */
+    --cat-drink: 192 90% 55%;   /* cian         — Bebidas */
+    --cat-kiosk: 322 82% 62%;   /* magenta      — Kiosco */
+    --cat-market: 95 65% 50%;   /* lima         — Supermercado */
+    --cat-pharma: 165 75% 45%;  /* verde agua   — Farmacia */
+    --cat-cloth: 220 90% 64%;   /* azul         — Ropa */
+    --cat-home: 45 90% 58%;     /* dorado       — Hogar/electro */
+    --cat-other: 280 60% 62%;   /* violeta rosa — Otros/fallback */
   }
 }
 
@@ -109,5 +125,70 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  /* --- Base visual compartida (Fase AA) ---------------------------------
+     Utilidades del lenguaje "vibrante": se usan en el home, la tienda pública y el
+     shell para no repetir las mismas combinaciones de clases en cada archivo. */
+
+  /* Texto con degradé de marca (violeta -> fucsia). Mismo look que el h1 de la landing. */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-fuchsia-400;
+  }
+
+  /* Superficie translúcida con desenfoque, para barras sticky y overlays sobre imágenes. */
+  .glass {
+    @apply border border-white/10 bg-card/60 backdrop-blur-md;
+  }
+
+  /* Resplandor violeta al hacer hover — reemplaza al `hover:shadow-lg` que no se notaba
+     porque <Card> ya trae sombra por defecto. */
+  .glow-primary {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.35), 0 8px 30px -6px hsl(var(--primary) / 0.35);
+  }
+
+  /* Velo oscuro de abajo hacia arriba: hace legible el texto puesto sobre una foto. */
+  .overlay-bottom {
+    @apply bg-gradient-to-t from-black/80 via-black/25 to-transparent;
+  }
+
+  /* Skeleton con brillo que recorre, en vez del pulse plano. */
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+  .shimmer::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 to-transparent;
+    content: '';
+  }
+
+  /* Aparición escalonada de listas. `backwards` es importante: sin él el elemento se
+     muestra opaco y recién después se desvanece, que se ve peor que sin animación. */
+  .stagger-in {
+    animation: stagger-in 0.42s ease-out backwards;
+  }
+  @keyframes stagger-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* Respeta a quien pidió menos movimiento en el sistema operativo. */
+@media (prefers-reduced-motion: reduce) {
+  .stagger-in,
+  .animate-float,
+  .animate-pulse-glow,
+  .animate-shimmer {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
   }
 }

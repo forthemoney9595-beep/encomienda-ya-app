@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/lib/firebase';
-import { doc, collection, query, orderBy, where } from 'firebase/firestore';
+import { doc, collection, query, orderBy, where, limit } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -127,9 +127,11 @@ export default function StorePublicPage() {
 
   // 2b. Reseñas públicas (misma colección que usa el dueño en /my-store/reviews,
   // pero de solo lectura acá — sin form de respuesta).
+  // OJO escala (regla de la Fase Y): `reviews` crece sin techo, así que va con limit.
+  // Antes bajaba TODAS las reseñas de la tienda para mostrar solo las primeras 10.
   const reviewsQuery = useMemoFirebase(() => {
     if (!firestore || !storeId) return null;
-    return query(collection(firestore, 'reviews'), where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
+    return query(collection(firestore, 'reviews'), where('storeId', '==', storeId), orderBy('createdAt', 'desc'), limit(20));
   }, [firestore, storeId]);
   const { data: reviews } = useCollection<Review>(reviewsQuery);
 
@@ -278,7 +280,7 @@ export default function StorePublicPage() {
                       className="flex items-center gap-2 p-3 sm:flex-1 text-left hover:bg-muted/40 transition-colors group"
                   >
                       <div className="h-9 w-9 rounded-lg bg-warning/15 text-warning flex items-center justify-center shrink-0">
-                          <Star className="h-4.5 w-4.5 fill-current" />
+                          <Star className="h-[18px] w-[18px] fill-current" />
                       </div>
                       <div className="min-w-0">
                           <p className="font-semibold text-sm flex items-center gap-1">
@@ -291,7 +293,7 @@ export default function StorePublicPage() {
               ) : (
                   <div className="flex items-center gap-2 p-3 sm:flex-1">
                       <div className="h-9 w-9 rounded-lg bg-muted text-muted-foreground flex items-center justify-center shrink-0">
-                          <Star className="h-4.5 w-4.5" />
+                          <Star className="h-[18px] w-[18px]" />
                       </div>
                       <p className="text-xs text-muted-foreground">Todavía sin reseñas</p>
                   </div>
@@ -300,7 +302,7 @@ export default function StorePublicPage() {
               {store.address && (
                   <div className="flex items-center gap-2 p-3 sm:flex-1 min-w-0">
                       <div className="h-9 w-9 rounded-lg bg-info/15 text-info flex items-center justify-center shrink-0">
-                          <MapPin className="h-4.5 w-4.5" />
+                          <MapPin className="h-[18px] w-[18px]" />
                       </div>
                       <div className="min-w-0">
                           <p className="font-semibold text-sm truncate">{cleanAddress(store.address)}</p>
@@ -312,7 +314,7 @@ export default function StorePublicPage() {
               {(store.weeklySchedule || store.schedule) && (
                   <div className="flex items-center gap-2 p-3 sm:flex-1 min-w-0">
                       <div className="h-9 w-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
-                          <Clock className="h-4.5 w-4.5" />
+                          <Clock className="h-[18px] w-[18px]" />
                       </div>
                       <div className="min-w-0">
                           <p className="font-semibold text-sm truncate">{storeStatus.timeRange}</p>

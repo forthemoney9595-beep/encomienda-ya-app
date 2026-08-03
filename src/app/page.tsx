@@ -11,7 +11,8 @@ import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/fire
 import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebase/firestore';
 import { normalizeSchedule, getStoreOpenStatus } from '@/lib/store-hours';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight } from 'lucide-react';
+import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight, type LucideIcon } from 'lucide-react';
+import { StoreCard, type StoreCardStore } from '@/components/store-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getCategoryStyle } from '@/lib/category-style';
 import { Input } from '@/components/ui/input';
@@ -142,37 +143,57 @@ const FeaturesSection = () => (
 
 // --- COMPONENTES DE LA APP (MODO USUARIO) ---
 
+// Fila horizontal desplazable para las secciones destacadas del inicio.
+const StoreRow = ({
+  title, icon: Icon, accent, children,
+}: { title: string; icon: LucideIcon; accent: string; children: React.ReactNode }) => (
+  <section className="mb-8">
+    <h2 className="font-headline text-lg font-bold mb-3 flex items-center gap-2">
+      <Icon className={cn('h-5 w-5', accent)} />
+      {title}
+    </h2>
+    {/* min-w-0 obligatorio: sin esto el contenido ancho de la fila estira toda la página
+        (es el bug de overflow horizontal ya documentado en CLAUDE.md). */}
+    <div className="min-w-0">
+      <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">{children}</div>
+    </div>
+  </section>
+);
+
 interface CategoryChipsProps {
   categories: string[];
   selectedCategory: string;
   setSelectedCategory: (category: string) => void;
+  counts: Record<string, number>;
 }
 
-const CategoryChips = ({ categories, selectedCategory, setSelectedCategory }: CategoryChipsProps) => (
-  <div className="flex gap-4 overflow-x-auto pb-2 mb-6 no-scrollbar">
-    {categories.map((cat, i) => {
-      const style = getCategoryStyle(cat, i);
+const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, counts }: CategoryChipsProps) => (
+  <div role="group" aria-label="Filtrar por rubro" className="flex gap-3 overflow-x-auto pb-2 mb-6 no-scrollbar">
+    {categories.map((cat) => {
+      const style = getCategoryStyle(cat);
       const Icon = style.icon;
       const isActive = selectedCategory === cat;
       return (
         <button
           key={cat}
           onClick={() => setSelectedCategory(cat)}
-          className={cn(
-            'flex flex-col items-center gap-2 shrink-0 transition-transform',
-            isActive ? 'scale-105' : 'opacity-80 hover:opacity-100'
-          )}
+          aria-pressed={isActive}
+          className="flex flex-col items-center gap-1.5 shrink-0 transition-transform duration-300 ease-spring"
         >
           <div className={cn(
-            'h-12 w-12 rounded-2xl flex items-center justify-center transition-all',
-            style.bg,
-            isActive ? 'shadow-md' : 'shadow-sm'
+            'h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-300 ease-spring ring-2',
+            isActive
+              ? cn('scale-105 shadow-glow ring-offset-2 ring-offset-background', style.solid, style.ring)
+              : cn('ring-transparent hover:scale-105', style.bg),
           )}>
-            <Icon className={cn('h-5 w-5', style.text)} />
+            <Icon className={cn('h-6 w-6', isActive ? '' : style.text)} />
           </div>
           <span className={cn('text-[11px] font-medium whitespace-nowrap', isActive ? 'text-foreground' : 'text-muted-foreground')}>
             {cat}
           </span>
+          {counts[cat] !== undefined && (
+            <span className="text-[10px] leading-none text-muted-foreground/70">{counts[cat]}</span>
+          )}
         </button>
       );
     })}
@@ -182,58 +203,37 @@ const CategoryChips = ({ categories, selectedCategory, setSelectedCategory }: Ca
 interface FilterBarProps {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  selectedCategory: string;
-  setSelectedCategory: (category: string) => void;
   minRating: string;
   setMinRating: (rating: string) => void;
-  categories: string[];
 }
 
-const FilterBar = ({
-  searchTerm,
-  setSearchTerm,
-  selectedCategory,
-  setSelectedCategory,
-  minRating,
-  setMinRating,
-  categories,
-}: FilterBarProps) => (
-  <Card className="p-4 mb-6 shadow-sm border-muted-foreground/20">
-    <div className="flex flex-col md:flex-row gap-4">
-      <div className="relative flex-1">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="¿Qué se te antoja hoy?"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 w-full bg-background"
-        />
-      </div>
-      <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-        <SelectTrigger className="w-full md:w-[200px]">
-          <SelectValue placeholder="Categoría" />
-        </SelectTrigger>
-        <SelectContent>
-          {categories.map(cat => (
-            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={minRating} onValueChange={setMinRating}>
-        <SelectTrigger className="w-full md:w-[180px]">
-          <Filter className="h-4 w-4 mr-2 text-primary" />
-          <SelectValue placeholder="Calificación" />
-        </SelectTrigger>
-        <SelectContent>
-          {[5, 4, 3, 2, 1, 0].map(rating => (
-            <SelectItem key={rating} value={String(rating)}>
-              {rating === 0 ? 'Todas las calif.' : `${rating}+ Estrellas`}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+// El <Select> de categoría se sacó a propósito: duplicaba exactamente lo que hacen los
+// chips de arriba. Los chips son la única fuente de verdad del rubro.
+const FilterBar = ({ searchTerm, setSearchTerm, minRating, setMinRating }: FilterBarProps) => (
+  <div className="flex flex-col sm:flex-row gap-3 mb-6">
+    <div className="relative flex-1">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        placeholder="Buscar una tienda..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="pl-10 w-full h-11 rounded-xl bg-card"
+      />
     </div>
-  </Card>
+    <Select value={minRating} onValueChange={setMinRating}>
+      <SelectTrigger className="w-full sm:w-[190px] h-11 rounded-xl bg-card">
+        <Filter className="h-4 w-4 mr-2 text-primary" />
+        <SelectValue placeholder="Calificación" />
+      </SelectTrigger>
+      <SelectContent>
+        {[5, 4, 3, 2, 1, 0].map(rating => (
+          <SelectItem key={rating} value={String(rating)}>
+            {rating === 0 ? 'Todas las calif.' : `${rating}+ Estrellas`}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
 );
 
 // ✅ Separamos el contenido lógico del componente principal para usar Suspense
@@ -276,44 +276,61 @@ function HomeContent() {
   const { data: favoritesData } = useCollection<{id: string}>(favoritesQuery);
   const favoriteIds = useMemo(() => new Set(favoritesData?.map(f => f.id)), [favoritesData]);
 
+  // Tiendas aprobadas + su estado de apertura calculado UNA sola vez. Antes
+  // storeOpenState() se llamaba dentro del comparador del sort (O(n log n) llamadas, cada
+  // una re-normalizando el horario); con secciones se llamaría todavía más.
+  const decorated = useMemo(() => {
+    return (rawStores || [])
+      .filter(store => store.isApproved !== false)
+      .map(store => ({ store, status: storeOpenState(store), isFav: favoriteIds.has(store.id) }));
+  }, [rawStores, favoriteIds]);
+
+  const hasFilters = !!searchTerm || selectedCategory !== 'Todas' || minRating !== '0';
+
   const filteredStores = useMemo(() => {
-    if (!rawStores) return [];
-    let filtered = rawStores;
     const minRatingValue = parseFloat(minRating);
+    const list = hasFilters
+      ? decorated.filter(({ store }) => {
+          const matchesSearch = store.name.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesCategory = selectedCategory === 'Todas' || store.category === selectedCategory;
+          const matchesRating = (store.rating || 0) >= minRatingValue;
+          return matchesSearch && matchesCategory && matchesRating;
+        })
+      : [...decorated];
 
-    filtered = filtered.filter(store => store.isApproved !== false);
-
-    if (searchTerm || selectedCategory !== 'Todas' || minRatingValue > 0) {
-      filtered = filtered.filter(store => {
-        const rating = store.rating || 0; 
-        const matchesSearch = store.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = selectedCategory === 'Todas' || store.category === selectedCategory;
-        const matchesRating = rating >= minRatingValue;
-        return matchesSearch && matchesCategory && matchesRating;
-      });
-    }
-    
-    return filtered.sort((a, b) => {
-        // Abiertas primero -- no tiene sentido mostrar arriba una tienda que no puede
-        // recibir pedidos ahora (aunque sea favorita: no vas a poder comprarle igual).
-        const aOpen = storeOpenState(a).isOpen ? 1 : 0;
-        const bOpen = storeOpenState(b).isOpen ? 1 : 0;
-        if (aOpen !== bOpen) return bOpen - aOpen;
-
-        const aFav = favoriteIds.has(a.id) ? 1 : 0;
-        const bFav = favoriteIds.has(b.id) ? 1 : 0;
-        if (aFav !== bFav) return bFav - aFav;
-        return (b.rating || 0) - (a.rating || 0);
+    return list.sort((a, b) => {
+      // Abiertas primero -- no tiene sentido mostrar arriba una tienda que no puede
+      // recibir pedidos ahora (aunque sea favorita: no vas a poder comprarle igual).
+      if (a.status.isOpen !== b.status.isOpen) return a.status.isOpen ? -1 : 1;
+      if (a.isFav !== b.isFav) return a.isFav ? -1 : 1;
+      return (b.store.rating || 0) - (a.store.rating || 0);
     });
+  }, [decorated, hasFilters, searchTerm, selectedCategory, minRating]);
 
-  }, [rawStores, searchTerm, selectedCategory, minRating, favoriteIds]);
+  // Secciones del modo "explorar" — todas son particiones en memoria de `decorated`,
+  // cero lecturas nuevas a Firestore.
+  const discountedStores = useMemo(
+    () => filteredStores.filter(d => (d.store.maxDiscountPercent || 0) > 0),
+    [filteredStores],
+  );
+  const favoriteStores = useMemo(() => filteredStores.filter(d => d.isFav), [filteredStores]);
 
+  // Los rubros salen de las tiendas APROBADAS, no de rawStores: si no, una tienda pendiente
+  // de aprobación aportaba su rubro al chip y ese chip después daba 0 resultados.
   const categories = useMemo(() => {
-    const unique = new Set(rawStores?.map(s => s.category).filter(Boolean) || []);
+    const unique = new Set(decorated.map(d => d.store.category).filter(Boolean));
     return ['Todas', ...Array.from(unique).filter(c => c !== 'Todas')];
-  }, [rawStores]);
+  }, [decorated]);
 
-  const toggleFavorite = async (e: React.MouseEvent, store: Store) => {
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { Todas: decorated.length };
+    decorated.forEach(({ store }) => {
+      if (store.category) counts[store.category] = (counts[store.category] || 0) + 1;
+    });
+    return counts;
+  }, [decorated]);
+
+  const toggleFavorite = async (e: React.MouseEvent, store: StoreCardStore) => {
     e.preventDefault(); 
     e.stopPropagation();
     if (!user || !firestore) {
@@ -381,20 +398,57 @@ function HomeContent() {
     );
   }
 
+  const openCount = decorated.filter(d => d.status.isOpen).length;
+
+  const renderCard = (d: typeof decorated[number], i: number, variant: 'grid' | 'carousel' = 'grid') => (
+    <StoreCard
+      key={d.store.id}
+      store={d.store}
+      isFavorite={d.isFav}
+      isOpen={d.status.isOpen}
+      statusLabel={d.status.label}
+      deliveryFee={deliveryFee}
+      onToggleFavorite={toggleFavorite}
+      variant={variant}
+      index={i}
+      cleanAddress={cleanAddress}
+    />
+  );
+
   return (
     <div className="container mx-auto animate-in fade-in duration-500">
-      <div className="flex items-center gap-4 mb-6">
-        <Avatar className="h-14 w-14 border-2 border-primary/30 shadow-sm">
-          <AvatarImage src={userProfile?.profileImageUrl} alt={userProfile?.displayName} />
-          <AvatarFallback className="bg-primary/15 text-primary font-bold text-lg">
-            {(userProfile?.displayName || 'I').charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <h1 className="font-headline text-2xl font-bold leading-tight">
-            Hola, {userProfile?.displayName || 'Invitado'} 👋
-          </h1>
-          <p className="text-muted-foreground">¿Qué se te antoja comer hoy?</p>
+      {/* HERO — con globos difuminados detrás (decorativos, no interactivos) */}
+      <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card/40 p-5 sm:p-6 mb-6">
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
+          <div className="absolute -left-10 -top-16 h-52 w-52 rounded-full bg-primary/25 blur-3xl animate-float" />
+          <div className="absolute -right-12 -bottom-20 h-56 w-56 rounded-full bg-cat-kiosk/20 blur-3xl animate-float" style={{ animationDelay: '2.5s' }} />
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Avatar className="h-14 w-14 ring-2 ring-primary/40 ring-offset-2 ring-offset-background">
+            <AvatarImage src={userProfile?.profileImageUrl} alt={userProfile?.displayName} />
+            <AvatarFallback className="bg-primary/15 text-primary font-bold text-lg">
+              {(userProfile?.displayName || 'I').charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight">
+              Hola, <span className="text-gradient">{userProfile?.displayName || 'Invitado'}</span> 👋
+            </h1>
+            <p className="text-sm text-muted-foreground">¿Qué se te antoja hoy?</p>
+          </div>
+        </div>
+
+        {/* Mini-stats: todo derivado del array ya cargado, cero lecturas extra */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span><strong className="text-foreground">{decorated.length}</strong> tiendas</span>
+          <span className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" />
+            <strong className="text-foreground">{openCount}</strong> abiertas ahora
+          </span>
+          {discountedStores.length > 0 && (
+            <span><strong className="text-foreground">{discountedStores.length}</strong> con descuento</span>
+          )}
         </div>
       </div>
 
@@ -402,119 +456,50 @@ function HomeContent() {
         categories={categories}
         selectedCategory={selectedCategory}
         setSelectedCategory={setSelectedCategory}
+        counts={categoryCounts}
       />
 
       <FilterBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
-        selectedCategory={selectedCategory}
-        setSelectedCategory={setSelectedCategory}
         minRating={minRating}
         setMinRating={setMinRating}
-        categories={categories}
       />
 
+      {/* Secciones destacadas — solo en modo "explorar" (sin filtros activos). Con filtros
+          se muestra una única grilla de resultados, si no la página confunde. */}
+      {!hasFilters && discountedStores.length > 0 && (
+        <StoreRow title="Con descuento" icon={Zap} accent="text-cat-food">
+          {discountedStores.map((d, i) => renderCard(d, i, 'carousel'))}
+        </StoreRow>
+      )}
+      {!hasFilters && favoriteStores.length > 0 && (
+        <StoreRow title="Tus favoritas" icon={Heart} accent="text-primary">
+          {favoriteStores.map((d, i) => renderCard(d, i, 'carousel'))}
+        </StoreRow>
+      )}
+
       <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
-        <ShoppingBag className="h-5 w-5 text-primary" /> Tiendas Disponibles
+        <ShoppingBag className="h-5 w-5 text-primary" />
+        {hasFilters ? 'Resultados' : 'Todas las tiendas'}
         <span className="text-sm font-normal text-muted-foreground ml-2">({filteredStores.length})</span>
       </h2>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredStores.length === 0 ? (
              <div className="col-span-full text-center py-12 opacity-70">
                 <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                 <p className="text-lg font-medium">No encontramos tiendas</p>
                 <p className="text-sm">Intenta cambiar los filtros de búsqueda.</p>
                 {/* Botón para limpiar filtros si no hay resultados */}
-                {(searchTerm || selectedCategory !== 'Todas' || minRating !== '0') && (
+                {hasFilters && (
                     <Button variant="link" onClick={() => { setSearchTerm(''); setSelectedCategory('Todas'); setMinRating('0'); }} className="mt-2">
                         Limpiar Filtros
                     </Button>
                 )}
             </div>
         ) : (
-            filteredStores.map((store) => {
-                const isFav = favoriteIds.has(store.id);
-                const status = storeOpenState(store);
-                return (
-                    <Link href={`/stores/${store.id}`} key={store.id} className="group">
-                        <Card className="h-full overflow-hidden hover:shadow-lg transition-all duration-300 border-transparent hover:border-primary/20 relative">
-                            <div className="relative aspect-video w-full bg-muted">
-                                {store.imageUrl ? (
-                                    <Image
-                                        src={store.imageUrl}
-                                        alt={store.name}
-                                        fill
-                                        className={cn(
-                                            "object-cover group-hover:scale-105 transition-transform duration-500",
-                                            !status.isOpen && "grayscale"
-                                        )}
-                                    />
-                                ) : (
-                                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                                        <StoreIcon className="h-10 w-10 opacity-20" />
-                                    </div>
-                                )}
-                                <button
-                                    onClick={(e) => toggleFavorite(e, store)}
-                                    className="absolute top-2 right-2 p-2 rounded-full bg-background/70 hover:bg-background shadow-sm backdrop-blur-sm transition-all hover:scale-110 z-10"
-                                >
-                                    <Heart className={cn("h-5 w-5 transition-colors", isFav ? "fill-primary text-primary" : "text-muted-foreground")} />
-                                </button>
-                                <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
-                                    {store.category || 'General'}
-                                </span>
-                                {/* Badge de ofertas: mayor descuento vigente de la tienda
-                                    (stores/{id}.maxDiscountPercent, mantenido desde el panel
-                                    de productos — cero lecturas extra acá). */}
-                                {(store.maxDiscountPercent || 0) > 0 && (
-                                    <span className="absolute bottom-2 right-2 bg-success text-success-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
-                                        Hasta -{store.maxDiscountPercent}%
-                                    </span>
-                                )}
-                                {/* Estado de apertura — badge arriba a la izquierda; si está cerrada/pausada
-                                    la imagen va en gris (arriba) para dejarlo claro de un vistazo. */}
-                                <span className={cn(
-                                    "absolute top-2 left-2 text-[10px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm flex items-center gap-1",
-                                    status.isOpen ? "bg-success/90 text-success-foreground" : "bg-black/70 text-white"
-                                )}>
-                                    <span className={cn("h-1.5 w-1.5 rounded-full", status.isOpen ? "bg-white" : "bg-muted-foreground")} />
-                                    {status.label}
-                                </span>
-                            </div>
-
-                            <CardHeader className="p-4 pb-2 space-y-1">
-                                <div className="flex justify-between items-start">
-                                    <CardTitle className="text-base font-bold line-clamp-1">{store.name}</CardTitle>
-                                    {(store.rating || 0) > 0 && (
-                                        <div className="flex items-center gap-1 text-xs font-medium bg-warning/15 text-warning px-1.5 py-0.5 rounded">
-                                            <Star className="h-3 w-3 fill-current" />
-                                            {store.rating?.toFixed(1)}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <MapPin className="h-3 w-3" /> 
-                                    {/* ✅ AQUI APLICAMOS LA LIMPIEZA */}
-                                    <span className="line-clamp-1">{cleanAddress(store.address)}</span>
-                                </div>
-                            </CardHeader>
-                            
-                            <CardContent className="p-4 pt-2">
-                                <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-                                    <div className="flex items-center gap-1">
-                                        <Clock className="h-3 w-3" />
-                                        {store.deliveryTime || '30-45 min'}
-                                    </div>
-                                    <div>
-                                        Envío: ${deliveryFee.toLocaleString()}
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </Link>
-                );
-            })
+            filteredStores.map((d, i) => renderCard(d, i))
         )}
       </div>
     </div>
