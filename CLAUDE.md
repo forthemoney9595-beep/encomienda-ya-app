@@ -774,6 +774,19 @@ inflar su propio `rating` sin una reseña real, o auto-aprobarse.
   `profiles`/`store-banners`/`products` (cualquier logueado puede pisar imágenes ajenas,
   bajo impacto por ser públicas de todos modos).
 
+**`npm audit` (mismo bloque de seguridad):** de 33 vulnerabilidades a 14 — `next` pasó de
+14.2.5 a **14.2.35** (mismo mayor, sin breaking changes; `npm audit fix` no lo agarraba solo,
+se instaló explícito) y eso eliminó el ÚNICO crítico y bajó varios altos. Verificado:
+typecheck+lint limpios, dev server arranca en 14.2.35, y home/login/tienda responden 200.
+**Quedan 14, todas detrás de un salto de versión MAYOR, dejadas afuera a propósito:**
+`eslint-config-next`/`@next/eslint-plugin-next`/`glob` (solo lint, dev-only, cero riesgo
+real); `firebase-admin` (12→14) y `mercadopago` (2→3) y sus transitivos
+(`@google-cloud/firestore`, `google-gax`, `teeny-request`, `retry-request`, `uuid`) — son
+dependencias de producción críticas (Admin SDK y pagos); forzar el mayor sin una pasada
+dedicada de pruebas es más riesgoso que las CVEs moderadas que arregla. Un "alto" residual en
+`next`/`postcss` también requiere saltar a Next 16 (fuera de alcance, App Router cambió mucho
+entre 14→15→16).
+
 ## Fase W (jul 2026): datos de prueba masivos para QA manual pre-lanzamiento
 Antes de la revisión final de seguridad, se pobló la base real (`studio-354048519-4bc1e`)
 con variedad de datos para poder navegar y controlar cada caso a mano. Corrido con dos
