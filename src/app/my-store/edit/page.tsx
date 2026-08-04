@@ -280,7 +280,11 @@ export default function EditStorePage() {
                     currentImageUrl={formData.imageUrl}
                     onImageUploaded={handleImageUploaded}
                     folder="store-banners"
-                    ownerId={userProfile!.storeId!}
+                    // uid del dueño, no storeId: storage.rules valida esta carpeta con el
+                    // mismo patrón simple que profiles/licenses (uid propio == path), sin
+                    // lookup cruzado a Firestore (ver Fase BB: firestore.get() no funciona
+                    // de forma confiable desde Storage Rules en este proyecto).
+                    ownerId={user!.uid}
                     variant="banner"
                 />
             </div>

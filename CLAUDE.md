@@ -769,10 +769,40 @@ inflar su propio `rating` sin una reseña real, o auto-aprobarse.
   quedaron reseteados a `isApproved:false` — coincide con el estado que la Fase W les había
   asignado originalmente (estaban aprobados manualmente en algún momento posterior, sin
   quedar registrado en ningún lado).
-- **Fuera de alcance de esta fase**: `roles_admin` (ya estaba bien: solo admin escribe);
-  `notifications` (create abierto a cualquier logueado, bajo pero no nulo); Storage de
-  `profiles`/`store-banners`/`products` (cualquier logueado puede pisar imágenes ajenas,
-  bajo impacto por ser públicas de todos modos).
+- **`notifications` (Firestore) — cerrado en una segunda pasada.** El `create` sigue abierto a
+  cualquier logueado a propósito (es una función real: la tienda avisa al repartidor, el chat
+  de la orden, etc. — restringir a "solo para mí mismo" la rompería). Se le agregó validación
+  de forma: `affectedKeys().hasOnly([...])` con los campos exactos que
+  `src/lib/order-service.ts`/`chat-window.tsx` realmente escriben, y `type` restringido a una
+  lista cerrada de 5 valores reales (`order_status`, `delivery`, `buyer`, `store`, `admin`).
+  Sube la vara contra spam/payloads inyectados sin tocar la función legítima. Nota: esto NO es
+  rate-limiting real (Firestore Rules no lo puede hacer) — eso necesitaría App Check, queda
+  para cuando se abra esa puerta.
+- **Storage (`profiles`/`store-banners`/`products`) — cerrado, con un hallazgo importante en
+  el camino.** Antes cualquier logueado podía pisar la imagen de OTRO usuario/tienda (el path
+  no validaba dueño). `src/components/image-upload.tsx` arma el path como
+  `{folder}/{ownerId}/archivo`. **Hallazgo: `firestore.get()`/`firestore.exists()` (lectura
+  cruzada a Firestore desde Storage Rules) NO funciona de forma confiable en este proyecto** —
+  se probó en vivo contra producción y falló incluso para `isAdmin()` (que ya existía antes de
+  esta fase, con datos verificados correctos). Por eso `store-banners`/`products` NO se
+  arreglaron con un `isStoreOwner(storeId)` vía Firestore (el intento inicial), sino cambiando
+  la convención de esas dos carpetas para usar el **uid del dueño** en vez del `storeId` —
+  mismo patrón simple y ya probado que usan `profiles`/`licenses`
+  (`request.auth.uid == uid`), sin ningún lookup cruzado. Se actualizó `ownerId` en
+  `my-store/edit/page.tsx` y `my-store/products/page.tsx` de `userProfile.storeId` a
+  `user.uid` — no rompe nada porque en esas dos pantallas quien sube SIEMPRE es el dueño
+  autenticado. Las imágenes viejas subidas con el path anterior (`{folder}/{storeId}/...`)
+  siguen siendo legibles (`read: if true`, sin cambios) — solo cambia dónde aterrizan las
+  subidas nuevas.
+  **Hallazgo colateral sin resolver, anotado aparte:** como `isAdmin()` tampoco funciona en
+  Storage Rules, el bypass de admin en `licenses/{uid}` (para ver el carnet de un repartidor
+  al aprobarlo) probablemente **nunca funcionó** — es un bug pre-existente, no algo que rompió
+  esta fase. Arreglarlo bien requiere Custom Claims de Firebase Auth (`request.auth.token.admin`,
+  sin lookup cruzado) en vez de `roles_admin` + `firestore.exists()`; queda pendiente, fuera de
+  alcance de esta fase.
+- **Regla general para el futuro**: en `storage.rules`, nunca condicionar un `allow` a un
+  `firestore.get()`/`firestore.exists()` sin probarlo en vivo primero — puede compilar
+  perfecto y fallar en runtime.
 
 **`npm audit` (mismo bloque de seguridad):** de 33 vulnerabilidades a 14 — `next` pasó de
 14.2.5 a **14.2.35** (mismo mayor, sin breaking changes; `npm audit fix` no lo agarraba solo,

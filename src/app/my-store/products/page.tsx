@@ -650,7 +650,8 @@ export default function ProductManagementPage() {
                     currentImageUrl={formData.imageUrl}
                     onImageUploaded={handleImageUploaded}
                     folder="products"
-                    ownerId={userProfile!.storeId!}
+                    // uid del dueño, no storeId (ver Fase BB en my-store/edit/page.tsx).
+                    ownerId={user!.uid}
                     variant="banner"
                 />
             </div>

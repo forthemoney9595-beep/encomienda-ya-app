@@ -206,11 +206,23 @@ service cloud.firestore {
     }
 
     // 6. NOTIFICACIONES
-    // create: cualquier usuario logueado puede crear (tienda notifica al delivery, etc.)
+    // create: cualquier usuario logueado puede crear -- es una función real (la tienda avisa
+    // al repartidor, el repartidor al cliente, el chat de la orden, etc.), así que no se puede
+    // restringir a "solo para mí mismo" sin romperla. Lo que SÍ se puede exigir es la FORMA del
+    // documento: campos exactos (nada de payloads extra) y `type` de una lista cerrada (los
+    // únicos valores que src/lib/order-service.ts y chat-window.tsx realmente usan) — sube la
+    // vara contra spam/basura sin tocar la función legítima.
     // read/update/delete: solo el destinatario puede ver/marcar sus propias notificaciones
     match /notifications/{notifId} {
       allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.keys().hasAll(['userId', 'title', 'message', 'type', 'read', 'createdAt']) &&
+        request.resource.data.keys().hasOnly(['userId', 'title', 'message', 'type', 'orderId', 'read', 'createdAt', 'icon']) &&
+        request.resource.data.userId is string &&
+        request.resource.data.title is string &&
+        request.resource.data.message is string &&
+        request.resource.data.read == false &&
+        request.resource.data.type in ['order_status', 'delivery', 'buyer', 'store', 'admin'];
     }
 
     // 7. CHATS — solo participantes de la orden (cliente, tienda, repartidor, admin)

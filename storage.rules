@@ -9,26 +9,37 @@ service firebase.storage {
       return request.resource.size < 5 * 1024 * 1024 &&
              request.resource.contentType.matches('image/.*');
     }
+    // OJO (Fase BB): `firestore.exists()`/`firestore.get()` -- lectura cruzada a Firestore
+    // desde Storage Rules -- se probó en vivo contra el proyecto real y NO funciona de forma
+    // confiable (falla incluso para admin, con datos verificados correctos). Por eso acá
+    // NINGUNA regla depende de eso: todo se valida con el propio uid en el path, igual que
+    // profiles/licenses de abajo (patrón probado y funcionando).
     function isAdmin() {
       return firestore.exists(/databases/(default)/documents/roles_admin/$(request.auth.uid));
     }
 
-    // Avatares de perfil — visibles públicamente (se muestran en la UI a otros usuarios)
-    match /profiles/{allPaths=**} {
+    // Avatares de perfil — visibles públicamente, pero cada quien solo puede escribir el
+    // suyo. image-upload.tsx arma el path como profiles/{uid}/archivo (ownerId=user.uid);
+    // antes cualquier logueado podía pisar el avatar de OTRO usuario.
+    match /profiles/{uid}/{allPaths=**} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidImage();
+      allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();
     }
 
-    // Banners de tienda — visibles públicamente en /stores/{id}
-    match /store-banners/{allPaths=**} {
+    // Banners de tienda — visibles públicamente en /stores/{id}. Path:
+    // store-banners/{uid}/archivo, donde {uid} es el uid del DUEÑO de la tienda (no el
+    // storeId -- ver comentario en my-store/edit/page.tsx). Solo esas dos pantallas suben
+    // acá y en ambas el que sube es siempre el dueño autenticado de la tienda.
+    match /store-banners/{uid}/{allPaths=**} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidImage();
+      allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();
     }
 
-    // Fotos de productos — visibles públicamente en el catálogo
-    match /products/{allPaths=**} {
+    // Fotos de productos — visibles públicamente en el catálogo. Path: products/{uid}/archivo
+    // (uid del dueño de la tienda, mismo criterio que store-banners de arriba).
+    match /products/{uid}/{allPaths=**} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidImage();
+      allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();
     }
 
     // Licencias de conducir (DNI/carnet de repartidores) — documento sensible, NUNCA
