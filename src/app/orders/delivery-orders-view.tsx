@@ -41,6 +41,13 @@ import {
 const RELEASE_REASONS = ['Se me rompió el vehículo', 'Emergencia personal', 'No pude ubicar la dirección'];
 const PROBLEM_REASONS = ['El cliente no responde', 'Dirección incorrecta/inaccesible', 'El cliente rechazó el pedido'];
 
+// Tope de pedidos simultáneos por repartidor -- antes no existía ningún límite (el código
+// permitía tomar pedidos sin fin), lo que podía saturar a un repartidor sin que se diera
+// cuenta y demorar entregas ya tomadas. Guardrail de UX, no de seguridad: se valida acá y
+// no en firestore.rules porque contar "pedidos activos del repartidor" requeriría una
+// aggregation query dentro de la regla, que Firestore no soporta bien.
+const MAX_ACTIVE_ORDERS = 3;
+
 // Definimos la interfaz localmente
 interface Order {
   id: string;
@@ -134,6 +141,14 @@ export default function DeliveryOrdersView() {
         variant: 'destructive',
         title: 'Cuenta pendiente de aprobación',
         description: 'Un administrador debe aprobar tu cuenta antes de que puedas tomar pedidos.',
+      });
+      return;
+    }
+    if (myActiveOrders.length >= MAX_ACTIVE_ORDERS) {
+      toast({
+        variant: 'destructive',
+        title: 'Ya tenés el máximo de pedidos en curso',
+        description: `Terminá alguno de tus ${MAX_ACTIVE_ORDERS} pedidos activos antes de tomar otro.`,
       });
       return;
     }
@@ -307,7 +322,7 @@ export default function DeliveryOrdersView() {
             Disponibles ({availableOrders?.length || 0})
           </TabsTrigger>
           <TabsTrigger value="active">
-            En Curso ({myActiveOrders?.length || 0})
+            En Curso ({myActiveOrders?.length || 0}/{MAX_ACTIVE_ORDERS})
           </TabsTrigger>
         </TabsList>
 
@@ -358,8 +373,17 @@ export default function DeliveryOrdersView() {
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button className="w-full" size="lg" onClick={() => handleTakeOrder(order)} disabled={!isApprovedDriver}>
-                        {isApprovedDriver ? 'Tomar Pedido' : 'Cuenta pendiente de aprobación'}
+                    <Button
+                        className="w-full"
+                        size="lg"
+                        onClick={() => handleTakeOrder(order)}
+                        disabled={!isApprovedDriver || myActiveOrders.length >= MAX_ACTIVE_ORDERS}
+                    >
+                        {!isApprovedDriver
+                          ? 'Cuenta pendiente de aprobación'
+                          : myActiveOrders.length >= MAX_ACTIVE_ORDERS
+                          ? `Ya tenés ${MAX_ACTIVE_ORDERS} pedidos en curso`
+                          : 'Tomar Pedido'}
                     </Button>
                 </CardFooter>
               </Card>

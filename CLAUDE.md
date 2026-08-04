@@ -768,7 +768,43 @@ backup** de la base — si alguien borraba/pisaba datos por error, no había vue
     minificado en vez de los nombres/líneas reales de `src/`. Mejora pendiente, no bloqueante
     (el error se captura igual, solo cuesta más leer el stack trace).
 
+## Fase DD (ago 2026): primera tanda de análisis rol por rol
+Después del bloque operativo (Fase CC) se retomó el pedido original de auditar cada rol
+(comprador/tienda/repartidor/admin) para ver qué funcionalidad tiene y qué se podría sumar.
+Antes de proponer nada se verificó el estado real del código (no memoria) con un agente de
+exploración — varias cosas que se creían pendientes ya estaban resueltas (chat en vivo entre
+comprador/tienda/repartidor vía `order_chats`, "Volver a pedir"), y otras confirmadas como
+gaps reales. El usuario priorizó 3 de la lista para esta tanda:
+- **Detalle de producto** (`src/app/stores/[storeId]/page.tsx`): tocar un producto (no el
+  botón +/-) abre un `Dialog` (`ProductDetailDialog`, nuevo) con foto grande, descripción
+  completa (sin `line-clamp`), precio con descuento y control de cantidad — antes tocar un
+  producto no hacía nada, la única info visible era la de la tarjeta truncada.
+- **Favoritos de producto** (`/favorites`): la pestaña "Productos" existía pero estaba
+  `disabled` con un placeholder "Próximamente" y el array hardcodeado vacío. Ahora funciona de
+  punta a punta: se guardan en la misma subcolección `users/{uid}/favorites` que los
+  favoritos de tienda, distinguidos por `type:'product'` (campo que la interfaz ya
+  anticipaba sin usar). El corazón para marcar/desmarcar vive en `ProductDetailDialog`
+  (no en la tarjeta, para no ensuciar el grid). `favorites/page.tsx` filtra
+  `favoritesData` por `type` para separar tiendas de productos.
+- **Tope de pedidos simultáneos del repartidor** (`delivery-orders-view.tsx`): el código
+  permitía tomar pedidos sin ningún límite (`myActiveOrders` es un array, nunca se validaba su
+  tamaño). Nuevo `MAX_ACTIVE_ORDERS = 3` — guardrail de UX, **no de seguridad** (se valida
+  client-side en `handleTakeOrder` y deshabilitando el botón "Tomar Pedido"; no se movió a
+  `firestore.rules` porque contar pedidos activos del repartidor ahí requeriría una
+  aggregation query dentro de la regla, que Firestore no soporta). El tab "En Curso" ahora
+  muestra "N/3".
+- **Verificado en el navegador real por el usuario** (no headless — Playwright sigue sin andar
+  bien en este Windows, ver nota de la Fase Q): las 3 funcionan como se esperaba.
+- **Quedó fuera de esta tanda, anotado en la lista de gaps de rol por rol para retomar
+  después:** propinas al repartidor, cupones/promos de tienda (ya diferido desde Fase P/V),
+  historial de pedidos del comprador sin filtro por estado/fecha, multi-usuario/empleados por
+  tienda, niveles de permiso en el rol admin (hoy binario).
+
 ## Pendientes pre-lanzamiento
+- **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
+  Variables, Production+Preview+Development) — hoy Sentry solo captura en local
+  (`.env.local`); sin esto en Vercel, producción no manda errores a Sentry. Recordatorio
+  explícito pedido por el usuario: avisarle antes del lanzamiento si todavía no se hizo.
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
 - Regenerar el `MP_WEBHOOK_SECRET` (quedó expuesto durante pruebas)
 - Sacar la tabla de cuentas demo visible en `/login` (sirve para pruebas, no para producción)

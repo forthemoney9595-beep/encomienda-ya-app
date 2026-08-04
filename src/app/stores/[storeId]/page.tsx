@@ -6,12 +6,14 @@ import { doc, collection, query, orderBy, where, limit } from 'firebase/firestor
 import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X, ShoppingBag, Home } from 'lucide-react';
+import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X, ShoppingBag, Home, Heart } from 'lucide-react';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { StoreImage } from '@/components/store-image';
 import { StoreCard } from '@/components/store-card';
 import { useCart } from '@/context/cart-context';
+import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { setDoc, deleteDoc } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
@@ -20,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { getCategoryStyle } from '@/lib/category-style';
 import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLAY_ORDER, type WeeklySchedule } from '@/lib/store-hours';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { StarRating } from '@/components/star-rating';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -83,6 +86,7 @@ export default function StorePublicPage() {
   const storeId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   
   const firestore = useFirestore();
+  const { user } = useAuth();
   const { addToCart, storeId: cartStoreId, totalItems, totalPrice, setCartSheetOpen } = useCart();
   const { toast } = useToast();
   const router = useRouter();
@@ -94,6 +98,7 @@ export default function StorePublicPage() {
   const scrollSpyTimeout = useRef<number | undefined>(undefined);
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
 
   // Las flechas del carrusel de destacados quedan deshabilitadas cuando no hay a dónde
   // desplazar (ej: solo 2 productos destacados que ya entran completos en pantalla) --
@@ -163,6 +168,41 @@ export default function StorePublicPage() {
     () => (relatedRaw || []).filter(s => s.id !== storeId),
     [relatedRaw, storeId],
   );
+
+  // 2d. Favoritos de PRODUCTO — misma subcolección que los favoritos de tienda
+  // (`users/{uid}/favorites`), distinguidos por `type:'product'` (el resto no tiene ese
+  // campo, ver toggleFavorite en page.tsx). Colección chica y acotada al propio usuario.
+  const productFavoritesQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'users', user.uid, 'favorites');
+  }, [firestore, user]);
+  const { data: favoritesData } = useCollection<{ id: string; type?: string }>(productFavoritesQuery);
+  const favoriteProductIds = useMemo(
+    () => new Set((favoritesData || []).filter(f => f.type === 'product').map(f => f.id)),
+    [favoritesData],
+  );
+
+  const toggleFavoriteProduct = async (product: Product) => {
+    if (!user || !firestore) {
+      toast({ title: 'Iniciá sesión', description: 'Necesitás una cuenta para guardar favoritos.' });
+      return;
+    }
+    const favRef = doc(firestore, 'users', user.uid, 'favorites', product.id);
+    if (favoriteProductIds.has(product.id)) {
+      await deleteDoc(favRef);
+    } else {
+      await setDoc(favRef, {
+        id: product.id,
+        type: 'product',
+        storeId,
+        storeName: store?.name || '',
+        name: product.name,
+        imageUrl: product.imageUrl || '',
+        price: effectivePrice(product),
+        addedAt: new Date(),
+      });
+    }
+  };
 
   // 3. Filtrar y Ordenar
   const products = useMemo(() => {
@@ -513,7 +553,7 @@ export default function StorePublicPage() {
                 <CarouselContent>
                     {featuredProducts.map(product => (
                         <CarouselItem key={product.id} className="basis-[78%] sm:basis-1/2 lg:basis-1/3">
-                            <ProductCard product={product} onAdd={handleAddToCart} isFeatured isDisabled={!storeStatus.isOpen} />
+                            <ProductCard product={product} onAdd={handleAddToCart} onOpenDetail={setDetailProduct} isFeatured isDisabled={!storeStatus.isOpen} />
                         </CarouselItem>
                     ))}
                 </CarouselContent>
@@ -533,7 +573,7 @@ export default function StorePublicPage() {
                 <h2 className="font-headline text-xl font-bold mb-2">{category}</h2>
                 <div>
                     {items.map(product => (
-                        <ProductRow key={product.id} product={product} onAdd={handleAddToCart} isDisabled={!storeStatus.isOpen} />
+                        <ProductRow key={product.id} product={product} onAdd={handleAddToCart} onOpenDetail={setDetailProduct} isDisabled={!storeStatus.isOpen} />
                     ))}
                 </div>
             </div>
@@ -672,6 +712,15 @@ export default function StorePublicPage() {
       )}
     </div>
 
+    <ProductDetailDialog
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onAdd={handleAddToCart}
+        isDisabled={!storeStatus.isOpen}
+        isFavorite={!!detailProduct && favoriteProductIds.has(detailProduct.id)}
+        onToggleFavorite={() => detailProduct && toggleFavoriteProduct(detailProduct)}
+    />
+
     {/* BARRA DE CARRITO FLOTANTE — solo si el carrito activo es el de esta tienda.
         bottom-nav (celular, solo compradores) ocupa 4rem + safe-area, por eso el
         offset en mobile; en desktop no hay bottom-nav, así que va pegada abajo. */}
@@ -717,44 +766,46 @@ function StoreNotFound({ router }: { router: any }) {
     );
 }
 
-function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Product, onAdd: (p: Product) => void, isFeatured?: boolean, isDisabled?: boolean }) {
+function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: { product: Product, onAdd: (p: Product) => void, onOpenDetail: (p: Product) => void, isFeatured?: boolean, isDisabled?: boolean }) {
     const outOfStock = product.stock != null && product.stock <= 0;
     return (
         <Card className={`flex flex-col overflow-hidden border hover:shadow-md transition-all ${isFeatured ? 'border-warning/30 bg-warning/5' : ''} ${(isDisabled || outOfStock) ? 'opacity-70 grayscale' : ''}`}>
-            <div className="relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden">
-                {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
-                ) : (
-                    <Package className="h-10 w-10 text-muted-foreground/50" />
-                )}
-                {isFeatured && (
-                    <span className="absolute top-2 right-2 bg-warning text-warning-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
-                        POPULAR
-                    </span>
-                )}
-                {!outOfStock && product.stock != null && product.stock <= 3 && (
-                    <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
-                        Quedan {product.stock}
-                    </span>
-                )}
-                {!!product.discountPercent && (
-                    <span className="absolute bottom-2 left-2 bg-success text-success-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
-                        -{product.discountPercent}%
-                    </span>
-                )}
-            </div>
-            <CardHeader className="p-4 pb-0">
-                <div className="flex justify-between items-start gap-2">
-                    <CardTitle className="text-base line-clamp-1">{product.name}</CardTitle>
-                    <span className="flex flex-col items-end shrink-0">
-                        {!!product.discountPercent && (
-                            <span className="text-xs text-muted-foreground line-through">${product.price}</span>
-                        )}
-                        <span className="font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
-                    </span>
+            <button type="button" onClick={() => onOpenDetail(product)} className="text-left">
+                <div className="relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden">
+                    {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                        <Package className="h-10 w-10 text-muted-foreground/50" />
+                    )}
+                    {isFeatured && (
+                        <span className="absolute top-2 right-2 bg-warning text-warning-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                            POPULAR
+                        </span>
+                    )}
+                    {!outOfStock && product.stock != null && product.stock <= 3 && (
+                        <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                            Quedan {product.stock}
+                        </span>
+                    )}
+                    {!!product.discountPercent && (
+                        <span className="absolute bottom-2 left-2 bg-success text-success-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                            -{product.discountPercent}%
+                        </span>
+                    )}
                 </div>
-                <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
-            </CardHeader>
+                <CardHeader className="p-4 pb-0">
+                    <div className="flex justify-between items-start gap-2">
+                        <CardTitle className="text-base line-clamp-1">{product.name}</CardTitle>
+                        <span className="flex flex-col items-end shrink-0">
+                            {!!product.discountPercent && (
+                                <span className="text-xs text-muted-foreground line-through">${product.price}</span>
+                            )}
+                            <span className="font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
+                        </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
+                </CardHeader>
+            </button>
             <CardFooter className="p-4 mt-auto">
                 {outOfStock ? (
                     <Button className="w-full" size="sm" disabled>Sin stock</Button>
@@ -766,11 +817,11 @@ function ProductCard({ product, onAdd, isFeatured, isDisabled }: { product: Prod
     );
 }
 
-function ProductRow({ product, onAdd, isDisabled }: { product: Product, onAdd: (p: Product) => void, isDisabled?: boolean }) {
+function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Product, onAdd: (p: Product) => void, onOpenDetail: (p: Product) => void, isDisabled?: boolean }) {
     const outOfStock = product.stock != null && product.stock <= 0;
     return (
         <div className={cn('flex items-center gap-4 py-4 border-b last:border-0', (isDisabled || outOfStock) && 'opacity-60')}>
-            <div className="flex-1 min-w-0">
+            <button type="button" onClick={() => onOpenDetail(product)} className="flex-1 min-w-0 text-left">
                 <h3 className="font-semibold line-clamp-1">{product.name}</h3>
                 <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>
                 <p className="mt-1.5 flex items-center gap-2">
@@ -787,15 +838,15 @@ function ProductRow({ product, onAdd, isDisabled }: { product: Product, onAdd: (
                 ) : product.stock != null && product.stock <= 3 ? (
                     <p className="text-xs font-medium text-destructive mt-1">Quedan {product.stock}</p>
                 ) : null}
-            </div>
+            </button>
             <div className="relative h-20 w-20 shrink-0">
-                <div className="h-20 w-20 rounded-xl bg-muted overflow-hidden flex items-center justify-center">
+                <button type="button" onClick={() => onOpenDetail(product)} className="h-20 w-20 rounded-xl bg-muted overflow-hidden flex items-center justify-center">
                     {product.imageUrl ? (
                         <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
                         <Package className="h-8 w-8 text-muted-foreground/50" />
                     )}
-                </div>
+                </button>
                 {!outOfStock && (
                     <div className="absolute -bottom-2 -right-2">
                         <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} variant="compact" maxQuantity={product.stock ?? undefined} />
@@ -803,6 +854,64 @@ function ProductRow({ product, onAdd, isDisabled }: { product: Product, onAdd: (
                 )}
             </div>
         </div>
+    );
+}
+
+function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, onToggleFavorite }: { product: Product | null, onClose: () => void, onAdd: (p: Product) => void, isDisabled?: boolean, isFavorite?: boolean, onToggleFavorite?: () => void }) {
+    const outOfStock = !!product && product.stock != null && product.stock <= 0;
+    return (
+        <Dialog open={!!product} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-md">
+                {product && (
+                    <>
+                        <div className="relative -mx-6 -mt-6 h-56 w-[calc(100%+3rem)] bg-muted flex items-center justify-center overflow-hidden rounded-t-lg">
+                            {product.imageUrl ? (
+                                <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                            ) : (
+                                <Package className="h-16 w-16 text-muted-foreground/50" />
+                            )}
+                            {!!product.discountPercent && (
+                                <span className="absolute bottom-3 left-3 bg-success text-success-foreground text-xs font-bold px-2 py-1 rounded-full shadow-sm">
+                                    -{product.discountPercent}%
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={onToggleFavorite}
+                                aria-label={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                                className="absolute top-3 right-3 h-9 w-9 rounded-full bg-background/80 backdrop-blur-sm shadow-sm flex items-center justify-center hover:scale-110 transition-transform"
+                            >
+                                <Heart className={cn('h-[18px] w-[18px]', isFavorite ? 'fill-primary text-primary' : 'text-foreground')} />
+                            </button>
+                        </div>
+                        <DialogHeader className="text-left pt-2">
+                            <DialogTitle className="text-xl">{product.name}</DialogTitle>
+                            {product.description && (
+                                <DialogDescription className="text-sm text-foreground/80 pt-1">
+                                    {product.description}
+                                </DialogDescription>
+                            )}
+                        </DialogHeader>
+                        <div className="flex items-center justify-between">
+                            <span className="flex items-baseline gap-2">
+                                {!!product.discountPercent && (
+                                    <span className="text-sm text-muted-foreground line-through">${product.price}</span>
+                                )}
+                                <span className="text-2xl font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
+                            </span>
+                            {!outOfStock && product.stock != null && product.stock <= 3 && (
+                                <span className="text-xs font-medium text-destructive">Quedan {product.stock}</span>
+                            )}
+                        </div>
+                        {outOfStock ? (
+                            <Button className="w-full" disabled>Sin stock</Button>
+                        ) : (
+                            <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} maxQuantity={product.stock ?? undefined} />
+                        )}
+                    </>
+                )}
+            </DialogContent>
+        </Dialog>
     );
 }
 

@@ -54,10 +54,14 @@ export default function FavoritesPage() {
     return collection(firestore, 'users', user.uid, 'favorites');
   }, [firestore, user]);
 
-  const { data: favoritesData, isLoading: favoritesLoading } = useCollection<{id: string, type?: string}>(favoritesQuery);
+  const { data: favoritesData, isLoading: favoritesLoading } = useCollection<{id: string, type?: string, storeId?: string, storeName?: string, name?: string, imageUrl?: string, price?: number}>(favoritesQuery);
 
-  // Crear un Set de IDs para búsqueda rápida
-  const favoriteIds = useMemo(() => new Set(favoritesData?.map(f => f.id)), [favoritesData]);
+  // Crear un Set de IDs para búsqueda rápida — solo favoritos de TIENDA (los de producto
+  // llevan type:'product' y se filtran aparte, ver favoriteProducts abajo).
+  const favoriteIds = useMemo(
+    () => new Set(favoritesData?.filter(f => f.type !== 'product').map(f => f.id)),
+    [favoritesData],
+  );
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -71,8 +75,10 @@ export default function FavoritesPage() {
     return allStores.filter(store => favoriteIds.has(store.id));
   }, [allStores, favoriteIds]);
 
-  // (Futuro: Aquí filtrarías los productos favoritos cuando implementemos esa parte)
-  const favoriteProducts: any[] = []; 
+  const favoriteProducts = useMemo(
+    () => (favoritesData || []).filter(f => f.type === 'product'),
+    [favoritesData],
+  );
 
   const isLoading = authLoading || storesLoading || favoritesLoading;
 
@@ -115,9 +121,9 @@ export default function FavoritesPage() {
                 <StoreIcon className="mr-2 h-4 w-4" />
                 Tiendas ({favoriteStores.length})
             </TabsTrigger>
-            <TabsTrigger value="products" disabled>
+            <TabsTrigger value="products">
                 <ShoppingBag className="mr-2 h-4 w-4" />
-                Productos (Próximamente)
+                Productos ({favoriteProducts.length})
             </TabsTrigger>
         </TabsList>
         
@@ -200,11 +206,49 @@ export default function FavoritesPage() {
             </div>
         </TabsContent>
 
-        <TabsContent value="products" className="mt-4">
-            <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
-                <ShoppingBag className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                <h3 className="text-lg font-semibold">Próximamente</h3>
-                <p className="text-sm text-muted-foreground">Pronto podrás guardar tus productos favoritos individualmente.</p>
+        <TabsContent value="products" className="mt-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {favoriteProducts.length === 0 ? (
+                    <div className="col-span-full text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">
+                        <ShoppingBag className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                        <h3 className="text-lg font-semibold">No tienes productos favoritos</h3>
+                        <p className="text-sm text-muted-foreground">Marcá el corazón en un producto (dentro de una tienda) para verlo aquí.</p>
+                    </div>
+                ) : (
+                    favoriteProducts.map((product) => (
+                        <Link href={`/stores/${product.storeId}`} key={product.id} className="group">
+                            <Card className="h-full overflow-hidden transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1 relative border-transparent hover:border-primary/20">
+                                <div className="relative h-36 w-full bg-muted flex items-center justify-center">
+                                    {product.imageUrl ? (
+                                        <Image
+                                            src={product.imageUrl}
+                                            alt={product.name || ''}
+                                            fill
+                                            style={{ objectFit: 'cover' }}
+                                            className="transition-transform duration-500 group-hover:scale-105"
+                                        />
+                                    ) : (
+                                        <ShoppingBag className="h-10 w-10 text-muted-foreground/30" />
+                                    )}
+                                    <button
+                                        onClick={(e) => handleRemoveFavorite(e, product.id, product.name || 'Producto')}
+                                        className="absolute top-2 right-2 p-2 rounded-full bg-background/80 hover:bg-background shadow-sm backdrop-blur-sm transition-all hover:scale-110 z-10"
+                                        title="Quitar de favoritos"
+                                    >
+                                        <Heart className="h-5 w-5 fill-primary text-primary" />
+                                    </button>
+                                </div>
+                                <CardHeader className="p-4 pb-2 space-y-1">
+                                    <CardTitle className="text-base font-bold line-clamp-1">{product.name}</CardTitle>
+                                    <p className="text-xs text-muted-foreground line-clamp-1">{product.storeName}</p>
+                                </CardHeader>
+                                <CardContent className="p-4 pt-0">
+                                    <span className="font-bold text-foreground">${(product.price || 0).toFixed(0)}</span>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    ))
+                )}
             </div>
         </TabsContent>
       </Tabs>
