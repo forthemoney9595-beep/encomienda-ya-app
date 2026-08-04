@@ -1,6 +1,11 @@
+const { withSentryConfig } = require('@sentry/nextjs');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /* config options here */
+  experimental: {
+    instrumentationHook: true,
+  },
   images: {
     remotePatterns: [
       {
@@ -37,4 +42,14 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  silent: true,
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
+  // Sin org/project/authToken todavía -> no sube source maps (los stack traces
+  // en Sentry se van a ver minificados por ahora). El monitoreo de errores en
+  // sí funciona igual, esto es solo para que las líneas de código sean legibles.
+});

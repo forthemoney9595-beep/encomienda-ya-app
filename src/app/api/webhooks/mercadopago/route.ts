@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import MercadoPagoConfig, { Payment } from "mercadopago";
 import { createHmac } from "crypto";
+import * as Sentry from "@sentry/nextjs";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
@@ -253,9 +254,12 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error("❌ [Webhook] Error:", error);
+    // Un pago no encontrado (ID inválido/expirado) es esperable, no un fallo real —
+    // no ensucia Sentry con ruido. Cualquier otro error sí (es plata real en juego).
     if (error.status === 404 || error.cause?.some((c: any) => c.code === 2000)) {
         return NextResponse.json({ error: "Payment not found" }, { status: 200 });
     }
+    Sentry.captureException(error, { tags: { route: "webhooks/mercadopago" } });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

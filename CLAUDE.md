@@ -113,6 +113,9 @@ NEXT_PUBLIC_FIREBASE_VAPID_KEY=
 
 # App
 NEXT_PUBLIC_BASE_URL=https://encomienda-ya-app.vercel.app
+
+# Sentry (monitoreo de errores, Fase CC)
+NEXT_PUBLIC_SENTRY_DSN=
 ```
 El archivo `.env.local` con los valores reales NO va a git. Hay que copiarlo manualmente en cada PC.
 
@@ -723,6 +726,47 @@ de gama baja). Se agregó un bloque `prefers-reduced-motion` que apaga las anima
 **Verificado a 430px y 1440px con datos reales:** sin overflow horizontal (430/430), sin errores
 de consola; el scroll del inicio en celular bajó de **3.183px a 1.854px**; ⌘K abre con el atajo,
 lista 18 ítems y filtra bien; las 3 pestañas de la tienda funcionan.
+
+## Fase CC (ago 2026): Bloque operativo — backups de Firestore
+Salió de una charla sobre qué infraestructura falta antes de lanzar (el usuario tiene el plan
+Blaze y pidió aprovechar herramientas que ese plan habilita). Primer ítem: **no había ningún
+backup** de la base — si alguien borraba/pisaba datos por error, no había vuelta atrás.
+- **Backup automático nativo de Firestore** (feature de Blaze, sin Cloud Functions ni código):
+  `firebase firestore:backups:schedules:create --retention 7d --recurrence DAILY`. Un backup
+  completo por día, se conservan los últimos 7. Ya está corriendo en producción
+  (`studio-354048519-4bc1e`, database `(default)`).
+- Para restaurar (si algún día hace falta): `firebase firestore:databases:restore` apuntando a
+  un backup de `firebase firestore:backups:list`. Restaura a una base NUEVA (no pisa la
+  existente), así que es seguro probarlo sin miedo a perder la base actual.
+- Costo: se factura como almacenamiento normal de Firestore (mismo precio por GiB que los
+  datos en vivo) — al tamaño actual de la base, centavos por mes.
+- **Sentry (monitoreo de errores).** Firestore no tiene equivalente a Sentry (Crashlytics es
+  mobile-nativo, Performance Monitoring mide velocidad, no excepciones) — hacía falta una pieza
+  aparte para dejar de depender de logs de Vercel que nadie mira. Setup manual (SDK v10, sin
+  wizard — el wizard pide login interactivo en el navegador, no se puede automatizar):
+  `@sentry/nextjs` instalado; `sentry.server.config.ts`/`sentry.edge.config.ts` (raíz del repo,
+  `Sentry.init` con el DSN) + `src/instrumentation.ts` (los importa según
+  `NEXT_RUNTIME`, y exporta `onRequestError = Sentry.captureRequestError` — **sin este export
+  los errores de Route Handlers no llegan a Sentry**, se confirmó en vivo) +
+  `src/instrumentation-client.ts` (init del lado cliente + `onRouterTransitionStart` para
+  trazar navegaciones) + `next.config.js` con `experimental.instrumentationHook: true`
+  (**obligatorio en Next 14**, deja de ser necesario recién en Next 15) envuelto en
+  `withSentryConfig`. `src/app/global-error.tsx` (nuevo, captura errores del root layout) y
+  `src/app/error.tsx` (ya existía, ahora también manda a Sentry) cubren errores de render.
+  DSN en `NEXT_PUBLIC_SENTRY_DSN` (`.env.local`, no versionado — falta agregarlo a las env vars
+  de Vercel para que capture en producción). `tracesSampleRate: 0.1` (10% de las requests, para
+  no gastar la cuota gratis de golpe). **Verificado end-to-end contra el proyecto real de
+  Sentry** (`javascript-nextjs`): un error de prueba lanzado desde una API route local apareció
+  en el dashboard (Issues, Number of Errors) en segundos.
+  - **`Sentry.captureException` agregado en los catches que más importan** (antes solo
+    `console.error`, invisible fuera de los logs de Vercel): `/api/webhooks/mercadopago` (el
+    caso que motivó todo esto — un fallo silencioso ahí deja un pago sin marcar), `/api/orders/create`,
+    `/api/checkout`, y `checkout-dialog.tsx` (los dos catches: falla al buscar la tienda al
+    abrir el diálogo, y falla al confirmar el pedido).
+  - **Sin subida de source maps todavía** (falta `org`/`project`/`SENTRY_AUTH_TOKEN` en
+    `withSentryConfig` — no se configuró aún): los stack traces en Sentry se ven con código
+    minificado en vez de los nombres/líneas reales de `src/`. Mejora pendiente, no bloqueante
+    (el error se captura igual, solo cuesta más leer el stack trace).
 
 ## Pendientes pre-lanzamiento
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla

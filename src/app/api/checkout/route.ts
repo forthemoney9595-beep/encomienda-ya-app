@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import MercadoPagoConfig, { Preference } from 'mercadopago';
 import { adminDb } from '@/lib/firebase-admin';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
@@ -127,6 +128,7 @@ export async function POST(request: Request) {
 
     } catch (error: any) {
         console.error("❌ [Checkout API] Error Catch:", error);
+        Sentry.captureException(error, { tags: { route: "checkout" } });
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import * as Sentry from '@sentry/nextjs';
 import { Button } from '@/components/ui/button';
 import { Home, RotateCcw, AlertTriangle } from 'lucide-react';
 
@@ -14,6 +15,7 @@ export default function GlobalErrorBoundary({
 }) {
   useEffect(() => {
     console.error('💥 Error no controlado:', error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (

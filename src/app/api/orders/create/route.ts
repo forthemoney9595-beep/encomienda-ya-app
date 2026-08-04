@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -259,6 +260,7 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error("❌ [API Error Global]:", error);
+    Sentry.captureException(error, { tags: { route: "orders/create" } });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

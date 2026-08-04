@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,6 +98,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 }
             } catch (error) {
                 console.error("Error buscando tienda:", error);
+                Sentry.captureException(error, { tags: { component: "checkout-dialog", stage: "fetch-store" } });
             }
         }
     };
@@ -262,6 +264,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
 
     } catch (error: any) {
         console.error("Error en checkout:", error);
+        Sentry.captureException(error, { tags: { component: "checkout-dialog", stage: "submit" } });
         toast({ variant: "destructive", title: "Error al procesar", description: error.message });
     } finally {
         setIsProcessing(false);
