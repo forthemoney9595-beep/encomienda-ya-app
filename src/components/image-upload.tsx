@@ -17,6 +17,11 @@ interface ImageUploadProps {
   // storage.rules pueda comprobar quién puede leer/escribir cada archivo (ver licenses/).
   ownerId: string;
   variant?: 'avatar' | 'banner';
+  // Para archivos sensibles (licencias/DNI): en vez de devolver la URL pública con token
+  // permanente de getDownloadURL(), devuelve solo el PATH del archivo. Quien lo muestre
+  // tiene que pedir una URL firmada de corta duración vía /api/licenses/signed-url -- así
+  // el archivo no queda accesible para siempre a cualquiera que consiga el link.
+  storeRawPath?: boolean;
 }
 
 export function ImageUpload({
@@ -24,7 +29,8 @@ export function ImageUpload({
   onImageUploaded,
   folder = 'uploads',
   ownerId,
-  variant = 'avatar'
+  variant = 'avatar',
+  storeRawPath = false,
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(currentImageUrl);
@@ -69,15 +75,19 @@ export function ImageUpload({
       // Referencia en Firebase Storage: carpeta/dueño/timestamp_nombre.jpg -- el id del
       // dueño en el path es lo que permite a storage.rules restringir quién puede leer/
       // sobreescribir cada archivo.
-      const storageRef = ref(storage, `${folder}/${ownerId}/${Date.now()}_${file.name}`);
-      
+      const path = `${folder}/${ownerId}/${Date.now()}_${file.name}`;
+      const storageRef = ref(storage, path);
+
       // Subir
       const snapshot = await uploadBytes(storageRef, file);
-      
-      // Obtener URL pública
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      
-      onImageUploaded(downloadURL);
+
+      if (storeRawPath) {
+        // Sensible: no generamos una URL pública permanente, solo devolvemos el path.
+        onImageUploaded(path);
+      } else {
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        onImageUploaded(downloadURL);
+      }
       toast({
         title: "Imagen subida",
         description: "Tu imagen se ha actualizado correctamente.",

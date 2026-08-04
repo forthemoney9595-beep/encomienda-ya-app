@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/auth-context';
 import type { UserProfile } from '@/context/auth-context';
 import { describeSchedule } from '@/lib/store-hours';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +39,29 @@ interface PendingListProps {
 }
 
 export function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading }: PendingListProps) {
+  const { user: adminUser } = useAuth();
   const [selectedUser, setSelectedUser] = useState<PendingUser | null>(null);
+  // Fotos de licencia: se piden como URLs firmadas de corta duración (nunca el link
+  // permanente con token viejo) al abrir el detalle -- ver /api/licenses/signed-url.
+  const [licenseUrls, setLicenseUrls] = useState<Record<string, string | null>>({});
+  const [loadingLicenses, setLoadingLicenses] = useState(false);
+
+  useEffect(() => {
+    if (!selectedUser || selectedUser.role !== 'delivery' || !adminUser) { setLicenseUrls({}); return; }
+    let cancelled = false;
+    setLoadingLicenses(true);
+    adminUser.getIdToken()
+      .then(token => fetch('/api/licenses/signed-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid: selectedUser.id }),
+      }))
+      .then(res => res.json())
+      .then(data => { if (!cancelled) setLicenseUrls(data); })
+      .catch(err => console.error('Error resolviendo fotos de licencia:', err))
+      .finally(() => { if (!cancelled) setLoadingLicenses(false); });
+    return () => { cancelled = true; };
+  }, [selectedUser, adminUser]);
 
   if (isLoading) return <Skeleton className="h-48 w-full" />;
 
@@ -126,18 +149,22 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                   {(selectedUser.licenseUrl || selectedUser.licenseBackUrl || selectedUser.licenseSelfieUrl) ? (
                     <div className="grid grid-cols-3 gap-2">
                       {([
-                        { label: 'Frente', url: selectedUser.licenseUrl },
-                        { label: 'Dorso', url: selectedUser.licenseBackUrl },
-                        { label: 'Selfie', url: selectedUser.licenseSelfieUrl },
-                      ]).map(({ label, url }) => (
+                        { label: 'Frente', has: !!selectedUser.licenseUrl, url: licenseUrls.licenseUrl },
+                        { label: 'Dorso', has: !!selectedUser.licenseBackUrl, url: licenseUrls.licenseBackUrl },
+                        { label: 'Selfie', has: !!selectedUser.licenseSelfieUrl, url: licenseUrls.licenseSelfieUrl },
+                      ]).map(({ label, has, url }) => (
                         <div key={label} className="space-y-1">
                           <p className="text-[10px] text-muted-foreground text-center">{label}</p>
-                          {url ? (
+                          {!has ? (
+                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-destructive text-center px-1">Falta</div>
+                          ) : url ? (
                             <a href={url} target="_blank" rel="noreferrer" className="block relative h-20 rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition">
                               <img src={url} alt={label} className="h-full w-full object-cover" />
                             </a>
                           ) : (
-                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-destructive text-center px-1">Falta</div>
+                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-muted-foreground text-center px-1">
+                              {loadingLicenses ? 'Cargando...' : 'Error'}
+                            </div>
                           )}
                         </div>
                       ))}

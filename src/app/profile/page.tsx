@@ -58,6 +58,12 @@ export default function ProfilePage() {
     const [licenseUrl, setLicenseUrl] = useState('');          // frente del carnet (compat con el campo viejo)
     const [licenseBackUrl, setLicenseBackUrl] = useState('');   // dorso del carnet
     const [licenseSelfieUrl, setLicenseSelfieUrl] = useState(''); // selfie sosteniendo el carnet
+    // URLs YA GUARDADAS se muestran vía una URL firmada de 5 min (/api/licenses/signed-url),
+    // nunca directo -- ver Fase BB: guardar un link público con token permanente para un DNI
+    // es el propio hallazgo de seguridad que esto corrige. Si el campo recién se subió y
+    // todavía no se guardó, no hay nada que resolver (ver "justUploaded" en el render).
+    const [licenseDisplayUrls, setLicenseDisplayUrls] = useState<Record<string, string | null>>({});
+    const [loadingLicenseUrls, setLoadingLicenseUrls] = useState(false);
 
     const userDocRef = useMemo(() => {
         if (!firestore || !user?.uid) return null;
@@ -84,6 +90,29 @@ export default function ProfilePage() {
             }
         }
     }, [userProfile]);
+
+    // Resuelve las 3 fotos de licencia YA GUARDADAS a URLs firmadas de corta duración, para
+    // poder mostrarlas en esta misma pantalla sin guardar un link permanente en ningún lado.
+    useEffect(() => {
+        if (!user || userProfile?.role !== 'delivery') return;
+        const hasAny = (userProfile as any).licenseUrl || (userProfile as any).licenseBackUrl || (userProfile as any).licenseSelfieUrl;
+        if (!hasAny) return;
+
+        let cancelled = false;
+        setLoadingLicenseUrls(true);
+        user.getIdToken()
+            .then(token => fetch('/api/licenses/signed-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ uid: user.uid }),
+            }))
+            .then(res => res.json())
+            .then(data => { if (!cancelled) setLicenseDisplayUrls(data); })
+            .catch(err => console.error('Error resolviendo fotos de licencia:', err))
+            .finally(() => { if (!cancelled) setLoadingLicenseUrls(false); });
+
+        return () => { cancelled = true; };
+    }, [user, userProfile]);
 
     useEffect(() => {
         if (!authLoading && !user) router.push('/login');
@@ -443,16 +472,27 @@ export default function ProfilePage() {
                                             </p>
                                             <div className="grid gap-3 sm:grid-cols-3">
                                                 {([
-                                                    { label: 'Frente del carnet', value: licenseUrl, set: setLicenseUrl },
-                                                    { label: 'Dorso del carnet', value: licenseBackUrl, set: setLicenseBackUrl },
-                                                    { label: 'Selfie con el carnet', value: licenseSelfieUrl, set: setLicenseSelfieUrl },
-                                                ]).map(({ label, value, set }) => (
+                                                    { label: 'Frente del carnet', field: 'licenseUrl', value: licenseUrl, set: setLicenseUrl },
+                                                    { label: 'Dorso del carnet', field: 'licenseBackUrl', value: licenseBackUrl, set: setLicenseBackUrl },
+                                                    { label: 'Selfie con el carnet', field: 'licenseSelfieUrl', value: licenseSelfieUrl, set: setLicenseSelfieUrl },
+                                                ] as const).map(({ label, field, value, set }) => {
+                                                    // Compat con datos viejos (URL completa con token ya guardada); lo nuevo es
+                                                    // un path que se resuelve a una URL firmada de 5 min vía el useEffect de arriba.
+                                                    const isLegacyUrl = value.startsWith('http');
+                                                    const displayUrl = isLegacyUrl ? value : licenseDisplayUrls[field];
+                                                    return (
                                                     <div key={label} className="space-y-1.5">
                                                         <p className="text-xs font-medium text-muted-foreground">{label}</p>
                                                         <div className="border-2 border-dashed rounded-lg p-3 flex flex-col items-center justify-center bg-muted/20 min-h-[140px]">
                                                             {value ? (
                                                                 <div className="relative w-full h-32">
-                                                                    <img src={value} alt={label} className="w-full h-full object-contain rounded-md" />
+                                                                    {displayUrl ? (
+                                                                        <img src={displayUrl} alt={label} className="w-full h-full object-contain rounded-md" />
+                                                                    ) : (
+                                                                        <div className="flex h-full w-full items-center justify-center text-center text-xs text-muted-foreground px-2">
+                                                                            {loadingLicenseUrls ? 'Cargando...' : '✅ Imagen cargada (se verá al guardar)'}
+                                                                        </div>
+                                                                    )}
                                                                     <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => set('')}>
                                                                         <Trash2 className="h-3 w-3" />
                                                                     </Button>
@@ -462,12 +502,14 @@ export default function ProfilePage() {
                                                                     onImageUploaded={set}
                                                                     folder="licenses"
                                                                     ownerId={user!.uid}
+                                                                    storeRawPath
                                                                     variant="banner"
                                                                 />
                                                             )}
                                                         </div>
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground">
                                                 💡 La selfie sirve para confirmar que el carnet es tuyo. Sostené el carnet junto a tu cara.

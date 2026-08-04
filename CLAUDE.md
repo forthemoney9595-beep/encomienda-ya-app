@@ -794,15 +794,41 @@ inflar su propio `rating` sin una reseña real, o auto-aprobarse.
   autenticado. Las imágenes viejas subidas con el path anterior (`{folder}/{storeId}/...`)
   siguen siendo legibles (`read: if true`, sin cambios) — solo cambia dónde aterrizan las
   subidas nuevas.
-  **Hallazgo colateral sin resolver, anotado aparte:** como `isAdmin()` tampoco funciona en
-  Storage Rules, el bypass de admin en `licenses/{uid}` (para ver el carnet de un repartidor
-  al aprobarlo) probablemente **nunca funcionó** — es un bug pre-existente, no algo que rompió
-  esta fase. Arreglarlo bien requiere Custom Claims de Firebase Auth (`request.auth.token.admin`,
-  sin lookup cruzado) en vez de `roles_admin` + `firestore.exists()`; queda pendiente, fuera de
-  alcance de esta fase.
+  **Hallazgo colateral — resuelto en la misma fase, con un fix más de fondo.** Al investigar
+  por qué `isAdmin()` fallaba en Storage Rules, se encontró algo peor: el panel admin mostraba
+  la foto del carnet vía `<img src={licenseUrl}>`, donde `licenseUrl` es una URL de descarga de
+  Firebase con un **token de acceso permanente incrustado** (`?alt=media&token=...`). Esa URL
+  sirve el archivo para siempre a CUALQUIERA que la tenga — sin login, sin pasar nunca por
+  Storage Rules (Firebase resuelve el token antes de mirar las reglas) — para un documento de
+  identidad (DNI/carnet) es un riesgo real de exposición permanente, no solo un bug de reglas.
+  - **`src/components/image-upload.tsx`**: nueva prop `storeRawPath` — para archivos sensibles,
+    en vez de devolver la URL con token, devuelve solo el PATH del archivo.
+  - **`src/app/my-store/edit/page.tsx` y `my-store/products/page.tsx`**: de paso, se cambió
+    `ownerId` de `userProfile.storeId` a `user.uid` (ver arriba) — nada que ver con licencias,
+    fue el fix de `firestore.get()` roto.
+  - **Nueva `src/app/api/licenses/signed-url/route.ts`** (Admin SDK, rate-limited): dado un
+    `uid`, devuelve URLs de acceso de **5 minutos** para las 3 fotos de licencia. Solo el propio
+    usuario o un admin pueden pedirlo (nunca un path arbitrario — siempre lee el path guardado
+    en Firestore, para no abrir un oráculo de firmado de cualquier archivo del bucket). Como usa
+    Admin SDK, bypasea Storage Rules por completo — el `isAdmin()` roto deja de importar para
+    este flujo real.
+  - **`profile/page.tsx`, `admin/pending-list.tsx`, `admin/delivery/delivery-personnel-list.tsx`**:
+    los 3 lugares que muestran el carnet ahora piden la URL firmada a la API en vez de leer
+    `licenseUrl` directo. Compat con datos viejos: si el valor guardado ya es una URL completa
+    (`http...`, de antes de este fix), la API la devuelve tal cual sin firmar nada nuevo.
+  - **Verificado contra producción real**: dueño ve sus propias fotos (200), admin ve las de
+    otro usuario (200), un comprador cualquiera intenta ver las de otro (403 bloqueado); y una
+    subida nueva simulada (path puro, sin token) devuelve una URL firmada real de GCS
+    (`Expires=...&Signature=...`) que efectivamente sirve la imagen (200, `image/png`).
+  - `storage.rules`: el comentario de `licenses/{uid}` se actualizó para dejar claro que la app
+    ya no depende de esa regla para leer (todo pasa por la API con Admin SDK); se deja la regla
+    como está por si algún día se lee directo desde el cliente, pero el `isAdmin()` de ahí sigue
+    roto y de bajo impacto real ahora.
 - **Regla general para el futuro**: en `storage.rules`, nunca condicionar un `allow` a un
   `firestore.get()`/`firestore.exists()` sin probarlo en vivo primero — puede compilar
-  perfecto y fallar en runtime.
+  perfecto y fallar en runtime. Y para cualquier documento sensible (DNI, carnet, comprobantes):
+  nunca guardar la URL de descarga con token en Firestore — guardar el path y servir siempre por
+  una URL firmada de corta duración vía una API con Admin SDK.
 
 **`npm audit` (mismo bloque de seguridad):** de 33 vulnerabilidades a 14 — `next` pasó de
 14.2.5 a **14.2.35** (mismo mayor, sin breaking changes; `npm audit fix` no lo agarraba solo,

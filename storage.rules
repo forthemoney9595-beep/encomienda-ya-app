@@ -44,7 +44,13 @@ service firebase.storage {
 
     // Licencias de conducir (DNI/carnet de repartidores) — documento sensible, NUNCA
     // público. El path incluye el uid del dueño (ver image-upload.tsx) para poder
-    // restringir lectura/escritura a ese mismo usuario o a un admin.
+    // restringir la escritura a ese mismo usuario.
+    // OJO lectura (Fase BB): la app YA NO lee este archivo directo desde el cliente para
+    // nada -- ni el propio repartidor en /profile ni el admin en el panel. Ambos piden una
+    // URL firmada de 5 min a /api/licenses/signed-url, que usa el Admin SDK (bypasea esta
+    // regla por completo, como cualquier ruta con Admin SDK). El `isAdmin()` de acá quedó
+    // sin uso real (y de paso: no funciona -- ver nota en isAdmin() más arriba) pero se deja
+    // por si algún día se lee directo desde el cliente.
     match /licenses/{uid}/{allPaths=**} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();

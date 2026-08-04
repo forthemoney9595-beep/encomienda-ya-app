@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -54,7 +55,29 @@ const getStatusVariant = (status: string) => {
 };
 
 export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDelete }: DeliveryPersonnelListProps) {
+  const { user: adminUser } = useAuth();
   const [selectedDriver, setSelectedDriver] = useState<DeliveryPersonnel | null>(null);
+  // Fotos de licencia: URLs firmadas de corta duración, nunca el link permanente con token
+  // viejo -- ver /api/licenses/signed-url.
+  const [licenseUrls, setLicenseUrls] = useState<Record<string, string | null>>({});
+  const [loadingLicenses, setLoadingLicenses] = useState(false);
+
+  useEffect(() => {
+    if (!selectedDriver || !adminUser) { setLicenseUrls({}); return; }
+    let cancelled = false;
+    setLoadingLicenses(true);
+    adminUser.getIdToken()
+      .then(token => fetch('/api/licenses/signed-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid: selectedDriver.id }),
+      }))
+      .then(res => res.json())
+      .then(data => { if (!cancelled) setLicenseUrls(data); })
+      .catch(err => console.error('Error resolviendo fotos de licencia:', err))
+      .finally(() => { if (!cancelled) setLoadingLicenses(false); });
+    return () => { cancelled = true; };
+  }, [selectedDriver, adminUser]);
 
   if (!personnel) return null;
 
@@ -173,18 +196,22 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                     {(selectedDriver?.licenseUrl || selectedDriver?.licenseBackUrl || selectedDriver?.licenseSelfieUrl) ? (
                         <div className="grid grid-cols-3 gap-2">
                             {([
-                                { label: 'Frente', url: selectedDriver?.licenseUrl },
-                                { label: 'Dorso', url: selectedDriver?.licenseBackUrl },
-                                { label: 'Selfie', url: selectedDriver?.licenseSelfieUrl },
-                            ]).map(({ label, url }) => (
+                                { label: 'Frente', has: !!selectedDriver?.licenseUrl, url: licenseUrls.licenseUrl },
+                                { label: 'Dorso', has: !!selectedDriver?.licenseBackUrl, url: licenseUrls.licenseBackUrl },
+                                { label: 'Selfie', has: !!selectedDriver?.licenseSelfieUrl, url: licenseUrls.licenseSelfieUrl },
+                            ]).map(({ label, has, url }) => (
                                 <div key={label} className="space-y-1">
                                     <p className="text-[10px] text-muted-foreground text-center">{label}</p>
-                                    {url ? (
+                                    {!has ? (
+                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-destructive text-center px-1">Falta</div>
+                                    ) : url ? (
                                         <a href={url} target="_blank" rel="noreferrer" className="block relative h-24 rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition">
                                             <img src={url} alt={label} className="h-full w-full object-cover" />
                                         </a>
                                     ) : (
-                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-destructive text-center px-1">Falta</div>
+                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-muted-foreground text-center px-1">
+                                            {loadingLicenses ? 'Cargando...' : 'Error'}
+                                        </div>
                                     )}
                                 </div>
                             ))}
