@@ -34,23 +34,84 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // 3. USUARIOS Y PERFILES
+    // 3. USUARIOS Y PERFILES — Fase BB (seguridad): antes cualquier usuario logueado podía
+    // reescribir CUALQUIER campo de su propio doc, incluido isApproved/role/rating. Un
+    // repartidor podía auto-aprobarse (isApproved:true) y saltarse la aprobación del admin
+    // (Fase O), o un comprador podía autopromoverse a role:'admin'. Ahora cada camino de
+    // escritura está limitado a los campos que ese camino de verdad necesita (inventariado
+    // contra TODO el código cliente: signup, /profile, toggles, panel admin).
     match /users/{userId} {
-      allow create: if isSignedIn() && isOwner(userId);
-      allow read, update: if isAdmin() || isOwner(userId);
+      allow read: if isAdmin() || isOwner(userId);
+
+      // CREATE: alta de cuenta (los 3 signup) o el fallback de login social que crea el
+      // perfil si no existe. Nadie puede autocrearse como admin ni nacer ya aprobado.
+      // OJO: en `create` NO existe `resource` (el doc anterior) todavía -- hay que validar
+      // sobre request.resource.data.keys() directo, nunca con .diff(resource.data), que
+      // fallaría siempre y rompería el alta de cuentas.
+      allow create: if isSignedIn() && isOwner(userId) &&
+        request.resource.data.role in ['buyer', 'store', 'delivery'] &&
+        (!('isApproved' in request.resource.data) || request.resource.data.isApproved == false) &&
+        request.resource.data.keys().hasOnly([
+          'uid', 'name', 'email', 'phoneNumber', 'role', 'addresses', 'storeId', 'isApproved',
+          'dni', 'birthDate', 'vehicle', 'status', 'displayName', 'profileImageUrl', 'createdAt'
+        ]);
+
+      // ADMIN sobre el doc de cualquier usuario: aprobar/rechazar, cambiar rol, sincronizar
+      // estado, CBU — acceso completo, igual que antes. O el PROPIO usuario sobre su doc,
+      // pero limitado a perfil/direcciones/favoritos/disponibilidad/CBU/tokens: nunca puede
+      // tocar isApproved/role/status/rating por este camino.
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'displayName', 'photoURL', 'profileImageUrl', 'phoneNumber',
+          'vehicle', 'licenseUrl', 'licenseBackUrl', 'licenseSelfieUrl',
+          'addresses', 'favoriteProducts', 'isOnline', 'payoutCbu',
+          'fcmToken', 'fcmTokens', 'notificationsEnabled'
+        ])
+      );
+
       allow delete: if isAdmin();
 
-      // Mantenemos tu subcolección de Favoritos
+      // Favoritos de tienda (subcolección aparte de favoriteProducts, que es un array en
+      // el doc principal) — sin cambios: solo el propio dueño, y no hay campos sensibles.
       match /favorites/{favoriteId} {
         allow read, write: if isOwner(userId);
       }
     }
 
-    // 4. TIENDAS (Stores)
+    // 4. TIENDAS (Stores) — mismo criterio que users/{uid} arriba: antes el dueño podía
+    // reescribir cualquier campo de su tienda, incluido isApproved (saltarse la aprobación
+    // del admin) o rating/ratingCount (inflar su propio promedio sin pasar por una reseña real).
     match /stores/{storeId} {
       allow read: if true;
-      allow create: if isSignedIn() && isOwner(request.resource.data.ownerId);
-      allow update: if isAdmin() || (isSignedIn() && isOwner(resource.data.ownerId));
+
+      // CREATE: alta desde /signup/store (el propio dueño) o alta manual del admin desde
+      // el panel. El dueño nunca puede nacer ya aprobado.
+      // Mismo cuidado que en users/{uid}: en `create` se valida con .keys(), no con
+      // .diff(resource.data) (el doc anterior no existe todavía).
+      allow create: if isAdmin() || (
+        isSignedIn() && isOwner(request.resource.data.ownerId) &&
+        (!('isApproved' in request.resource.data) || request.resource.data.isApproved == false) &&
+        request.resource.data.keys().hasOnly([
+          'name', 'category', 'address', 'cuit', 'maintenanceMode', 'isApproved', 'rating',
+          'deliveryTime', 'minOrder', 'ownerId', 'ownerName', 'createdAt', 'productCategories',
+          'imageUrl', 'imageHint', 'products', 'horario'
+        ])
+      );
+
+      // ADMIN sobre cualquier tienda: acceso completo, igual que antes. O el PROPIO dueño
+      // sobre SU PROPIA tienda: edición de perfil, horarios, pausa manual, categorías, CBU,
+      // y el recálculo automático de maxDiscountPercent (Fase V). Nunca isApproved / rating
+      // / ratingCount / ownerId / commissionRate por este camino.
+      allow update: if isAdmin() || (
+        isSignedIn() && isOwner(resource.data.ownerId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'description', 'category', 'address', 'imageUrl', 'deliveryTime',
+          'weeklySchedule', 'schedule', 'coords', 'updatedAt', 'manuallyPaused',
+          'productCategories', 'maxDiscountPercent', 'payoutCbu'
+        ])
+      );
+
       allow delete: if isAdmin();
 
       // Subcolección PRODUCTOS (Soportamos 'products' y 'items' por compatibilidad)

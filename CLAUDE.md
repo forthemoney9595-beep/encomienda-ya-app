@@ -731,9 +731,48 @@ lista 18 ítems y filtra bien; las 3 pestañas de la tienda funcionan.
 - Limpiar datos de prueba (órdenes/notificaciones, reseñas `Cliente de Prueba N` en
   "DonalPizza" de la Fase Q, **y todo el seed masivo de la Fase W** — ver abajo) antes de
   abrir a usuarios reales
-- Restringir por campo la regla de `users/{uid}` (`allow update`) — hoy cualquier usuario
-  logueado puede reescribir cualquier campo de su propio documento, incluido `isApproved`
-  (ver hallazgo anotado en la Fase U)
+## Fase BB (ago 2026): reglas de Firestore restringidas por campo (users/stores)
+Cerraba el hallazgo anotado desde la Fase U: cualquier usuario logueado podía reescribir
+**cualquier** campo de su propio doc en `users/{uid}` (incluido `isApproved`, `role`, `rating`),
+y lo mismo el dueño de una tienda sobre `stores/{storeId}`. Un repartidor podía auto-aprobarse
+desde la consola del navegador y salir a repartir sin pasar nunca por el admin; una tienda podía
+inflar su propio `rating` sin una reseña real, o auto-aprobarse.
+- **Inventario exhaustivo primero** (agente de exploración sobre TODO el código cliente, no de
+  memoria): 21 puntos de escritura reales a `users`/`stores` mapeados uno por uno (los 3
+  signup, `/profile`, toggles de disponibilidad/pausa, CBU, favoritos, panel admin), con la
+  lista exacta de campos que cada camino escribe.
+- **`firestore.rules`**: `create` y `update` de `users/{uid}` y `stores/{storeId}` ahora exigen
+  `affectedKeys().hasOnly([...])` con la lista de campos que ese camino de verdad necesita. El
+  propio usuario/dueño nunca puede tocar `isApproved`/`role`/`status`/`rating`/`ratingCount`
+  desde su propio update; el admin sigue con acceso total (bypass explícito). El `create` valida
+  además `isApproved != true` (nadie nace ya aprobado) y, en `users`, `role in ['buyer','store','delivery']`
+  (nadie se autocrea como admin).
+- **Bug propio encontrado y corregido antes de desplegar:** las reglas de `create` usaban
+  `request.resource.data.diff(resource.data)` — pero en un `create`, `resource` (el doc anterior)
+  **no existe todavía**; eso habría roto el alta de cuentas y tiendas por completo. Se corrigió a
+  `request.resource.data.keys().hasOnly([...])`, que no depende del doc previo.
+- **Verificado contra producción real, con el SDK de CLIENTE** (no Admin, que bypasea las
+  reglas) usando las 4 cuentas de test + un signup real de punta a punta (buyer y store,
+  creados y borrados en la corrida): registro/edición de perfil, toggle de disponibilidad,
+  pausa manual, CBU, `maxDiscountPercent` — todos permitidos. Los ataques (auto-aprobarse,
+  autopromoverse a admin, inflar rating, crear una tienda ya-aprobada) — todos bloqueados con
+  `permission-denied`, confirmado por dos vías independientes (rechazo del SDK + lectura con
+  Admin SDK del valor persistido real).
+  **Nota de método:** la primera pasada de verificación dio falsos positivos porque
+  `updateDoc()` en Node resuelve de forma optimista (local) antes de que el servidor confirme
+  el permiso, y las cuentas de prueba usadas ya estaban aprobadas de antes (memoria
+  desactualizada — recordatorio de por qué siempre hay que verificar contra el estado real, no
+  asumir). Se resolvió separando ataque y verificación en procesos distintos y leyendo la
+  verdad con Admin SDK.
+- **Efecto colateral de la verificación (documentado, no un bug):** para probar el bloqueo
+  con un estado inicial conocido, `repartidor.pendiente@test.com` y `stores/Boutique Lu`
+  quedaron reseteados a `isApproved:false` — coincide con el estado que la Fase W les había
+  asignado originalmente (estaban aprobados manualmente en algún momento posterior, sin
+  quedar registrado en ningún lado).
+- **Fuera de alcance de esta fase**: `roles_admin` (ya estaba bien: solo admin escribe);
+  `notifications` (create abierto a cualquier logueado, bajo pero no nulo); Storage de
+  `profiles`/`store-banners`/`products` (cualquier logueado puede pisar imágenes ajenas,
+  bajo impacto por ser públicas de todos modos).
 
 ## Fase W (jul 2026): datos de prueba masivos para QA manual pre-lanzamiento
 Antes de la revisión final de seguridad, se pobló la base real (`studio-354048519-4bc1e`)
