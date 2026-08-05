@@ -848,6 +848,71 @@ gaps reales. El usuario priorizó 3 de la lista para esta tanda:
   - **Desplegado a producción** (`firebase deploy --only firestore:rules`, dry-run limpio
     antes de desplegar).
 
+## Fase FF (ago 2026): reorganización del panel admin + 2 pantallas que faltaban
+Pedido del usuario: el panel admin "le hacen falta varias cosas para poder llevar una app
+con todos los datos que manejará" + reorganizar la navegación (menús desplegables,
+mejor seccionado). Se auditó el panel completo antes de proponer nada — dos hallazgos
+verificados en el código (no supuestos):
+- **`payment_mismatches` no tenía NINGUNA regla de Firestore ni pantalla.** Es la
+  colección donde el webhook de MP (K1) deja los pagos que no coinciden en monto/estado
+  con la orden "para revisión manual" — pero no había forma real de revisarlos salvo
+  entrando a la consola de Firestore a mano. Plata real sin resolver, punto ciego serio.
+- **`driver_incidents`** (soltar pedido / reportar problema, Fase T) solo se veía como
+  una vista previa de 8 en el dashboard, sin página propia, sin filtro, sin forma de
+  marcarlos resueltos.
+- Log de Acciones sin buscador/filtro; de paso se encontró que `ACTION_LABELS` nunca tuvo
+  entradas para `approve_withdrawal` ni `refund_order` (se veían como texto crudo desde
+  que existen esas acciones, bug previo a esta fase).
+
+**Pantallas nuevas:**
+- **`/admin/payment-issues`** — lista `payment_mismatches` (pestañas Pendientes/Resueltos),
+  cada una con el detalle (monto pagado vs. total de la orden, o estado inesperado), link
+  al pedido y botón "Marcar resuelto". Colección pensada para quedar casi siempre vacía
+  (solo anomalías) — por eso usa un `limit(200)` defensivo simple en vez de la paginación
+  por cursor de otras pantallas.
+- **`/admin/incidents`** — historial completo de `driver_incidents` con paginación
+  `getDocs`+cursor (esta sí puede crecer con el volumen de pedidos, a diferencia de la de
+  arriba), pestañas Pendientes/Resueltos, botón resolver.
+- **OJO con el patrón "resuelto" en ambas:** los documentos viejos no tienen el campo
+  `resolved` — se tratan como pendientes con un filtro en MEMORIA (`resolved !== true`),
+  nunca con un `where('resolved','!=',true)` — Firestore excluye del `!=` los documentos
+  que no tienen el campo, así que esa query hubiera escondido justo los datos viejos que
+  hay que revisar. El webhook de MP ahora escribe `resolved: false` explícito en los
+  registros nuevos.
+- **Log de Acciones**: buscador + `Select` de tipo de acción (filtro en memoria sobre la
+  ventana de 200 ya cargada, sin query nueva); `ACTION_LABELS` completado con las 4
+  acciones que faltaban (`approve_withdrawal`, `refund_order`, `change_admin_level`,
+  `resolve_payment_mismatch`, `resolve_driver_incident`).
+- **Dashboard** (`admin/page.tsx`): nueva alerta roja "N discrepancias de pago sin
+  revisar" (antes cero visibilidad) y el widget de incidentes ganó un link "Ver todos" a
+  la página nueva.
+
+**Reglas de Firestore:** ambas colecciones ganaron `allow read: if isAdmin()` +
+`allow update` restringido a `['resolved','resolvedAt','resolvedBy']` (marcar resuelto es
+metadata operativa, cualquier nivel de admin puede hacerlo — no mueve plata por sí sola,
+el reembolso real sigue yendo por `/api/admin/refund-order` que exige `full`).
+`allow delete` en `payment_mismatches` quedó en `isFullAdmin()` por las dudas (no hay UI
+para borrar, pero si alguna vez se agrega, que sea con el nivel más alto).
+
+**Navegación** (`main-nav.tsx`): el menú admin (antes 10 links sueltos bajo un solo título
+"Supervisión") pasó a 5 secciones colapsables — Operación / Finanzas / Confianza y
+Seguridad / Comunicación / Sistema — con un `NavSection` nuevo (envuelve el `Collapsible`
+de shadcn, ya instalado y sin usar desde la Fase AA). El estado abierto/cerrado de cada
+sección se guarda en `localStorage` por sección (`admin-nav-section:{id}`) para que no se
+resetee en cada navegación (cada `Link` del admin es una carga de página completa, no un
+router push en cliente). "Sistema" arranca colapsada por defecto (es la que menos se
+toca); el resto arranca abierta.
+
+**Verificado por el usuario en su propio navegador** (dev server local): las 5 secciones
+colapsan/expanden bien, `/admin/incidents` mostró los 5 incidentes reales que ya existían
+en la base (de pruebas de la Fase T/W), `/admin/payment-issues` mostró el estado vacío
+correcto (la colección está genuinamente vacía en este momento — no se fabricaron datos
+de prueba de plata para no ensuciar una colección sensible), y el log de acciones mostró
+el buscador/filtro nuevo.
+
+**Desplegado a producción** (`firebase deploy --only firestore:rules`, dry-run limpio
+antes de desplegar).
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

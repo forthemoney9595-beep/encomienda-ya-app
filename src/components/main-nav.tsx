@@ -2,17 +2,18 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import { 
-  Home, 
-  ShoppingBag, 
-  Heart, 
-  ListOrdered, 
-  BarChart3, 
-  Bike, 
+import {
+  Home,
+  ShoppingBag,
+  Heart,
+  ListOrdered,
+  BarChart3,
+  Bike,
   Store,
   Package,
   LayoutDashboard,
@@ -24,10 +25,43 @@ import {
   Bell,
   Settings,
   DollarSign,
-  Tag
+  Tag,
+  AlertTriangle,
+  ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { getCategoryStyle } from '@/lib/category-style';
+
+// Sección colapsable del menú admin -- antes eran 10 links sueltos bajo un solo título
+// "Supervisión". El estado abierto/cerrado se guarda en localStorage por sección para que
+// no se resetee cada vez que se navega (cada Link es una navegación de página completa).
+function NavSection({ id, title, defaultOpen = true, children }: { id: string; title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const storageKey = `admin-nav-section:${id}`;
+  const [open, setOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
+    if (stored !== null) setOpen(stored === 'open');
+  }, [storageKey]);
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    window.localStorage.setItem(storageKey, next ? 'open' : 'closed');
+  };
+
+  return (
+    <Collapsible open={open} onOpenChange={handleOpenChange} className="px-3 py-1">
+      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+        {title}
+        <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-1 pt-1">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 export function MainNav({
   className,
@@ -90,93 +124,117 @@ export function MainNav({
     return null;
   }
   
-  // 👮‍♂️ ADMIN LINKS
+  // 👮‍♂️ ADMIN LINKS — agrupados en secciones colapsables (antes 10 links sueltos bajo
+  // un solo título "Supervisión", sin jerarquía ni forma de compactar el menú).
   const renderAdminLinks = () => (
     <>
+      <NavSection id="operacion" title="Operación">
+        <Link href="/admin">
+          <Button variant={pathname === '/admin' || pathname === '/admin/dashboard' ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <LayoutDashboard className="mr-2 h-4 w-4" />
+            Dashboard
+          </Button>
+        </Link>
+        <Link href="/admin/orders">
+          <Button variant={pathname.startsWith('/admin/orders') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <ShoppingBag className="mr-2 h-4 w-4" />
+            Gestión Pedidos
+          </Button>
+        </Link>
+        <Link href="/admin/stores">
+          <Button variant={pathname.startsWith('/admin/stores') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Store className="mr-2 h-4 w-4" />
+            Gestión Tiendas
+            <NavBadge count={pendingStoresCount} />
+          </Button>
+        </Link>
+        <Link href="/admin/delivery">
+          <Button variant={pathname.startsWith('/admin/delivery') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Bike className="mr-2 h-4 w-4" />
+            Gestión Repartidores
+            <NavBadge count={pendingDriversCount} />
+          </Button>
+        </Link>
+        <Link href="/admin/users">
+          <Button variant={pathname.startsWith('/admin/users') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Users className="mr-2 h-4 w-4" />
+            Gestión Usuarios
+          </Button>
+        </Link>
+      </NavSection>
+
+      {/* Finanzas y Pagos / Comunicaciones / Configuración: mueven plata, mandan broadcast
+          o cambian config de negocio -- ocultas para admin nivel 'support' (el guard de la
+          página también las bloquea si entran por URL directa). Discrepancias de Pago es
+          solo revisión/triage (no mueve plata por sí sola), visible a cualquier nivel. */}
+      <NavSection id="finanzas" title="Finanzas">
+        {isFullAdmin && (
+          <Link href="/admin/finances">
+            <Button variant={pathname.startsWith('/admin/finances') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <DollarSign className="mr-2 h-4 w-4" />
+              Finanzas y Pagos
+              <NavBadge count={pendingWithdrawalsCount} />
+            </Button>
+          </Link>
+        )}
+        <Link href="/admin/payment-issues">
+          <Button variant={pathname.startsWith('/admin/payment-issues') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <AlertTriangle className="mr-2 h-4 w-4" />
+            Discrepancias de Pago
+          </Button>
+        </Link>
+      </NavSection>
+
+      <NavSection id="confianza" title="Confianza y Seguridad">
+        <Link href="/admin/reviews">
+          <Button variant={pathname.startsWith('/admin/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Moderación Reseñas
+          </Button>
+        </Link>
+        <Link href="/admin/incidents">
+          <Button variant={pathname.startsWith('/admin/incidents') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Shield className="mr-2 h-4 w-4" />
+            Incidentes de Repartidor
+          </Button>
+        </Link>
+        <Link href="/admin/audit-log">
+          <Button variant={pathname.startsWith('/admin/audit-log') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Shield className="mr-2 h-4 w-4" />
+            Log de Acciones
+          </Button>
+        </Link>
+      </NavSection>
+
+      {isFullAdmin && (
+        <NavSection id="comunicacion" title="Comunicación">
+          <Link href="/admin/communications">
+            <Button variant={pathname.startsWith('/admin/communications') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Bell className="mr-2 h-4 w-4" />
+              Comunicaciones
+            </Button>
+          </Link>
+        </NavSection>
+      )}
+
+      {isFullAdmin && (
+        <NavSection id="sistema" title="Sistema" defaultOpen={false}>
+          <Link href="/admin/settings">
+            <Button variant={pathname.startsWith('/admin/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Settings className="mr-2 h-4 w-4" />
+              Configuración
+            </Button>
+          </Link>
+        </NavSection>
+      )}
+
       <div className="px-3 py-2">
-        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
-          Supervisión
-        </h2>
-        <div className="space-y-1">
-          <Link href="/admin">
-            <Button variant={pathname === '/admin' || pathname === '/admin/dashboard' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <LayoutDashboard className="mr-2 h-4 w-4" />
-              Dashboard
-            </Button>
-          </Link>
-          <Link href="/admin/orders">
-            <Button variant={pathname.startsWith('/admin/orders') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <ShoppingBag className="mr-2 h-4 w-4" />
-              Gestión Pedidos
-            </Button>
-          </Link>
-          <Link href="/admin/stores">
-            <Button variant={pathname.startsWith('/admin/stores') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Store className="mr-2 h-4 w-4" />
-              Gestión Tiendas
-              <NavBadge count={pendingStoresCount} />
-            </Button>
-          </Link>
-          <Link href="/admin/delivery">
-            <Button variant={pathname.startsWith('/admin/delivery') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Bike className="mr-2 h-4 w-4" />
-              Gestión Repartidores
-              <NavBadge count={pendingDriversCount} />
-            </Button>
-          </Link>
-          <Link href="/admin/users">
-            <Button variant={pathname.startsWith('/admin/users') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Users className="mr-2 h-4 w-4" />
-              Gestión Usuarios
-            </Button>
-          </Link>
-          {/* Finanzas/Comunicaciones/Configuración: mueven plata, mandan broadcast o
-              cambian config de negocio -- ocultas para admin nivel 'support' (el guard de
-              la página también las bloquea si entran por URL directa). */}
-          {isFullAdmin && (
-            <Link href="/admin/finances">
-              <Button variant={pathname.startsWith('/admin/finances') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                <DollarSign className="mr-2 h-4 w-4" />
-                Finanzas y Pagos
-                <NavBadge count={pendingWithdrawalsCount} />
-              </Button>
-            </Link>
-          )}
-          {isFullAdmin && (
-            <Link href="/admin/communications">
-              <Button variant={pathname.startsWith('/admin/communications') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                <Bell className="mr-2 h-4 w-4" />
-                Comunicaciones
-              </Button>
-            </Link>
-          )}
-          <Link href="/admin/reviews">
-            <Button variant={pathname.startsWith('/admin/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Moderación Reseñas
-            </Button>
-          </Link>
-          <Link href="/admin/audit-log">
-            <Button variant={pathname.startsWith('/admin/audit-log') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Shield className="mr-2 h-4 w-4" />
-              Log de Acciones
-            </Button>
-          </Link>
-          {isFullAdmin && (
-            <Link href="/admin/settings">
-              <Button variant={pathname.startsWith('/admin/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                <Settings className="mr-2 h-4 w-4" />
-                Configuración
-              </Button>
-            </Link>
-          )}
-          <Link href="/">
-            <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Home className="mr-2 h-4 w-4" />
-              Ir al Inicio (App)
-            </Button>
-          </Link>
-        </div>
+        <Link href="/">
+          <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Home className="mr-2 h-4 w-4" />
+            Ir al Inicio (App)
+          </Button>
+        </Link>
       </div>
     </>
   );

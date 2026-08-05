@@ -126,6 +126,7 @@ export async function POST(request: Request) {
         orderTotal,
         reason: "amount_mismatch",
         createdAt: new Date(),
+        resolved: false,
       });
       return NextResponse.json({ status: "amount_mismatch_flagged_for_review" });
     }
@@ -141,6 +142,7 @@ export async function POST(request: Request) {
         reason: "unexpected_order_status",
         orderStatus: existingData.status,
         createdAt: new Date(),
+        resolved: false,
       });
       return NextResponse.json({ status: "unexpected_order_status_flagged_for_review" });
     }

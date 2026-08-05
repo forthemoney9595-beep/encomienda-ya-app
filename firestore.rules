@@ -217,11 +217,28 @@ service cloud.firestore {
     // /api/orders/release y /api/orders/report-problem (Admin SDK). Solo el admin las
     // lee (para detectar acaparamiento o repartidores problemáticos); el repartidor no
     // necesita ver su propio historial de incidentes acá.
+    // Fase FF: el admin (cualquier nivel -- es trabajo operativo, no mueve plata) puede
+    // marcarlos resueltos desde /admin/incidents, antes no había forma de hacerlo.
     match /driver_incidents/{incidentId} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update: if false;
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedAt', 'resolvedBy']);
       allow delete: if isAdmin();
+    }
+
+    // 5d. DISCREPANCIAS DE PAGO — el webhook de MercadoPago (Admin SDK) deja acá los pagos
+    // que no coinciden en monto o estado con la orden, para revisión manual (ver K1 en
+    // CLAUDE.md). Fase FF: antes esta colección no tenía NINGUNA regla (ni el admin podía
+    // leerla desde el panel; solo era visible entrando a la consola de Firestore a mano).
+    match /payment_mismatches/{id} {
+      allow read: if isAdmin();
+      allow create: if false;
+      // Marcar resuelto es metadata operativa (cualquier nivel de admin) -- el reembolso
+      // real, si corresponde, sigue yendo por /api/admin/refund-order (exige 'full').
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedAt', 'resolvedBy']);
+      allow delete: if isFullAdmin();
     }
 
     // 6. NOTIFICACIONES

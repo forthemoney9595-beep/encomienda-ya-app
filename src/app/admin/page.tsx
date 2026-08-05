@@ -161,9 +161,17 @@ function AdminDashboard() {
   const pendingUsersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('isApproved', '==', false)) : null, [firestore]);
   const { data: pendingUsers, isLoading: pendingLoading } = useCollection<any>(pendingUsersQuery);
 
-  // Incidentes de repartidor (soltar pedido / reportar problema).
+  // Incidentes de repartidor (soltar pedido / reportar problema) -- vista previa de 8,
+  // el historial completo con filtro/resolución vive en /admin/incidents (Fase FF).
   const incidentsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'driver_incidents'), orderBy('createdAt', 'desc'), limit(8)) : null, [firestore]);
   const { data: driverIncidents } = useCollection<any>(incidentsQuery);
+
+  // Discrepancias de pago del webhook de MP -- antes esta colección no tenía NINGUNA
+  // pantalla, ni siquiera un aviso acá (Fase FF). Colección pequeña por diseño (solo
+  // anomalías), así que basta un límite defensivo sin paginación.
+  const mismatchesQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'payment_mismatches'), orderBy('createdAt', 'desc'), limit(50)) : null, [firestore]);
+  const { data: paymentMismatches } = useCollection<any>(mismatchesQuery);
+  const pendingMismatchesCount = (paymentMismatches || []).filter((m: any) => m.resolved !== true).length;
 
   const refreshTotals = () => { refreshDelivered(); refreshUsers(); };
   const dashboardLoading = activeLoading || storesLoading || pendingLoading;
@@ -452,14 +460,33 @@ function AdminDashboard() {
       )}
       {/* ─────────────────────────────────────────────────────── */}
 
+      {/* ── Discrepancias de pago pendientes ── */}
+      {pendingMismatchesCount > 0 && (
+        <Link href="/admin/payment-issues"
+          className="flex items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 hover:bg-destructive/10 transition-colors">
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-destructive shrink-0" />
+            <span className="text-sm font-semibold text-destructive">
+              {pendingMismatchesCount} discrepancia{pendingMismatchesCount === 1 ? '' : 's'} de pago sin revisar
+            </span>
+          </div>
+          <span className="text-xs text-muted-foreground shrink-0">Ver todas →</span>
+        </Link>
+      )}
+
       {/* ── Incidentes de repartidor (soltar pedido / reportar problema) ── */}
       {driverIncidents && driverIncidents.length > 0 && (
         <div className="rounded-xl border border-warning/40 bg-warning/5 p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
-            <h2 className="text-sm font-semibold text-warning">
-              Incidentes recientes de repartidores
-            </h2>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+              <h2 className="text-sm font-semibold text-warning">
+                Incidentes recientes de repartidores
+              </h2>
+            </div>
+            <Link href="/admin/incidents" className="text-xs text-muted-foreground hover:text-foreground shrink-0">
+              Ver todos →
+            </Link>
           </div>
           <div className="space-y-2">
             {driverIncidents.map((inc: any) => (
