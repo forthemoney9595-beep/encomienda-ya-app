@@ -65,6 +65,14 @@ const ALERT_KINDS: { k: AlertKind; label: string; icon: any; href: string }[] = 
 ];
 
 /**
+ * Formato de moneda argentino: separador de miles con PUNTO ($1.953.560). Antes se usaba
+ * `toFixed(2)`, que imprime "$1953560.00" — ilegible de un vistazo y además con el punto
+ * en el lugar equivocado para la convención local. Sin decimales: son pesos, los centavos
+ * no aportan nada en un total de plataforma.
+ */
+const money = (n: number) => `$${Math.round(n || 0).toLocaleString('es-AR')}`;
+
+/**
  * "hace X" legible a cualquier escala. Antes solo formateaba horas y minutos, así que un
  * pedido trabado de hace 3 meses mostraba "hace 2261h 14m" — técnicamente correcto e
  * inútil de leer. Se hizo evidente al cargar datos de prueba con fechas viejas.
@@ -184,10 +192,23 @@ function AdminDashboard() {
     () => firestore ? query(collection(firestore, 'orders'), where('status', '==', 'Entregado')) : null,
     [firestore]
   );
-  const { data: deliveredAgg, refresh: refreshDelivered } = useAggregate(
+  const { data: deliveredAgg, error: deliveredErr, refresh: refreshDelivered } = useAggregate(
     deliveredAggQuery,
     { revenue: sum('total'), completed: count() },
     { refreshOnFocus: true }
+  );
+
+  // Comisión de la plataforma y envíos, en aggregations SEPARADAS.
+  // OJO: NO se pueden meter en la misma query que `sum('total')`. Firestore exige un índice
+  // que cubra el filtro + TODOS los campos agregados a la vez; tener (status,total),
+  // (status,serviceFee) y (status,deliveryFee) por separado no alcanza para pedir las tres
+  // sumas juntas — la query falla y `useAggregate` se traga el error, devolviendo 0 en
+  // TODAS las métricas (así se rompieron las tarjetas al intentar unificarlas).
+  const { data: feesAgg, refresh: refreshFees } = useAggregate(
+    deliveredAggQuery, { total: sum('serviceFee') }, { refreshOnFocus: true },
+  );
+  const { data: shippingAgg, refresh: refreshShipping } = useAggregate(
+    deliveredAggQuery, { total: sum('deliveryFee') }, { refreshOnFocus: true },
   );
 
   const usersCountQuery = useMemoFirebase(
@@ -195,6 +216,18 @@ function AdminDashboard() {
     [firestore]
   );
   const { count: totalUsers, refresh: refreshUsers } = useCountFromServer(usersCountQuery, { refreshOnFocus: true });
+
+  // Desglose de usuarios por rol y tasa de completado: counts de un solo campo (índice
+  // automático, sin deploy). Le dan contexto a los headline numbers, que antes eran solo
+  // un número suelto sin con qué compararlo.
+  const buyersQ    = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'buyer')) : null, [firestore]);
+  const storesQ    = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'store')) : null, [firestore]);
+  const driversQ   = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'delivery')) : null, [firestore]);
+  const allOrdersQ = useMemoFirebase(() => firestore ? collection(firestore, 'orders') : null, [firestore]);
+  const { count: buyersCount,  refresh: rBuyers }  = useCountFromServer(buyersQ,    { refreshOnFocus: true });
+  const { count: storesCount,  refresh: rStores }  = useCountFromServer(storesQ,    { refreshOnFocus: true });
+  const { count: driversCount, refresh: rDrivers } = useCountFromServer(driversQ,   { refreshOnFocus: true });
+  const { count: allOrdersCount, refresh: rOrders } = useCountFromServer(allOrdersQ, { refreshOnFocus: true });
 
   // Pedidos activos ahora (set chico) -> en vivo.
   const activeOrdersQuery = useMemoFirebase(
@@ -240,7 +273,7 @@ function AdminDashboard() {
   const { data: paymentMismatches } = useCollection<any>(mismatchesQuery);
   const pendingMismatchesCount = (paymentMismatches || []).filter((m: any) => m.resolved !== true).length;
 
-  const refreshTotals = () => { refreshDelivered(); refreshUsers(); };
+  const refreshTotals = () => { refreshDelivered(); refreshFees(); refreshShipping(); refreshUsers(); rBuyers(); rStores(); rDrivers(); rOrders(); };
   const dashboardLoading = activeLoading || storesLoading || pendingLoading;
 
   // Solicitudes pendientes de aprobación (tiendas y repartidores)
@@ -746,37 +779,115 @@ function AdminDashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">de pedidos completados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Usuarios Registrados</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalUsers}</div>
-            <p className="text-xs text-muted-foreground">compradores, tiendas y repartidores</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pedidos Completados</CardTitle>
-            <PackageCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.completedOrders}</div>
-            <p className="text-xs text-muted-foreground">pedidos entregados con éxito</p>
-          </CardContent>
-        </Card>
+      {/* ── Totales históricos ────────────────────────────────────────────────
+          Antes eran tres números sueltos sin con qué compararlos, y el monto salía como
+          "$1953560.00" (toFixed, sin separador de miles y con el punto donde va la coma
+          en Argentina). Ahora cada tarjeta desglosa lo que ese número esconde. */}
+      {/* Si la aggregation falla (típicamente por un índice faltante), avisarlo en vez de
+          mostrar $0 como si no hubiera ventas. */}
+      {deliveredErr && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+          <span>
+            No se pudieron calcular los totales{(deliveredErr as any)?.code === 'failed-precondition' ? ' — falta un índice de Firestore (el link para crearlo está en la consola)' : ''}.
+            Los números de abajo pueden estar incompletos.
+          </span>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {(() => {
+          const revenue   = stats.totalRevenue;
+          const completed = stats.completedOrders;
+          const fees      = feesAgg?.total ?? 0;
+          const shipping  = shippingAgg?.total ?? 0;
+          // Lo que va a las tiendas: el total menos lo que se lleva la plataforma y menos
+          // el envío que cobra el repartidor.
+          const toStores  = Math.max(0, revenue - fees - shipping);
+          const avgTicket = completed > 0 ? revenue / completed : 0;
+          const totalOrd  = allOrdersCount ?? 0;
+          const rate      = totalOrd > 0 ? Math.round((completed / totalOrd) * 100) : 0;
+
+          const Row = ({ label, value, accent }: { label: string; value: string; accent?: string }) => (
+            <div className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="text-muted-foreground">{label}</span>
+              <span className={cn('font-medium tabular-nums', accent || 'text-foreground')}>{value}</span>
+            </div>
+          );
+
+          return (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Facturado</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <div className="text-3xl font-bold tabular-nums">{money(revenue)}</div>
+                    <p className="text-xs text-muted-foreground">total de pedidos entregados</p>
+                  </div>
+                  <div className="space-y-1.5 border-t pt-2.5">
+                    <Row label="Comisión de la plataforma" value={money(fees)} accent="text-success" />
+                    <Row label="Envíos (a repartidores)" value={money(shipping)} accent="text-info" />
+                    <Row label="A las tiendas" value={money(toStores)} />
+                    <Row label="Ticket promedio" value={money(avgTicket)} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Usuarios Registrados</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <div className="text-3xl font-bold tabular-nums">{(stats.totalUsers || 0).toLocaleString('es-AR')}</div>
+                    <p className="text-xs text-muted-foreground">sin contar administradores</p>
+                  </div>
+                  <div className="space-y-1.5 border-t pt-2.5">
+                    <Row label="Compradores" value={(buyersCount ?? 0).toLocaleString('es-AR')} />
+                    <Row label="Tiendas" value={(storesCount ?? 0).toLocaleString('es-AR')} accent="text-info" />
+                    <Row label="Repartidores" value={(driversCount ?? 0).toLocaleString('es-AR')} accent="text-warning" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pedidos Entregados</CardTitle>
+                  <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <div className="text-3xl font-bold tabular-nums">{completed.toLocaleString('es-AR')}</div>
+                    <p className="text-xs text-muted-foreground">
+                      de {totalOrd.toLocaleString('es-AR')} pedidos en total
+                    </p>
+                  </div>
+                  <div className="space-y-2 border-t pt-2.5">
+                    {/* Barra de tasa de entrega: un 49% dicho en texto no se siente igual
+                        que verlo ocupar la mitad de la barra. */}
+                    <div className="flex items-baseline justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Tasa de entrega</span>
+                      <span className={cn('font-medium tabular-nums', rate >= 70 ? 'text-success' : rate >= 40 ? 'text-warning' : 'text-destructive')}>
+                        {rate}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn('h-full rounded-full transition-all', rate >= 70 ? 'bg-success' : rate >= 40 ? 'bg-warning' : 'bg-destructive')}
+                        style={{ width: `${Math.min(100, rate)}%` }}
+                      />
+                    </div>
+                    <Row label="Todavía en curso" value={liveStatus.totalActive.toLocaleString('es-AR')} />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          );
+        })()}
       </div>
 
        <div className="grid gap-4 mt-6 md:grid-cols-2 lg:grid-cols-7">

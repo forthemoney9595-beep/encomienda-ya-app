@@ -7,6 +7,7 @@ import {
   type CollectionReference,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import * as Sentry from '@sentry/nextjs';
 
 // Helpers para aggregation queries (count/sum/average) de Firestore.
 //
@@ -53,6 +54,7 @@ export function useAggregate<T extends AggregateSpec>(
 ) {
   const [data, setData] = useState<AggregateData<T> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const specRef = useRef(spec);
   specRef.current = spec;
 
@@ -65,8 +67,20 @@ export function useAggregate<T extends AggregateSpec>(
     try {
       const snap = await getAggregateFromServer(queryRef, specRef.current);
       setData(snap.data() as AggregateData<T>);
-    } catch (error) {
-      console.error(error);
+      setError(null);
+    } catch (err: any) {
+      // ANTES esto era un console.error suelto: la query fallaba, `data` quedaba en null y
+      // la UI mostraba 0 en TODAS las métricas sin ninguna pista de que algo se había roto.
+      // Pasó de verdad al agregar sum('serviceFee') a una aggregation que ya sumaba
+      // 'total': Firestore exige un índice que cubra el filtro MÁS todos los campos
+      // agregados a la vez, y sin él devuelve failed-precondition. Ahora el error se
+      // expone (para que la UI pueda distinguir "0" de "falló") y se reporta a Sentry.
+      console.error('[useAggregate] La consulta falló:', err);
+      setError(err);
+      Sentry.captureException(err, {
+        tags: { area: 'firebase-aggregate', code: err?.code ?? 'unknown' },
+        extra: { fields: Object.keys(specRef.current) },
+      });
     } finally {
       setIsLoading(false);
     }
@@ -78,7 +92,7 @@ export function useAggregate<T extends AggregateSpec>(
 
   useFocusRefresh(run, !!opts.refreshOnFocus);
 
-  return { data, isLoading, refresh: run };
+  return { data, isLoading, error, refresh: run };
 }
 
 /**
@@ -101,8 +115,10 @@ export function useCountFromServer(
     try {
       const snap = await getCountFromServer(queryRef);
       setCount(snap.data().count);
-    } catch (error) {
-      console.error(error);
+    } catch (err: any) {
+      // Mismo criterio que useAggregate: un count que falla mostraba 0 en silencio.
+      console.error('[useCountFromServer] La consulta falló:', err);
+      Sentry.captureException(err, { tags: { area: 'firebase-aggregate', code: err?.code ?? 'unknown' } });
     } finally {
       setIsLoading(false);
     }

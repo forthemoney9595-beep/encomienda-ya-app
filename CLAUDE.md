@@ -1079,6 +1079,38 @@ El script (`_seed-qa.js`, fuera del repo) tiene `--undo` para borrar los 115 doc
 una pasada. **Pendiente: borrarlos antes de lanzar** (ver pendientes abajo). Se agregó
 `_*.js`/`_*.mjs` al `.gitignore` para que estos scripts no se cuelen al repo.
 
+**Headline cards del dashboard, con desglose:** el monto salía como `$1953560.00`
+(`toFixed(2)`: sin separador de miles y con el punto donde va la coma en Argentina) y los
+tres números no tenían con qué compararse. Nuevo helper `money()` (`toLocaleString('es-AR')`,
+sin decimales) y cada tarjeta ahora desglosa lo que su número esconde: **Facturado** →
+comisión de la plataforma / envíos a repartidores / lo que va a las tiendas / ticket
+promedio; **Usuarios** → por rol; **Entregados** → sobre el total, con tasa de entrega y
+barra de color (verde ≥70%, ámbar ≥40%, rojo abajo).
+
+**🚨 TRAMPA DE FIRESTORE — varias sumas en una misma aggregation.** Al intentar agregar
+`sum('serviceFee')` y `sum('deliveryFee')` a la aggregation que ya hacía `sum('total')`,
+**TODAS las tarjetas se fueron a $0**. Firestore exige un índice que cubra el filtro MÁS
+todos los campos agregados **a la vez**: tener `(status,total)`, `(status,serviceFee)` y
+`(status,deliveryFee)` por separado NO alcanza para pedirlas juntas. La query falla con
+`failed-precondition` y `useAggregate` se tragaba el error, así que el síntoma era cero en
+todo sin ninguna pista. **Regla: una aggregation por campo sumado, cada una con su índice**
+(o crear el índice combinado, si algún día se quiere ahorrar la lectura extra).
+- Como consecuencia se endureció `src/lib/firebase-aggregate.ts`: `useAggregate` ahora
+  **expone `error`** y ambos hooks reportan el fallo a **Sentry** (antes solo un
+  `console.error` suelto). El dashboard muestra un aviso "falta un índice de Firestore" en
+  vez de mostrar $0 como si no hubiera ventas.
+
+**Costo a escala del dashboard — anotado, NO resuelto (a propósito).** El dashboard hace
+hoy 8 consultas de agregación (3 sobre Entregado, 4 counts de usuarios, 1 count de todas
+las órdenes) y Firestore cobra ~1 lectura por cada 1000 docs escaneados. Con el volumen
+actual son ~8 lecturas por carga (nada); con ~100.000 pedidos serían **~210 lecturas por
+carga**, y como varias tienen `refreshOnFocus` se repiten cada vez que se vuelve a la
+pestaña: ~6.300 lecturas/día para UN admin que lo abra 30 veces (≈12% de la cuota gratis
+diaria). **Cuándo actuar:** recién en decenas de miles de pedidos. **Solución cuando toque:**
+un documento `stats/platform` con los totales precalculados (actualizado por el cron que ya
+existe en `/api/cron/generate-settlements` o por un trigger), que baja las ~210 lecturas a 1.
+No se hizo ahora porque a escala de Tinogasta sería sobreingeniería.
+
 **Nota de método:** Firebase Auth **rate-limitea por IP** tras varios logins seguidos, y
 `storageState` de Playwright **no sirve para reusar la sesión** porque Firebase guarda el
 token en IndexedDB (que storageState no captura). Conclusión práctica: hacer login UNA vez
