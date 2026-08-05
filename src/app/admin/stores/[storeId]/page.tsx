@@ -14,6 +14,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/auth-context';
+import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { cn } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
@@ -33,6 +35,7 @@ const formatDate = (ts: any) => {
 function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     const { storeId } = params;
     const firestore = useFirestore();
+    const { user: adminUser } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
 
@@ -96,6 +99,9 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
         setSavingCbu(true);
         try {
             await updateDoc(storeRef, { payoutCbu: cbuInput.trim() });
+            // El CBU define a qué cuenta se transfiere la plata en la liquidación -- cambiarlo
+            // tiene que quedar registrado sí o sí (antes no quedaba en ningún lado).
+            if (adminUser) logAdminAction(firestore, adminUser.uid, 'edit_cbu', storeId, `tienda — CBU ...${cbuInput.trim().slice(-4)}`);
             toast({ title: 'CBU guardado', description: 'La próxima liquidación automática usará este CBU.' });
         } catch {
             toast({ variant: 'destructive', title: 'Error al guardar' });
@@ -109,6 +115,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
         setTogglingPause(true);
         try {
             await updateDoc(storeRef, { manuallyPaused: !store.manuallyPaused });
+            if (adminUser) logAdminAction(firestore, adminUser.uid, store.manuallyPaused ? 'unpause_store' : 'pause_store', storeId, store.name || '');
             toast({ title: store.manuallyPaused ? 'Tienda reactivada' : 'Tienda pausada' });
         } catch {
             toast({ variant: 'destructive', title: 'Error al cambiar estado' });
@@ -121,6 +128,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
         if (!firestore || !storeRef || !store) return;
         try {
             await updateDoc(storeRef, { isApproved: !store.isApproved });
+            if (adminUser) logAdminAction(firestore, adminUser.uid, store.isApproved ? 'reject_account' : 'approve_account', storeId, `tienda: ${store.name || ''}`);
             toast({ title: store.isApproved ? 'Aprobación retirada' : 'Tienda aprobada' });
         } catch {
             toast({ variant: 'destructive', title: 'Error' });

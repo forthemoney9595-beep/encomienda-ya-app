@@ -227,6 +227,22 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 5c-bis. LOG DE ACCIONES ADMIN — BUG DE LARGA DATA (Fase GG): esta colección existe
+    // desde la Fase N pero NUNCA tuvo regla, así que Firestore denegaba por defecto TODAS
+    // las escrituras. Como logAdminAction() traga el error con un console.warn para no
+    // romper la acción principal, el log quedaba siempre vacío sin ningún síntoma visible
+    // (parecía "todavía no hubo acciones"). Ninguna acción sensible del panel quedó
+    // registrada en todo ese tiempo.
+    match /admin_audit_log/{entryId} {
+      allow read: if isAdmin();
+      // Un admin solo puede registrar acciones a su propio nombre: no puede fabricar
+      // entradas atribuidas a otro admin.
+      allow create: if isAdmin() && request.resource.data.adminUid == request.auth.uid;
+      // Un log de auditoría no se edita ni se borra -- ni siquiera un admin 'full'. Si se
+      // pudiera, dejaría de servir como evidencia de lo que pasó.
+      allow update, delete: if false;
+    }
+
     // 5d. DISCREPANCIAS DE PAGO — el webhook de MercadoPago (Admin SDK) deja acá los pagos
     // que no coinciden en monto o estado con la orden, para revisión manual (ver K1 en
     // CLAUDE.md). Fase FF: antes esta colección no tenía NINGUNA regla (ni el admin podía

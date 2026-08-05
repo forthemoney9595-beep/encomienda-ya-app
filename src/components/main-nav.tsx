@@ -218,7 +218,7 @@ export function MainNav({
       )}
 
       {isFullAdmin && (
-        <NavSection id="sistema" title="Sistema" defaultOpen={false}>
+        <NavSection id="sistema" title="Sistema">
           <Link href="/admin/settings">
             <Button variant={pathname.startsWith('/admin/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Settings className="mr-2 h-4 w-4" />

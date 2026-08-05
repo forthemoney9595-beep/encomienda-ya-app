@@ -131,6 +131,7 @@ function AdminOrdersPage() {
       const res = await authedFetch('/api/orders/cancel', user, { orderId, userId: orderUserId });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
+      if (firestore) logAdminAction(firestore, user.uid, 'cancel_order', orderId);
       toast({ title: 'Pedido cancelado' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error al cancelar', description: e.message });

@@ -22,6 +22,8 @@ import { useDoc, useFirestore, useCollection, useMemoFirebase } from '@/firebase
 import AdminAuthGuard from '../../admin-auth-guard';
 import { collection, query, where, doc, updateDoc, orderBy, limit, CollectionReference } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/auth-context';
+import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { type Order as OrderType } from '@/lib/order-service';
 import Link from 'next/link';
@@ -46,6 +48,7 @@ function DriverProfilePage() {
   const driverId = params.driverId as string;
   const firestore = useFirestore();
   const { toast } = useToast();
+  const { user: adminUser } = useAuth();
 
   const [cbuInput, setCbuInput] = useState('');
   const [cbuLoaded, setCbuLoaded] = useState(false);
@@ -112,6 +115,8 @@ function DriverProfilePage() {
     setSavingCbu(true);
     try {
       await updateDoc(driverRef, { payoutCbu: cbuInput.trim() });
+      // Mismo criterio que el CBU de tienda: define a qué cuenta va la plata, se audita.
+      if (firestore && adminUser) logAdminAction(firestore, adminUser.uid, 'edit_cbu', driverId, `repartidor — CBU ...${cbuInput.trim().slice(-4)}`);
       toast({ title: 'CBU guardado', description: 'La liquidación automática lo usará.' });
     } catch {
       toast({ variant: 'destructive', title: 'Error al guardar' });
@@ -125,6 +130,9 @@ function DriverProfilePage() {
     setUpdatingStatus(true);
     try {
       await updateDoc(driverRef, { status, isApproved: status === 'Activo' });
+      if (firestore && adminUser) {
+        logAdminAction(firestore, adminUser.uid, status === 'Activo' ? 'approve_account' : 'reject_account', driverId, `repartidor — ${status}`);
+      }
       toast({ title: status === 'Activo' ? 'Repartidor activado' : `Estado: ${status}` });
     } catch {
       toast({ variant: 'destructive', title: 'Error al cambiar estado' });

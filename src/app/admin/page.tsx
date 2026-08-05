@@ -24,6 +24,8 @@ import Link from 'next/link';
 import AdminAuthGuard from './admin-auth-guard';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/auth-context';
+import { logAdminAction } from '@/lib/admin-audit';
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
@@ -75,6 +77,7 @@ function AdminDashboard() {
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
+  const { user: adminUser } = useAuth();
 
   // Aprobar / rechazar solicitudes de tiendas y repartidores
   const handleUpdateUserStatus = async (userId: string, isApproved: boolean) => {
@@ -84,6 +87,12 @@ function AdminDashboard() {
       const relatedStore = (stores as any[])?.find((s: any) => s.ownerId === userId);
       if (relatedStore) {
         await updateDoc(doc(firestore, 'stores', relatedStore.id), { isApproved });
+      }
+      // Aprobar una cuenta es de lo más sensible del panel (habilita a operar y cobrar) y
+      // sin embargo era de lo poco que NO quedaba en el log de acciones.
+      if (adminUser) {
+        logAdminAction(firestore, adminUser.uid, isApproved ? 'approve_account' : 'reject_account', userId,
+          relatedStore ? `tienda: ${relatedStore.name || relatedStore.id}` : 'repartidor');
       }
       toast({ title: isApproved ? 'Usuario aprobado' : 'Usuario rechazado' });
     } catch (error) {

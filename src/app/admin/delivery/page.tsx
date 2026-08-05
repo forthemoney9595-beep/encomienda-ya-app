@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import PageHeader from '@/components/page-header';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
+import { cn } from '@/lib/utils';
 // ✅ Importamos la interfaz desde el archivo vecino que acabamos de arreglar
 import { DeliveryPersonnelList, type DeliveryPersonnel } from './delivery-personnel-list';
 // ✅ Import correcto del contexto de Auth
@@ -12,14 +15,20 @@ import { useToast } from '@/hooks/use-toast';
 import { ManageDriverDialog } from './manage-driver-dialog';
 import AdminAuthGuard from '../admin-auth-guard';
 import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { logAdminAction } from '@/lib/admin-audit';
+import { authedFetch } from '@/lib/authed-fetch';
+
+type DriverFilter = 'all' | 'pending' | 'active' | 'rejected';
 
 function AdminDeliveryPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isFullAdmin, loading: authLoading } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   
   const [isManageDialogOpen, setManageDialogOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<DeliveryPersonnel | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<DriverFilter>('all');
 
   // Consulta de Repartidores
   const personnelQuery = useMemoFirebase(() => {
@@ -28,6 +37,25 @@ function AdminDeliveryPage() {
   }, [firestore]);
 
   const { data: personnel, isLoading: personnelLoading } = useCollection<DeliveryPersonnel>(personnelQuery);
+
+  const filteredPersonnel = useMemo(() => {
+    const t = search.trim().toLowerCase();
+    return (personnel || []).filter(p => {
+      if (statusFilter === 'pending' && p.status !== 'Pendiente') return false;
+      if (statusFilter === 'active' && p.status !== 'Activo') return false;
+      if (statusFilter === 'rejected' && !['Rechazado', 'Inactivo'].includes(p.status)) return false;
+      if (!t) return true;
+      const plate = typeof p.vehicle === 'object' && p.vehicle ? p.vehicle.plate || '' : '';
+      return `${p.name || ''} ${p.email || ''} ${plate}`.toLowerCase().includes(t);
+    });
+  }, [personnel, search, statusFilter]);
+
+  const counts = useMemo(() => ({
+    all: personnel?.length || 0,
+    pending: (personnel || []).filter(p => p.status === 'Pendiente').length,
+    active: (personnel || []).filter(p => p.status === 'Activo').length,
+    rejected: (personnel || []).filter(p => ['Rechazado', 'Inactivo'].includes(p.status)).length,
+  }), [personnel]);
 
   // Aprobar / Rechazar
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
@@ -47,6 +75,10 @@ function AdminDeliveryPage() {
             updatedAt: serverTimestamp()
         });
         
+        // Aprobar/rechazar un repartidor habilita o corta su capacidad de operar y cobrar
+        // -- de las acciones más sensibles del panel, y no quedaba registrada en ningún lado.
+        if (user) logAdminAction(firestore, user.uid, status === 'approved' ? 'approve_account' : 'reject_account', personnelId, 'repartidor');
+
         toast({
             title: 'Estado Actualizado',
             description: `El repartidor ha sido marcado como ${newStatus}.`,
@@ -81,6 +113,8 @@ function AdminDeliveryPage() {
           updatedAt: serverTimestamp()
       });
 
+      if (user) logAdminAction(firestore, user.uid, 'edit_driver', driverData.id, `estado: ${driverData.status}`);
+
       toast({
         title: 'Repartidor Actualizado',
         description: `Los datos de ${driverData.name} han sido guardados.`,
@@ -98,15 +132,27 @@ function AdminDeliveryPage() {
     }
   };
 
+  // La confirmación ya la pide el AlertDialog en personnel-actions.tsx — acá no hace
+  // falta otro confirm(). Antes esto SIEMPRE fallaba con un toast ("no habilitada
+  // todavía") porque borrar solo el doc de Firestore dejaba viva la cuenta de Auth; ahora
+  // va por /api/admin/delete-user (Admin SDK), que borra Auth + Firestore, igual que el
+  // botón equivalente de /admin/users.
   const handleDeleteDriver = async (driverId: string) => {
-    // La confirmación ya la pide el AlertDialog en personnel-actions.tsx — acá no
-    // hace falta otro confirm(). Por seguridad la eliminación directa no está
-    // habilitada todavía (requeriría borrar también la cuenta de Firebase Auth).
-    toast({
-      title: 'Acción no disponible',
-      description: 'Por seguridad, la eliminación directa no está habilitada todavía.',
-      variant: 'destructive',
-    });
+    if (!user) return;
+    if (!isFullAdmin) {
+      toast({ variant: 'destructive', title: 'No autorizado', description: 'Necesitás acceso completo de administrador para eliminar cuentas.' });
+      return;
+    }
+    try {
+      const res = await authedFetch('/api/admin/delete-user', user, { userId: driverId });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar');
+      if (firestore) logAdminAction(firestore, user.uid, 'delete_user', driverId, 'repartidor');
+      toast({ title: 'Repartidor eliminado', description: 'La cuenta fue borrada de Auth y Firestore.' });
+    } catch (error: any) {
+      console.error(error);
+      toast({ variant: 'destructive', title: 'Error al eliminar', description: error.message });
+    }
   };
 
   const openDialogForEdit = (driver: DeliveryPersonnel) => {
@@ -125,6 +171,31 @@ function AdminDeliveryPage() {
       
       <PageHeader title="Gestión de Repartidores" description="Administra las cuentas y aprobaciones de tu flota." />
 
+      {/* Búsqueda + filtro por estado: antes esta página no tenía NINGUNO de los dos, había
+          que revisar la lista completa a ojo para encontrar un repartidor o ver quién estaba
+          pendiente de aprobación. Filtrado en memoria: `users where role==delivery` es un
+          subconjunto acotado (la flota de un pueblo), no una colección sin techo. */}
+      <div className="flex flex-col gap-3">
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar por nombre, email o patente..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {([
+            { k: 'all', label: 'Todos' },
+            { k: 'pending', label: 'Pendientes' },
+            { k: 'active', label: 'Activos' },
+            { k: 'rejected', label: 'Rechazados' },
+          ] as { k: DriverFilter; label: string }[]).map(({ k, label }) => (
+            <button key={k} onClick={() => setStatusFilter(k)}
+              className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
+                statusFilter === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70')}>
+              {label} ({counts[k]})
+            </button>
+          ))}
+        </div>
+      </div>
+
       {authLoading || personnelLoading ? (
          <div className="border rounded-lg p-4 space-y-4">
             <div className="flex justify-between">
@@ -139,7 +210,7 @@ function AdminDeliveryPage() {
         </div>
       ) : (
         <DeliveryPersonnelList
-          personnel={personnel || []}
+          personnel={filteredPersonnel}
           onStatusUpdate={handleStatusUpdate}
           onEdit={openDialogForEdit}
           onDelete={handleDeleteDriver}

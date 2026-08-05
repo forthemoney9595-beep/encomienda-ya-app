@@ -913,6 +913,103 @@ el buscador/filtro nuevo.
 **Desplegado a producción** (`firebase deploy --only firestore:rules`, dry-run limpio
 antes de desplegar).
 
+## Fase GG (ago 2026): panel admin como centro de control + 2 bugs graves de larga data
+Pedido del usuario: "revisemos sección por sección... que sea un centro de control total,
+que no se le pase nada por alto y que pueda encontrar cualquier cosa en cualquier
+momento". Se auditaron las 12 páginas del admin con un agente de exploración antes de
+tocar nada. De los ~30 hallazgos se atacaron los 3 críticos + 2 bugs encontrados al
+verificar.
+
+**🚨 BUG 1 — el ⌘K no respondía al CLICK (afectaba a TODA la app, no solo al admin).**
+`src/components/ui/command.tsx` usaba `data-[disabled]:pointer-events-none`. Tailwind lo
+traduce al selector `[data-disabled]`, que matchea si el **atributo existe**, sin importar
+su valor — y cmdk v1 renderiza `data-disabled="false"` en los items HABILITADOS. Resultado:
+**todos** los items del buscador quedaban con `pointer-events: none`; el click atravesaba
+el item y lo recibía el contenedor padre. Funcionaba con teclado (flechas+Enter) y no con
+mouse, por eso pasó desapercibido desde la Fase AA. Corregido a `data-[disabled=true]:`.
+**Verificado con Playwright** (página de prueba aislada, borrada después): antes
+`pointer-events: none` + el click lo recibía `DIV[GROUP-ITEMS]`; después `auto`, el click
+cae dentro del item y `onSelect` dispara. **Regla para el futuro:** en Tailwind,
+`data-[x]:` = "atributo presente"; si la librería emite `x="false"`, hay que escribir
+`data-[x=true]:`.
+
+**🚨 BUG 2 — el Log de Acciones nunca registró NADA desde que existe (Fase N).** La
+colección `admin_audit_log` no tenía NINGUNA regla en `firestore.rules` → Firestore
+denegaba por defecto todas las escrituras. Como `logAdminAction()` traga el error con un
+`console.warn` para no interrumpir la acción principal, fallaba en silencio y la página
+mostraba "No hay acciones registradas todavía", que parecía un estado normal. Se agregó la
+regla: `read` solo admin; `create` solo con `adminUid == request.auth.uid` (un admin no
+puede fabricar entradas a nombre de otro); **`update`/`delete` bloqueados incluso para
+`isFullAdmin`** — un log de auditoría que se puede editar no sirve como evidencia. Además
+`logAdminAction` ahora manda el fallo a Sentry (antes solo console.warn), así no vuelve a
+quedar invisible.
+
+**Crítico 1 — búsqueda global admin (no existía).** `global-search.tsx` estaba montado en
+`/admin/*` pero con contenido 100% de comprador ("Mis Favoritos", "Abrir carrito"). Ahora
+se bifurca por rol con 4 variantes: **admin** (pedido por ID exacto, usuarios por prefijo
+de email O nombre, tiendas incluidas las no aprobadas, y las 12 secciones del panel
+respetando `isFullAdmin`), **tienda** (sus propios productos + sus 8 secciones),
+**repartidor** (sus 6 secciones) y **comprador** (el de siempre, intacto).
+- Al elegir un cliente/admin se abre el `UserDetailDialog` (ficha + historial de pedidos)
+  **encima de la página actual**: antes navegaba a `/admin/users?q=...` y, si ya estabas en
+  esa página, la ruta no cambiaba y parecía que el click no hacía nada. Dueño de tienda y
+  repartidor sí navegan a su ficha propia (tienen página dedicada con métricas y CBU).
+- Si un dueño de tienda no tiene `storeId` en su perfil (pasó con `tienda@test.com`, ver
+  bug de dato más arriba), la tienda se busca por `ownerId` entre las que el diálogo ya
+  tiene cargadas — cero lecturas extra.
+- **OJO — Firestore busca por PREFIJO, no por substring:** buscar "test.com" no encuentra
+  "cliente@test.com". Además los rangos distinguen mayúsculas (`'D' < 'd'`), así que se
+  consultan las dos variantes del nombre. El estado vacío explica cómo buscar en vez de
+  dejar al admin pensando que el buscador está roto.
+- A propósito el ⌘K del repartidor NO busca pedidos: los que le importan ya están en
+  `/orders`, y `orders` es una colección sin techo (regla de las Fases Y/Z).
+
+**Crítico 2 — el Log de Acciones tenía agujeros grandes.** Solo 9 acciones se registraban.
+Se agregó `logAdminAction` en las que faltaban y eran de las más sensibles: aprobar/rechazar
+tienda o repartidor (dashboard, `/admin/delivery` y ambos detalles), pausar/reactivar
+tienda, editar tienda (incluye la comisión), editar CBU de tienda y de repartidor, cancelar
+pedido, guardar configuración global (con el detalle de qué cambió), enviar broadcast y
+eliminar tienda. `ACTION_LABELS` pasó de 9 a 18 entradas.
+
+**Crítico 3 — colecciones sin paginar.** `withdrawals` (la única de plata que crece sin
+techo) se bajaba ENTERA en `finance-view.tsx` para sumar en el cliente. Ahora: métricas por
+**aggregation** (`sum('amount')`+`count()` por estado, mismo patrón de la Fase Z) y tabla
+paginada con cursor de a 25 con **filtros server-side** (estado y rol van en la query, no en
+memoria, para que "Pendientes" muestre todos y no solo los de la página cargada). 4 índices
+compuestos nuevos de `withdrawals`, **desplegados a producción**.
+- `stores` y `users where role=='delivery'` se dejaron SIN paginar a propósito: son
+  colecciones acotadas por diseño (marketplace de pueblo) y `stores` ya se baja entera en
+  el home del comprador. Paginarlas sería sobre-ingeniería; lo que sí les faltaba era poder
+  encontrar y filtrar.
+
+**Mejoras por página:**
+- `/admin/stores`: chips de filtro (Todas/Pendientes/Aprobadas/Pausadas) con contador,
+  columnas de **rubro** y **rating** (se habían perdido), badge de "Pausada", fila resaltada
+  si está pendiente, export CSV, y el diálogo de borrado ahora aclara que los pedidos
+  históricos quedan y sugiere pausar en vez de borrar.
+- `/admin/delivery`: buscador (nombre/email/patente) y chips de filtro por estado — no tenía
+  **ninguno** de los dos. Y el botón "Eliminar" **siempre fallaba** con un toast ("no
+  habilitada todavía"); ahora borra de verdad vía `/api/admin/delete-user` (Auth+Firestore),
+  igual que el equivalente de `/admin/users`, exigiendo `isFullAdmin`.
+- `/admin/settings`: activar **Modo Mantenimiento** ahora pide confirmación — cortaba los
+  pedidos de toda la plataforma con menos fricción que cancelar un solo pedido.
+- `/admin/users`: reacciona al query param `?q=` aunque ya estés en la página (ver arriba).
+- Menú: "Sistema" (donde vive Configuración) arrancaba **colapsada** por defecto y el
+  usuario no la encontraba — ahora arranca abierta como el resto.
+
+**Código muerto eliminado:** `admin/stores/stores-list.tsx` y `admin/stores/store-actions.tsx`
+— dos implementaciones paralelas de la gestión de tiendas que ningún archivo importaba
+(`admin/stores/page.tsx` reimplementó la suya). Confundían al auditar: su `AlertDialog`
+prometía borrar "todos sus productos", cosa que el código vivo no hace.
+
+**Nota de método:** Playwright **sí funciona** en este entorno Windows (contra lo anotado en
+la Fase Q) — `npx playwright install chromium` + headless. Fue lo que permitió encontrar el
+BUG 1, que ninguna cantidad de lectura de código habría revelado. Límite encontrado:
+Firebase Auth rate-limitea por IP tras varios logins seguidos, así que conviene reusar
+`storageState` en vez de loguear en cada test. Por eso quedaron sin verificar en vivo las
+variantes de ⌘K de repartidor y comprador (el fix es el mismo patrón ya verificado en
+tienda y admin).
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

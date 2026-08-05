@@ -117,7 +117,14 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      // OJO (bug real, Fase GG): tiene que ser `data-[disabled=true]:`, NO `data-[disabled]:`.
+      // Tailwind traduce `data-[disabled]:` al selector `[data-disabled]`, que matchea si el
+      // ATRIBUTO EXISTE, sin importar su valor -- y cmdk v1 renderiza data-disabled="false"
+      // en los items habilitados. Resultado: TODOS los items quedaban con
+      // pointer-events:none, así que el ⌘K solo respondía al teclado y hacer click no hacía
+      // nada (verificado con Playwright: el click atravesaba el item y lo recibía el
+      // contenedor padre). Afectaba tanto al buscador del comprador como al del admin.
+      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
       className
     )}
     {...props}

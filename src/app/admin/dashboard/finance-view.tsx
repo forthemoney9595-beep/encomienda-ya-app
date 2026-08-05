@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,8 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, orderBy, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { useAggregate } from '@/lib/firebase-aggregate';
+import {
+    collection, query, where, orderBy, limit, startAfter, getDocs, updateDoc, doc,
+    serverTimestamp, sum, count, type QueryDocumentSnapshot,
+} from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
 import { authedFetch } from '@/lib/authed-fetch';
 import { logAdminAction } from '@/lib/admin-audit';
@@ -25,6 +29,8 @@ import { es } from 'date-fns/locale';
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 type RoleFilter  = 'all' | 'store' | 'delivery';
+
+const PAGE_SIZE = 25;
 
 const formatDate = (ts: any, full = false) => {
     if (!ts?.seconds) return '—';
@@ -49,35 +55,89 @@ export function FinanceView() {
     const [rejectReason, setRejectReason]         = useState('');
     const [submittingReject, setSubmittingReject] = useState(false);
 
-    const withdrawalsQuery = useMemoFirebase(() => {
+    // ── Métricas: aggregation server-side (Fase Z/GG) ────────────────────────────
+    // Antes se bajaba la colección `withdrawals` ENTERA para sumar en el cliente. Es la
+    // única colección de plata que crece sin techo (un doc por cada retiro histórico) y
+    // era la última que quedaba sin paginar en el panel.
+    const pendingAggQ  = useMemoFirebase(() => firestore ? query(collection(firestore, 'withdrawals'), where('status', '==', 'pending')) : null, [firestore]);
+    const approvedAggQ = useMemoFirebase(() => firestore ? query(collection(firestore, 'withdrawals'), where('status', '==', 'approved')) : null, [firestore]);
+    const rejectedAggQ = useMemoFirebase(() => firestore ? query(collection(firestore, 'withdrawals'), where('status', '==', 'rejected')) : null, [firestore]);
+    const { data: pendingAgg, refresh: refreshPending }   = useAggregate(pendingAggQ,  { total: sum('amount'), n: count() }, { refreshOnFocus: true });
+    const { data: approvedAgg, refresh: refreshApproved } = useAggregate(approvedAggQ, { total: sum('amount'), n: count() }, { refreshOnFocus: true });
+    const { data: rejectedAgg, refresh: refreshRejected } = useAggregate(rejectedAggQ, { total: sum('amount'), n: count() }, { refreshOnFocus: true });
+    const refreshMetrics = useCallback(() => { refreshPending(); refreshApproved(); refreshRejected(); }, [refreshPending, refreshApproved, refreshRejected]);
+
+    const metrics = {
+        pending: pendingAgg?.total ?? 0,
+        pendingCount: pendingAgg?.n ?? 0,
+        paid: approvedAgg?.total ?? 0,
+        rejected: rejectedAgg?.total ?? 0,
+        totalCount: (pendingAgg?.n ?? 0) + (approvedAgg?.n ?? 0) + (rejectedAgg?.n ?? 0),
+    };
+
+    // ── Tabla paginada con cursor + filtros SERVER-SIDE ──────────────────────────
+    // Los filtros van en la query (no en memoria) para que "Pendientes" muestre TODOS los
+    // pendientes y no solo los que entraron en la página ya cargada. Índices compuestos
+    // nuevos en firestore.indexes.json: (status, createdAt), (userRole, createdAt) y
+    // (status, userRole, createdAt).
+    const [rows, setRows] = useState<any[]>([]);
+    const [lastSnap, setLastSnap] = useState<QueryDocumentSnapshot | null>(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [withdrawalsLoading, setWithdrawalsLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    const buildQuery = useCallback((cursor: QueryDocumentSnapshot | null) => {
         if (!firestore) return null;
-        return query(collection(firestore, 'withdrawals'), orderBy('createdAt', 'desc'));
-    }, [firestore]);
+        const cons: any[] = [];
+        if (statusFilter !== 'all') cons.push(where('status', '==', statusFilter));
+        if (roleFilter !== 'all') cons.push(where('userRole', '==', roleFilter));
+        cons.push(orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+        if (cursor) cons.push(startAfter(cursor));
+        return query(collection(firestore, 'withdrawals'), ...cons);
+    }, [firestore, statusFilter, roleFilter]);
 
-    const { data: withdrawals, isLoading: withdrawalsLoading } = useCollection<any>(withdrawalsQuery);
+    const resetLoad = useCallback(async () => {
+        const q = buildQuery(null);
+        if (!q) return;
+        setWithdrawalsLoading(true);
+        try {
+            const snap = await getDocs(q);
+            setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLastSnap(snap.docs[snap.docs.length - 1] || null);
+            setHasMore(snap.docs.length === PAGE_SIZE);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setWithdrawalsLoading(false);
+        }
+    }, [buildQuery]);
 
-    // Métricas
-    const metrics = useMemo(() => {
-        if (!withdrawals) return { pending: 0, paid: 0, rejected: 0, pendingCount: 0 };
-        return withdrawals.reduce((acc, w) => {
-            if (w.status === 'pending')  { acc.pending += w.amount || 0; acc.pendingCount++; }
-            if (w.status === 'approved') acc.paid     += w.amount || 0;
-            if (w.status === 'rejected') acc.rejected += w.amount || 0;
-            return acc;
-        }, { pending: 0, paid: 0, rejected: 0, pendingCount: 0 });
-    }, [withdrawals]);
+    useEffect(() => { resetLoad(); }, [resetLoad]);
 
-    // Tabla filtrada
-    const displayed = useMemo(() => {
-        if (!withdrawals) return [];
-        return withdrawals.filter(w => {
-            if (statusFilter !== 'all' && w.status !== statusFilter) return false;
-            if (roleFilter !== 'all'   && w.userRole !== roleFilter)  return false;
-            return true;
-        });
-    }, [withdrawals, statusFilter, roleFilter]);
+    const loadMore = async () => {
+        const q = buildQuery(lastSnap);
+        if (!q || !lastSnap) return;
+        setLoadingMore(true);
+        try {
+            const snap = await getDocs(q);
+            setRows(prev => [...prev, ...snap.docs.map(d => ({ id: d.id, ...d.data() }))]);
+            setLastSnap(snap.docs[snap.docs.length - 1] || lastSnap);
+            setHasMore(snap.docs.length === PAGE_SIZE);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
 
-    // Exportar CSV
+    // Refresca tabla + métricas después de aprobar/rechazar (antes el listener en vivo lo
+    // hacía solo; ahora que es one-shot hay que pedirlo explícito).
+    const refreshAll = useCallback(() => { resetLoad(); refreshMetrics(); }, [resetLoad, refreshMetrics]);
+
+    const displayed = rows;
+
+    // Exportar CSV — exporta lo que está cargado en pantalla (usar "Cargar más" antes si
+    // se necesita el histórico completo).
     const handleExportCsv = () => {
         const rows = displayed.map((w: any) => ({
             'Fecha solicitud': w.createdAt?.seconds ? format(w.createdAt.toDate(), 'dd/MM/yyyy HH:mm', { locale: es }) : '',
@@ -105,6 +165,7 @@ export function FinanceView() {
             if (!res.ok) throw new Error(data.error || 'Error al aprobar');
             toast({ title: 'Pago registrado', description: `$${data.amountApproved?.toLocaleString()} descontados del saldo.` });
             if (firestore) logAdminAction(firestore, user.uid, 'approve_withdrawal', withdrawalId, `$${data.amountApproved}`);
+            refreshAll();
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Error al aprobar', description: err.message });
         } finally {
@@ -130,6 +191,7 @@ export function FinanceView() {
             toast({ title: 'Solicitud rechazada', description: 'El monto vuelve al saldo disponible del usuario.' });
             logAdminAction(firestore, user.uid, 'reject_withdrawal', rejectDialogId, rejectReason.trim());
             setRejectDialogId(null);
+            refreshAll();
         } catch {
             toast({ variant: 'destructive', title: 'Error al rechazar' });
         } finally {
@@ -179,7 +241,7 @@ export function FinanceView() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">${(metrics.pending + metrics.paid + metrics.rejected).toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">{withdrawals?.length ?? 0} solicitudes totales</p>
+                        <p className="text-xs text-muted-foreground">{metrics.totalCount} solicitudes totales</p>
                     </CardContent>
                 </Card>
             </div>
@@ -334,6 +396,14 @@ export function FinanceView() {
                         </TableBody>
                     </Table>
                 </div>
+                {hasMore && !withdrawalsLoading && (
+                    <div className="flex justify-center border-t py-3">
+                        <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                            {loadingMore && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Cargar más
+                        </Button>
+                    </div>
+                )}
             </Card>
 
             {/* Modal de rechazo */}

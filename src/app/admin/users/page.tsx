@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { useCountFromServer } from '@/lib/firebase-aggregate';
@@ -30,8 +31,12 @@ function AdminUsersPage() {
   const { user: currentUser, isFullAdmin } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchParams = useSearchParams();
+  const qParam = searchParams.get('q') || '';
+  // Precarga desde la búsqueda global admin (⌘K) -- ej. tocar un cliente ahí navega acá
+  // con ?q=email@ejemplo.com en vez de dejar al admin escribirlo de nuevo a mano.
+  const [search, setSearch] = useState(qParam);
+  const [debouncedSearch, setDebouncedSearch] = useState(qParam.trim().toLowerCase());
   const [roleFilter, setRoleFilter] = useState<'all' | 'buyer' | 'store' | 'delivery' | 'admin'>('all');
   const [detailUser, setDetailUser] = useState<any | null>(null);
 
@@ -58,6 +63,13 @@ function AdminUsersPage() {
     all: cAll ?? 0, buyer: cBuyer ?? 0, store: cStore ?? 0, delivery: cDelivery ?? 0, admin: cAdmin ?? 0,
   };
   const refreshCounts = () => { rAll(); rBuyer(); rStore(); rDelivery(); rAdmin(); };
+
+  // Si el ⌘K navega acá estando YA en esta página, la ruta no cambia (solo el query param)
+  // y el componente no se re-monta -- sin esto el buscador quedaba con el valor viejo y
+  // parecía que el resultado del ⌘K "no llevaba a ningún lado".
+  useEffect(() => {
+    if (qParam) { setSearch(qParam); setRoleFilter('all'); }
+  }, [qParam]);
 
   // Debounce del buscador.
   useEffect(() => {

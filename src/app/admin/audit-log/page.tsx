@@ -27,6 +27,18 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   refund_order:             { label: 'Pedido reembolsado',     color: 'bg-warning/15 text-warning border-warning/30' },
   resolve_payment_mismatch: { label: 'Discrepancia resuelta',  color: 'bg-success/15 text-success border-success/30' },
   resolve_driver_incident:  { label: 'Incidente resuelto',     color: 'bg-success/15 text-success border-success/30' },
+  // Fase GG: acciones sensibles que se ejecutaban sin dejar NINGÚN rastro (aprobar una
+  // tienda/repartidor, pausar una tienda, cancelar un pedido, cambiar un CBU o los fees
+  // globales, mandar un broadcast a toda la plataforma).
+  approve_account:          { label: 'Cuenta aprobada',        color: 'bg-success/15 text-success border-success/30' },
+  reject_account:           { label: 'Cuenta rechazada',       color: 'bg-destructive/15 text-destructive border-destructive/30' },
+  pause_store:              { label: 'Tienda pausada',         color: 'bg-warning/15 text-warning border-warning/30' },
+  unpause_store:            { label: 'Tienda reactivada',      color: 'bg-success/15 text-success border-success/30' },
+  edit_driver:              { label: 'Repartidor editado',     color: 'bg-info/15 text-info border-info/30' },
+  edit_cbu:                 { label: 'CBU modificado',         color: 'bg-warning/15 text-warning border-warning/30' },
+  cancel_order:             { label: 'Pedido cancelado',       color: 'bg-destructive/15 text-destructive border-destructive/30' },
+  update_config:            { label: 'Configuración global',   color: 'bg-warning/15 text-warning border-warning/30' },
+  send_broadcast:           { label: 'Broadcast enviado',      color: 'bg-info/15 text-info border-info/30' },
 };
 
 const formatDate = (ts: any) => {

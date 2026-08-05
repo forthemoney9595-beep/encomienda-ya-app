@@ -11,6 +11,7 @@ import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
+import { logAdminAction } from '@/lib/admin-audit';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Bell, Send } from 'lucide-react';
@@ -61,6 +62,9 @@ function AdminCommunicationsPage() {
       const res = await authedFetch('/api/admin/notify-broadcast', user, { target: dest, title, body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      // Un broadcast le llega a todos los usuarios de la plataforma -- no quedaba
+      // registrado en ningún lado qué se mandó, a quién ni cuándo.
+      if (firestore) logAdminAction(firestore, user.uid, 'send_broadcast', dest, `"${title}" — ${data.notified} destinatarios`);
       toast({ title: 'Notificación enviada', description: `${data.notified} destinatarios, ${data.sent} push.` });
       setTitle(''); setBody('');
     } catch (e: any) {

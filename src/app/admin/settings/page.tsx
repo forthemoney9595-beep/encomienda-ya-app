@@ -11,6 +11,8 @@ import { Switch } from '@/components/ui/switch';
 import { useFirestore, useMemoFirebase, useDoc } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/auth-context';
+import { logAdminAction } from '@/lib/admin-audit';
 import { Settings, AlertTriangle, Save, Loader2 } from 'lucide-react';
 
 interface PlatformConfig {
@@ -23,6 +25,7 @@ interface PlatformConfig {
 function AdminSettingsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const { user: adminUser } = useAuth();
 
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
   const { data: configData } = useDoc<PlatformConfig>(configRef);
@@ -36,9 +39,28 @@ function AdminSettingsPage() {
 
   const handleSave = async () => {
     if (!firestore) return;
+
+    // El modo mantenimiento corta los pedidos en TODA la plataforma -- pedía menos
+    // confirmación que cancelar un solo pedido. Solo se pregunta al ACTIVARLO.
+    const turningOnMaintenance = localConfig.maintenanceMode && !configData?.maintenanceMode;
+    if (turningOnMaintenance && !confirm('⚠️ Vas a activar el MODO MANTENIMIENTO: ningún cliente va a poder hacer pedidos en toda la plataforma hasta que lo desactives. ¿Confirmás?')) {
+      return;
+    }
+
     setIsSaving(true);
     try {
       await setDoc(doc(firestore, 'config', 'platform'), localConfig, { merge: true });
+      // Cambiar fees o el día de liquidación afecta plata de todas las tiendas y
+      // repartidores -- antes no quedaba registro de quién lo cambió ni cuándo.
+      if (adminUser) {
+        const changes = [
+          configData?.serviceFee !== localConfig.serviceFee ? `serviceFee: ${configData?.serviceFee ?? '—'}% → ${localConfig.serviceFee}%` : null,
+          configData?.deliveryFee !== localConfig.deliveryFee ? `envío: $${configData?.deliveryFee ?? '—'} → $${localConfig.deliveryFee}` : null,
+          configData?.settlementDayOfWeek !== localConfig.settlementDayOfWeek ? `día liquidación: ${localConfig.settlementDayOfWeek}` : null,
+          configData?.maintenanceMode !== localConfig.maintenanceMode ? `mantenimiento: ${localConfig.maintenanceMode ? 'ON' : 'OFF'}` : null,
+        ].filter(Boolean).join(' · ');
+        if (changes) logAdminAction(firestore, adminUser.uid, 'update_config', 'platform', changes);
+      }
       toast({ title: 'Configuración guardada', description: 'Los cambios se aplicarán globalmente.' });
     } catch (error) {
       console.error('Error guardando config:', error);
