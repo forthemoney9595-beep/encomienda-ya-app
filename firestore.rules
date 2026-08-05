@@ -243,6 +243,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // 5c-ter. HISTORIAL DE BROADCASTS (Fase GG) — lo escribe /api/admin/notify-broadcast
+    // con Admin SDK (por eso `create: false` acá: el cliente no puede fabricar registros de
+    // envíos que nunca ocurrieron). Es un historial, no se edita ni se borra.
+    match /broadcasts/{id} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     // 5d. DISCREPANCIAS DE PAGO — el webhook de MercadoPago (Admin SDK) deja acá los pagos
     // que no coinciden en monto o estado con la orden, para revisión manual (ver K1 en
     // CLAUDE.md). Fase FF: antes esta colección no tenía NINGUNA regla (ni el admin podía

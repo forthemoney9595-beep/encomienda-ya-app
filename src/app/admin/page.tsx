@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw } from 'lucide-react';
+import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw, Clock, CreditCard, ChefHat, Truck, ChevronRight } from 'lucide-react';
 import { downloadCsv } from '@/lib/csv-export';
 import { PendingList } from './pending-list';
 import { useRouter } from 'next/navigation';
@@ -28,6 +28,63 @@ import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+
+// Etapas del flujo del pedido EN ORDEN. Se dibujan como un pipeline conectado (ver el
+// render más abajo) en vez de tarjetas sueltas: así se lee el RECORRIDO del pedido y en
+// qué punto se está acumulando la cola.
+// El color progresa según de quién depende: gris (el sistema espera) → ámbar (la pelota la
+// tiene la tienda) → azul (ya está en la calle). Es la misma escala semántica que usa el
+// resto de la app en order-status.ts.
+const PIPELINE_STAGES = [
+  { status: 'Pendiente de Confirmación', label: 'Esperando tienda',  who: 'la tienda debe confirmar',        icon: Clock,        dot: 'bg-muted-foreground/40', ring: 'ring-muted-foreground/20', text: 'text-muted-foreground', tint: 'bg-muted/30' },
+  { status: 'Pendiente de Pago',         label: 'Esperando pago',    who: 'el cliente debe pagar',           icon: CreditCard,   dot: 'bg-warning',             ring: 'ring-warning/30',          text: 'text-warning',          tint: 'bg-warning/10' },
+  { status: 'En preparación',            label: 'Preparando',        who: 'la tienda está cocinando',        icon: ChefHat,      dot: 'bg-warning',             ring: 'ring-warning/30',          text: 'text-warning',          tint: 'bg-warning/10' },
+  { status: 'Listo para recoger',        label: 'Listo para retiro', who: 'falta que lo tome un repartidor', icon: PackageCheck, dot: 'bg-warning',             ring: 'ring-warning/30',          text: 'text-warning',          tint: 'bg-warning/10' },
+  { status: 'En camino',                 label: 'Yendo a la tienda', who: 'el repartidor va a retirar',      icon: Bike,         dot: 'bg-info',                ring: 'ring-info/30',             text: 'text-info',             tint: 'bg-info/10' },
+  { status: 'En reparto',                label: 'Yendo al cliente',  who: 'el repartidor va a entregar',     icon: Truck,        dot: 'bg-info',                ring: 'ring-info/30',             text: 'text-info',             tint: 'bg-info/10' },
+] as const;
+
+// Dónde está físicamente el pedido en cada tramo del pipeline (se rotula debajo).
+const PIPELINE_ZONES = [
+  { label: 'en la tienda', from: 0, to: 3 },
+  { label: 'en la calle',  from: 4, to: 5 },
+] as const;
+
+// Cuántas alertas se listan antes de resumir el resto. Con volumen real la lista completa
+// se volvía una pared inmanejable (44 filas empujando todo el dashboard).
+const ALERT_PREVIEW = 6;
+
+// Tipos de alerta que se unifican en el panel "Requiere tu atención". Antes cada uno era
+// un bloque aparte con su propio marco de color, apilados: tres cajas rojas/ámbar
+// compitiendo por la atención y empujando el resto del dashboard fuera de pantalla.
+type AlertKind = 'stuck' | 'payment' | 'incident';
+const ALERT_KINDS: { k: AlertKind; label: string; icon: any; href: string }[] = [
+  { k: 'stuck',    label: 'Pedidos trabados', icon: Clock,       href: '/admin/orders' },
+  { k: 'payment',  label: 'Pagos',            icon: DollarSign,  href: '/admin/payment-issues' },
+  { k: 'incident', label: 'Repartidores',     icon: Bike,        href: '/admin/incidents' },
+];
+
+/**
+ * "hace X" legible a cualquier escala. Antes solo formateaba horas y minutos, así que un
+ * pedido trabado de hace 3 meses mostraba "hace 2261h 14m" — técnicamente correcto e
+ * inútil de leer. Se hizo evidente al cargar datos de prueba con fechas viejas.
+ */
+function formatElapsed(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)}m`;
+  if (hours < 48) {
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return `${h}h${m > 0 ? ` ${m}m` : ''}`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 30) {
+    const restHours = Math.floor(hours - days * 24);
+    return `${days} día${days === 1 ? '' : 's'}${restHours > 0 ? ` ${restHours}h` : ''}`;
+  }
+  const months = Math.floor(days / 30);
+  const restDays = days - months * 30;
+  return `${months} mes${months === 1 ? '' : 'es'}${restDays > 0 ? ` ${restDays}d` : ''}`;
+}
 
 // Estados "activos": pedidos en curso ahora. Set chico por naturaleza -> se escucha en vivo.
 const ACTIVE_STATUSES = [
@@ -103,6 +160,7 @@ function AdminDashboard() {
 
   // Controles de período (se declaran arriba porque la query del período los usa).
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'7d'|'30d'|'month'>('30d');
+  const [alertFilter, setAlertFilter] = useState<AlertKind | 'all'>('all');
   const [analyticsSort, setAnalyticsSort] = useState<'revenue'|'orders'>('revenue');
 
   const analyticsFrom = useMemo(() => {
@@ -261,6 +319,64 @@ function AdminDashboard() {
       .sort((a, b) => b.hoursElapsed - a.hoursElapsed);
   }, [activeOrders]);
 
+  // Bandeja unificada de atención: pedidos trabados + discrepancias de pago + incidentes
+  // de repartidor en UNA sola lista, ordenada por gravedad real y no por tipo. Antes eran
+  // tres bloques separados en los que todo se pintaba de rojo por igual, así que un pedido
+  // trabado hace 3 meses se veía igual de urgente que uno de hace 3 horas.
+  const alerts = useMemo(() => {
+    const items: {
+      id: string; kind: AlertKind; severity: 'high' | 'medium';
+      title: string; subtitle: string; meta: string; sortKey: number; href: string;
+    }[] = [];
+
+    stuckOrders.forEach((o: any) => items.push({
+      id: `s-${o.id}`,
+      kind: 'stuck',
+      // Más de un día parado es otra categoría de problema que "se pasó del umbral".
+      severity: o.hoursElapsed >= 24 ? 'high' : 'medium',
+      title: o.status,
+      subtitle: `${o.customerName || 'Cliente'} · ${o.storeName || 'Tienda'}`,
+      meta: `hace ${formatElapsed(o.hoursElapsed)}`,
+      sortKey: o.hoursElapsed,
+      href: `/orders/${o.id}`,
+    }));
+
+    (paymentMismatches || []).filter((m: any) => m.resolved !== true).forEach((m: any) => items.push({
+      id: `p-${m.id}`,
+      kind: 'payment',
+      severity: 'high', // siempre: es plata real sin conciliar
+      title: m.reason === 'amount_mismatch' ? 'Monto no coincide' : 'Estado de orden inesperado',
+      subtitle: m.reason === 'amount_mismatch'
+        ? `Pagó $${(m.paidAmount || 0).toLocaleString()} · pedido $${(m.orderTotal || 0).toLocaleString()}`
+        : `El pago llegó con el pedido en "${m.orderStatus}"`,
+      meta: 'revisar',
+      sortKey: Number.MAX_SAFE_INTEGER, // primero de todo
+      href: '/admin/payment-issues',
+    }));
+
+    (driverIncidents || []).filter((i: any) => i.resolved !== true).forEach((i: any) => items.push({
+      id: `i-${i.id}`,
+      kind: 'incident',
+      severity: i.type === 'problem_reported' ? 'high' : 'medium',
+      title: i.type === 'released' ? 'Soltó el pedido' : 'Reportó un problema',
+      subtitle: `${i.driverName || 'Repartidor'} · ${i.reason || ''}`,
+      meta: i.type === 'problem_reported' ? 'sin resolver' : '',
+      sortKey: i.type === 'problem_reported' ? 1e6 : 1e5,
+      href: `/orders/${i.orderId}`,
+    }));
+
+    return items.sort((a, b) => b.sortKey - a.sortKey);
+  }, [stuckOrders, paymentMismatches, driverIncidents]);
+
+  const alertCounts = useMemo(() => ({
+    all: alerts.length,
+    stuck: alerts.filter(a => a.kind === 'stuck').length,
+    payment: alerts.filter(a => a.kind === 'payment').length,
+    incident: alerts.filter(a => a.kind === 'incident').length,
+  }), [alerts]);
+
+  const visibleAlerts = (alertFilter === 'all' ? alerts : alerts.filter(a => a.kind === alertFilter));
+
   // Estado en tiempo real — snapshot de QUÉ ESTÁ PASANDO AHORA en la plataforma
   const liveStatus = useMemo(() => {
     const byStatus: Record<string, number> = {};
@@ -353,167 +469,258 @@ function AdminDashboard() {
         </Button>
       </div>
 
-      {/* ── Estado en tiempo real ─────────────────────────────── */}
-      <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
+      {/* ── Estado en tiempo real ─────────────────────────────────────────────────
+          Rediseñado (Fase GG) a pedido del usuario: antes era una grilla irregular de
+          tarjetas sueltas, con colores sin criterio, textos que no explicaban para qué
+          servía cada número y ninguna acción posible (no llevaban a ningún lado).
+          Ahora: (1) el flujo del pedido se muestra EN ORDEN, con el color que ya usa el
+          resto de la app para ese estado (order-status.ts) y una descripción de a quién
+          le toca actuar; (2) cada etapa es un LINK al filtro correspondiente de
+          /admin/orders; (3) el estado de la red (tiendas/repartidores) va en su propio
+          bloque separado, porque responde otra pregunta. */}
+      <div className="rounded-xl border border-border bg-card/50 p-4 space-y-4">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
           </span>
           <h2 className="text-sm font-semibold">Estado actual</h2>
-          <span className="text-xs text-muted-foreground">— actualización en tiempo real</span>
+          <span className="text-xs text-muted-foreground">— en vivo</span>
         </div>
 
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-          {/* Pedidos activos totales */}
-          <div className="col-span-2 sm:col-span-3 lg:col-span-2 rounded-lg bg-primary/10 border border-primary/20 p-3 flex items-center gap-3">
-            <Activity className="h-8 w-8 text-primary shrink-0" />
+        {/* ── Pipeline del pedido ──────────────────────────────────────────────
+            Las 6 etapas dibujadas como un recorrido conectado: un círculo por etapa
+            unido por una línea, con el número grande arriba y quién tiene la pelota
+            abajo. En pantalla chica se apila en vertical y la línea pasa a ser lateral. */}
+        <div className="rounded-xl border border-border bg-background/40 p-4 sm:p-5">
+          <div className="mb-5 flex items-end justify-between gap-3">
             <div>
-              <div className="text-3xl font-bold text-primary">{liveStatus.totalActive}</div>
-              <div className="text-xs text-muted-foreground">pedidos activos ahora</div>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Flujo del pedido
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Tocá una etapa para ver esos pedidos</p>
             </div>
+            <Link href="/admin/orders" className="group flex items-baseline gap-2 text-right transition-opacity hover:opacity-80">
+              <span className="text-4xl font-bold leading-none text-primary">{liveStatus.totalActive}</span>
+              <span className="text-xs text-muted-foreground">en curso →</span>
+            </Link>
           </div>
 
-          {/* Desglose por estado */}
-          {[
-            { status: 'Pendiente de Confirmación', label: 'Esperando tienda',  color: 'text-warning'     },
-            { status: 'Pendiente de Pago',         label: 'Esperando pago',    color: 'text-warning'     },
-            { status: 'En preparación',            label: 'Preparando',        color: 'text-info'        },
-            { status: 'Listo para recoger',        label: 'Listo para retiro', color: 'text-success'     },
-            { status: 'En camino',                 label: 'En camino',         color: 'text-primary'     },
-            { status: 'En reparto',                label: 'En reparto',        color: 'text-primary'     },
-          ].filter(s => (liveStatus.byStatus[s.status] || 0) > 0).map(s => (
-            <div key={s.status} className="rounded-lg bg-muted/40 border border-border p-2.5">
-              <div className={cn('text-2xl font-bold', s.color)}>{liveStatus.byStatus[s.status]}</div>
-              <div className="text-[11px] text-muted-foreground leading-tight">{s.label}</div>
-            </div>
-          ))}
-          {liveStatus.totalActive === 0 && (
-            <div className="col-span-2 sm:col-span-3 lg:col-span-4 rounded-lg bg-muted/40 border border-border p-2.5 flex items-center gap-2 text-muted-foreground text-sm">
-              <CheckCircle2 className="h-4 w-4 text-success" /> Sin pedidos activos en este momento
-            </div>
-          )}
-        </div>
-
-        {/* Segunda fila: tiendas y repartidores */}
-        <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-          <div className="rounded-lg bg-muted/40 border border-border p-2.5">
-            <div className="text-xl font-bold text-success">{(stores?.length || 0) - liveStatus.pausedStores}</div>
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1"><StoreIcon className="h-3 w-3" /> Tiendas abiertas</div>
-          </div>
-          <div className={cn('rounded-lg border p-2.5', liveStatus.pausedStores > 0 ? 'bg-warning/10 border-warning/30' : 'bg-muted/40 border-border')}>
-            <div className={cn('text-xl font-bold', liveStatus.pausedStores > 0 ? 'text-warning' : 'text-muted-foreground')}>{liveStatus.pausedStores}</div>
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Pause className="h-3 w-3" /> Tiendas pausadas</div>
-          </div>
-          <div className="rounded-lg bg-muted/40 border border-border p-2.5">
-            <div className="text-xl font-bold text-primary">{liveStatus.activeDrivers}</div>
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Bike className="h-3 w-3" /> Repartidores activos</div>
-          </div>
-          {(liveStatus.pendingApprovalStores + liveStatus.pendingApprovalDrivers) > 0 ? (
-            <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-2.5">
-              <div className="text-xl font-bold text-destructive">{liveStatus.pendingApprovalStores + liveStatus.pendingApprovalDrivers}</div>
-              <div className="text-[11px] text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-destructive" /> Aprobaciones pendientes</div>
+          {liveStatus.totalActive === 0 ? (
+            <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 p-3 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-success" /> Ningún pedido en curso — todo entregado.
             </div>
           ) : (
-            <div className="rounded-lg bg-muted/40 border border-border p-2.5">
-              <div className="text-xl font-bold text-muted-foreground">0</div>
-              <div className="text-[11px] text-muted-foreground flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-success" /> Sin aprobaciones pendientes</div>
-            </div>
+            <>
+              <div className="relative flex flex-col gap-1 sm:flex-row sm:gap-0">
+                {/* Línea conectora: horizontal en desktop, vertical en móvil. Va detrás de
+                    los círculos y se recorta a los extremos para no sobresalir. */}
+                <div className="pointer-events-none absolute left-[1.375rem] top-6 bottom-6 w-px bg-border sm:left-0 sm:right-0 sm:top-[1.625rem] sm:bottom-auto sm:h-px sm:w-auto sm:mx-[8.333%]" />
+
+                {PIPELINE_STAGES.map(stage => {
+                  const n = liveStatus.byStatus[stage.status] || 0;
+                  const active = n > 0;
+                  return (
+                    <Link
+                      key={stage.status}
+                      href={`/admin/orders?status=${encodeURIComponent(stage.status)}`}
+                      className="group relative flex flex-1 items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/40 sm:flex-col sm:gap-0 sm:text-center"
+                    >
+                      {/* Nodo */}
+                      <span
+                        className={cn(
+                          'relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-4 ring-offset-0 transition-transform group-hover:scale-105',
+                          active ? `${stage.tint} ${stage.ring}` : 'bg-muted/40 ring-background',
+                        )}
+                        style={{ boxShadow: '0 0 0 6px hsl(var(--card) / 0.5)' }}
+                      >
+                        <stage.icon className={cn('h-5 w-5', active ? stage.text : 'text-muted-foreground/40')} />
+                        {active && (
+                          <span className={cn('absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full ring-2 ring-card', stage.dot)} />
+                        )}
+                      </span>
+
+                      <span className="min-w-0 sm:mt-3 sm:w-full">
+                        <span className={cn('block text-2xl font-bold leading-none sm:text-3xl', active ? stage.text : 'text-muted-foreground/40')}>
+                          {n}
+                        </span>
+                        <span className={cn('mt-1.5 block text-[13px] font-medium leading-tight sm:text-xs', active ? 'text-foreground' : 'text-muted-foreground')}>
+                          {stage.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground sm:text-[10px]">
+                          {stage.who}
+                        </span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              {/* Zonas: dónde está físicamente el pedido. Solo en desktop, donde el
+                  pipeline se lee de izquierda a derecha. */}
+              <div className="mt-4 hidden gap-2 sm:flex">
+                {PIPELINE_ZONES.map(zone => {
+                  const span = zone.to - zone.from + 1;
+                  const count = PIPELINE_STAGES
+                    .slice(zone.from, zone.to + 1)
+                    .reduce((s, st) => s + (liveStatus.byStatus[st.status] || 0), 0);
+                  return (
+                    <div
+                      key={zone.label}
+                      style={{ flexGrow: span }}
+                      className="rounded-md border border-dashed border-border/70 px-2 py-1 text-center text-[10px] uppercase tracking-wider text-muted-foreground"
+                    >
+                      {zone.label} · {count}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
+        </div>
+
+        {/* Estado de la red: responde "¿tengo con qué operar?" */}
+        <div>
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Capacidad de la red
+          </p>
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+            {(() => {
+              const pend = liveStatus.pendingApprovalStores + liveStatus.pendingApprovalDrivers;
+              const noDrivers = liveStatus.activeDrivers === 0;
+              const cards = [
+                {
+                  href: '/admin/stores', icon: StoreIcon, value: (stores?.length || 0) - liveStatus.pausedStores,
+                  label: 'Tiendas operando', hint: 'pueden recibir pedidos',
+                  color: 'text-success', alert: false,
+                },
+                {
+                  href: '/admin/stores', icon: Pause, value: liveStatus.pausedStores,
+                  label: 'Tiendas pausadas', hint: 'cortaron pedidos a mano',
+                  color: liveStatus.pausedStores > 0 ? 'text-warning' : 'text-muted-foreground/40',
+                  alert: liveStatus.pausedStores > 0, tone: 'warning' as const,
+                },
+                {
+                  href: '/admin/delivery', icon: Bike, value: liveStatus.activeDrivers,
+                  label: 'Repartidores activos',
+                  hint: noDrivers ? 'nadie puede entregar' : 'aprobados y disponibles',
+                  color: noDrivers ? 'text-destructive' : 'text-info',
+                  alert: noDrivers, tone: 'destructive' as const,
+                },
+                {
+                  href: '/admin/users', icon: pend > 0 ? AlertTriangle : CheckCircle2, value: pend,
+                  label: 'Esperando aprobación',
+                  hint: pend > 0 ? 'no pueden operar todavía' : 'nada pendiente',
+                  color: pend > 0 ? 'text-destructive' : 'text-muted-foreground/40',
+                  alert: pend > 0, tone: 'destructive' as const,
+                },
+              ];
+              return cards.map((c, i) => (
+                <Link
+                  key={i}
+                  href={c.href}
+                  className={cn(
+                    'rounded-xl border p-4 transition-all hover:-translate-y-0.5',
+                    c.alert && c.tone === 'destructive' ? 'border-destructive/30 bg-destructive/10 hover:bg-destructive/15'
+                      : c.alert ? 'border-warning/30 bg-warning/10 hover:bg-warning/15'
+                      : 'border-border bg-background/40 hover:bg-muted/30',
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={cn('text-3xl font-bold leading-none', c.color)}>{c.value}</span>
+                    <c.icon className={cn('h-5 w-5 shrink-0', c.color)} />
+                  </div>
+                  <div className="mt-2.5 text-[13px] font-medium leading-tight">{c.label}</div>
+                  <div className={cn('mt-0.5 text-[11px] leading-snug', c.alert ? c.color : 'text-muted-foreground')}>{c.hint}</div>
+                </Link>
+              ));
+            })()}
+          </div>
         </div>
       </div>
       {/* ─────────────────────────────────────────────────────── */}
 
-      {/* ── Alertas de pedidos trabados ───────────────────────── */}
-      {stuckOrders.length > 0 && (
-        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
-            <h2 className="text-sm font-semibold text-destructive">
-              Atención requerida — {stuckOrders.length} pedido{stuckOrders.length !== 1 ? 's' : ''} sin movimiento
-            </h2>
-          </div>
-          <div className="space-y-2">
-            {stuckOrders.map((o: any) => {
-              const h = Math.floor(o.hoursElapsed);
-              const m = Math.round((o.hoursElapsed - h) * 60);
-              const timeLabel = h >= 1 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
-              return (
-                <Link key={o.id} href={`/orders/${o.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-background/60 border border-border px-3 py-2.5 hover:bg-muted/40 transition-colors group">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Badge variant="outline" className={cn('text-[10px] shrink-0',
-                      ['En preparación','Listo para recoger','En camino','En reparto'].includes(o.status)
-                        ? 'border-info/40 text-info'
-                        : 'border-warning/40 text-warning'
-                    )}>
-                      {o.status}
-                    </Badge>
-                    <span className="text-sm font-medium truncate">{o.customerName}</span>
-                    <span className="text-xs text-muted-foreground truncate hidden sm:block">
-                      {(o as any).storeName || ''}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-semibold text-destructive">hace {timeLabel}</span>
-                    <span className="text-xs text-muted-foreground font-mono">#{o.id.slice(0,6)}</span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Umbrales: confirmación ≥1h · pago ≥2h · preparación ≥3h · retiro ≥2h · entrega ≥3h
-          </p>
-        </div>
-      )}
-      {/* ─────────────────────────────────────────────────────── */}
-
-      {/* ── Discrepancias de pago pendientes ── */}
-      {pendingMismatchesCount > 0 && (
-        <Link href="/admin/payment-issues"
-          className="flex items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 hover:bg-destructive/10 transition-colors">
-          <div className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-destructive shrink-0" />
-            <span className="text-sm font-semibold text-destructive">
-              {pendingMismatchesCount} discrepancia{pendingMismatchesCount === 1 ? '' : 's'} de pago sin revisar
-            </span>
-          </div>
-          <span className="text-xs text-muted-foreground shrink-0">Ver todas →</span>
-        </Link>
-      )}
-
-      {/* ── Incidentes de repartidor (soltar pedido / reportar problema) ── */}
-      {driverIncidents && driverIncidents.length > 0 && (
-        <div className="rounded-xl border border-warning/40 bg-warning/5 p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
-              <h2 className="text-sm font-semibold text-warning">
-                Incidentes recientes de repartidores
-              </h2>
+      {/* ── Bandeja de atención (unificada) ───────────────────────────────────
+          Antes: tres bloques apilados (trabados / discrepancias / incidentes), cada uno
+          con su marco de color, todo en rojo por igual y con el hash del pedido ocupando
+          espacio sin aportar. Ahora: un solo panel, con filtro por tipo, ordenado por
+          gravedad REAL y con una barra de severidad por fila en vez de teñir todo. */}
+      {alerts.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-border bg-card/50">
+          <div className="flex flex-col gap-3 border-b border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/15">
+                <AlertTriangle className="h-[18px] w-[18px] text-destructive" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold leading-tight">Requiere tu atención</h2>
+                <p className="text-xs text-muted-foreground">
+                  {alerts.length} cosa{alerts.length === 1 ? '' : 's'} pendiente{alerts.length === 1 ? '' : 's'} de resolver
+                </p>
+              </div>
             </div>
-            <Link href="/admin/incidents" className="text-xs text-muted-foreground hover:text-foreground shrink-0">
-              Ver todos →
-            </Link>
+
+            {/* Filtro por tipo: cada pastilla muestra su propio conteo. */}
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setAlertFilter('all')}
+                className={cn('rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  alertFilter === 'all' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
+              >
+                Todo ({alertCounts.all})
+              </button>
+              {ALERT_KINDS.filter(k => alertCounts[k.k] > 0).map(({ k, label, icon: Icon }) => (
+                <button
+                  key={k}
+                  onClick={() => setAlertFilter(k)}
+                  className={cn('flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                    alertFilter === k ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
+                >
+                  <Icon className="h-3 w-3" /> {label} ({alertCounts[k]})
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="space-y-2">
-            {driverIncidents.map((inc: any) => (
-              <Link key={inc.id} href={`/orders/${inc.orderId}`}
-                className="flex items-center justify-between gap-3 rounded-lg bg-background/60 border border-border px-3 py-2.5 hover:bg-muted/40 transition-colors group">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Badge variant="outline" className={cn('text-[10px] shrink-0',
-                    inc.type === 'released' ? 'border-destructive/40 text-destructive' : 'border-warning/40 text-warning'
-                  )}>
-                    {inc.type === 'released' ? 'Soltó pedido' : 'Reportó problema'}
-                  </Badge>
-                  <span className="text-sm font-medium truncate">{inc.driverName}</span>
-                  <span className="text-xs text-muted-foreground truncate hidden sm:block">{inc.reason}</span>
+
+          <div className="divide-y divide-border/60">
+            {visibleAlerts.slice(0, ALERT_PREVIEW).map(a => (
+              <Link
+                key={a.id}
+                href={a.href}
+                className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+              >
+                {/* Barra de severidad: reemplaza al "todo rojo". */}
+                <span className={cn('h-9 w-1 shrink-0 rounded-full', a.severity === 'high' ? 'bg-destructive' : 'bg-warning')} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{a.title}</span>
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{a.subtitle}</p>
                 </div>
-                <span className="text-xs text-muted-foreground font-mono shrink-0">#{inc.orderId?.slice(0,6)}</span>
+                {a.meta && (
+                  <span className={cn('shrink-0 text-xs font-medium tabular-nums',
+                    a.severity === 'high' ? 'text-destructive' : 'text-warning')}>
+                    {a.meta}
+                  </span>
+                )}
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
               </Link>
             ))}
           </div>
+
+          {visibleAlerts.length > ALERT_PREVIEW && (
+            <Link
+              href={ALERT_KINDS.find(k => k.k === alertFilter)?.href ?? '/admin/orders'}
+              className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40"
+            >
+              <span>Y {visibleAlerts.length - ALERT_PREVIEW} más</span>
+              <span className="shrink-0 font-medium">Ver todas →</span>
+            </Link>
+          )}
+
+          <p className="border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
+            Un pedido se marca trabado según su estado: confirmación ≥1h · pago ≥2h · preparación ≥3h · retiro ≥2h · entrega ≥3h
+          </p>
         </div>
       )}
 

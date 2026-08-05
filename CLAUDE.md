@@ -1010,6 +1010,80 @@ Firebase Auth rate-limitea por IP tras varios logins seguidos, así que conviene
 variantes de ⌘K de repartidor y comprador (el fix es el mismo patrón ya verificado en
 tienda y admin).
 
+## Fase HH (ago 2026): cierre de gaps del admin + rediseño del dashboard con volumen real
+Continuación de la Fase GG (los 3 gaps que habían quedado anotados). En el medio se
+sembraron datos de prueba para poder ver el panel con volumen, y eso destapó 3 bugs más.
+
+**Los 3 gaps cerrados:**
+- **`/admin/orders`:** búsqueda por **ID exacto server-side** (`getDoc` directo) que
+  encuentra un pedido en todo el histórico aunque esté fuera del filtro de fecha/estado o
+  en otra página — antes la búsqueda solo filtraba en memoria los 50 de la página cargada.
+  Nombre de cliente/tienda siguen filtrando sobre la página (Firestore no hace substring y
+  `orders` no tiene techo) y ahora la UI lo aclara en vez de dejar al admin adivinando.
+- **`/admin/reviews`:** filtro por rating **server-side** (chips Todas/1-2★/3★/4-5★ con
+  `where('rating','in',[...])`, índice nuevo `reviews (rating, createdAt)`), más un aviso
+  arriba con el conteo real de críticas vía aggregation. Antes aislar las de 1-2 estrellas
+  —justo las que hay que moderar— solo funcionaba sobre la página ya cargada.
+- **`/admin/communications`:** historial de envíos. Nueva colección **`broadcasts`**, escrita
+  por `/api/admin/notify-broadcast` con Admin SDK (`create: false` en las reglas: el cliente
+  no puede fabricar envíos que nunca ocurrieron; tampoco se edita ni se borra). Lista los
+  últimos 20 con destino/destinatarios/push, botón **"Reusar"** que recarga el mensaje en el
+  formulario, y un **contador real de cuota** ("te quedan N de 5 envíos esta hora") calculado
+  sobre el historial — antes el límite solo se conocía al chocar contra el 429.
+
+**🚨 BUG — filtrar por estado en `/admin/orders` fallaba ("Error al cargar pedidos").**
+Faltaba el índice compuesto `orders (status, createdAt)`. OJO: existía
+`(status, deliveryPersonId, createdAt)`, que **no sirve** — Firestore exige que los campos
+de igualdad usados sean prefijo exacto del índice. El bug era **previo a esta fase**: la
+página siempre combinó `where('status')` + `orderBy('createdAt')`, pero el `useCollection`
+viejo se tragaba el error y la lista quedaba vacía en silencio; al pasar a `getDocs` salió
+a la superficie. De paso el catch ahora distingue `failed-precondition` y avisa "Falta un
+índice de Firestore" en vez del genérico.
+
+**🚨 BUG — "Siguiente" en `/admin/orders` nunca avanzó de página.** Leía
+`(order as any)._snap` para el cursor, un campo que el hook `useCollection` **nunca
+adjunta** (bug latente anotado en la Fase Z, confirmado y corregido acá). Pasó a
+`getDocs`+cursor como el resto de las páginas paginadas.
+
+**Contador de la lista engañoso:** decía "50 pedidos (página 1)", que se lee como si
+hubiera 50 en total. Ahora: **"Mostrando 1-50 de 101 pedidos · página 1 de 3"**, con el
+total por `getCountFromServer` respetando los filtros activos.
+
+**Dashboard rediseñado** (a pedido explícito del usuario, tras dos iteraciones):
+- **Pipeline visual del flujo** en vez de tarjetas sueltas: las 6 etapas como nodos
+  conectados por una línea, con el número grande y **quién tiene la pelota** debajo ("la
+  tienda debe confirmar", "el cliente debe pagar", "falta que lo tome un repartidor"...).
+  El color progresa según de quién depende: gris (esperando) → ámbar (la tienda) → azul (en
+  la calle). Debajo, dos zonas rotulan cuántos hay **en la tienda** y cuántos **en la calle**
+  — dice de un vistazo si el cuello de botella es de comercios o de logística. Cada nodo
+  enlaza a `/admin/orders?status=...` (esa página lee el query param y arranca en fecha
+  "Todo" para no esconder los viejos). En móvil se apila vertical con la línea al costado.
+- **Bandeja de atención unificada**: antes eran TRES bloques apilados (pedidos trabados /
+  discrepancias de pago / incidentes de repartidor), cada uno con su marco de color,
+  compitiendo y empujando el resto del dashboard fuera de pantalla. Ahora es un solo panel
+  "Requiere tu atención" con pastillas de filtro por tipo (con su conteo), ordenado por
+  gravedad REAL mezclando tipos (las discrepancias de pago primero siempre: es plata sin
+  conciliar), y una **barra de severidad** por fila en lugar de teñir todo de rojo (rojo si
+  lleva +24h trabado o es un problema reportado, ámbar si no). Se quitó el hash del pedido,
+  que ocupaba lugar sin aportar.
+- **`formatElapsed()`**: el tiempo se mostraba solo en horas, así que un pedido trabado de
+  hace 3 meses decía **"hace 2261h 14m"** — correcto e ilegible. Ahora escala a días y
+  meses ("hace 3 meses 4d"), manteniendo horas por debajo de 48h. Verificado con los
+  valores reales que aparecían en pantalla.
+
+**Datos de prueba (`seedBatch: 'QA-GG'`)**: se sembraron **15 tiendas** (12 aprobadas, 2
+pendientes, 1 pausada) y **100 pedidos** (80 dentro de 30 días para que la paginación de a
+50 se note, 20 más viejos para probar el filtro "Todo") repartidos en los 9 estados reales.
+La base tenía **1 sola orden** antes de esto — por eso no se podía probar nada con volumen.
+El script (`_seed-qa.js`, fuera del repo) tiene `--undo` para borrar los 115 documentos de
+una pasada. **Pendiente: borrarlos antes de lanzar** (ver pendientes abajo). Se agregó
+`_*.js`/`_*.mjs` al `.gitignore` para que estos scripts no se cuelen al repo.
+
+**Nota de método:** Firebase Auth **rate-limitea por IP** tras varios logins seguidos, y
+`storageState` de Playwright **no sirve para reusar la sesión** porque Firebase guarda el
+token en IndexedDB (que storageState no captura). Conclusión práctica: hacer login UNA vez
+por script y verificar todo en esa misma corrida, no un script por chequeo.
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local
@@ -1019,8 +1093,9 @@ tienda y admin).
 - Regenerar el `MP_WEBHOOK_SECRET` (quedó expuesto durante pruebas)
 - Sacar la tabla de cuentas demo visible en `/login` (sirve para pruebas, no para producción)
 - Limpiar datos de prueba (órdenes/notificaciones, reseñas `Cliente de Prueba N` en
-  "DonalPizza" de la Fase Q, **y todo el seed masivo de la Fase W** — ver abajo) antes de
-  abrir a usuarios reales
+  "DonalPizza" de la Fase Q, **el seed masivo de la Fase W**, y **el seed de QA de la Fase
+  HH**: 15 tiendas + 100 pedidos marcados con `seedBatch: 'QA-GG'`, borrables de una con
+  `node _seed-qa.js --undo`) antes de abrir a usuarios reales
 ## Fase BB (ago 2026): reglas de Firestore restringidas por campo (users/stores)
 Cerraba el hallazgo anotado desde la Fase U: cualquier usuario logueado podía reescribir
 **cualquier** campo de su propio doc en `users/{uid}` (incluido `isApproved`, `role`, `rating`),

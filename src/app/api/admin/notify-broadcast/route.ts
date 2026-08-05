@@ -89,6 +89,19 @@ export async function POST(request: Request) {
       }
     }
 
+    // Historial de comunicaciones (Fase GG): antes NO quedaba registro de qué se mandó,
+    // a quién ni cuándo -- no se podía auditar ni reenviar un mensaje anterior. Se escribe
+    // desde acá (Admin SDK) para que el cliente no pueda fabricar entradas falsas.
+    await adminDb.collection('broadcasts').add({
+      adminUid: callerUid,
+      target,
+      title,
+      body,
+      notified: recipientUids.length,
+      pushSent,
+      createdAt: Timestamp.now(),
+    }).catch(err => console.error('[Admin broadcast] no se pudo guardar el historial:', err));
+
     console.log(`[Admin broadcast] ${callerUid} → ${target}: ${recipientUids.length} notificaciones, ${pushSent} push`);
     return NextResponse.json({ sent: pushSent, notified: recipientUids.length });
 

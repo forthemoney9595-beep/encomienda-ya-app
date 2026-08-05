@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AdminAuthGuard from '../admin-auth-guard';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,8 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, orderBy, where, limit, startAfter, QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
+import { useFirestore } from '@/lib/firebase';
+import {
+  collection, query, orderBy, where, limit, startAfter, getDocs, getCountFromServer, doc, getDoc,
+  QueryDocumentSnapshot, Timestamp,
+} from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
@@ -26,6 +30,9 @@ import Link from 'next/link';
 import type { Order } from '@/lib/order-service';
 
 const PAGE_SIZE = 50;
+// Los IDs de documento de Firestore tienen 20 caracteres; desde acá vale la pena intentar
+// el getDoc directo en vez de gastar una lectura en cada tecla.
+const ORDER_ID_MIN_LEN = 15;
 const ALL_STATUSES = [
   'Pendiente de Confirmación', 'Pendiente de Pago', 'En preparación',
   'Listo para recoger', 'En camino', 'En reparto', 'Entregado', 'Cancelado', 'Rechazado',
@@ -52,12 +59,39 @@ function AdminOrdersPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
+  // Las tarjetas del flujo en el dashboard enlazan acá con ?status=... -- así tocar
+  // "Preparando" abre directamente la lista filtrada por ese estado. Se arranca en "Todo"
+  // de fecha para que no se pierdan pedidos viejos de ese estado (justo los que importan).
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get('status');
+  const [statusFilter, setStatusFilter] = useState<string>(statusParam || 'all');
+  const [dateFilter, setDateFilter] = useState<DateFilter>(statusParam ? 'all' : '30d');
   const [search, setSearch] = useState('');
-  const [cursors, setCursors] = useState<(QueryDocumentSnapshot | null)[]>([null]);
-  const [pageIndex, setPageIndex] = useState(0);
   const [cancelling, setCancelling] = useState<string | null>(null);
+
+  // Paginación con getDocs + cursor, igual que admin/users, reviews, incidents y finances.
+  // ANTES usaba useCollection y leía `(order as any)._snap` para el startAfter -- campo que
+  // el hook compartido NUNCA adjunta, así que el botón "Siguiente" no avanzaba nunca
+  // (bug latente anotado en la Fase Z, confirmado y corregido acá).
+  const [rows, setRows] = useState<any[]>([]);
+  const [pageStack, setPageStack] = useState<QueryDocumentSnapshot[]>([]);
+  const [lastSnap, setLastSnap] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Búsqueda por ID exacto: se resuelve con un getDoc directo, así encuentra CUALQUIER
+  // pedido del histórico sin importar filtros ni página. Antes la búsqueda solo filtraba
+  // en memoria los 50 documentos de la página cargada, así que buscar un pedido viejo por
+  // ID no lo encontraba nunca. Firestore no sabe buscar por substring, y `orders` es una
+  // colección sin techo: por eso nombre de cliente/tienda siguen filtrando en memoria
+  // (sobre la página) y el ID va server-side.
+  const [idResult, setIdResult] = useState<any | null>(null);
+  const [idSearching, setIdSearching] = useState(false);
+
+  // Total real que matchea los filtros actuales -- count() server-side, no baja documentos
+  // (mismo criterio de la Fase Z). Sin esto la cabecera decía "50 pedidos", que se leía
+  // como si esos fueran TODOS los pedidos y no la primera página.
+  const [totalCount, setTotalCount] = useState<number | null>(null);
 
   // Reembolso
   const [refundOrder, setRefundOrder] = useState<any | null>(null);
@@ -67,28 +101,85 @@ function AdminOrdersPage() {
 
   const dateFrom = useMemo(() => getDateFrom(dateFilter), [dateFilter]);
 
-  const ordersQuery = useMemoFirebase(() => {
+  const buildQuery = useCallback((cursor: QueryDocumentSnapshot | null) => {
     if (!firestore) return null;
     const constraints: any[] = [orderBy('createdAt', 'desc'), limit(PAGE_SIZE)];
     if (statusFilter !== 'all') constraints.unshift(where('status', '==', statusFilter));
     if (dateFrom) constraints.unshift(where('createdAt', '>=', Timestamp.fromDate(dateFrom)));
-    const cursor = cursors[pageIndex];
     if (cursor) constraints.push(startAfter(cursor));
     return query(collection(firestore, 'orders'), ...constraints);
-  }, [firestore, statusFilter, dateFilter, pageIndex, cursors]);
+  }, [firestore, statusFilter, dateFrom]);
 
-  const { data: orders, isLoading } = useCollection<Order & { _snap?: any }>(ordersQuery);
+  const loadPage = useCallback(async (cursor: QueryDocumentSnapshot | null) => {
+    const q = buildQuery(cursor);
+    if (!q) return;
+    setIsLoading(true);
+    try {
+      const snap = await getDocs(q);
+      setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLastSnap(snap.docs[snap.docs.length - 1] || null);
+      setHasMore(snap.docs.length === PAGE_SIZE);
+    } catch (e: any) {
+      console.error('[admin/orders] Error cargando pedidos:', e);
+      // Firestore devuelve 'failed-precondition' cuando falta un índice compuesto, e
+      // incluye en el mensaje el link para crearlo. El toast genérico ("Error al cargar
+      // pedidos") no decía nada y obligaba a abrir la consola para entender qué pasaba.
+      const missingIndex = e?.code === 'failed-precondition';
+      toast({
+        variant: 'destructive',
+        title: missingIndex ? 'Falta un índice de Firestore' : 'Error al cargar pedidos',
+        description: missingIndex
+          ? 'Esta combinación de filtros necesita un índice que todavía no está desplegado. El link para crearlo está en la consola del navegador.'
+          : e?.message,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [buildQuery, toast]);
+
+  // Al cambiar de filtro se vuelve a la primera página (si no, el cursor viejo no aplica).
+  useEffect(() => { setPageStack([]); loadPage(null); }, [loadPage]);
+
+  // Total con los mismos filtros (sin limit ni cursor).
+  useEffect(() => {
+    if (!firestore) return;
+    const cons: any[] = [];
+    if (statusFilter !== 'all') cons.push(where('status', '==', statusFilter));
+    if (dateFrom) cons.push(where('createdAt', '>=', Timestamp.fromDate(dateFrom)));
+    let cancelled = false;
+    getCountFromServer(query(collection(firestore, 'orders'), ...cons))
+      .then(s => { if (!cancelled) setTotalCount(s.data().count); })
+      .catch(() => { if (!cancelled) setTotalCount(null); });
+    return () => { cancelled = true; };
+  }, [firestore, statusFilter, dateFrom]);
+
+  // Búsqueda por ID exacto contra toda la colección (getDoc directo, 1 lectura).
+  useEffect(() => {
+    const term = search.trim();
+    if (!firestore || term.length < ORDER_ID_MIN_LEN) { setIdResult(null); return; }
+    let cancelled = false;
+    setIdSearching(true);
+    getDoc(doc(firestore, 'orders', term))
+      .then(s => { if (!cancelled) setIdResult(s.exists() ? { id: s.id, ...s.data() } : null); })
+      .catch(() => { if (!cancelled) setIdResult(null); })
+      .finally(() => { if (!cancelled) setIdSearching(false); });
+    return () => { cancelled = true; };
+  }, [firestore, search]);
+
+  const orders = rows;
 
   const displayed = useMemo(() => {
-    if (!orders) return [];
-    if (!search.trim()) return orders;
+    // Si el término es un ID que existe, se muestra ESE pedido aunque esté fuera del
+    // filtro de fecha/estado o en otra página.
+    if (idResult) return [idResult];
+    if (!search.trim()) return rows;
     const q = search.toLowerCase();
-    return orders.filter(o =>
+    return rows.filter(o =>
       o.customerName?.toLowerCase().includes(q) ||
       o.storeName?.toLowerCase().includes(q) ||
       o.id?.toLowerCase().includes(q)
     );
-  }, [orders, search]);
+  }, [rows, search, idResult]);
 
   const handleExportCsv = () => {
     const rows = displayed.map(o => ({
@@ -107,21 +198,22 @@ function AdminOrdersPage() {
   };
 
   const handleNextPage = () => {
-    if (!orders || orders.length < PAGE_SIZE) return;
-    const lastDoc = (orders[orders.length - 1] as any)._snap;
-    if (!lastDoc) return;
-    setCursors(prev => {
-      const next = [...prev];
-      next[pageIndex + 1] = lastDoc;
-      return next;
-    });
-    setPageIndex(p => p + 1);
+    if (!hasMore || !lastSnap) return;
+    setPageStack(prev => [...prev, lastSnap]);
+    loadPage(lastSnap);
   };
 
   const handlePrevPage = () => {
-    if (pageIndex === 0) return;
-    setPageIndex(p => p - 1);
+    if (pageStack.length === 0) return;
+    const next = pageStack.slice(0, -1);
+    setPageStack(next);
+    loadPage(next.length > 0 ? next[next.length - 1] : null);
   };
+
+  const pageIndex = pageStack.length;
+  const rangeFrom = pageIndex * PAGE_SIZE + 1;
+  const rangeTo = pageIndex * PAGE_SIZE + displayed.length;
+  const totalPages = typeof totalCount === 'number' ? Math.max(1, Math.ceil(totalCount / PAGE_SIZE)) : 1;
 
   const handleCancel = async (orderId: string, orderUserId: string) => {
     if (!user) return;
@@ -133,6 +225,8 @@ function AdminOrdersPage() {
       if (!res.ok) throw new Error(data.error || 'Error');
       if (firestore) logAdminAction(firestore, user.uid, 'cancel_order', orderId);
       toast({ title: 'Pedido cancelado' });
+      // Ya no hay listener en vivo (la lista es one-shot paginada): hay que recargar.
+      loadPage(pageStack.length > 0 ? pageStack[pageStack.length - 1] : null);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error al cancelar', description: e.message });
     } finally {
@@ -160,6 +254,7 @@ function AdminOrdersPage() {
       if (!res.ok) throw new Error(data.error || 'Error');
       if (firestore) logAdminAction(firestore, user.uid, 'refund_order', refundOrder.id, `$${amount}${refundReason ? ' — ' + refundReason : ''}`);
       toast({ title: 'Reembolso registrado', description: `$${amount.toLocaleString()} — recordá hacer la devolución en MercadoPago.` });
+      loadPage(pageStack.length > 0 ? pageStack[pageStack.length - 1] : null);
       setRefundOrder(null);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error al reembolsar', description: e.message });
@@ -176,20 +271,33 @@ function AdminOrdersPage() {
       <Card className="shadow-sm">
         <CardContent className="pt-4 space-y-3">
           {/* Búsqueda */}
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por cliente, tienda o ID..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-9"
-            />
+          <div className="space-y-1.5">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Pegá un ID de pedido, o filtrá por cliente/tienda..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-9"
+              />
+              {idSearching && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            {idResult && (
+              <p className="text-xs text-success">
+                Pedido encontrado por ID — se muestra aunque esté fuera de los filtros de fecha/estado.
+              </p>
+            )}
+            {!idResult && search.trim().length >= ORDER_ID_MIN_LEN && !idSearching && (
+              <p className="text-xs text-muted-foreground">
+                No existe ningún pedido con ese ID. Cliente y tienda se filtran solo sobre esta página.
+              </p>
+            )}
           </div>
 
           {/* Fecha */}
           <div className="flex gap-2 flex-wrap">
             {(Object.keys(DATE_LABELS) as DateFilter[]).map(d => (
-              <button key={d} onClick={() => { setDateFilter(d); setPageIndex(0); setCursors([null]); }}
+              <button key={d} onClick={() => { setDateFilter(d); }}
                 className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
                   dateFilter === d ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
                 )}>{DATE_LABELS[d]}</button>
@@ -198,12 +306,12 @@ function AdminOrdersPage() {
 
           {/* Estado */}
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => { setStatusFilter('all'); setPageIndex(0); setCursors([null]); }}
+            <button onClick={() => { setStatusFilter("all"); }}
               className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
                 statusFilter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
               )}>Todos</button>
             {ALL_STATUSES.map(s => (
-              <button key={s} onClick={() => { setStatusFilter(s); setPageIndex(0); setCursors([null]); }}
+              <button key={s} onClick={() => { setStatusFilter(s); }}
                 className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
                   statusFilter === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
                 )}>{s}</button>
@@ -217,7 +325,16 @@ function AdminOrdersPage() {
         <CardHeader className="border-b py-3 px-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {isLoading ? 'Cargando...' : `${displayed.length} pedidos ${orders && orders.length >= PAGE_SIZE ? '(página ' + (pageIndex + 1) + ')' : ''}`}
+              {/* Antes decía solo "50 pedidos (página 1)", que se leía como si hubiera 50 en
+                  total. Ahora muestra el rango que se está viendo Y el total real que
+                  matchea los filtros (count server-side, no baja documentos). */}
+              {isLoading ? 'Cargando...' : idResult ? '1 pedido (búsqueda por ID)' : (
+                <>
+                  Mostrando {rangeFrom}-{rangeTo}
+                  {typeof totalCount === 'number' ? ` de ${totalCount}` : ''} pedido{totalCount === 1 ? '' : 's'}
+                  {totalPages > 1 ? ` · página ${pageIndex + 1} de ${totalPages}` : ''}
+                </>
+              )}
             </CardTitle>
             {!isLoading && displayed.length > 0 && (
               <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1.5" onClick={handleExportCsv}>

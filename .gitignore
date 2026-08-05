@@ -43,3 +43,6 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+# scripts temporales de QA/seed (Admin SDK) — no van al repo
+_*.js
+_*.mjs

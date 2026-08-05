@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { useCountFromServer } from '@/lib/firebase-aggregate';
-import { collection, query, orderBy, limit, startAfter, getDocs, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, startAfter, getDocs, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
 import { logAdminAction } from '@/lib/admin-audit';
 import { useToast } from '@/hooks/use-toast';
@@ -34,14 +34,28 @@ function Stars({ rating }: { rating: number }) {
   );
 }
 
+const PAGE_SIZE = 25;
+
+// Filtro por rating SERVER-SIDE: sin esto, aislar las reseñas de 1-2 estrellas (las que de
+// verdad hay que moderar) solo funcionaba sobre la página ya cargada, así que una crítica
+// vieja no aparecía nunca. Usa `in` (igualdades) en vez de `<=` para poder combinar con
+// orderBy('createdAt') -- una desigualdad obligaría a ordenar primero por rating.
+type RatingFilter = 'all' | 'bad' | 'mid' | 'good';
+const RATING_FILTERS: { k: RatingFilter; label: string; values: number[] | null }[] = [
+  { k: 'all',  label: 'Todas',      values: null },
+  { k: 'bad',  label: '1-2 ★',      values: [1, 2] },
+  { k: 'mid',  label: '3 ★',        values: [3] },
+  { k: 'good', label: '4-5 ★',      values: [4, 5] },
+];
+
 function AdminReviewsPage() {
   const { user } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [ratingFilter, setRatingFilter] = useState<RatingFilter>('all');
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const PAGE_SIZE = 25;
   const [rows, setRows] = useState<any[]>([]);
   const [lastSnap, setLastSnap] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -51,25 +65,45 @@ function AdminReviewsPage() {
   const totalQ = useMemoFirebase(() => firestore ? collection(firestore, 'reviews') : null, [firestore]);
   const { count: totalReviews, refresh: refreshTotal } = useCountFromServer(totalQ, { refreshOnFocus: true });
 
+  // Cuántas críticas hay en total (no solo en la página) -- es el número que le importa a
+  // quien modera, y se calcula server-side sin bajar documentos.
+  const badQ = useMemoFirebase(
+    () => firestore ? query(collection(firestore, 'reviews'), where('rating', 'in', [1, 2])) : null,
+    [firestore],
+  );
+  const { count: badCount, refresh: refreshBad } = useCountFromServer(badQ, { refreshOnFocus: true });
+
+  const buildQuery = useCallback((cursor: QueryDocumentSnapshot | null) => {
+    if (!firestore) return null;
+    const values = RATING_FILTERS.find(f => f.k === ratingFilter)?.values;
+    const cons: any[] = [];
+    if (values) cons.push(where('rating', 'in', values));
+    cons.push(orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+    if (cursor) cons.push(startAfter(cursor));
+    return query(collection(firestore, 'reviews'), ...cons);
+  }, [firestore, ratingFilter]);
+
   const resetLoad = useCallback(async () => {
-    if (!firestore) return;
+    const q = buildQuery(null);
+    if (!q) return;
     setIsLoading(true);
     try {
-      const snap = await getDocs(query(collection(firestore, 'reviews'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE)));
+      const snap = await getDocs(q);
       setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLastSnap(snap.docs[snap.docs.length - 1] || null);
       setHasMore(snap.docs.length === PAGE_SIZE);
     } catch (e) { console.error(e); toast({ variant: 'destructive', title: 'Error al cargar reseñas' }); }
     finally { setIsLoading(false); }
-  }, [firestore, toast]);
+  }, [buildQuery, toast]);
 
   useEffect(() => { resetLoad(); }, [resetLoad]);
 
   const loadMore = async () => {
-    if (!firestore || !lastSnap) return;
+    const q = buildQuery(lastSnap);
+    if (!q || !lastSnap) return;
     setLoadingMore(true);
     try {
-      const snap = await getDocs(query(collection(firestore, 'reviews'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE), startAfter(lastSnap)));
+      const snap = await getDocs(q);
       setRows(prev => [...prev, ...snap.docs.map(d => ({ id: d.id, ...d.data() }))]);
       setLastSnap(snap.docs[snap.docs.length - 1] || lastSnap);
       setHasMore(snap.docs.length === PAGE_SIZE);
@@ -101,6 +135,7 @@ function AdminReviewsPage() {
       toast({ title: 'Reseña eliminada', description: 'El rating de la tienda fue recalculado.' });
       resetLoad();
       refreshTotal();
+      refreshBad();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally {
@@ -115,14 +150,39 @@ function AdminReviewsPage() {
         description={`${totalReviews ?? 0} reseñas en la plataforma.`}
       />
 
-      <div className="relative">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por cliente, tienda o contenido..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Aviso de críticas pendientes: lo primero que quiere ver quien modera. */}
+      {(badCount ?? 0) > 0 && ratingFilter !== 'bad' && (
+        <button
+          onClick={() => setRatingFilter('bad')}
+          className="flex w-full items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-left transition-colors hover:bg-destructive/10"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-destructive">
+            <Star className="h-4 w-4 fill-current" />
+            {badCount} reseña{badCount === 1 ? '' : 's'} de 1-2 estrellas
+          </span>
+          <span className="shrink-0 text-xs text-muted-foreground">Ver solo esas →</span>
+        </button>
+      )}
+
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por cliente, tienda o contenido..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {RATING_FILTERS.map(({ k, label }) => (
+            <button key={k} onClick={() => setRatingFilter(k)}
+              className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
+                ratingFilter === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70')}>
+              {label}{k === 'bad' && (badCount ?? 0) > 0 ? ` (${badCount})` : ''}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading && (
