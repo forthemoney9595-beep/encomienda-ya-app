@@ -116,5 +116,5 @@ function AdminSettingsPage() {
 }
 
 export default function AdminSettingsPageGuarded() {
-  return <AdminAuthGuard><AdminSettingsPage /></AdminAuthGuard>;
+  return <AdminAuthGuard requireFullAdmin><AdminSettingsPage /></AdminAuthGuard>;
 }

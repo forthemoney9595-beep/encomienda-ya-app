@@ -34,7 +34,7 @@ export function MainNav({
   ...props
 }: React.HTMLAttributes<HTMLElement>) {
   const pathname = usePathname();
-  const { userProfile } = useAuth();
+  const { userProfile, isFullAdmin } = useAuth();
   const firestore = useFirestore();
 
   const isAdminUser = userProfile?.role === 'admin';
@@ -130,19 +130,26 @@ export function MainNav({
               Gestión Usuarios
             </Button>
           </Link>
-          <Link href="/admin/finances">
-            <Button variant={pathname.startsWith('/admin/finances') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <DollarSign className="mr-2 h-4 w-4" />
-              Finanzas y Pagos
-              <NavBadge count={pendingWithdrawalsCount} />
-            </Button>
-          </Link>
-          <Link href="/admin/communications">
-            <Button variant={pathname.startsWith('/admin/communications') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Bell className="mr-2 h-4 w-4" />
-              Comunicaciones
-            </Button>
-          </Link>
+          {/* Finanzas/Comunicaciones/Configuración: mueven plata, mandan broadcast o
+              cambian config de negocio -- ocultas para admin nivel 'support' (el guard de
+              la página también las bloquea si entran por URL directa). */}
+          {isFullAdmin && (
+            <Link href="/admin/finances">
+              <Button variant={pathname.startsWith('/admin/finances') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                <DollarSign className="mr-2 h-4 w-4" />
+                Finanzas y Pagos
+                <NavBadge count={pendingWithdrawalsCount} />
+              </Button>
+            </Link>
+          )}
+          {isFullAdmin && (
+            <Link href="/admin/communications">
+              <Button variant={pathname.startsWith('/admin/communications') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                <Bell className="mr-2 h-4 w-4" />
+                Comunicaciones
+              </Button>
+            </Link>
+          )}
           <Link href="/admin/reviews">
             <Button variant={pathname.startsWith('/admin/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <MessageSquare className="mr-2 h-4 w-4" />
@@ -155,12 +162,14 @@ export function MainNav({
               Log de Acciones
             </Button>
           </Link>
-          <Link href="/admin/settings">
-            <Button variant={pathname.startsWith('/admin/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Settings className="mr-2 h-4 w-4" />
-              Configuración
-            </Button>
-          </Link>
+          {isFullAdmin && (
+            <Link href="/admin/settings">
+              <Button variant={pathname.startsWith('/admin/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                <Settings className="mr-2 h-4 w-4" />
+                Configuración
+              </Button>
+            </Link>
+          )}
           <Link href="/">
             <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Home className="mr-2 h-4 w-4" />

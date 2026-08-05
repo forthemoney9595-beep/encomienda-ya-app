@@ -16,5 +16,5 @@ function AdminFinancesPage() {
 }
 
 export default function AdminFinancesPageGuarded() {
-  return <AdminAuthGuard><AdminFinancesPage /></AdminAuthGuard>;
+  return <AdminAuthGuard requireFullAdmin><AdminFinancesPage /></AdminAuthGuard>;
 }

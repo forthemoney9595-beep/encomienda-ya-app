@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken } from "@/lib/auth-server";
+import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
 
 // Primera ruta admin-only de la API — verifica token + existencia en roles_admin.
@@ -21,10 +21,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  // Verificar que es admin real (misma fuente de verdad que isAdmin() en firestore.rules)
-  const adminDoc = await adminDb.collection('roles_admin').doc(callerUid).get();
-  if (!adminDoc.exists) {
-    return NextResponse.json({ error: "No autorizado — se requiere rol admin" }, { status: 403 });
+  // Mueve plata real -- exige admin de nivel 'full', no alcanza con 'support'.
+  if (!(await verifyFullAdmin(callerUid))) {
+    return NextResponse.json({ error: "No autorizado — se requiere admin con acceso completo" }, { status: 403 });
   }
 
   try {

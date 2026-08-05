@@ -12,6 +12,22 @@ service cloud.firestore {
     function isAdmin() {
       return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
+    // Nivel de admin (Fase DD): roles_admin/{uid}.level puede ser 'full' (default si el
+    // campo no existe -- los admins creados antes de esta fase no pierden nada) o
+    // 'support' (solo operativo). Exigido para plata, config, broadcast, borrar cuentas y
+    // promover/degradar otros admins.
+    function isFullAdmin() {
+      return isAdmin() &&
+        get(/databases/$(database)/documents/roles_admin/$(request.auth.uid)).data.get('level', 'full') != 'support';
+    }
+    // Un cambio de rol hacia o desde 'admin', o al campo adminLevel, es en sí mismo un acto
+    // de otorgar/quitar privilegios -- no alcanza con ser admin 'support' para hacerlo (si
+    // no, un admin 'support' podría promoverse a otra cuenta cómplice a full admin).
+    function isAdminRoleChange() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['adminLevel']) ||
+        request.resource.data.get('role', '') == 'admin' ||
+        resource.data.get('role', '') == 'admin';
+    }
     function isStoreOwner(storeId) {
       return get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid;
     }
@@ -22,16 +38,19 @@ service cloud.firestore {
 
     // --- REGLAS DE COLECCIONES ---
 
-    // 1. CONFIGURACIÓN GLOBAL
+    // 1. CONFIGURACIÓN GLOBAL — cambiar fees/día de liquidación/mantenimiento es una
+    // decisión de negocio, no una tarea operativa: exige admin 'full'.
     match /config/{configDoc} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isFullAdmin();
     }
 
-    // 2. ROLES ADMIN — solo el propio usuario puede leer su doc (para saber si es admin)
+    // 2. ROLES ADMIN — solo el propio usuario puede leer su doc (para saber si es admin).
+    // Escribir acá ES otorgar o quitar acceso de administrador -- solo 'full' puede
+    // hacerlo (si 'support' pudiera, se autopromovería a sí mismo o a un cómplice).
     match /roles_admin/{uid} {
       allow read: if isAdmin() || isOwner(uid);
-      allow write: if isAdmin();
+      allow write: if isFullAdmin();
     }
 
     // 3. USUARIOS Y PERFILES — Fase BB (seguridad): antes cualquier usuario logueado podía
@@ -60,7 +79,7 @@ service cloud.firestore {
       // estado, CBU — acceso completo, igual que antes. O el PROPIO usuario sobre su doc,
       // pero limitado a perfil/direcciones/favoritos/disponibilidad/CBU/tokens: nunca puede
       // tocar isApproved/role/status/rating por este camino.
-      allow update: if isAdmin() || (
+      allow update: if (isAdmin() && (!isAdminRoleChange() || isFullAdmin())) || (
         isOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'displayName', 'photoURL', 'profileImageUrl', 'phoneNumber',
@@ -247,8 +266,8 @@ service cloud.firestore {
         request.resource.data.amount is number &&
         request.resource.data.amount > 0;
 
-      // ✏️ UPDATE/DELETE: solo el admin puede aprobar, rechazar o eliminar
-      allow update, delete: if isAdmin();
+      // ✏️ UPDATE/DELETE: aprobar/rechazar es plata real -- exige admin 'full'.
+      allow update, delete: if isFullAdmin();
     }
 
     // 9. RESEÑAS DE TIENDA

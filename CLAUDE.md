@@ -800,6 +800,54 @@ gaps reales. El usuario priorizó 3 de la lista para esta tanda:
   historial de pedidos del comprador sin filtro por estado/fecha, multi-usuario/empleados por
   tienda, niveles de permiso en el rol admin (hoy binario).
 
+## Fase EE (ago 2026): segunda tanda rol por rol — historial con filtro + niveles de admin
+- **Historial de pedidos con filtro** (`buyer-orders-view.tsx`): pestañas Todos/En
+  curso/Entregados/Cancelados (agrupa los ~10 estados reales vía el mismo
+  `getOrderStatusKind` de `order-status.ts`, sin inventar un mapeo nuevo) + buscador por
+  nombre de tienda. Todo en memoria: los pedidos de UN comprador son un conjunto acotado
+  (a diferencia de las colecciones sin techo de las Fases Y/Z), así que filtrar/buscar acá
+  no viola esa regla.
+- **Niveles de permiso en admin** (antes binario: `roles_admin/{uid}` sí/no). Nuevo campo
+  opcional `roles_admin/{uid}.level`: `'full'` (todo el acceso, **default si no existe** —
+  los admins creados antes de esta fase no pierden nada) o `'support'` (operativo: puede
+  ver dashboard/pedidos/tiendas/repartidores/usuarios/reseñas/log, pero NO plata, config,
+  broadcast, borrar cuentas, ni promover/degradar otros admins). Denormalizado también a
+  `users/{uid}.adminLevel` para que la UI (badge, sidebar) lo lea sin una consulta aparte.
+  - **`firestore.rules`**: nuevo `isFullAdmin()` (lee `roles_admin/{uid}.level` con
+    `.get('level','full')`, el `.get(key,default)` de Map SÍ funciona en Firestore Rules —
+    no es el mismo caso que el `firestore.get()` cruzado Storage→Firestore que falló en la
+    Fase BB, acá es una lectura normal dentro del mismo servicio Firestore). Exigido en:
+    escribir `roles_admin/{uid}` (el más crítico — si no, un 'support' podría reescribir su
+    propio doc y autopromoverse), `config/{doc}` (settings), `withdrawals` update/delete
+    (aprobar/rechazar retiros). Nuevo `isAdminRoleChange()` además exige `isFullAdmin()`
+    para tocar el campo `role` de/hacia `'admin'` o el campo `adminLevel` de CUALQUIER
+    usuario vía `users/{userId}` — cierra el mismo tipo de desincronización de la Fase R1
+    (UI dice una cosa, el acceso real otra): antes un 'support' podría escribir
+    `role:'admin'` en el perfil de otra cuenta (bypass porque `isAdmin()` ya alcanzaba para
+    esa rama) mientras el `roles_admin` real fallaba, dejando una cuenta "admin" fantasma
+    sin acceso real.
+  - **`src/lib/auth-server.ts`**: nuevo `verifyFullAdmin(uid)`, usado en las 4 rutas
+    admin-only que de verdad importan (`approve-withdrawal`, `notify-broadcast`,
+    `delete-user`, `refund-order`) en vez del `roles_admin.doc(uid).get().exists` inline
+    que tenían antes. `delete-review` se dejó en `isAdmin()` normal (moderar reseñas es
+    tarea de soporte legítima).
+  - **UI**: `AdminAuthGuard` ganó una prop `requireFullAdmin` (aplicada a
+    `/admin/finances`, `/admin/settings`, `/admin/communications` — bloquea por URL directa
+    aunque el link ya esté oculto); `main-nav.tsx` oculta esos 3 links para 'support';
+    `admin/users/page.tsx`: al promover a alguien a admin ahora se elige nivel ("Hacer Admin
+    completo/soporte"), un admin existente puede subir/bajar de nivel, y otorgar/quitar
+    admin + borrar cuentas quedó oculto para actores 'support' (más allá de que el server
+    ya lo rechaza, evita el viaje redondo y el estado a medias descrito arriba).
+  - **Verificado contra producción real** con un script que baja temporalmente
+    `admin@test.com` a `level:'support'` (Admin SDK), intenta las 4 acciones sensibles
+    logueado con el SDK de CLIENTE (todas bloqueadas con `permission-denied`, incluida la
+    auto-promoción), confirma que una acción normal de admin (leer pedidos) sigue
+    funcionando, y restaura el nivel a `full` al final (`FieldValue.delete()`, ground truth
+    confirmado con una lectura fresca después). `config/platform` quedó sin cambios y el
+    doc de prueba de `roles_admin` nunca se llegó a crear. Script no quedó en el repo.
+  - **Desplegado a producción** (`firebase deploy --only firestore:rules`, dry-run limpio
+    antes de desplegar).
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

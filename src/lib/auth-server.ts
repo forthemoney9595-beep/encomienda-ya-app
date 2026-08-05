@@ -20,3 +20,14 @@ export async function verifyStoreOwnership(uid: string, storeId: string): Promis
   const storeDoc = await adminDb.collection('stores').doc(storeId).get();
   return storeDoc.exists && storeDoc.data()?.ownerId === uid;
 }
+
+// Niveles de admin (Fase DD): roles_admin/{uid}.level puede ser 'full' (todo el acceso,
+// default si el campo no existe -- así los admins ya creados antes de esta fase no pierden
+// nada) o 'support' (solo operativo). Las rutas que mueven plata, mandan broadcast, borran
+// cuentas o cambian roles/config exigen 'full' -- mismo criterio que isFullAdmin() en
+// firestore.rules.
+export async function verifyFullAdmin(uid: string): Promise<boolean> {
+  const adminDoc = await adminDb.collection('roles_admin').doc(uid).get();
+  if (!adminDoc.exists) return false;
+  return adminDoc.data()?.level !== 'support';
+}

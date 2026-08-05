@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken } from "@/lib/auth-server";
+import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 
 // Registra un reembolso/compensación sobre un pedido.
 // Nota: NO transfiere plata por sí solo -- deja registro del reembolso, marca el pedido
@@ -16,8 +16,10 @@ export async function POST(request: Request) {
   const callerUid = await verifyAuthToken(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const adminDoc = await adminDb.collection('roles_admin').doc(callerUid).get();
-  if (!adminDoc.exists) return NextResponse.json({ error: "Se requiere rol admin" }, { status: 403 });
+  // Registra un reembolso (plata real) -- exige admin de nivel 'full', no alcanza con 'support'.
+  if (!(await verifyFullAdmin(callerUid))) {
+    return NextResponse.json({ error: "No autorizado — se requiere admin con acceso completo" }, { status: 403 });
+  }
 
   try {
     const { orderId, amount, reason } = await request.json();

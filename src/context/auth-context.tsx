@@ -33,6 +33,10 @@ export interface UserProfile {
   isApproved?: boolean;
   dni?: string; // Repartidor, cargado en /signup/delivery
   birthDate?: string; // Repartidor, cargado en /signup/delivery
+  // Nivel de admin (Fase DD): 'support' = acceso operativo (pedidos/reseñas/vista), sin
+  // plata/config/broadcast/borrado de cuentas ni poder de promover otros admins. Sin valor
+  // (undefined) = 'full', para que los admins creados antes de esta fase no pierdan nada.
+  adminLevel?: 'full' | 'support';
 }
 
 interface AuthContextType {
@@ -40,6 +44,10 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   isAdmin: boolean;
+  // Admin con acceso TOTAL (no 'support'). La fuente de verdad real es roles_admin/{uid}.level
+  // en el servidor (ver auth-server.ts/firestore.rules) -- esto es solo para decidir qué
+  // mostrar/habilitar en la UI, nunca reemplaza la validación server-side.
+  isFullAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -47,6 +55,7 @@ const AuthContext = createContext<AuthContextType>({
   userProfile: null,
   loading: true,
   isAdmin: false,
+  isFullAdmin: false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -165,9 +174,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isAdmin = userProfile?.role === 'admin';
+  const isFullAdmin = isAdmin && userProfile?.adminLevel !== 'support';
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, isAdmin }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, isAdmin, isFullAdmin }}>
       {children}
     </AuthContext.Provider>
   );

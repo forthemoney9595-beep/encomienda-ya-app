@@ -132,5 +132,5 @@ function AdminCommunicationsPage() {
 }
 
 export default function AdminCommunicationsPageGuarded() {
-  return <AdminAuthGuard><AdminCommunicationsPage /></AdminAuthGuard>;
+  return <AdminAuthGuard requireFullAdmin><AdminCommunicationsPage /></AdminAuthGuard>;
 }

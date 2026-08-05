@@ -3,10 +3,14 @@
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 
-export default function AdminAuthGuard({ children }: { children: React.ReactNode }) {
-    const { user, isAdmin, loading } = useAuth();
+// requireFullAdmin: para secciones sensibles (finanzas, config, comunicaciones) que un
+// admin nivel 'support' no debería poder ver ni por URL directa, aunque el link ya esté
+// oculto del menú (ver main-nav.tsx). El guardado real de estos datos siempre está además
+// en firestore.rules/las API routes -- esto es defensa en profundidad del lado UI.
+export default function AdminAuthGuard({ children, requireFullAdmin }: { children: React.ReactNode; requireFullAdmin?: boolean }) {
+    const { user, isAdmin, isFullAdmin, loading } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
@@ -23,7 +27,8 @@ export default function AdminAuthGuard({ children }: { children: React.ReactNode
             // El usuario está cargado y NO es admin, redirigir a la página principal
             router.push('/');
         }
-        // Si es admin, no hacer nada y permitir el renderizado
+        // Si es admin, no hacer nada y permitir el renderizado (salvo el caso
+        // requireFullAdmin, que se maneja en el render de abajo con un mensaje propio)
 
     }, [user, isAdmin, loading, router]);
 
@@ -34,6 +39,21 @@ export default function AdminAuthGuard({ children }: { children: React.ReactNode
                 <div className="flex flex-col items-center gap-2">
                     <Loader2 className="h-12 w-12 animate-spin text-primary" />
                     <p className="text-muted-foreground">Verificando permisos de administrador...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (requireFullAdmin && !isFullAdmin) {
+        return (
+            <div className="flex items-center justify-center h-screen px-4">
+                <div className="flex flex-col items-center gap-2 text-center max-w-sm">
+                    <ShieldAlert className="h-12 w-12 text-warning" />
+                    <h2 className="font-semibold text-lg">Sección no disponible</h2>
+                    <p className="text-sm text-muted-foreground">
+                        Tu cuenta tiene acceso de soporte (operativo). Esta sección requiere un
+                        administrador con acceso completo.
+                    </p>
                 </div>
             </div>
         );
