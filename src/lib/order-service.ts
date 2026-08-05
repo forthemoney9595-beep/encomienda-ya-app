@@ -69,6 +69,12 @@ export interface Order {
   storeReviewed?: boolean;
   hasReportedProblem?: boolean;
 
+  // Reembolso registrado por /api/admin/refund-order. Se descuenta del saldo de la tienda
+  // y del repartidor (ver payout-service.ts) -- antes existían en Firestore pero no en
+  // este tipo, así que las billeteras los ignoraban y pagaban el pedido completo igual.
+  refunded?: boolean;
+  refundAmount?: number;
+
   // Datos del driver para el mapa en tiempo real
   driverCoords?: { latitude: number; longitude: number };
 }

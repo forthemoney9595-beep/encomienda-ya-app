@@ -10,6 +10,9 @@ import { normalizeSchedule, getStoreOpenStatus, nowInArgentina } from "@/lib/sto
 // Valor fallback si config/platform.deliveryFee no está configurado en Firestore
 const DEFAULT_DELIVERY_FEE = 2000;
 
+// Métodos de pago aceptados. A propósito NO incluye 'Efectivo': ver el chequeo más abajo.
+const ALLOWED_PAYMENT_METHODS = ['mercadopago'];
+
 export async function POST(request: Request) {
   const ip = getClientIp(request);
   const { allowed } = checkRateLimit(ip, 'orders:create', 5, 60_000);
@@ -23,6 +26,20 @@ export async function POST(request: Request) {
 
     if (!userId || !items || !storeId) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
+    }
+
+    // 🔒 SOLO PAGO DIGITAL (decisión de producto, ago 2026).
+    // La app nunca ofreció efectivo en el checkout (CheckoutDialog ni siquiera manda este
+    // campo, así que cae en el default 'mercadopago'), pero la ruta aceptaba CUALQUIER
+    // valor que viniera en el body. Un pedido en efectivo rompe el modelo de saldos:
+    // el repartidor cobra el total en mano y, sin embargo, payout-service le acredita
+    // el envío a él Y su parte a la tienda, con plata que la plataforma nunca recibió.
+    // Mientras no exista rendición de efectivo, esto se rechaza en el servidor.
+    if (paymentMethod && !ALLOWED_PAYMENT_METHODS.includes(paymentMethod)) {
+      return NextResponse.json(
+        { error: "Método de pago no disponible. Solo se aceptan pagos digitales." },
+        { status: 400 },
+      );
     }
 
     // 🔒 El uid del token tiene que ser el mismo userId que dice el body — si no, alguien

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context';
 // ✅ Usamos useCollection para buscar la tienda por ownerId
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import type { Order } from '@/lib/order-service';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -69,6 +69,11 @@ export default function StoreWalletPage() {
   const myStore = userStores && userStores.length > 0 ? userStores[0] : null;
   const storeId = myStore?.id; // Este es el ID real del documento de la tienda
 
+  // Comisión por defecto de la plataforma, para tiendas sin tarifa propia (mismo criterio
+  // que payout-service.ts en el servidor).
+  const configRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'platform') : null), [firestore]);
+  const { data: platformConfig } = useDoc<{ defaultCommissionRate?: number }>(configRef);
+
   // 3. Traer VENTAS (Usando el storeId real encontrado)
   const salesQuery = useMemoFirebase(() => {
     if (!firestore || !storeId) return null;
@@ -99,19 +104,31 @@ export default function StoreWalletPage() {
       const sales = orders || [];
       const withdrawalHistory = withdrawals || [];
 
-      // ✅ AQUI ESTÁ LA MAGIA: Leemos la comisión del documento encontrado
-      const commissionRate = myStore?.commissionRate || 0; 
+      // OJO: esta fórmula tiene que dar EXACTAMENTE lo mismo que computeStoreBalance() en
+      // src/lib/payout-service.ts, que es la que valida el servidor al aprobar un retiro.
+      // Si no coinciden, la tienda ve un saldo mayor del que puede cobrar y el retiro le
+      // rebota sin explicación. (Pasó: acá se sumaban los pedidos en efectivo y los
+      // reembolsados, y la comisión caía en `|| 0` para tiendas sin tarifa propia.)
+      const commissionRate = (typeof myStore?.commissionRate === 'number' && myStore.commissionRate > 0)
+        ? myStore.commissionRate
+        : (platformConfig?.defaultCommissionRate ?? 10);
 
       const totalSalesRevenue = sales.reduce((sum, order) => {
+          // Efectivo: lo cobró el repartidor en mano, esa plata nunca entró a la plataforma.
+          if (order.paymentMethod === 'Efectivo') return sum;
+
           const productTotal = (order.total || 0) - (order.deliveryFee || 0);
-          
-          // Cálculo usando el % real
           const commission = productTotal * (commissionRate / 100);
-          const netEarnings = productTotal - commission;
-          
-          return sum + Math.max(0, netEarnings);
+          const netEarnings = Math.max(0, productTotal - commission);
+
+          // Reembolsado: se descuenta la parte devuelta al comprador.
+          const refundRatio = order.refunded
+            ? Math.min(1, Math.max(0, (Number(order.refundAmount) || 0) / (Number(order.total) || 1)))
+            : 0;
+
+          return sum + netEarnings * (1 - refundRatio);
       }, 0);
-      
+
       const totalWithdrawn = withdrawalHistory
           .filter(w => w.status !== 'rejected')
           .reduce((sum, w) => sum + (w.amount || 0), 0);
@@ -125,7 +142,7 @@ export default function StoreWalletPage() {
           sales,
           commissionRate // Lo mostramos en la UI
       };
-  }, [orders, withdrawals, myStore]);
+  }, [orders, withdrawals, myStore, platformConfig]);
 
   const handleRequestWithdrawal = async () => {
       if (!firestore || !user) return;

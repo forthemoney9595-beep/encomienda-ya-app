@@ -18,6 +18,7 @@ import { Settings, AlertTriangle, Save, Loader2 } from 'lucide-react';
 interface PlatformConfig {
   serviceFee: number;
   deliveryFee?: number;
+  defaultCommissionRate?: number;
   maintenanceMode: boolean;
   settlementDayOfWeek?: number;
 }
@@ -30,11 +31,11 @@ function AdminSettingsPage() {
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
   const { data: configData } = useDoc<PlatformConfig>(configRef);
 
-  const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, deliveryFee: 2000, maintenanceMode: false, settlementDayOfWeek: 5 });
+  const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, maintenanceMode: false, settlementDayOfWeek: 5 });
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (configData) setLocalConfig({ serviceFee: 10, deliveryFee: 2000, settlementDayOfWeek: 5, maintenanceMode: false, ...configData });
+    if (configData) setLocalConfig({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, settlementDayOfWeek: 5, maintenanceMode: false, ...configData });
   }, [configData]);
 
   const handleSave = async () => {
@@ -56,6 +57,7 @@ function AdminSettingsPage() {
         const changes = [
           configData?.serviceFee !== localConfig.serviceFee ? `serviceFee: ${configData?.serviceFee ?? '—'}% → ${localConfig.serviceFee}%` : null,
           configData?.deliveryFee !== localConfig.deliveryFee ? `envío: $${configData?.deliveryFee ?? '—'} → $${localConfig.deliveryFee}` : null,
+          configData?.defaultCommissionRate !== localConfig.defaultCommissionRate ? `comisión default: ${configData?.defaultCommissionRate ?? '—'}% → ${localConfig.defaultCommissionRate}%` : null,
           configData?.settlementDayOfWeek !== localConfig.settlementDayOfWeek ? `día liquidación: ${localConfig.settlementDayOfWeek}` : null,
           configData?.maintenanceMode !== localConfig.maintenanceMode ? `mantenimiento: ${localConfig.maintenanceMode ? 'ON' : 'OFF'}` : null,
         ].filter(Boolean).join(' · ');
@@ -100,6 +102,20 @@ function AdminSettingsPage() {
               <span className="absolute left-3 top-2.5 text-muted-foreground font-bold text-xs">$</span>
             </div>
             <p className="text-xs text-muted-foreground">Costo de envío que se suma a cada pedido. Default: $2000.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="commission" className="text-sm font-semibold">Comisión por defecto a tiendas (%)</Label>
+            <div className="relative">
+              <Input id="commission" type="number" value={localConfig.defaultCommissionRate ?? 10}
+                onChange={(e) => setLocalConfig({ ...localConfig, defaultCommissionRate: Number(e.target.value) })}
+                className="pl-8 border-primary/30" />
+              <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Se aplica a las tiendas que no tengan una comisión propia cargada. Antes esas
+              tiendas quedaban en 0% sin que nadie lo notara — o sea, operaban gratis.
+            </p>
           </div>
 
           <div className="space-y-2">

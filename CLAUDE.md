@@ -1116,6 +1116,61 @@ No se hizo ahora porque a escala de Tinogasta sería sobreingeniería.
 token en IndexedDB (que storageState no captura). Conclusión práctica: hacer login UNA vez
 por script y verificar todo en esa misma corrida, no un script por chequeo.
 
+## Fase II (ago 2026): auditoría de Finanzas — 3 agujeros que hacían perder plata real
+Pedido del usuario: revisar el admin sección por sección, "con respecto a pagos y finanzas
+necesitamos mejorar mucho ese panel". La auditoría encontró que la fórmula de saldos tenía
+tres defectos que le hacían pagar a la plataforma plata que nunca recibió.
+
+**Corrección de método antes de nada:** el primer análisis se apoyó en que "37% de los
+pedidos entregados son en efectivo" — pero ese dato era **del seed que yo mismo generé**
+(`Math.random() > 0.35`). Al filtrar por `seedBatch`, la base tenía **UN solo pedido real**
+y era por MercadoPago. Nunca usar datos de prueba propios como evidencia del negocio.
+
+**🚨 1 — El pago en EFECTIVO rompía el modelo de saldos.** `payout-service.ts` no miraba
+`paymentMethod` en ningún lado (0 referencias), pero en efectivo el repartidor cobra **el
+total completo en mano** ("Debes recibir $X en efectivo"). Con un pedido de $10.000:
+el repartidor se queda con los $10.000, y encima el sistema le acreditaba $2.000 de envío
+a él y ~$7.500 a la tienda — plata que la plataforma **nunca recibió**. Medido sobre la
+base actual: **$522.848 de más a tiendas + $36.000 de más a repartidores**.
+- **Decisión de producto: la app queda SOLO DIGITAL.** Se evaluó con el usuario; el costo
+  del efectivo no es técnico (media hora de código) sino operativo: rendiciones semanales,
+  control de mora, qué hacer si un repartidor no deposita. Para un operador solo, no rinde.
+  Argentina además tiene una penetración altísima de MercadoPago.
+- **Hallazgo:** la app YA era solo digital de hecho — `CheckoutDialog` ni siquiera manda
+  `paymentMethod`, así que caía en el default `'mercadopago'`. Pero `/api/orders/create`
+  aceptaba **cualquier valor del body**: se agregó `ALLOWED_PAYMENT_METHODS` y se rechaza
+  server-side.
+- `payout-service` ahora **excluye los pedidos en efectivo** del saldo (protege ante
+  cualquier pedido histórico). **Si algún día se reactiva el efectivo, hay que modelar la
+  RENDICIÓN del repartidor** (descontar de su saldo lo que cobró), no volver a incluirlos.
+
+**🚨 2 — Los reembolsos no descontaban del saldo.** `/api/admin/refund-order` marca
+`order.refunded`/`refundAmount`, pero el saldo sumaba el pedido entero igual: el admin
+devolvía la plata al comprador Y la tienda/repartidor la cobraban lo mismo. Se descuenta
+proporcional (`refundRatio`) usando el campo que ya vive en la propia orden, sin query
+extra. De paso: `refunded`/`refundAmount` **no existían en el tipo `Order`**, por eso las
+billeteras los ignoraban.
+
+**🚨 3 — 5 de 21 tiendas operaban con comisión 0%.** `commissionRate || 0`: una tienda dada
+de alta sin comisión explícita trabajaba gratis para siempre sin que nadie lo notara. Nuevo
+`config/platform.defaultCommissionRate` (editable en **/admin/settings**, default 10%) que
+se aplica a las tiendas sin tarifa propia.
+
+**Las 3 fórmulas de saldo estaban duplicadas y ahora coinciden.** `my-store/wallet` y
+`delivery/earnings` recalculaban el saldo en el CLIENTE con la fórmula vieja, así que la
+tienda veía $1.646.253 disponibles mientras el servidor solo aprobaba $1.123.406 — retiro
+rechazado sin explicación. Las tres (servidor + las dos billeteras) aplican ahora el mismo
+criterio: sin efectivo, menos reembolsos, con comisión por defecto. **Al tocar una hay que
+tocar las tres** (idealmente algún día unificarlas de verdad).
+
+**Pendiente de Finanzas, NO resuelto (anotado):** el `serviceFee` (5% al cliente) no está
+modelado como ingreso en ningún cálculo de saldo — solo se muestra en el dashboard; falta
+un **estado de cuenta** por tienda/repartidor (facturado / cobrado / deuda con detalle de
+movimientos); no hay **conciliación con MercadoPago** (contrastar lo que dice el sistema
+contra lo que entró de verdad a la cuenta); y `computeStoreBalance` baja **todos** los
+pedidos entregados de la tienda sin `limit`, lo que a escala revienta (y corre en cada
+aprobación de retiro).
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

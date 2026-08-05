@@ -95,8 +95,18 @@ export default function DeliveryEarningsPage() {
       const deliveredOrders = orders || [];
       const withdrawalHistory = withdrawals || [];
 
-      // Total histórico ganado
-      const totalEarned = deliveredOrders.reduce((sum, order) => sum + (order.deliveryFee || 0), 0);
+      // Total histórico ganado.
+      // OJO: tiene que dar EXACTAMENTE lo mismo que computeDriverBalance() en
+      // src/lib/payout-service.ts, que es lo que valida el servidor al aprobar un retiro.
+      // Si no coinciden, el repartidor ve un saldo que no puede cobrar y el retiro rebota.
+      const totalEarned = deliveredOrders.reduce((sum, order) => {
+          // Efectivo: ya cobró el total en mano, incluido su envío.
+          if (order.paymentMethod === 'Efectivo') return sum;
+          const refundRatio = order.refunded
+            ? Math.min(1, Math.max(0, (Number(order.refundAmount) || 0) / (Number(order.total) || 1)))
+            : 0;
+          return sum + (order.deliveryFee || 0) * (1 - refundRatio);
+      }, 0);
       
       // Total retirado (Aprobado o Pendiente cuenta como "no disponible")
       const totalWithdrawn = withdrawalHistory
