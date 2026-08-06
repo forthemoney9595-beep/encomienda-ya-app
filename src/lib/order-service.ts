@@ -69,6 +69,11 @@ export interface Order {
   storeReviewed?: boolean;
   hasReportedProblem?: boolean;
 
+  // Calificación de productos por el comprador: mapa {itemId: rating}. Está fuera de
+  // `items` a propósito -- ver el comentario en orders/[orderId]/page.tsx: permitir que el
+  // comprador reescribiera `items` para calificar le dejaba cambiar también los precios.
+  itemRatings?: Record<string, number>;
+
   // Reembolso registrado por /api/admin/refund-order. Se descuenta del saldo de la tienda
   // y del repartidor (ver payout-service.ts) -- antes existían en Firestore pero no en
   // este tipo, así que las billeteras los ignoraban y pagaban el pedido completo igual.

@@ -42,10 +42,50 @@ async function getDefaultCommission(): Promise<number> {
   }
 }
 
-export async function computeStoreBalance(storeId: string): Promise<{
+/**
+ * Los dos saldos que hay que distinguir, y por qué:
+ *
+ * - `availableBalance` = facturado − (retiros aprobados + retiros PENDIENTES).
+ *   Es lo que el usuario puede PEDIR. Descuenta lo pendiente para que no pida dos veces
+ *   la misma plata.
+ *
+ * - `approvableBalance` = facturado − retiros APROBADOS solamente.
+ *   Es contra lo que hay que validar cuando el admin APRUEBA un retiro puntual, porque ese
+ *   retiro todavía está `pending` y ya estaría restado de `availableBalance`.
+ *
+ * 🚨 Este era el bug: `approve-withdrawal` validaba el monto contra `availableBalance`, que
+ * ya incluía el propio retiro que se estaba aprobando. Con facturado 10.000 y un pedido de
+ * 10.000: available = 10.000 − 10.000 = 0 → "supera el saldo real disponible ($0)". O sea
+ * NINGÚN retiro por el saldo completo era aprobable, y como el cron genera exactamente eso
+ * (`Math.floor(availableBalance)`), TODA liquidación automática quedaba inaprobable.
+ */
+export type BalanceResult = {
   totalRevenue: number;
+  /** Retiros ya transferidos (status 'approved'). */
+  withdrawnSettled: number;
+  /** Retiros solicitados y todavía sin procesar (status 'pending'). */
+  withdrawnPending: number;
+  /** Compat: settled + pending. Lo que históricamente se llamaba "totalWithdrawn". */
   totalWithdrawn: number;
+  /** Lo que el usuario puede pedir hoy. */
   availableBalance: number;
+  /** Contra esto se valida la aprobación de un retiro pendiente. */
+  approvableBalance: number;
+};
+
+/** Suma retiros por estado. `rejected` no cuenta: esa plata volvió al saldo. */
+function splitWithdrawals(docs: FirebaseFirestore.QueryDocumentSnapshot[]) {
+  let settled = 0, pending = 0;
+  for (const d of docs) {
+    const w = d.data();
+    const amount = Number(w.amount) || 0;
+    if (w.status === 'approved') settled += amount;
+    else if (w.status === 'pending') pending += amount;
+  }
+  return { settled, pending };
+}
+
+export async function computeStoreBalance(storeId: string): Promise<BalanceResult & {
   commissionRate: number;
 }> {
   const storeSnap = await adminDb.collection('stores').doc(storeId).get();
@@ -73,30 +113,36 @@ export async function computeStoreBalance(storeId: string): Promise<{
   }, 0);
 
   const ownerId = storeSnap.data()?.ownerId;
-  if (!ownerId) return { totalRevenue, totalWithdrawn: 0, availableBalance: totalRevenue, commissionRate };
+  if (!ownerId) {
+    // Tienda sin dueño: no se le puede atribuir ningún retiro, así que todo lo facturado
+    // figura como disponible. (Caso anómalo; queda así para no romper el cálculo.)
+    return {
+      totalRevenue, withdrawnSettled: 0, withdrawnPending: 0, totalWithdrawn: 0,
+      availableBalance: totalRevenue, approvableBalance: totalRevenue, commissionRate,
+    };
+  }
 
   const withdrawalsSnap = await adminDb.collection('withdrawals')
     .where('userId', '==', ownerId)
     .where('userRole', '==', 'store')
     .get();
 
-  const totalWithdrawn = withdrawalsSnap.docs
-    .filter(d => d.data().status !== 'rejected')
-    .reduce((sum, d) => sum + (d.data().amount || 0), 0);
+  const { settled, pending } = splitWithdrawals(withdrawalsSnap.docs);
 
   return {
     totalRevenue,
-    totalWithdrawn,
-    availableBalance: Math.max(0, totalRevenue - totalWithdrawn),
+    withdrawnSettled: settled,
+    withdrawnPending: pending,
+    totalWithdrawn: settled + pending,
+    availableBalance: Math.max(0, totalRevenue - settled - pending),
+    approvableBalance: Math.max(0, totalRevenue - settled),
     commissionRate,
   };
 }
 
-export async function computeDriverBalance(driverUserId: string): Promise<{
-  totalEarned: number;
-  totalWithdrawn: number;
-  availableBalance: number;
-}> {
+export async function computeDriverBalance(driverUserId: string): Promise<
+  Omit<BalanceResult, 'totalRevenue'> & { totalEarned: number }
+> {
   const ordersSnap = await adminDb.collection('orders')
     .where('deliveryPersonId', '==', driverUserId)
     .where('status', '==', 'Entregado')
@@ -113,13 +159,14 @@ export async function computeDriverBalance(driverUserId: string): Promise<{
     .where('userRole', '==', 'delivery')
     .get();
 
-  const totalWithdrawn = withdrawalsSnap.docs
-    .filter(d => d.data().status !== 'rejected')
-    .reduce((sum, d) => sum + (d.data().amount || 0), 0);
+  const { settled, pending } = splitWithdrawals(withdrawalsSnap.docs);
 
   return {
     totalEarned,
-    totalWithdrawn,
-    availableBalance: Math.max(0, totalEarned - totalWithdrawn),
+    withdrawnSettled: settled,
+    withdrawnPending: pending,
+    totalWithdrawn: settled + pending,
+    availableBalance: Math.max(0, totalEarned - settled - pending),
+    approvableBalance: Math.max(0, totalEarned - settled),
   };
 }

@@ -4,11 +4,19 @@ import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyStoreOwnership } from "@/lib/auth-server";
 
-const FIXED_SHIPPING_COST = 2000;
+// Fallback si config/platform.deliveryFee no está configurado (mismo default que
+// /api/orders/create).
+const DEFAULT_DELIVERY_FEE = 2000;
 
 // Reemplaza al "Tengo Stock" todo-o-nada: la tienda puede confirmar el pedido sacando
-// ítems puntuales sin stock. El total SIEMPRE se recalcula acá (nunca se confía en un
-// total que mande el cliente) a partir de los precios ya verificados al crear la orden.
+// ítems puntuales sin stock.
+//
+// 🔒 El total SIEMPRE se recalcula acá releyendo el precio del CATÁLOGO, nunca del array
+// `items` de la orden. Antes se confiaba en `item.price` del documento asumiendo que era
+// "el precio ya verificado al crear la orden" — pero la regla de Firestore le permitía al
+// comprador reescribir ese array, así que podía bajarse el precio y confirmar un pedido de
+// $20.000 a $2.000. La regla ya no lo permite (ver firestore.rules), y esto es la segunda
+// barrera: aunque alguien lograra alterar `items`, el precio cobrado sale del catálogo.
 export async function POST(request: Request) {
   const ip = getClientIp(request);
   const { allowed } = checkRateLimit(ip, 'orders:confirm-stock', 20, 60_000);
@@ -58,19 +66,56 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No se puede confirmar un pedido sin productos. Rechazalo en su lugar." }, { status: 400 });
     }
 
-    // Recalcular SIEMPRE desde los precios ya verificados al crear la orden (nunca un
-    // total mandado por el cliente).
     const platformConfigSnap = await adminDb.collection("config").doc("platform").get();
-    const serviceFeePercent = platformConfigSnap.data()?.serviceFee ?? 5;
+    const platformConfig = platformConfigSnap.data() || {};
+    const serviceFeePercent = platformConfig.serviceFee ?? 5;
+    // El envío sale de config (o del que ya tenía la orden), NO de una constante. Antes
+    // estaba hardcodeado en 2000 mientras `create` lo leía de config: si el admin cambiaba
+    // la tarifa, el `total` se recalculaba con 2000 pero el campo `deliveryFee` quedaba con
+    // el valor de config -> `subtotal + deliveryFee + serviceFee != total`, el checkout
+    // cobraba un monto distinto y el webhook lo marcaba como discrepancia (pago trabado).
+    const deliveryFee = Number(orderData.deliveryFee ?? platformConfig.deliveryFee ?? DEFAULT_DELIVERY_FEE);
 
-    const newSubtotal = keptItems.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
+    // 🔒 Precio SIEMPRE del catálogo, nunca del array `items` de la orden (ver comentario
+    // de arriba). Mismo criterio y mismo orden de subcolecciones que /api/orders/create.
+    const pricedItems: any[] = [];
+    for (const it of keptItems) {
+      const quantity = Number(it.quantity) || 0;
+      if (!it.id || quantity <= 0) {
+        return NextResponse.json({ error: `Ítem inválido en el pedido: ${it.id || '(sin id)'}` }, { status: 400 });
+      }
+
+      let productSnap = await adminDb.collection("stores").doc(storeId).collection("products").doc(it.id).get();
+      if (!productSnap.exists) {
+        productSnap = await adminDb.collection("stores").doc(storeId).collection("items").doc(it.id).get();
+      }
+      if (!productSnap.exists) {
+        return NextResponse.json(
+          { error: `El producto "${it.title || it.name || it.id}" ya no existe en tu catálogo. Sacalo del pedido para confirmarlo.` },
+          { status: 400 },
+        );
+      }
+
+      const p = productSnap.data()!;
+      const catalogPrice = Number(p.price ?? p.unit_price ?? 0);
+      if (!(catalogPrice > 0)) {
+        return NextResponse.json({ error: `El producto "${p.name || p.title || it.id}" tiene precio inválido.` }, { status: 400 });
+      }
+      const discountPercent = Number(p.discountPercent) || 0;
+      const price = discountPercent > 0 ? catalogPrice * (1 - discountPercent / 100) : catalogPrice;
+
+      pricedItems.push({ ...it, price, quantity, title: p.name || p.title || it.title || 'Producto' });
+    }
+
+    const newSubtotal = pricedItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
     const newServiceFee = (newSubtotal * serviceFeePercent) / 100;
-    const newTotal = newSubtotal + FIXED_SHIPPING_COST + newServiceFee;
+    const newTotal = newSubtotal + deliveryFee + newServiceFee;
 
     await orderRef.update({
-      items: keptItems,
+      items: pricedItems,
       subtotal: newSubtotal,
       serviceFee: newServiceFee,
+      deliveryFee,
       total: newTotal,
       status: "Pendiente de Pago",
       updatedAt: Timestamp.now(),

@@ -53,26 +53,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Esta solicitud ya está "${w.status}", no se puede aprobar.` }, { status: 400 });
     }
 
-    // Recalcular el saldo real para validar que el monto pedido es legítimo
-    let availableBalance = 0;
+    // Recalcular el saldo real para validar que el monto pedido es legítimo.
+    //
+    // 🚨 Se valida contra `approvableBalance` (facturado − retiros YA APROBADOS), NO contra
+    // `availableBalance` (que además descuenta los pendientes). El retiro que estamos
+    // aprobando está justamente en `pending`, así que usando `availableBalance` se restaba a
+    // sí mismo: un retiro por el saldo completo daba siempre "supera el saldo disponible
+    // ($0)" y ninguna liquidación del cron era aprobable.
+    let approvableBalance = 0;
     if (w.userRole === 'store') {
       // Encontrar la tienda del dueño
       const storesSnap = await adminDb.collection('stores').where('ownerId', '==', w.userId).limit(1).get();
       if (!storesSnap.empty) {
         const result = await computeStoreBalance(storesSnap.docs[0].id);
-        availableBalance = result.availableBalance;
+        approvableBalance = result.approvableBalance;
       }
     } else if (w.userRole === 'delivery') {
       const result = await computeDriverBalance(w.userId);
-      availableBalance = result.availableBalance;
+      approvableBalance = result.approvableBalance;
     }
 
     const requestedAmount = Number(w.amount) || 0;
-    if (requestedAmount > availableBalance + 1) {
+    if (requestedAmount > approvableBalance + 1) {
       // Tolerancia de $1 para redondeos -- si el monto pedido supera el saldo real, se rechaza
       return NextResponse.json({
-        error: `El monto solicitado ($${requestedAmount.toLocaleString()}) supera el saldo real disponible ($${availableBalance.toFixed(0)}). Revisá el saldo antes de aprobar.`,
-        saldoReal: availableBalance,
+        error: `El monto solicitado ($${requestedAmount.toLocaleString()}) supera el saldo real disponible ($${approvableBalance.toFixed(0)}). Revisá el saldo antes de aprobar.`,
+        saldoReal: approvableBalance,
         montoSolicitado: requestedAmount,
       }, { status: 400 });
     }
@@ -86,7 +92,7 @@ export async function POST(request: Request) {
       approvedBy: callerUid,
       operationRef: opRef,
       ...(note ? { adminNote: String(note).trim().slice(0, 300) } : {}),
-      balanceAtApproval: Math.round(availableBalance),
+      balanceAtApproval: Math.round(approvableBalance),
     });
 
     return NextResponse.json({ success: true, amountApproved: requestedAmount });

@@ -166,15 +166,31 @@ service cloud.firestore {
       // que de verdad escribe directo (todo lo que toca total/items/pago pasa SIEMPRE por
       // las API seguras del Admin SDK, que no usan estas reglas).
       allow update: if isSignedIn() && (
-        isAdmin() ||
+        // ADMIN: acceso amplio PERO sin tocar los campos de dinero desde el cliente.
+        // 🚨 Antes era `isAdmin()` a secas: un admin podía reescribir `total`, `items`,
+        // `refunded` o `paymentStatus` de cualquier pedido desde la consola del navegador.
+        // Como el saldo de tiendas y repartidores se deriva 100% de las órdenes, eso
+        // equivalía a editar el saldo de cualquiera sin dejar rastro. Todo lo que toca
+        // plata pasa por las API con Admin SDK (cancel / refund-order / confirm-stock),
+        // que además dejan auditoría.
+        (isAdmin() &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'total', 'subtotal', 'serviceFee', 'deliveryFee', 'items',
+            'paymentStatus', 'refunded', 'refundAmount', 'paidAmount'
+          ])) ||
 
         // TIENDA: solo rechazar el pedido o marcarlo listo para retirar, y avisar al
         // repartidor. Total/items/pago: siempre por /api/orders/confirm-stock.
+        // 🚨 `Rechazado` SOLO desde 'Pendiente de Confirmación': antes la regla no miraba el
+        // estado actual, así que la tienda podía rechazar un pedido YA PAGADO desde la
+        // consola. Eso dejaba `paymentStatus:'paid'` + `status:'Rechazado'` sin ningún
+        // registro de que había plata del cliente para devolver.
         (isStoreOwner(resource.data.storeId) &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'readyForPickup', 'lastDriverNotification']) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
-            request.resource.data.status in ['Rechazado', 'Listo para recoger'])) ||
+            (request.resource.data.status == 'Rechazado' && resource.data.status == 'Pendiente de Confirmación') ||
+            (request.resource.data.status == 'Listo para recoger' && resource.data.status == 'En preparación'))) ||
 
         // REPARTIDOR ASIGNADO: avanzar su propio pedido + reportar posición GPS
         // (driverCoords, sin tocar status — tiene que seguir siendo una escritura barata).
@@ -193,12 +209,16 @@ service cloud.firestore {
             .hasOnly(['deliveryPersonId', 'deliveryPersonName', 'status', 'takenAt']) &&
           request.resource.data.status == 'En camino') ||
 
-        // CLIENTE: solo puede calificar productos (rating por item), no otros campos.
-        // Calificar al repartidor ya NO es un campo de escritura directa -- va por
-        // /api/delivery-reviews/create (mismo criterio que calificar la tienda), que
-        // valida Entregado y evita calificar dos veces antes de tocar la orden.
+        // CLIENTE: solo puede calificar productos, y SOLO sobre el mapa `itemRatings`.
+        // 🚨 Antes esto permitía escribir `items`, que es donde vive el PRECIO de cada
+        // producto. Como /api/orders/confirm-stock recalculaba el subtotal desde ese array,
+        // el comprador podía bajarse el precio a $1 antes de que la tienda confirmara y
+        // pagar un pedido de $20.000 por $2.000 (el webhook validaba contra el total ya
+        // alterado, así que ni siquiera quedaba registrado como anomalía).
+        // Calificar al repartidor va por /api/delivery-reviews/create.
         (resource.data.userId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items']))
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['itemRatings']) &&
+          resource.data.status == 'Entregado')
       );
     }
 
@@ -300,15 +320,36 @@ service cloud.firestore {
       // 👁️ READ: el dueño de la solicitud o el admin
       allow read, list: if isSignedIn() && (isAdmin() || isOwner(resource.data.userId));
 
-      // ✏️ CREATE: el usuario solo puede crear solicitudes propias, en estado 'pending'
+      // ✏️ CREATE: el usuario solo puede crear solicitudes propias, en estado 'pending'.
+      // `hasOnly` es clave: sin él se podían sembrar campos de aprobación (approvedBy,
+      // operationRef, balanceAtApproval, processedAt) en un doc recién creado, o marcarlo
+      // como `source:'auto'` para que pareciera generado por el cron.
+      // El monto NO se puede topear contra el saldo desde acá (Firestore Rules no puede
+      // sumar una colección) -- eso lo valida /api/admin/approve-withdrawal al aprobar.
       allow create: if isSignedIn() &&
         isOwner(request.resource.data.userId) &&
         request.resource.data.status == 'pending' &&
+        request.resource.data.source == 'manual' &&
+        request.resource.data.userRole in ['store', 'delivery'] &&
         request.resource.data.amount is number &&
-        request.resource.data.amount > 0;
+        request.resource.data.amount > 0 &&
+        request.resource.data.keys().hasOnly([
+          'userId', 'userName', 'userRole', 'amount', 'cbu', 'status', 'source', 'createdAt'
+        ]);
 
-      // ✏️ UPDATE/DELETE: aprobar/rechazar es plata real -- exige admin 'full'.
-      allow update, delete: if isFullAdmin();
+      // ✏️ UPDATE: aprobar/rechazar es plata real -- exige admin 'full' Y solo los campos
+      // del procesamiento. Antes era un update libre: se podía reescribir `amount` de un
+      // retiro ya aprobado, o cambiar `userId`, sin dejar rastro en ningún lado.
+      allow update: if isFullAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'processedAt', 'approvedBy', 'operationRef', 'adminNote',
+          'balanceAtApproval', 'rejectionReason', 'rejectedBy'
+        ]);
+
+      // ❌ DELETE: bloqueado incluso para admin. Borrar un retiro 'approved' baja el
+      // total retirado y le devuelve el saldo al usuario -> habilita cobrar dos veces la
+      // misma plata, sin ninguna entrada en el log. Un registro de dinero no se borra.
+      allow delete: if false;
     }
 
     // 9. RESEÑAS DE TIENDA

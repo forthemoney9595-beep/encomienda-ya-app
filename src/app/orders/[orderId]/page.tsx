@@ -208,11 +208,15 @@ export default function OrderTrackingPage() {
     }
   }, [order, isLoading, user, myUserProfile, router, orderLoading, orderId]);
   
+    // 🔒 Calificar un producto escribe en `itemRatings` (un mapa {itemId: rating}), NO en
+    // `items`. Antes reescribía el array `items` COMPLETO solo para agregar un campo, y la
+    // regla de Firestore tenía que permitir esa escritura — lo que dejaba al comprador
+    // reescribir también el `price` de cada ítem. Como `/api/orders/confirm-stock`
+    // recalculaba el subtotal desde ese array, se podía pagar un pedido de $20.000 por $2.000.
     const handleReviewSubmit = async (rating: number, review: string) => {
         if (!reviewingItem || !order || !firestore) return;
-        const updatedItems = order.items.map(item => item.id === reviewingItem.id ? { ...item, userRating: rating } : item);
         try {
-            await updateDoc(orderRef!, { items: updatedItems });
+            await updateDoc(orderRef!, { [`itemRatings.${reviewingItem.id}`]: rating });
              toast({ title: "¡Reseña enviada!", description: "Gracias por tu opinión." });
             setReviewingItem(null);
         } catch (error) { toast({ variant: 'destructive', title: "Error" }); }
@@ -543,11 +547,15 @@ export default function OrderTrackingPage() {
                                 <p className="text-sm text-muted-foreground">Cantidad: {item.quantity}</p>
                             </div>
                             <div className="text-right flex items-center gap-4">
-                               {isBuyer && order.status === 'Entregado' && (
-                                   item.userRating 
-                                   ? (<div className="flex items-center gap-1 text-sm text-warning"><Star className="h-4 w-4 fill-current" /><span className="font-bold">{item.userRating}</span></div>)
-                                   : (<Button variant="outline" size="sm" onClick={() => setReviewingItem(item)}><Star className="mr-2 h-4 w-4" /> Valorar</Button>)
-                                )}<p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                               {isBuyer && order.status === 'Entregado' && (() => {
+                                   // La calificación vive en `itemRatings` (mapa aparte); se
+                                   // sigue leyendo `item.userRating` como compat con pedidos
+                                   // viejos, cuando se guardaba dentro del propio ítem.
+                                   const rated = order.itemRatings?.[item.id] ?? item.userRating;
+                                   return rated
+                                     ? (<div className="flex items-center gap-1 text-sm text-warning"><Star className="h-4 w-4 fill-current" /><span className="font-bold">{rated}</span></div>)
+                                     : (<Button variant="outline" size="sm" onClick={() => setReviewingItem(item)}><Star className="mr-2 h-4 w-4" /> Valorar</Button>);
+                                })()}<p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
                             </div>
                         </div>
                     ))}
