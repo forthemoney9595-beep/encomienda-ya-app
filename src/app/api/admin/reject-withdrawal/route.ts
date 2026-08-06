@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
+import { notifyUser } from "@/lib/notify-server";
 
 /**
  * Rechazar una solicitud de retiro.
@@ -59,6 +60,19 @@ export async function POST(request: Request) {
       callerUid, 'reject_withdrawal', withdrawalId,
       `$${(Number(w.amount) || 0).toLocaleString('es-AR')} a ${w.userName || w.userId}${rejectionReason ? ` · ${rejectionReason}` : ''}`,
     );
+
+    // El motivo del rechazo tiene que LLEGARLE, no quedar guardado en la base. Antes no se
+    // notificaba nada: la solicitud aparecía "Rechazada" en su billetera, sin explicación y
+    // sin aviso, y la plata volvía al saldo sin que nadie supiera por qué.
+    await notifyUser({
+      userId: w.userId,
+      title: 'Tu solicitud de retiro fue rechazada',
+      body: rejectionReason
+        ? `$${(Number(w.amount) || 0).toLocaleString('es-AR')} volvieron a tu saldo disponible. Motivo: ${rejectionReason}`
+        : `$${(Number(w.amount) || 0).toLocaleString('es-AR')} volvieron a tu saldo disponible. Podés volver a solicitarlo.`,
+      type: 'payout_rejected',
+      link: w.userRole === 'store' ? '/my-store/wallet' : '/delivery/earnings',
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

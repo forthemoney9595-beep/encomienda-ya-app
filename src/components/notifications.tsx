@@ -91,13 +91,15 @@ export function Notifications() {
     }
 
     // 2. LÓGICA DE REDIRECCIÓN INTELIGENTE 🧠
-    // Si es un aviso de pago, vamos a la billetera según el rol
-    if (notification.type === 'payout_received') {
-        if (userProfile?.role === 'store') {
-            router.push('/orders?tab=wallet'); // Ruta para tiendas
-        } else if (userProfile?.role === 'delivery') {
-            router.push('/orders?tab=wallet'); // Ruta para repartidores (unificamos en /orders)
-        }
+    // Avisos de plata (retiro pagado o rechazado) → la billetera del rol.
+    // OJO: esto apuntaba a `/orders?tab=wallet`, una pestaña que ya NO EXISTE — se eliminó de
+    // los paneles operativos en las Fases P y R porque mostraba números fantasma. La
+    // billetera real vive en su propia ruta. El link llega en la notificación
+    // (`notify-server.ts`), acá solo queda el fallback por rol para las viejas.
+    if (notification.type === 'payout_received' || notification.type === 'payout_rejected') {
+        if (notification.link) router.push(notification.link);
+        else if (userProfile?.role === 'store') router.push('/my-store/wallet');
+        else if (userProfile?.role === 'delivery') router.push('/delivery/earnings');
         return;
     }
 

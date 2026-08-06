@@ -287,21 +287,37 @@ export default function DeliveryEarningsPage() {
                           </div>
                       ) : (
                           withdrawals.map((w: any) => (
-                              <div key={w.id} className="flex items-center justify-between p-3 border rounded-lg bg-card text-sm">
-                                  <div>
-                                      <div className="flex items-center gap-2">
-                                          <p className="font-bold">${w.amount.toLocaleString()}</p>
-                                          {w.source === 'auto' && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>}
+                              <div key={w.id} className="p-3 border rounded-lg bg-card text-sm space-y-1.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                      <div>
+                                          <div className="flex items-center gap-2">
+                                              <p className="font-bold">${(w.amount || 0).toLocaleString('es-AR')}</p>
+                                              {w.source === 'auto' && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>}
+                                          </div>
+                                          <p className="text-xs text-muted-foreground">{formatDate(w.createdAt)}</p>
                                       </div>
-                                      <p className="text-xs text-muted-foreground">{formatDate(w.createdAt)}</p>
+                                      <Badge variant={
+                                          w.status === 'approved' ? 'default' :
+                                          w.status === 'rejected' ? 'destructive' : 'secondary'
+                                      } className={w.status === 'approved' ? 'bg-success text-success-foreground hover:bg-success/90' : w.status === 'pending' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : ''}>
+                                          {w.status === 'approved' ? 'Pagado' :
+                                           w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                                      </Badge>
                                   </div>
-                                  <Badge variant={
-                                      w.status === 'approved' ? 'default' :
-                                      w.status === 'rejected' ? 'destructive' : 'secondary'
-                                  } className={w.status === 'approved' ? 'bg-success text-success-foreground hover:bg-success/90' : w.status === 'pending' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : ''}>
-                                      {w.status === 'approved' ? 'Pagado' :
-                                       w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
-                                  </Badge>
+                                  {/* El motivo del rechazo se guardaba pero no se mostraba: el
+                                      repartidor veía "Rechazado" sin saber qué corregir. */}
+                                  {w.status === 'rejected' && w.rejectionReason && (
+                                      <p className="rounded border-l-2 border-destructive/40 bg-destructive/5 px-2 py-1 text-xs text-muted-foreground">
+                                          {w.rejectionReason}
+                                      </p>
+                                  )}
+                                  {/* Comprobante de la transferencia real, para poder rastrearla. */}
+                                  {w.status === 'approved' && w.operationRef && (
+                                      <p className="text-xs text-muted-foreground">
+                                          Comprobante: <span className="font-mono">{w.operationRef}</span>
+                                          {w.processedAt && ` · ${formatDate(w.processedAt)}`}
+                                      </p>
+                                  )}
                               </div>
                           ))
                       )}

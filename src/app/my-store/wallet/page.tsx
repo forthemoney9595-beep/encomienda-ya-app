@@ -247,14 +247,31 @@ export default function StoreWalletPage() {
                   <CardHeader><CardTitle>Historial de Retiros</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                       {withdrawals?.map((w: any) => (
-                          <div key={w.id} className="flex justify-between items-center p-3 border rounded text-sm">
-                              <span className="flex items-center gap-2">
-                                  ${w.amount} - {formatDate(w.createdAt)}
-                                  {w.source === 'auto' && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>}
-                              </span>
-                              <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'secondary'}>
-                                  {w.status === 'approved' ? 'Pagado' : w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
-                              </Badge>
+                          <div key={w.id} className="p-3 border rounded text-sm space-y-1.5">
+                              <div className="flex justify-between items-center gap-2">
+                                  <span className="flex items-center gap-2">
+                                      ${(w.amount || 0).toLocaleString('es-AR')} - {formatDate(w.createdAt)}
+                                      {w.source === 'auto' && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>}
+                                  </span>
+                                  <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'secondary'}>
+                                      {w.status === 'approved' ? 'Pagado' : w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                                  </Badge>
+                              </div>
+                              {/* El motivo del rechazo se guardaba pero no se mostraba en ningún
+                                  lado: la tienda veía "Rechazado" y no sabía qué corregir. */}
+                              {w.status === 'rejected' && w.rejectionReason && (
+                                  <p className="rounded border-l-2 border-destructive/40 bg-destructive/5 px-2 py-1 text-xs text-muted-foreground">
+                                      {w.rejectionReason}
+                                  </p>
+                              )}
+                              {/* Comprobante de la transferencia: es lo que le permite
+                                  reclamar/rastrear el pago en su banco. */}
+                              {w.status === 'approved' && w.operationRef && (
+                                  <p className="text-xs text-muted-foreground">
+                                      Comprobante: <span className="font-mono">{w.operationRef}</span>
+                                      {w.processedAt && ` · ${formatDate(w.processedAt)}`}
+                                  </p>
+                              )}
                           </div>
                       ))}
                       {withdrawals?.length === 0 && <p className="text-center text-muted-foreground py-4">Sin retiros aún.</p>}

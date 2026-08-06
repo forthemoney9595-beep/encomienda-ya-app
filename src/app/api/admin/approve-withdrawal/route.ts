@@ -5,6 +5,7 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
+import { notifyUser } from "@/lib/notify-server";
 
 // Primera ruta admin-only de la API — verifica token + existencia en roles_admin.
 // Antes, aprobar un retiro era un updateDoc directo desde el cliente (protegido solo
@@ -103,6 +104,17 @@ export async function POST(request: Request) {
       callerUid, 'approve_withdrawal', withdrawalId,
       `$${requestedAmount.toLocaleString('es-AR')} a ${w.userName || w.userId} (${w.userRole === 'store' ? 'tienda' : 'repartidor'}) · op ${opRef}`,
     );
+
+    // Avisarle a quien cobra. Antes NO se notificaba nada: la tienda/repartidor se enteraba
+    // solo si entraba a mirar su billetera por las suyas, aunque la plata ya estuviera
+    // transferida.
+    await notifyUser({
+      userId: w.userId,
+      title: '💰 Te transferimos tu dinero',
+      body: `Enviamos $${requestedAmount.toLocaleString('es-AR')} a ${w.cbu || 'tu cuenta'}. Comprobante: ${opRef}. Puede tardar unos minutos en acreditarse.`,
+      type: 'payout_received',
+      link: w.userRole === 'store' ? '/my-store/wallet' : '/delivery/earnings',
+    });
 
     return NextResponse.json({ success: true, amountApproved: requestedAmount });
   } catch (error: any) {

@@ -155,6 +155,24 @@ function AdminUsersPage() {
         return;
     }
 
+    // Decisión de producto: una cuenta es tienda O repartidor, nunca las dos cosas. Quien
+    // quiera hacer ambas se crea una cuenta aparte. Convertir en repartidor al dueño de una
+    // tienda lo dejaría tomando pedidos de la competencia con la misma cuenta con la que
+    // vende, y le partiría el circuito de cobro en dos (el saldo de tienda sale de
+    // `stores.ownerId`, el de repartidor de `orders.deliveryPersonId`).
+    if (newRole === 'delivery') {
+        const ownsStore = await getDocs(query(
+            collection(firestore, 'stores'), where('ownerId', '==', userId), limit(1)));
+        if (!ownsStore.empty) {
+            toast({
+                variant: 'destructive',
+                title: 'Esta cuenta tiene una tienda',
+                description: `Es dueña de "${ownsStore.docs[0].data().name || 'una tienda'}". Una cuenta no puede vender y repartir a la vez — que se cree una cuenta aparte de repartidor.`,
+            });
+            return;
+        }
+    }
+
     const confirmMessage = promotingToAdmin
         ? `⚠️ Le vas a dar acceso de administrador ${level === 'full' ? 'TOTAL' : 'de SOPORTE (operativo, sin plata/config/broadcast)'} a este usuario. ¿Confirmás?`
         : demotingFromAdmin

@@ -32,8 +32,16 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid;
     }
     // Repartidor aprobado por el admin: solo estos pueden autoasignarse pedidos.
+    // 🚨 El `role == 'delivery'` NO es redundante. `isApproved` es un campo COMPARTIDO: el
+    // flujo de aprobación del admin (admin/page.tsx) lo escribe en `users/{uid}` tanto para
+    // repartidores COMO para dueños de tienda. Sin el chequeo de rol, cualquier tienda
+    // aprobada cumplía la condición de "repartidor aprobado" y podía autoasignarse pedidos
+    // — incluso de tiendas COMPETIDORAS — con un write directo desde la consola.
+    // Verificado en vivo antes del fix: "Farmacia del Pueblo" tomó un pedido de "Super Los
+    // Aromos" y lo pasó a "En camino". La UI no muestra el botón, pero la regla lo permitía.
     function isApprovedDriver() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isApproved == true;
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return u.isApproved == true && u.get('role', '') == 'delivery';
     }
 
     // --- REGLAS DE COLECCIONES ---
