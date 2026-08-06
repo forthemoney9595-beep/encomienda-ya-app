@@ -84,11 +84,7 @@ export async function POST(request: Request) {
     const payment = new Payment(client);
     const paymentData = await payment.get({ id: paymentId });
 
-    if (paymentData.status !== "approved") {
-      return NextResponse.json({ status: "received_but_not_approved" });
-    }
-
-    // 2. Extraer Metadata
+    // 2. Extraer Metadata (se necesita también en las ramas de anomalía de abajo)
     const { metadata } = paymentData;
     const buyerId = metadata.buyer_id;
     const storeId = metadata.store_id;
@@ -107,8 +103,49 @@ export async function POST(request: Request) {
     }
     const existingData = existingOrder.data()!;
 
-    // 🔒 Idempotencia: si la orden ya fue procesada, retornar sin hacer nada
+    // Deja el problema anotado para revisión manual Y marca la orden, para que se pueda
+    // ver desde el propio pedido y no solo desde la lista de discrepancias.
+    const flagIssue = async (reason: string, extra: Record<string, any> = {}) => {
+      await adminDb.collection("payment_mismatches").add({
+        orderId: orderRefId, paymentId, reason,
+        paidAmount: Number(paymentData.transaction_amount) || 0,
+        orderTotal: Number(existingData.total) || 0,
+        mpStatus: paymentData.status,
+        createdAt: new Date(), resolved: false, ...extra,
+      });
+      await ordersCollection.doc(orderRefId).set(
+        { hasPaymentIssue: true, paymentIssueReason: reason, updatedAt: new Date() },
+        { merge: true },
+      );
+    };
+
+    // 🚨 PAGO REVERTIDO EN MERCADOPAGO (reembolso desde el panel de MP, contracargo,
+    // cancelación). Antes esta rama era un `return` mudo: la orden quedaba `paid` para
+    // siempre y, al entregarse, se le liquidaba a la tienda y al repartidor plata que la
+    // plataforma ya había devuelto. MP reenvía el webhook en estos casos.
+    if (["refunded", "charged_back", "cancelled"].includes(String(paymentData.status))) {
+      if (existingData.paymentStatus === "paid") {
+        console.error(`🚨 [Webhook] Pago REVERTIDO en MP (${paymentData.status}) para la orden ${orderRefId} que estaba pagada.`);
+        await flagIssue("payment_reversed");
+        await ordersCollection.doc(orderRefId).set({ paymentStatus: "reversed" }, { merge: true });
+      }
+      return NextResponse.json({ status: "payment_reversed_flagged" });
+    }
+
+    if (paymentData.status !== "approved") {
+      return NextResponse.json({ status: "received_but_not_approved" });
+    }
+
+    // 🔒 Idempotencia: si la orden ya fue procesada, no reprocesar.
     if (existingData.paymentStatus === "paid") {
+      // 🚨 Pero si el paymentId es DISTINTO del que ya tenía, es un SEGUNDO pago del mismo
+      // pedido (el comprador abrió dos veces el link de pago): plata cobrada dos veces que
+      // antes salía por acá sin dejar ningún registro.
+      if (existingData.mpPaymentId && String(existingData.mpPaymentId) !== String(paymentId)) {
+        console.error(`🚨 [Webhook] DOBLE PAGO en la orden ${orderRefId}: ya tenía ${existingData.mpPaymentId}, llegó ${paymentId}.`);
+        await flagIssue("duplicate_payment", { previousPaymentId: existingData.mpPaymentId });
+        return NextResponse.json({ status: "duplicate_payment_flagged" });
+      }
       console.log(`ℹ️ [Webhook] Orden ${orderRefId} ya procesada — ignorando duplicado`);
       return NextResponse.json({ status: "already_processed" });
     }
@@ -119,15 +156,7 @@ export async function POST(request: Request) {
     const orderTotal = Number(existingData.total) || 0;
     if (Math.abs(paidAmount - orderTotal) > 1) {
       console.error(`❌ [Webhook] Monto pagado ($${paidAmount}) no coincide con el total de la orden ${orderRefId} ($${orderTotal}). No se marca como pagada, queda para revisión manual.`);
-      await adminDb.collection("payment_mismatches").add({
-        orderId: orderRefId,
-        paymentId,
-        paidAmount,
-        orderTotal,
-        reason: "amount_mismatch",
-        createdAt: new Date(),
-        resolved: false,
-      });
+      await flagIssue("amount_mismatch");
       return NextResponse.json({ status: "amount_mismatch_flagged_for_review" });
     }
 
@@ -135,27 +164,24 @@ export async function POST(request: Request) {
     // canceló/rechazó, no se marca pagada (queda como posible reembolso manual).
     if (existingData.status !== "Pendiente de Pago") {
       console.error(`❌ [Webhook] Orden ${orderRefId} no está "Pendiente de Pago" (está "${existingData.status}"). Pago recibido pero no se marca, queda para revisión manual.`);
-      await adminDb.collection("payment_mismatches").add({
-        orderId: orderRefId,
-        paymentId,
-        paidAmount,
-        reason: "unexpected_order_status",
-        orderStatus: existingData.status,
-        createdAt: new Date(),
-        resolved: false,
-      });
+      await flagIssue("unexpected_order_status", { orderStatus: existingData.status });
       return NextResponse.json({ status: "unexpected_order_status_flagged_for_review" });
     }
 
     console.log(`✅ [Webhook] Pago Aprobado. Procesando Orden ${orderRefId}...`);
-    
+
     // 3. Actualizar la Orden en Firestore
     const updateData = {
         paymentStatus: "paid",
         status: "En preparación", // Pasa directo a cocina
         mpPaymentId: paymentId,
+        // Monto REALMENTE cobrado por MercadoPago. Antes se validaba y se descartaba, así
+        // que si después había que conciliar contra el extracto de MP no existía el dato:
+        // solo quedaba el `total` de la orden, que además pudo cambiar después.
+        paidAmount,
+        paidAt: new Date(),
         updatedAt: new Date(),
-        readyForPickup: false 
+        readyForPickup: false
     };
 
     await ordersCollection.doc(orderRefId).set(updateData, { merge: true });

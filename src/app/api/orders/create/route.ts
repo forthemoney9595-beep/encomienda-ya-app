@@ -97,6 +97,17 @@ export async function POST(request: Request) {
     const serviceFeePercent = platformConfig.serviceFee ?? 5;
     const shippingCost: number = platformConfig.deliveryFee ?? DEFAULT_DELIVERY_FEE;
 
+    // Comisión vigente para ESTA tienda en ESTE momento (la propia, o la global si no tiene
+    // una cargada). Se guarda en el pedido para que el saldo no cambie retroactivamente si
+    // después se edita la comisión — ver `commissionRate` en orderData más abajo.
+    const storeCommission = storeData?.commissionRate;
+    const commissionRateAtOrder: number =
+        typeof storeCommission === 'number' && storeCommission > 0
+            ? storeCommission
+            : (typeof platformConfig.defaultCommissionRate === 'number' && platformConfig.defaultCommissionRate >= 0
+                ? platformConfig.defaultCommissionRate
+                : 10);
+
     const storeCoords = storeData?.coords || storeData?.location || null;
     // Buscamos el ID del dueño para notificarle
     const ownerId = storeData?.ownerId || storeData?.userId;
@@ -204,6 +215,12 @@ export async function POST(request: Request) {
             deliveryFee: shippingCost,
             serviceFee: serviceFeeAmount,
             total: finalTotal,
+
+            // 🔒 Comisión CONGELADA al momento del pedido. Antes el saldo se calculaba
+            // siempre con la comisión ACTUAL de la tienda, así que cambiarla recalculaba
+            // todo el histórico: subirla podía hacer que una tienda pasara a deber plata
+            // por pedidos ya liquidados, y bajarla le regalaba saldo por ventas viejas.
+            commissionRate: commissionRateAtOrder,
 
             paymentMethod: paymentMethod || "mercadopago",
             paymentStatus: "pending_payment",

@@ -57,11 +57,33 @@ export async function POST(request: Request) {
             }, { status: 400 });
         }
 
+        // 🚨 Si el pedido YA ESTABA PAGADO, cancelarlo deja plata del comprador en poder de
+        // la plataforma. Antes esto no dejaba ningún rastro: el pedido quedaba
+        // `{status:'Cancelado', paymentStatus:'paid'}` y que se devolviera dependía de que
+        // un humano se acordara. Ahora queda anotado como discrepancia pendiente, que es la
+        // misma bandeja que el admin ya revisa (/admin/payment-issues).
+        const wasPaid = order.paymentStatus === 'paid' && !order.refunded;
+        if (wasPaid) {
+            await adminDb.collection('payment_mismatches').add({
+                orderId,
+                paymentId: order.mpPaymentId || null,
+                reason: 'cancelled_after_payment',
+                paidAmount: Number(order.paidAmount ?? order.total) || 0,
+                orderTotal: Number(order.total) || 0,
+                orderStatus: order.status,
+                cancelledBy: isAdmin ? 'admin' : 'buyer',
+                createdAt: Timestamp.now(),
+                resolved: false,
+            });
+        }
+
         await orderRef.update({
             status: 'Cancelado',
             cancelledAt: Timestamp.now(),
             cancelledBy: isAdmin ? 'admin' : 'buyer',
             updatedAt: Timestamp.now(),
+            // Marca visible desde el propio pedido: hay plata para devolver.
+            ...(wasPaid ? { hasPaymentIssue: true, paymentIssueReason: 'cancelled_after_payment' } : {}),
         });
 
         const storeOwnerId = order.storeOwnerId;

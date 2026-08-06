@@ -21,6 +21,20 @@ import { cn } from '@/lib/utils';
 const REASON_LABELS: Record<string, string> = {
   amount_mismatch: 'Monto no coincide',
   unexpected_order_status: 'Estado de orden inesperado',
+  // Anomalías que antes no dejaban ningún registro (ver webhook y /api/orders/cancel).
+  payment_reversed: 'Pago revertido en MercadoPago',
+  duplicate_payment: 'Doble pago del mismo pedido',
+  cancelled_after_payment: 'Cancelado con el pago hecho',
+};
+
+// Qué tiene que hacer el admin con cada tipo. Sin esto, "marcar resuelto" es un botón que
+// hace desaparecer una alerta de plata sin que quede claro qué acción correspondía.
+const REASON_HINTS: Record<string, string> = {
+  amount_mismatch: 'Verificá en MercadoPago cuánto entró realmente y ajustá o reembolsá la diferencia.',
+  unexpected_order_status: 'El pago llegó tarde. Decidí si reactivás el pedido o devolvés la plata.',
+  payment_reversed: 'MercadoPago devolvió o retuvo esta plata. Si el pedido se entregó, es una pérdida a registrar.',
+  duplicate_payment: 'El comprador pagó dos veces. Hay que devolverle uno de los dos pagos.',
+  cancelled_after_payment: 'El pedido se canceló con la plata ya cobrada: corresponde reembolsar al comprador.',
 };
 
 const formatDate = (ts: any) => {
@@ -113,11 +127,34 @@ function AdminPaymentIssuesPage() {
                   <p className="text-sm">
                     {m.reason === 'amount_mismatch' ? (
                       <>Pagado <strong>${m.paidAmount?.toLocaleString()}</strong> vs. orden <strong>${m.orderTotal?.toLocaleString()}</strong></>
-                    ) : (
+                    ) : m.reason === 'unexpected_order_status' ? (
                       <>Pago recibido con la orden en estado <strong>&quot;{m.orderStatus}&quot;</strong> (esperaba &quot;Pendiente de Pago&quot;)</>
+                    ) : m.reason === 'duplicate_payment' ? (
+                      <>Se cobró <strong>${m.paidAmount?.toLocaleString()}</strong> de nuevo sobre un pedido ya pagado</>
+                    ) : m.reason === 'payment_reversed' ? (
+                      <>MercadoPago revirtió <strong>${m.paidAmount?.toLocaleString()}</strong> (estado: {m.mpStatus})</>
+                    ) : m.reason === 'cancelled_after_payment' ? (
+                      <>Se canceló con <strong>${m.paidAmount?.toLocaleString()}</strong> ya cobrados (canceló: {m.cancelledBy})</>
+                    ) : (
+                      <>Revisar manualmente</>
                     )}
                   </p>
-                  <p className="text-xs text-muted-foreground font-mono">Payment ID: {m.paymentId}</p>
+                  {/* Qué corresponde hacer: sin esto "marcar resuelto" es un botón que borra
+                      una alerta de plata sin dejar claro qué acción había que tomar. */}
+                  {REASON_HINTS[m.reason] && (
+                    <p className="text-xs text-warning">{REASON_HINTS[m.reason]}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground font-mono">
+                    Payment ID: {m.paymentId || '—'}
+                    {m.previousPaymentId ? ` · anterior: ${m.previousPaymentId}` : ''}
+                  </p>
+                  {/* En la pestaña de resueltos, quién y cuándo lo resolvió (el dato ya se
+                      guardaba pero no se mostraba en ningún lado). */}
+                  {m.resolved && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Resuelto {m.resolvedAt ? formatDate(m.resolvedAt) : ''}{m.resolvedBy ? ` · por ${String(m.resolvedBy).slice(0, 8)}…` : ''}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button variant="outline" size="sm" asChild>

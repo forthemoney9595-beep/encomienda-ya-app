@@ -13,6 +13,8 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import type { Order } from '@/lib/order-service';
+import { storeNetForOrder } from '@/lib/money';
+import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Wallet, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -90,9 +92,14 @@ export default function StoreWalletPage() {
   // 4. Traer RETIROS
   const withdrawalsQuery = useMemoFirebase(() => {
       if (!firestore || !user?.uid) return null;
+      // `userRole` es obligatorio: sin él, un dueño de tienda que además sea repartidor
+      // veía acá descontados también sus retiros como repartidor (y viceversa), o sea un
+      // saldo menor del que el servidor le aprobaría. El servidor sí filtra por rol
+      // (payout-service.ts), así que sin esto las dos cifras no coinciden.
       return query(
           collection(firestore, 'withdrawals'),
           where('userId', '==', user.uid),
+          where('userRole', '==', 'store'),
           orderBy('createdAt', 'desc')
       );
   }, [firestore, user?.uid]);
@@ -113,21 +120,10 @@ export default function StoreWalletPage() {
         ? myStore.commissionRate
         : (platformConfig?.defaultCommissionRate ?? 10);
 
-      const totalSalesRevenue = sales.reduce((sum, order) => {
-          // Efectivo: lo cobró el repartidor en mano, esa plata nunca entró a la plataforma.
-          if (order.paymentMethod === 'Efectivo') return sum;
-
-          const productTotal = (order.total || 0) - (order.deliveryFee || 0);
-          const commission = productTotal * (commissionRate / 100);
-          const netEarnings = Math.max(0, productTotal - commission);
-
-          // Reembolsado: se descuenta la parte devuelta al comprador.
-          const refundRatio = order.refunded
-            ? Math.min(1, Math.max(0, (Number(order.refundAmount) || 0) / (Number(order.total) || 1)))
-            : 0;
-
-          return sum + netEarnings * (1 - refundRatio);
-      }, 0);
+      // Misma función que usa el servidor al aprobar un retiro (src/lib/money.ts): sin
+      // efectivo, sin la parte reembolsada, con la comisión congelada del pedido, y sobre
+      // el valor de los productos (el serviceFee es de la plataforma).
+      const totalSalesRevenue = sales.reduce((sum, order) => sum + storeNetForOrder(order, commissionRate), 0);
 
       const totalWithdrawn = withdrawalHistory
           .filter(w => w.status !== 'rejected')
@@ -272,14 +268,24 @@ export default function StoreWalletPage() {
               <Card>
                   <CardHeader><CardTitle>Últimas Ventas</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
-                      {orders?.map((o) => (
-                          <div key={o.id} className="flex justify-between items-center p-3 border rounded text-sm">
-                              <span>Orden #{o.id.slice(0,6)}</span>
-                              <span className="font-bold text-success">
-                                  +${((o.total || 0) - (o.deliveryFee || 0)) * (1 - (financialSummary.commissionRate / 100))}
-                              </span>
-                          </div>
-                      ))}
+                      {/* El monto por venta usa la MISMA función que el titular de arriba.
+                          Antes calculaba aparte (sin descontar reembolsos ni excluir
+                          efectivo) y sin redondear, así que la lista no sumaba el total y
+                          aparecían cifras como $9449.999999999998. */}
+                      {orders?.map((o) => {
+                          const neto = storeNetForOrder(o, financialSummary.commissionRate);
+                          return (
+                              <div key={o.id} className="flex justify-between items-center p-3 border rounded text-sm">
+                                  <span>
+                                      Orden #{o.id.slice(0,6)}
+                                      {o.refunded && <span className="ml-2 text-xs text-destructive">reembolsada</span>}
+                                  </span>
+                                  <span className={cn('font-bold', neto > 0 ? 'text-success' : 'text-muted-foreground')}>
+                                      +${Math.round(neto).toLocaleString('es-AR')}
+                                  </span>
+                              </div>
+                          );
+                      })}
                       {orders?.length === 0 && <p className="text-center text-muted-foreground py-4">No hay ventas entregadas.</p>}
                   </CardContent>
               </Card>

@@ -1,37 +1,12 @@
 import { adminDb } from '@/lib/firebase-admin';
+import { storeNetForOrder, driverNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
 
-// Fórmula centralizada de saldo disponible — reemplaza el cálculo duplicado que vivía
-// por separado en my-store/wallet/page.tsx y delivery/earnings/page.tsx, y ahora también
-// se usa server-side en /api/admin/approve-withdrawal para validar antes de aprobar.
+// Saldos server-side. Las REGLAS de reparto (qué se le paga a cada uno por un pedido) viven
+// en `src/lib/money.ts`, compartidas con las billeteras del cliente para que no vuelvan a
+// desincronizarse. Acá solo se consultan las órdenes y los retiros, y se restan.
 //
-// 🔒 SOLO CUENTA PLATA QUE ENTRÓ A LA PLATAFORMA (ago 2026).
-// Un pedido en efectivo lo cobra el repartidor EN MANO: esa plata nunca pasa por la
-// plataforma. Sin este filtro, el saldo acreditaba igual el envío al repartidor Y su parte
-// a la tienda, o sea que la plataforma terminaba pagando de su bolsillo por un pedido del
-// que no recibió un peso (y encima el repartidor ya se había quedado con el total).
-// La app hoy solo acepta pago digital (ver ALLOWED_PAYMENT_METHODS en /api/orders/create),
-// pero este filtro protege el cálculo ante cualquier pedido histórico o futuro en efectivo.
-// Si algún día se reactiva el efectivo, hay que modelar la RENDICIÓN del repartidor
-// (descontar de su saldo lo que cobró), no simplemente volver a incluirlos acá.
-const isPlatformCollected = (o: FirebaseFirestore.DocumentData) => o.paymentMethod !== 'Efectivo';
-
-// 🔒 REEMBOLSOS (ago 2026). `/api/admin/refund-order` marca el pedido con `refunded` y
-// `refundAmount`, pero el saldo sumaba igual el pedido completo: si el admin devolvía la
-// plata al comprador, la tienda/repartidor la cobraban lo mismo y la plataforma pagaba dos
-// veces. Se descuenta proporcionalmente sobre lo que le tocaba a cada parte, usando el
-// campo que ya vive en la propia orden (sin una query extra a `refunds`).
-const refundRatio = (o: FirebaseFirestore.DocumentData) => {
-  if (!o.refunded) return 0;
-  const total = Number(o.total) || 0;
-  const refunded = Number(o.refundAmount) || 0;
-  if (total <= 0) return 1;                       // sin total conocido: se anula entero
-  return Math.min(1, Math.max(0, refunded / total));
-};
-
 // Comisión por defecto para tiendas sin `commissionRate` propio, leída de
-// `config/platform.defaultCommissionRate` (editable en /admin/settings). El fallback duro
-// es 10%: preferible cobrar de más y corregir, a regalar la comisión en silencio.
-const FALLBACK_COMMISSION = 10;
+// `config/platform.defaultCommissionRate` (editable en /admin/settings).
 async function getDefaultCommission(): Promise<number> {
   try {
     const cfg = await adminDb.collection('config').doc('platform').get();
@@ -67,10 +42,20 @@ export type BalanceResult = {
   withdrawnPending: number;
   /** Compat: settled + pending. Lo que históricamente se llamaba "totalWithdrawn". */
   totalWithdrawn: number;
-  /** Lo que el usuario puede pedir hoy. */
+  /** Lo que el usuario puede pedir hoy. Nunca negativo (ver `debt`). */
   availableBalance: number;
   /** Contra esto se valida la aprobación de un retiro pendiente. */
   approvableBalance: number;
+  /**
+   * Plata que se le pagó DE MÁS, en positivo (0 si no debe nada).
+   *
+   * 🚨 Pasa cuando se reembolsa un pedido que ya se había liquidado: el facturado baja por
+   * debajo de lo ya transferido. Antes el `Math.max(0, …)` dejaba el saldo en $0 y la deuda
+   * quedaba invisible: nadie la veía, al usuario no se le avisaba, y el cron simplemente lo
+   * salteaba sin explicar por qué dejó de cobrar. La deuda igual se arrastra (el cálculo es
+   * acumulativo y las ventas futuras la absorben), pero ahora se puede VER.
+   */
+  debt: number;
 };
 
 /** Suma retiros por estado. `rejected` no cuenta: esa plata volvió al saldo. */
@@ -103,14 +88,8 @@ export async function computeStoreBalance(storeId: string): Promise<BalanceResul
     .where('status', '==', 'Entregado')
     .get();
 
-  const totalRevenue = ordersSnap.docs.reduce((sum, d) => {
-    const o = d.data();
-    if (!isPlatformCollected(o)) return sum; // pagado en mano al repartidor
-    const productTotal = (o.total || 0) - (o.deliveryFee || 0);
-    const commission = productTotal * (commissionRate / 100);
-    const neto = Math.max(0, productTotal - commission);
-    return sum + neto * (1 - refundRatio(o));
-  }, 0);
+  const totalRevenue = ordersSnap.docs.reduce(
+    (sum, d) => sum + storeNetForOrder(d.data(), commissionRate), 0);
 
   const ownerId = storeSnap.data()?.ownerId;
   if (!ownerId) {
@@ -118,7 +97,7 @@ export async function computeStoreBalance(storeId: string): Promise<BalanceResul
     // figura como disponible. (Caso anómalo; queda así para no romper el cálculo.)
     return {
       totalRevenue, withdrawnSettled: 0, withdrawnPending: 0, totalWithdrawn: 0,
-      availableBalance: totalRevenue, approvableBalance: totalRevenue, commissionRate,
+      availableBalance: totalRevenue, approvableBalance: totalRevenue, debt: 0, commissionRate,
     };
   }
 
@@ -135,6 +114,7 @@ export async function computeStoreBalance(storeId: string): Promise<BalanceResul
     withdrawnPending: pending,
     totalWithdrawn: settled + pending,
     availableBalance: Math.max(0, totalRevenue - settled - pending),
+    debt: Math.max(0, settled - totalRevenue),
     approvableBalance: Math.max(0, totalRevenue - settled),
     commissionRate,
   };
@@ -148,11 +128,7 @@ export async function computeDriverBalance(driverUserId: string): Promise<
     .where('status', '==', 'Entregado')
     .get();
 
-  const totalEarned = ordersSnap.docs.reduce((sum, d) => {
-    const o = d.data();
-    if (!isPlatformCollected(o)) return sum; // ya cobró el envío en mano junto con el total
-    return sum + (o.deliveryFee || 0) * (1 - refundRatio(o));
-  }, 0);
+  const totalEarned = ordersSnap.docs.reduce((sum, d) => sum + driverNetForOrder(d.data()), 0);
 
   const withdrawalsSnap = await adminDb.collection('withdrawals')
     .where('userId', '==', driverUserId)
@@ -167,6 +143,7 @@ export async function computeDriverBalance(driverUserId: string): Promise<
     withdrawnPending: pending,
     totalWithdrawn: settled + pending,
     availableBalance: Math.max(0, totalEarned - settled - pending),
+    debt: Math.max(0, settled - totalEarned),
     approvableBalance: Math.max(0, totalEarned - settled),
   };
 }

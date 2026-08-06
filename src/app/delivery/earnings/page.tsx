@@ -12,6 +12,7 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import type { Order } from '@/lib/order-service';
+import { driverNetForOrder } from '@/lib/money';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TrendingUp, Truck, CreditCard, Wallet, History, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -84,6 +85,7 @@ export default function DeliveryEarningsPage() {
       return query(
           collection(firestore, 'withdrawals'),
           where('userId', '==', user.uid),
+          where('userRole', '==', 'delivery'),
           orderBy('createdAt', 'desc')
       );
   }, [firestore, user?.uid]);
@@ -95,18 +97,10 @@ export default function DeliveryEarningsPage() {
       const deliveredOrders = orders || [];
       const withdrawalHistory = withdrawals || [];
 
-      // Total histórico ganado.
-      // OJO: tiene que dar EXACTAMENTE lo mismo que computeDriverBalance() en
-      // src/lib/payout-service.ts, que es lo que valida el servidor al aprobar un retiro.
-      // Si no coinciden, el repartidor ve un saldo que no puede cobrar y el retiro rebota.
-      const totalEarned = deliveredOrders.reduce((sum, order) => {
-          // Efectivo: ya cobró el total en mano, incluido su envío.
-          if (order.paymentMethod === 'Efectivo') return sum;
-          const refundRatio = order.refunded
-            ? Math.min(1, Math.max(0, (Number(order.refundAmount) || 0) / (Number(order.total) || 1)))
-            : 0;
-          return sum + (order.deliveryFee || 0) * (1 - refundRatio);
-      }, 0);
+      // Misma función que usa el servidor al aprobar un retiro (src/lib/money.ts). Antes
+      // esta fórmula estaba escrita aparte y se desincronizaba con el servidor cada vez que
+      // se corregía una de las dos.
+      const totalEarned = deliveredOrders.reduce((sum, order) => sum + driverNetForOrder(order), 0);
       
       // Total retirado (Aprobado o Pendiente cuenta como "no disponible")
       const totalWithdrawn = withdrawalHistory
