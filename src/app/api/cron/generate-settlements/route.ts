@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
+import { nowInArgentina } from "@/lib/store-hours";
 
 // Ruta para el cron job diario de Vercel.
 // Vercel llama a esta URL automáticamente una vez por día (definido en vercel.json) y
@@ -17,7 +18,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const now = new Date();
+    // El día se evalúa en hora ARGENTINA, no en UTC: Vercel corre en UTC y `getDay()` ahí
+    // puede caer en otro día del que ve el usuario. Hoy el cron son las 14:00 UTC (11:00
+    // ART, mismo día) así que no se notaba, pero bastaba mover el horario para que la
+    // liquidación se generara el día equivocado. Mismo helper que usa el horario de tiendas.
+    const now = nowInArgentina();
     const todayDow = now.getDay(); // 0=Dom, 5=Vie, etc.
 
     // Día de liquidación configurable desde Firestore (admin/dashboard)
@@ -38,9 +43,14 @@ export async function GET(request: Request) {
       const payoutCbu = storeData.payoutCbu;
       if (!ownerId || !payoutCbu) { results.skipped++; continue; }
 
-      // No generar si ya tiene una solicitud pendiente reciente
+      // No generar si ya tiene una solicitud pendiente.
+      // OJO `userRole`: sin ese filtro, una persona que sea dueña de tienda Y repartidor
+      // (mismo uid) se bloqueaba a sí misma — un pago pendiente como tienda impedía
+      // generar el de repartidor y viceversa. Los dos circuitos de pago son
+      // independientes y no deben pisarse nunca.
       const existingPendingSnap = await adminDb.collection('withdrawals')
         .where('userId', '==', ownerId)
+        .where('userRole', '==', 'store')
         .where('status', '==', 'pending')
         .limit(1)
         .get();
@@ -93,9 +103,14 @@ export async function GET(request: Request) {
     }
 
     // --- REPARTIDORES ---
+    // OJO `isApproved` y NO `status`: son dos campos que ya se desincronizaron una vez
+    // (ver Fase R1 — el admin aprobaba, la UI decía "Activo" pero el repartidor seguía
+    // bloqueado). El gate real de "este repartidor opera" es isApproved, así que es el que
+    // define quién cobra; usando `status` un repartidor aprobado con el status desfasado
+    // se quedaba sin liquidación.
     const driversSnap = await adminDb.collection('users')
       .where('role', '==', 'delivery')
-      .where('status', '==', 'Activo')
+      .where('isApproved', '==', true)
       .get();
 
     for (const driverDoc of driversSnap.docs) {
@@ -103,8 +118,11 @@ export async function GET(request: Request) {
       const payoutCbu = driverData.payoutCbu;
       if (!payoutCbu) { results.skipped++; continue; }
 
+      // Mismo criterio que arriba: acotado a userRole 'delivery' para no cruzarse con un
+      // eventual pago pendiente del mismo uid como tienda.
       const existingPendingSnap = await adminDb.collection('withdrawals')
         .where('userId', '==', driverDoc.id)
+        .where('userRole', '==', 'delivery')
         .where('status', '==', 'pending')
         .limit(1)
         .get();

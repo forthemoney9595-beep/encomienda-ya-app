@@ -27,9 +27,19 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { withdrawalId } = await request.json();
+    const { withdrawalId, operationRef, note } = await request.json();
     if (!withdrawalId) {
       return NextResponse.json({ error: "Falta withdrawalId" }, { status: 400 });
+    }
+    // El comprobante de la transferencia es obligatorio: la plata se transfiere POR FUERA
+    // (banco/MercadoPago) y sin este dato no hay forma de rastrear un pago si mañana la
+    // tienda dice "no me llegó". Antes solo se marcaba `approved` sin ninguna referencia.
+    const opRef = String(operationRef || '').trim();
+    if (opRef.length < 4) {
+      return NextResponse.json(
+        { error: "Falta el número de operación / comprobante de la transferencia." },
+        { status: 400 },
+      );
     }
 
     const withdrawalRef = adminDb.collection('withdrawals').doc(withdrawalId);
@@ -67,9 +77,16 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
+    // Trazabilidad del pago: quién lo aprobó, cuándo, con qué comprobante y cuál era el
+    // saldo real en ese momento. Antes solo quedaba `status` y la fecha, así que no había
+    // forma de saber qué admin autorizó una transferencia ni de rastrearla en el banco.
     await withdrawalRef.update({
       status: 'approved',
       processedAt: Timestamp.now(),
+      approvedBy: callerUid,
+      operationRef: opRef,
+      ...(note ? { adminNote: String(note).trim().slice(0, 300) } : {}),
+      balanceAtApproval: Math.round(availableBalance),
     });
 
     return NextResponse.json({ success: true, amountApproved: requestedAmount });

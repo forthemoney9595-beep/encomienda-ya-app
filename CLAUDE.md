@@ -1171,6 +1171,54 @@ contra lo que entró de verdad a la cuenta); y `computeStoreBalance` baja **todo
 pedidos entregados de la tienda sin `limit`, lo que a escala revienta (y corre en cada
 aprobación de retiro).
 
+## Fase JJ (ago 2026): circuito de pagos — separar tienda de repartidor + trazabilidad
+Pedido del usuario: "separemos la forma de pagar a una tienda y a los de delivery, para que
+no se mezclen... organizar esos pagos para nunca llegar a confundirse", y revisar la
+solicitud de pago automática.
+
+**Cómo funciona el circuito (para referencia):** un pago nace de dos formas, ambas terminan
+en la colección `withdrawals` — **manual** (la tienda lo pide en `/my-store/wallet`, el
+repartidor en `/delivery/earnings`, `source:'manual'`) o **automática** (el cron de Vercel
+corre diario 14:00 UTC y, si es el día de `config/platform.settlementDayOfWeek`, genera las
+solicitudes con el saldo completo, `source:'auto'`). El admin las aprueba en Finanzas.
+**Aprobar NO transfiere nada**: la transferencia la hace el admin por fuera (banco/MP) y
+después marca la solicitud.
+
+**🚨 1 — Los pagos de tienda y de repartidor se pisaban entre sí.** El chequeo de "¿ya tiene
+un pago pendiente?" en el cron filtraba **solo por `userId`, sin `userRole`**. Una persona
+que fuera dueña de tienda Y repartidor (mismo uid) se bloqueaba a sí misma: un pendiente
+como tienda impedía generar el de repartidor y viceversa. Se agregó `where('userRole')` en
+ambos lados + índice nuevo `withdrawals (userId, userRole, status)`.
+
+**🚨 2 — No quedaba ningún registro de la transferencia real.** Al aprobar solo se escribía
+`status:'approved'` y la fecha: no se sabía **qué admin** autorizó el pago ni había forma de
+rastrearlo en el banco si la tienda reclamaba "no me llegó". Ahora `/api/admin/approve-withdrawal`
+**exige `operationRef`** (número de operación/comprobante, mínimo 4 caracteres) y guarda
+además `approvedBy`, `adminNote` opcional y `balanceAtApproval` (el saldo real en el momento
+de aprobar). Del lado UI, el `confirm()` nativo se reemplazó por un diálogo que muestra
+destinatario, tipo, CBU y monto, y pide el comprobante — el botón queda deshabilitado sin él.
+El número de operación aparece en la tabla bajo el estado y en el CSV.
+
+**🚨 3 — El cron usaba el campo equivocado para elegir repartidores.** Filtraba por
+`status === 'Activo'`, pero el gate real de "este repartidor opera" es **`isApproved`** (son
+dos campos que ya se desincronizaron una vez, ver Fase R1). Un repartidor aprobado con el
+`status` desfasado **no cobraba**. Corregido a `where('isApproved','==',true)`.
+
+**4 — El día de liquidación se evaluaba en UTC.** `new Date().getDay()` en Vercel es UTC;
+hoy no se notaba (14:00 UTC = 11:00 ART, mismo día) pero bastaba mover el horario del cron
+para que la liquidación se generara el día equivocado. Ahora usa `nowInArgentina()`, el
+mismo helper que el horario de tiendas.
+
+**Separación visual (lo pedido):** los pagos a tiendas y a repartidores dejaron de ser un
+chip más entre otros. Ahora son **tres tarjetas-pestaña** arriba de todo — "Todos los pagos"
+/ "A tiendas" (venta de productos) / "A repartidores" (envíos realizados) — y la tabla queda
+acotada a ese circuito. El filtro por estado quedó debajo, dentro del circuito elegido.
+**Verificado:** al elegir "A repartidores" la tabla muestra solo filas de rol Repartidor.
+
+**Pendiente anotado:** "aprobado" sigue mezclando dos momentos distintos ("reviso y
+autorizo" vs "ya transferí"). Hoy se resuelve con el comprobante obligatorio, pero si el
+volumen crece conviene un estado intermedio explícito.
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { useAggregate } from '@/lib/firebase-aggregate';
 import {
@@ -49,6 +50,11 @@ export function FinanceView() {
     // Filtros
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [roleFilter, setRoleFilter]   = useState<RoleFilter>('all');
+
+    // Modal de aprobación (pide el comprobante de la transferencia)
+    const [approveTarget, setApproveTarget] = useState<any | null>(null);
+    const [operationRef, setOperationRef]   = useState('');
+    const [approveNote, setApproveNote]     = useState('');
 
     // Modal de rechazo
     const [rejectDialogId, setRejectDialogId]     = useState<string | null>(null);
@@ -148,23 +154,40 @@ export function FinanceView() {
             'CBU/Alias':       w.cbu || '',
             'Estado':          w.status === 'pending' ? 'Pendiente' : w.status === 'approved' ? 'Pagado' : 'Rechazado',
             'Origen':          w.source === 'auto' ? 'Automático' : 'Manual',
+            'N° operación':    w.operationRef || '',
+            'Aprobado por':    w.approvedBy || '',
+            'Nota admin':      w.adminNote || '',
             'Motivo rechazo':  w.rejectionReason || '',
         }));
         const now = format(new Date(), 'yyyy-MM-dd', { locale: es });
         downloadCsv(rows, `retiros_${now}.csv`);
     };
 
-    // Aprobar
-    const handleApprove = async (withdrawalId: string) => {
-        if (!user) return;
-        if (!confirm('¿Confirmás que ya realizaste la transferencia bancaria?')) return;
-        setIsProcessing(withdrawalId);
+    // Aprobar. Ya no alcanza un confirm(): la transferencia se hace POR FUERA (banco/MP) y
+    // hay que registrar el comprobante para poder rastrear el pago después.
+    const openApproveDialog = (w: any) => {
+        setOperationRef('');
+        setApproveNote('');
+        setApproveTarget(w);
+    };
+
+    const handleApprove = async () => {
+        if (!user || !approveTarget) return;
+        const opRef = operationRef.trim();
+        if (opRef.length < 4) {
+            toast({ variant: 'destructive', title: 'Falta el número de operación', description: 'Es el comprobante de la transferencia que ya hiciste.' });
+            return;
+        }
+        setIsProcessing(approveTarget.id);
         try {
-            const res = await authedFetch('/api/admin/approve-withdrawal', user, { withdrawalId });
+            const res = await authedFetch('/api/admin/approve-withdrawal', user, {
+                withdrawalId: approveTarget.id, operationRef: opRef, note: approveNote.trim(),
+            });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al aprobar');
             toast({ title: 'Pago registrado', description: `$${data.amountApproved?.toLocaleString()} descontados del saldo.` });
-            if (firestore) logAdminAction(firestore, user.uid, 'approve_withdrawal', withdrawalId, `$${data.amountApproved}`);
+            if (firestore) logAdminAction(firestore, user.uid, 'approve_withdrawal', approveTarget.id, `$${data.amountApproved} · op ${opRef}`);
+            setApproveTarget(null);
             refreshAll();
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Error al aprobar', description: err.message });
@@ -246,42 +269,56 @@ export function FinanceView() {
                 </Card>
             </div>
 
-            {/* Filtros */}
-            <div className="flex flex-wrap gap-3 items-center">
-                <div className="flex gap-1.5 flex-wrap">
-                    {([
-                        { k: 'all',      label: 'Todos' },
-                        { k: 'pending',  label: 'Pendientes' },
-                        { k: 'approved', label: 'Pagados' },
-                        { k: 'rejected', label: 'Rechazados' },
-                    ] as { k: StatusFilter; label: string }[]).map(({ k, label }) => (
-                        <button key={k} onClick={() => setStatusFilter(k)}
-                            className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-                                statusFilter === k
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted text-muted-foreground hover:bg-muted/70'
-                            )}>
-                            {label}
+            {/* ── Separación por destinatario ──────────────────────────────────────
+                Pedido explícito: los pagos a TIENDAS y a REPARTIDORES no deben mezclarse.
+                Antes eran un chip más entre otros, así que era fácil aprobar el pago
+                equivocado. Ahora son pestañas grandes, cada una con su propio pendiente en
+                plata, y la tabla queda acotada a ese circuito. */}
+            <div className="grid gap-2 sm:grid-cols-3">
+                {([
+                    { k: 'all',      label: 'Todos los pagos', hint: 'vista combinada', icon: Wallet },
+                    { k: 'store',    label: 'A tiendas',       hint: 'venta de productos', icon: DollarSign },
+                    { k: 'delivery', label: 'A repartidores',  hint: 'envíos realizados', icon: TrendingUp },
+                ] as { k: RoleFilter; label: string; hint: string; icon: any }[]).map(({ k, label, hint, icon: Icon }) => {
+                    const active = roleFilter === k;
+                    return (
+                        <button
+                            key={k}
+                            onClick={() => setRoleFilter(k)}
+                            className={cn(
+                                'rounded-xl border p-3 text-left transition-all',
+                                active
+                                    ? 'border-primary/40 bg-primary/10 shadow-sm'
+                                    : 'border-border bg-card/50 hover:bg-muted/40',
+                            )}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
+                                <span className={cn('text-sm font-semibold', active && 'text-primary')}>{label}</span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
                         </button>
-                    ))}
-                </div>
-                <div className="h-4 w-px bg-border hidden sm:block" />
-                <div className="flex gap-1.5 flex-wrap">
-                    {([
-                        { k: 'all',      label: 'Todos los roles' },
-                        { k: 'store',    label: 'Tiendas' },
-                        { k: 'delivery', label: 'Repartidores' },
-                    ] as { k: RoleFilter; label: string }[]).map(({ k, label }) => (
-                        <button key={k} onClick={() => setRoleFilter(k)}
-                            className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-                                roleFilter === k
-                                    ? 'bg-secondary text-secondary-foreground'
-                                    : 'bg-muted text-muted-foreground hover:bg-muted/70'
-                            )}>
-                            {label}
-                        </button>
-                    ))}
-                </div>
+                    );
+                })}
+            </div>
+
+            {/* Estado dentro del circuito elegido */}
+            <div className="flex gap-1.5 flex-wrap">
+                {([
+                    { k: 'all',      label: 'Todos' },
+                    { k: 'pending',  label: 'Pendientes' },
+                    { k: 'approved', label: 'Pagados' },
+                    { k: 'rejected', label: 'Rechazados' },
+                ] as { k: StatusFilter; label: string }[]).map(({ k, label }) => (
+                    <button key={k} onClick={() => setStatusFilter(k)}
+                        className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
+                            statusFilter === k
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                        )}>
+                        {label}
+                    </button>
+                ))}
             </div>
 
             {/* Tabla */}
@@ -364,6 +401,13 @@ export function FinanceView() {
                                         {w.status === 'rejected' && w.rejectionReason && (
                                             <p className="text-[11px] text-muted-foreground mt-1 max-w-[160px] line-clamp-2">{w.rejectionReason}</p>
                                         )}
+                                        {/* Comprobante de la transferencia real: es lo que permite
+                                            rastrear el pago si después reclaman que no llegó. */}
+                                        {w.status === 'approved' && w.operationRef && (
+                                            <p className="mt-1 font-mono text-[10px] text-muted-foreground" title="Número de operación">
+                                                op {w.operationRef}
+                                            </p>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                         {w.processedAt ? formatDate(w.processedAt) : '—'}
@@ -373,9 +417,9 @@ export function FinanceView() {
                                             <div className="flex justify-end gap-1.5">
                                                 <Button size="sm" variant="outline"
                                                     className="h-8 px-2 text-xs text-success border-success/30 hover:bg-success/10 gap-1"
-                                                    onClick={() => handleApprove(w.id)}
+                                                    onClick={() => openApproveDialog(w)}
                                                     disabled={!!isProcessing}
-                                                    title="Confirmar pago">
+                                                    title="Registrar el pago (pide comprobante)">
                                                     {isProcessing === w.id
                                                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                         : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -405,6 +449,64 @@ export function FinanceView() {
                     </div>
                 )}
             </Card>
+
+            {/* Modal de aprobación: exige el comprobante de la transferencia real */}
+            <Dialog open={!!approveTarget} onOpenChange={open => { if (!open) setApproveTarget(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Registrar pago</DialogTitle>
+                    </DialogHeader>
+
+                    {approveTarget && (
+                        <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+                            <div className="flex justify-between gap-2">
+                                <span className="text-muted-foreground">Destinatario</span>
+                                <span className="font-medium">{approveTarget.userName}</span>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                                <span className="text-muted-foreground">Tipo</span>
+                                <span className="font-medium">{approveTarget.userRole === 'store' ? 'Tienda' : 'Repartidor'}</span>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                                <span className="text-muted-foreground">CBU / Alias</span>
+                                <span className="font-mono text-xs">{approveTarget.cbu || '—'}</span>
+                            </div>
+                            <div className="flex justify-between gap-2 border-t pt-1.5">
+                                <span className="text-muted-foreground">Monto a transferir</span>
+                                <span className="text-base font-bold">${(approveTarget.amount || 0).toLocaleString('es-AR')}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-3">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="opref">Número de operación / comprobante *</Label>
+                            <Input id="opref" value={operationRef} onChange={e => setOperationRef(e.target.value)}
+                                placeholder="Ej: 4821-9930 (el que te da el banco o MP)" />
+                            <p className="text-xs text-muted-foreground">
+                                Queda guardado con el pago. Sin esto no hay forma de rastrear la transferencia si después reclaman.
+                            </p>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="opnote">Nota interna (opcional)</Label>
+                            <Textarea id="opnote" value={approveNote} onChange={e => setApproveNote(e.target.value)} rows={2}
+                                placeholder="Ej: transferido desde la cuenta de MercadoPago." />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setApproveTarget(null)} disabled={!!isProcessing}>Cancelar</Button>
+                        <Button
+                            className="bg-success hover:bg-success/90 text-success-foreground gap-2"
+                            onClick={handleApprove}
+                            disabled={!!isProcessing || operationRef.trim().length < 4}
+                        >
+                            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                            Ya transferí — registrar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Modal de rechazo */}
             <Dialog open={!!rejectDialogId} onOpenChange={open => { if (!open) setRejectDialogId(null); }}>
