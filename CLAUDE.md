@@ -1215,6 +1215,17 @@ chip más entre otros. Ahora son **tres tarjetas-pestaña** arriba de todo — "
 acotada a ese circuito. El filtro por estado quedó debajo, dentro del circuito elegido.
 **Verificado:** al elegir "A repartidores" la tabla muestra solo filas de rol Repartidor.
 
+**Reembolsos — mismo criterio.** Salió de la pregunta "¿a dónde se reembolsa?": a ningún
+lado, el sistema **no mueve plata** (la devolución la hace el admin en MercadoPago, igual
+que las transferencias). Tenía el mismo agujero que los retiros: (a) le avisaba al comprador
+**"Reembolso procesado"** aunque nadie hubiera devuelto nada todavía — si el admin se
+olvidaba, el cliente quedaba esperando; (b) no había dónde anotar el comprobante. Ahora
+`/api/admin/refund-order` **exige `operationRef`** (se guarda en `refunds` y en el propio
+pedido como `refundOperationRef`/`refundedBy`), el mensaje al comprador pasó a "Devolvimos
+$X... puede tardar unos días en acreditarse", y el diálogo aclara el orden correcto:
+**primero devolvés en MercadoPago, después lo registrás acá** (antes el texto decía
+"recordá hacer la devolución", que es justo como se olvida).
+
 **Pendiente anotado:** "aprobado" sigue mezclando dos momentos distintos ("reviso y
 autorizo" vs "ya transferí"). Hoy se resuelve con el comprobante obligatorio, pero si el
 volumen crece conviene un estado intermedio explícito.

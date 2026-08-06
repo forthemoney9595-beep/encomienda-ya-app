@@ -22,12 +22,24 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { orderId, amount, reason } = await request.json();
+    const { orderId, amount, reason, operationRef } = await request.json();
     if (!orderId) return NextResponse.json({ error: "Falta orderId" }, { status: 400 });
 
     const numAmount = Number(amount);
     if (!Number.isFinite(numAmount) || numAmount <= 0) {
       return NextResponse.json({ error: "Monto de reembolso inválido" }, { status: 400 });
+    }
+
+    // Mismo criterio que aprobar un retiro: la devolución se hace POR FUERA (MercadoPago),
+    // así que sin el número de operación no hay forma de demostrar que se hizo si el
+    // comprador reclama. Antes se registraba el reembolso "a ciegas" y se le avisaba al
+    // cliente que ya estaba procesado, aunque nadie hubiera devuelto nada todavía.
+    const opRef = String(operationRef || '').trim();
+    if (opRef.length < 4) {
+      return NextResponse.json(
+        { error: "Falta el número de operación de la devolución en MercadoPago." },
+        { status: 400 },
+      );
     }
 
     const orderRef = adminDb.collection('orders').doc(orderId);
@@ -50,6 +62,7 @@ export async function POST(request: Request) {
       storeId: order.storeId || null,
       amount: numAmount,
       reason: reason || '',
+      operationRef: opRef,
       adminUid: callerUid,
       createdAt: Timestamp.now(),
     });
@@ -59,6 +72,8 @@ export async function POST(request: Request) {
       refunded: true,
       refundAmount: numAmount,
       refundReason: reason || '',
+      refundOperationRef: opRef,
+      refundedBy: callerUid,
       refundedAt: Timestamp.now(),
     });
 
@@ -66,8 +81,11 @@ export async function POST(request: Request) {
     if (order.userId) {
       await adminDb.collection('notifications').add({
         userId: order.userId,
-        title: '💸 Reembolso procesado',
-        body: `Se registró un reembolso de $${numAmount.toLocaleString()} para tu pedido.${reason ? ` Motivo: ${reason}` : ''}`,
+        title: '💸 Reembolso enviado',
+        // El texto habla del dinero YA devuelto por MercadoPago (el admin no puede
+        // registrar el reembolso sin el número de operación), y avisa que la acreditación
+        // depende del medio de pago -- no promete que el dinero ya esté en la cuenta.
+        body: `Devolvimos $${numAmount.toLocaleString()} de tu pedido. Puede tardar unos días en verse acreditado según tu medio de pago.${reason ? ` Motivo: ${reason}` : ''}`,
         type: 'refund',
         orderId,
         read: false,
@@ -85,7 +103,7 @@ export async function POST(request: Request) {
         if (uniq.length > 0) {
           await adminMessaging.sendEachForMulticast({
             tokens: uniq,
-            notification: { title: '💸 Reembolso procesado', body: `Reembolso de $${numAmount.toLocaleString()} en tu pedido.` },
+            notification: { title: '💸 Reembolso enviado', body: `Devolvimos $${numAmount.toLocaleString()} de tu pedido.` },
             webpush: { fcmOptions: { link: `/orders/${orderId}` } },
           }).catch(() => {});
         }

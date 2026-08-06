@@ -97,6 +97,7 @@ function AdminOrdersPage() {
   const [refundOrder, setRefundOrder] = useState<any | null>(null);
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
+  const [refundOperationRef, setRefundOperationRef] = useState('');
   const [submittingRefund, setSubmittingRefund] = useState(false);
 
   const dateFrom = useMemo(() => getDateFrom(dateFilter), [dateFilter]);
@@ -238,6 +239,7 @@ function AdminOrdersPage() {
     setRefundOrder(order);
     setRefundAmount(String(order.total || ''));
     setRefundReason('');
+    setRefundOperationRef('');
   };
 
   const handleRefund = async () => {
@@ -247,13 +249,20 @@ function AdminOrdersPage() {
       toast({ variant: 'destructive', title: 'Monto inválido' });
       return;
     }
+    const opRef = refundOperationRef.trim();
+    if (opRef.length < 4) {
+      toast({ variant: 'destructive', title: 'Falta el número de operación', description: 'Es el comprobante de la devolución que ya hiciste en MercadoPago.' });
+      return;
+    }
     setSubmittingRefund(true);
     try {
-      const res = await authedFetch('/api/admin/refund-order', user, { orderId: refundOrder.id, amount, reason: refundReason });
+      const res = await authedFetch('/api/admin/refund-order', user, {
+        orderId: refundOrder.id, amount, reason: refundReason, operationRef: opRef,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
-      if (firestore) logAdminAction(firestore, user.uid, 'refund_order', refundOrder.id, `$${amount}${refundReason ? ' — ' + refundReason : ''}`);
-      toast({ title: 'Reembolso registrado', description: `$${amount.toLocaleString()} — recordá hacer la devolución en MercadoPago.` });
+      if (firestore) logAdminAction(firestore, user.uid, 'refund_order', refundOrder.id, `$${amount} · op ${opRef}${refundReason ? ' — ' + refundReason : ''}`);
+      toast({ title: 'Reembolso registrado', description: `$${amount.toLocaleString()} devueltos al comprador.` });
       loadPage(pageStack.length > 0 ? pageStack[pageStack.length - 1] : null);
       setRefundOrder(null);
     } catch (e: any) {
@@ -450,15 +459,23 @@ function AdminOrdersPage() {
               <Label>Motivo <span className="text-muted-foreground">(lo verá el comprador)</span></Label>
               <Textarea value={refundReason} onChange={e => setRefundReason(e.target.value)} rows={2} placeholder="Ej: El pedido llegó incompleto." />
             </div>
-            <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg p-2.5">
-              Esto registra el reembolso y notifica al comprador. La devolución real del dinero
-              la hacés vos desde MercadoPago (igual que las transferencias de retiros).
+            {/* Mismo criterio que aprobar un retiro: la devolución se hace por fuera, así que
+                sin comprobante no hay con qué respaldarla si el comprador reclama. */}
+            <div className="space-y-1.5">
+              <Label>N° de operación de la devolución *</Label>
+              <Input value={refundOperationRef} onChange={e => setRefundOperationRef(e.target.value)}
+                placeholder="El que te da MercadoPago al devolver" />
+            </div>
+            <div className="rounded-lg bg-warning/10 border border-warning/30 p-2.5 text-[11px] text-foreground">
+              <strong>Hacé primero la devolución en MercadoPago</strong> y después registrala acá con
+              su número de operación. Esto no mueve plata: descuenta el monto del saldo de la
+              tienda y del repartidor, y le avisa al comprador que ya se le devolvió.
             </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setRefundOrder(null)} disabled={submittingRefund}>Cancelar</Button>
-            <Button onClick={handleRefund} disabled={submittingRefund} className="gap-1.5">
-              {submittingRefund && <Loader2 className="h-4 w-4 animate-spin" />} Registrar reembolso
+            <Button onClick={handleRefund} disabled={submittingRefund || refundOperationRef.trim().length < 4} className="gap-1.5">
+              {submittingRefund && <Loader2 className="h-4 w-4 animate-spin" />} Ya devolví — registrar
             </Button>
           </DialogFooter>
         </DialogContent>
