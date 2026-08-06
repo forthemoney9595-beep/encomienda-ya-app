@@ -1380,6 +1380,74 @@ Hay que escribir un valor distinto al actual.
   fuera obligatorio) y una tienda del seed ("Pizzería de Prueba") figura con $8.000 de deuda.
   Se van con la limpieza del seed pre-lanzamiento.
 
+## Fase LL (ago 2026): una tienda podía tomar pedidos como repartidor + billetera que avisa
+Salió de dos preguntas del usuario: "¿los paneles de finanzas de tienda/repartidor están
+completos y bien conectados?" y, aparte, "no me parece buena idea que una tienda pueda ser
+repartidor o viceversa; que se cree una cuenta aparte". La segunda destapó un agujero real.
+
+### 🚨 El agujero de roles (verificado en vivo ANTES de tocar nada)
+`isApprovedDriver()` en `firestore.rules` solo leía `users/{uid}.isApproved`. **Pero
+`isApproved` es un campo COMPARTIDO**: el flujo de aprobación del admin
+(`admin/page.tsx:handleUpdateUserStatus`) lo escribe en `users/{uid}` tanto para
+repartidores **como para dueños de tienda** (y también en `stores/{id}`). O sea que
+cualquier tienda aprobada cumplía la condición de "repartidor aprobado".
+- **Probado contra producción con el SDK de cliente:** `farmacia@test.com` (role `store`,
+  `isApproved: true`) tomó un pedido de **otra tienda** ("Super Los Aromos"), se puso como
+  `deliveryPersonId` y lo pasó a "En camino". La UI no muestra el botón — pero la regla lo
+  permitía, y las reglas son lo único que separa a un atacante de la base.
+- **La plata NO se fugaba** (esto se verificó, no se asumió): el cron de liquidación filtra
+  `where('role','==','delivery')` y `/api/withdrawals/request` compara el rol contra
+  Firestore. El daño era **operativo** (robar pedidos de la competencia y dejarlos trabados)
+  más ganancias de reparto que nadie iba a poder cobrar nunca.
+- **Fix:** `isApprovedDriver()` ahora exige además `role == 'delivery'`.
+
+**Decisión de producto del usuario: una cuenta es tienda O repartidor, nunca las dos.** Quien
+quiera hacer ambas cosas se crea una cuenta aparte. `users/{uid}.role` ya era un solo valor,
+así que el alta nunca podía producir el estado mezclado; el único camino que quedaba era que
+un admin cambiara el rol de un dueño de tienda — `/admin/users` ahora lo frena con el nombre
+de la tienda en el mensaje. Auditoría de la base: **0 cuentas con roles mezclados**.
+
+### La billetera ahora avisa
+- **Aprobar o rechazar un retiro no notificaba NADA.** La plata se transfería y la
+  tienda/repartidor se enteraba solo si entraba a mirar su billetera por las suyas. Ahora
+  llega campanita + push, con el **comprobante** si se pagó y con el **motivo** si se rechazó.
+- **El motivo del rechazo se guardaba pero no se mostraba en ninguna pantalla**: veían
+  "Rechazado" sin saber qué corregir. Ahora se ve en las dos billeteras, junto al comprobante
+  de las transferencias aprobadas.
+- **Bug encontrado de paso:** la campanita mandaba los avisos de pago a `/orders?tab=wallet`,
+  una pestaña **eliminada en las Fases P y R** (mostraba números fantasma). El link estaba
+  muerto desde entonces. Ahora va a `/my-store/wallet` o `/delivery/earnings` según el rol, y
+  la propia notificación trae el `link`.
+- **Nuevo `src/lib/notify-server.ts`**: campanita + push desde el servidor, en un solo lugar.
+  El patrón estaba inline en `refund-order` y se iba a repetir en cada ruta nueva — misma
+  lección que `money.ts`. No lanza nunca (avisar no debe abortar una transferencia ya hecha)
+  pero reporta a Sentry.
+
+### 🚨 Error de método propio, vale la pena recordarlo
+El primer "✅ bloqueado" del script de ataque fue un **falso positivo que yo mismo causé**. El
+revert usaba `beforeData.deliveryPersonId ?? FieldValue.delete()`, y **`??` trata `null` como
+nullish**: el campo valía `null`, así que se **borró** en vez de restaurarse. Sin ese campo, la
+regla `resource.data.deliveryPersonId == null` deja de evaluar y bloquea a **todos** — el
+ataque parecía cerrado y en realidad estaba roto el pedido. Se detectó porque la prueba de
+regresión (repartidor legítimo) también falló. Se reparó el pedido y se corrigió el script para
+distinguir "no existía" (`k in before`) de "valía null".
+**Dos reglas que quedan de esto:** (1) en un script de reversión, nunca `??` sobre campos que
+legítimamente pueden ser `null`; (2) **todo endurecimiento de reglas necesita su prueba de
+regresión en la misma corrida** — bloquear al atacante no sirve si también bloqueás al usuario
+real, y sin ese segundo chequeo el falso positivo pasa desapercibido.
+
+### Verificación
+- `_attack-roles.js` — ataque + regresión en la misma corrida: tienda **bloqueada**,
+  repartidor legítimo **sigue pudiendo tomar el pedido**. Revierte lo que toca.
+- `_audit-roles.js` — busca cuentas con roles mezclados (dueño de tienda con otro rol,
+  repartidor con rol distinto de `delivery`). **0 casos.**
+- `_e2e-payout.js` ampliado a **21/21**: ahora también verifica que la notificación de pago
+  llegue con el comprobante y apunte a la billetera, y todo el flujo de rechazo (motivo
+  guardado, `rejectedBy`, notificación con el motivo, no se puede rechazar dos veces).
+- `_check-clean.js` — confirma que no quedó basura de las pruebas (retiros/notificaciones/
+  auditoría de test, pedidos con campos rotos). **Base limpia.**
+- Reglas desplegadas a producción (dry-run limpio antes). Build, typecheck y lint limpios.
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local
