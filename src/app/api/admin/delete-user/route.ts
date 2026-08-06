@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { logAdminActionServer } from "@/lib/admin-audit-server";
+import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
 
 // Elimina un usuario de Firebase Auth Y de Firestore en una sola operación.
 // El deleteDoc directo desde el cliente (admin/users/page.tsx) solo borraba de Firestore
@@ -20,9 +22,39 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { userId } = await request.json();
+    const { userId, force } = await request.json();
     if (!userId) return NextResponse.json({ error: "Falta userId" }, { status: 400 });
     if (userId === callerUid) return NextResponse.json({ error: "No podés eliminarte a vos mismo" }, { status: 400 });
+
+    const userSnap = await adminDb.collection('users').doc(userId).get();
+    const u = userSnap.data() || {};
+    const label = u.displayName || u.email || userId;
+
+    // 🚨 Borrar una cuenta con plata pendiente hace desaparecer una deuda real: el saldo se
+    // calcula desde los pedidos, pero sin el doc de usuario/tienda nadie vuelve a verlo, y
+    // el retiro pendiente queda huérfano en `withdrawals`. Se bloquea salvo `force`
+    // explícito, y en ese caso queda registrado el monto que se estaba debiendo.
+    let owed = 0;
+    try {
+      if (u.role === 'delivery') {
+        const b = await computeDriverBalance(userId);
+        owed = b.availableBalance + b.withdrawnPending;
+      } else if (u.role === 'store') {
+        const storesSnap = await adminDb.collection('stores').where('ownerId', '==', userId).limit(1).get();
+        if (!storesSnap.empty) {
+          const b = await computeStoreBalance(storesSnap.docs[0].id);
+          owed = b.availableBalance + b.withdrawnPending;
+        }
+      }
+    } catch { /* si el cálculo falla, no bloquear el borrado por eso */ }
+
+    if (owed > 1 && !force) {
+      return NextResponse.json({
+        error: `${label} tiene $${Math.round(owed).toLocaleString('es-AR')} sin cobrar. Pagale (o rechazá su solicitud) antes de borrar la cuenta.`,
+        owed: Math.round(owed),
+        needsForce: true,
+      }, { status: 409 });
+    }
 
     // Borrar de Firebase Auth (la cuenta real)
     await adminAuth.deleteUser(userId).catch(() => {
@@ -34,6 +66,11 @@ export async function POST(request: Request) {
 
     // Si era admin, limpiar también roles_admin
     await adminDb.collection('roles_admin').doc(userId).delete().catch(() => {});
+
+    await logAdminActionServer(
+      callerUid, 'delete_user', userId,
+      `${label} (${u.role || 'sin rol'})${owed > 1 ? ` · se le debía $${Math.round(owed).toLocaleString('es-AR')}` : ''}`,
+    );
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

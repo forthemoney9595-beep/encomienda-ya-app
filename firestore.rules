@@ -281,7 +281,7 @@ service cloud.firestore {
       // Marcar resuelto es metadata operativa (cualquier nivel de admin) -- el reembolso
       // real, si corresponde, sigue yendo por /api/admin/refund-order (exige 'full').
       allow update: if isAdmin() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedAt', 'resolvedBy']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedAt', 'resolvedBy', 'resolutionNote']);
       allow delete: if isFullAdmin();
     }
 
@@ -324,18 +324,13 @@ service cloud.firestore {
       // `hasOnly` es clave: sin él se podían sembrar campos de aprobación (approvedBy,
       // operationRef, balanceAtApproval, processedAt) en un doc recién creado, o marcarlo
       // como `source:'auto'` para que pareciera generado por el cron.
-      // El monto NO se puede topear contra el saldo desde acá (Firestore Rules no puede
-      // sumar una colección) -- eso lo valida /api/admin/approve-withdrawal al aprobar.
-      allow create: if isSignedIn() &&
-        isOwner(request.resource.data.userId) &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.source == 'manual' &&
-        request.resource.data.userRole in ['store', 'delivery'] &&
-        request.resource.data.amount is number &&
-        request.resource.data.amount > 0 &&
-        request.resource.data.keys().hasOnly([
-          'userId', 'userName', 'userRole', 'amount', 'cbu', 'status', 'source', 'createdAt'
-        ]);
+      // 🚨 CERRADO: la creación pasa 100% por /api/withdrawals/request (Admin SDK), que es
+      // el único lugar donde se puede topear el monto contra el saldo real -- Firestore
+      // Rules no puede sumar una colección, así que acá solo se podía validar `amount > 0`.
+      // Con el create abierto, cualquiera creaba desde la consola un retiro de $99.999.999:
+      // no cobraba de más (la aprobación recalcula), pero CONGELABA la liquidación
+      // automática de esa cuenta, porque el cron saltea a quien ya tiene uno `pending`.
+      allow create: if false;
 
       // ✏️ UPDATE: aprobar/rechazar es plata real -- exige admin 'full' Y solo los campos
       // del procesamiento. Antes era un update libre: se podía reescribir `amount` de un

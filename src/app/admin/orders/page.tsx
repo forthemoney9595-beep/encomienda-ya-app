@@ -261,7 +261,7 @@ function AdminOrdersPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
-      if (firestore) logAdminAction(firestore, user.uid, 'refund_order', refundOrder.id, `$${amount} · op ${opRef}${refundReason ? ' — ' + refundReason : ''}`);
+      // La auditoría la escribe la propia API (admin-audit-server), en la misma request.
       toast({ title: 'Reembolso registrado', description: `$${amount.toLocaleString()} devueltos al comprador.` });
       loadPage(pageStack.length > 0 ? pageStack[pageStack.length - 1] : null);
       setRefundOrder(null);
@@ -390,6 +390,16 @@ function AdminOrdersPage() {
                           <Badge variant="outline" className="text-[10px] border-warning/40 text-warning">
                             Reembolsado ${((order as any).refundAmount || 0).toLocaleString()}
                           </Badge>
+                        )}
+                        {/* Vínculo pedido ↔ discrepancia de pago: hasta ahora las anomalías
+                            solo se veían desde /admin/payment-issues, así que mirando un
+                            pedido no había forma de saber que su plata estaba en revisión. */}
+                        {(order as any).hasPaymentIssue && (
+                          <Link href="/admin/payment-issues">
+                            <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive hover:bg-destructive/10">
+                              ⚠ Problema de pago
+                            </Badge>
+                          </Link>
                         )}
                       </div>
                     </td>

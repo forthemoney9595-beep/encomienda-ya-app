@@ -144,10 +144,19 @@ function AdminDeliveryPage() {
       return;
     }
     try {
-      const res = await authedFetch('/api/admin/delete-user', user, { userId: driverId });
-      const data = await res.json();
+      let res = await authedFetch('/api/admin/delete-user', user, { userId: driverId });
+      let data = await res.json();
+      // 409 = tiene plata sin cobrar. Borrarlo haría desaparecer una deuda real, asi que la
+      // API lo frena y hay que confirmarlo a mano.
+      if (res.status === 409 && data.needsForce) {
+        if (!confirm(`${data.error}
+
+¿Borrar igual? La deuda se pierde y queda registrada en el log.`)) return;
+        res = await authedFetch('/api/admin/delete-user', user, { userId: driverId, force: true });
+        data = await res.json();
+      }
       if (!res.ok) throw new Error(data.error || 'Error al eliminar');
-      if (firestore) logAdminAction(firestore, user.uid, 'delete_user', driverId, 'repartidor');
+      // La auditoria la escribe la propia API (admin-audit-server).
       toast({ title: 'Repartidor eliminado', description: 'La cuenta fue borrada de Auth y Firestore.' });
     } catch (error: any) {
       console.error(error);

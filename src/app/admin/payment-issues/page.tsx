@@ -68,14 +68,24 @@ function AdminPaymentIssuesPage() {
 
   const handleResolve = async (id: string) => {
     if (!firestore || !user) return;
+    // Una discrepancia de pago es plata que no cuadra: "resuelto" sin decir CÓMO no sirve
+    // de nada dentro de seis meses. La nota es obligatoria y queda en el registro y en el
+    // log de acciones.
+    const note = window.prompt('¿Cómo se resolvió? (ej: "MP retuvo el pago, se devolvió al cliente el 12/8")');
+    if (note === null) return;
+    if (note.trim().length < 4) {
+      toast({ variant: 'destructive', title: 'Falta la explicación', description: 'Escribí qué se hizo con esa plata.' });
+      return;
+    }
     setResolving(id);
     try {
       await updateDoc(doc(firestore, 'payment_mismatches', id), {
         resolved: true,
         resolvedAt: serverTimestamp(),
         resolvedBy: user.uid,
+        resolutionNote: note.trim().slice(0, 300),
       });
-      logAdminAction(firestore, user.uid, 'resolve_payment_mismatch', id);
+      logAdminAction(firestore, user.uid, 'resolve_payment_mismatch', id, note.trim().slice(0, 200));
       toast({ title: 'Marcado como resuelto' });
     } catch (error) {
       console.error(error);
@@ -153,6 +163,11 @@ function AdminPaymentIssuesPage() {
                   {m.resolved && (
                     <p className="text-[11px] text-muted-foreground">
                       Resuelto {m.resolvedAt ? formatDate(m.resolvedAt) : ''}{m.resolvedBy ? ` · por ${String(m.resolvedBy).slice(0, 8)}…` : ''}
+                    </p>
+                  )}
+                  {m.resolved && m.resolutionNote && (
+                    <p className="mt-1 rounded border-l-2 border-success/40 bg-success/5 px-2 py-1 text-xs">
+                      {m.resolutionNote}
                     </p>
                   )}
                 </div>

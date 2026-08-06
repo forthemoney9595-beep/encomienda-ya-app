@@ -3,6 +3,7 @@ import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { logAdminActionServer } from "@/lib/admin-audit-server";
 
 // Registra un reembolso/compensación sobre un pedido.
 // Nota: NO transfiere plata por sí solo -- deja registro del reembolso, marca el pedido
@@ -109,6 +110,13 @@ export async function POST(request: Request) {
         }
       } catch { /* noop */ }
     }
+
+    // Auditoría en la misma request que registra el reembolso (antes la escribía el
+    // cliente después; si fallaba, el reembolso quedaba sin autor).
+    await logAdminActionServer(
+      callerUid, 'refund_order', orderId,
+      `${numAmount.toLocaleString('es-AR')} · op ${opRef}${reason ? ' — ' + reason : ''}`,
+    );
 
     return NextResponse.json({ success: true, amount: numAmount });
   } catch (error: any) {

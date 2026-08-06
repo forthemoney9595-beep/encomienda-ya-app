@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
+import { logAdminActionServer } from "@/lib/admin-audit-server";
 
 // Primera ruta admin-only de la API — verifica token + existencia en roles_admin.
 // Antes, aprobar un retiro era un updateDoc directo desde el cliente (protegido solo
@@ -94,6 +95,14 @@ export async function POST(request: Request) {
       ...(note ? { adminNote: String(note).trim().slice(0, 300) } : {}),
       balanceAtApproval: Math.round(approvableBalance),
     });
+
+    // Auditoría en la MISMA request que mueve la plata. Antes la escribía el cliente después
+    // de recibir el OK: si el navegador se cerraba o fallaba justo ahí, el pago quedaba
+    // aprobado sin ningún rastro de quién lo autorizó.
+    await logAdminActionServer(
+      callerUid, 'approve_withdrawal', withdrawalId,
+      `$${requestedAmount.toLocaleString('es-AR')} a ${w.userName || w.userId} (${w.userRole === 'store' ? 'tienda' : 'repartidor'}) · op ${opRef}`,
+    );
 
     return NextResponse.json({ success: true, amountApproved: requestedAmount });
   } catch (error: any) {

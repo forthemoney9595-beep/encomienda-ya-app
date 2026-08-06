@@ -221,6 +221,10 @@ export async function POST(request: Request) {
             // todo el histórico: subirla podía hacer que una tienda pasara a deber plata
             // por pedidos ya liquidados, y bajarla le regalaba saldo por ventas viejas.
             commissionRate: commissionRateAtOrder,
+            // Monto de la comisión, para poder sumarlo server-side (aggregation) sin tener
+            // que bajar los pedidos y recalcular con la tasa de cada tienda. Es lo que le
+            // permite al dashboard mostrar el margen REAL de la plataforma.
+            commissionAmount: calculatedSubtotal * (commissionRateAtOrder / 100),
 
             paymentMethod: paymentMethod || "mercadopago",
             paymentStatus: "pending_payment",

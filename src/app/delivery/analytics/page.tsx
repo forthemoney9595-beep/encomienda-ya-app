@@ -15,6 +15,7 @@ import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { driverNetForOrder } from '@/lib/money';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { type Period, PERIOD_LABELS, getPeriodBounds } from '@/lib/analytics-period';
@@ -44,7 +45,10 @@ function computeStats(orders: Order[], from: Date | null, to?: Date | null) {
     return true;
   });
   const completed = filtered.filter(o => o.status === 'Entregado');
-  const totalEarned = completed.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
+  // Mismo criterio que la billetera y que el servidor (src/lib/money.ts): descuenta la parte
+  // reembolsada y excluye los pedidos en efectivo. Antes era `o.deliveryFee` a secas, así que
+  // las analíticas mostraban una ganancia mayor a la que después se podía retirar.
+  const totalEarned = completed.reduce((sum, o) => sum + driverNetForOrder(o as any), 0);
   const avgEarning = completed.length > 0 ? totalEarned / completed.length : 0;
   return { totalEarned, completedCount: completed.length, avgEarning, orders: filtered };
 }
@@ -93,7 +97,7 @@ export default function DeliveryAnalyticsPage() {
     const days = eachDayOfInterval({ start: from, end: new Date() });
     return days.map(day => ({
       day: format(day, 'd/M', { locale: es }),
-      ganancias: completed.filter(o => isSameDay(orderDate(o), day)).reduce((sum, o) => sum + (o.deliveryFee || 0), 0),
+      ganancias: completed.filter(o => isSameDay(orderDate(o), day)).reduce((sum, o) => sum + driverNetForOrder(o as any), 0),
     }));
   }, [current.orders, from, period]);
 
@@ -238,7 +242,7 @@ export default function DeliveryAnalyticsPage() {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <div className="font-bold text-success">+${(order.deliveryFee || 0).toLocaleString()}</div>
+                  <div className="font-bold text-success">+${Math.round(driverNetForOrder(order as any)).toLocaleString('es-AR')}</div>
                   <Badge variant="outline" className={cn('text-[10px] uppercase',
                     order.status === 'Entregado' ? 'bg-success/15 text-success border-success/30' :
                     order.status === 'Cancelado' ? 'bg-destructive/15 text-destructive border-destructive/30' :

@@ -13,3 +13,12 @@ export async function authedFetch(url: string, user: User | null, body: unknown)
     body: JSON.stringify(body),
   });
 }
+
+// Igual que authedFetch pero para rutas de solo lectura (GET), que no llevan body.
+export async function authedGet(url: string, user: User | null): Promise<Response> {
+  const token = user ? await user.getIdToken() : null;
+  return fetch(url, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}

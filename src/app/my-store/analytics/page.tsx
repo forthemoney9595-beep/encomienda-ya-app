@@ -190,6 +190,15 @@ export default function StoreAnalyticsPage() {
                 <p className="text-xs text-muted-foreground">{PERIOD_LABELS[period]}</p>
                 {hasPrev && <PctBadge current={current.totalRevenue} prev={prev.totalRevenue} />}
             </div>
+            {/* Es el total BRUTO que pagó el cliente: incluye el envío (va al repartidor) y
+                la tarifa de servicio + comisión (van a la plataforma). Sin esta aclaración se
+                leía como "lo que voy a cobrar" y no coincidía con la billetera. */}
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Bruto: incluye envío y comisiones.{' '}
+              <Link href="/my-store/wallet" className="text-primary underline underline-offset-2">
+                Ver lo que cobrás
+              </Link>
+            </p>
           </CardContent>
         </Card>
 

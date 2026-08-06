@@ -8,7 +8,8 @@ import { PendingList } from './pending-list';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { storeBaseAmount, commissionForOrder, FALLBACK_COMMISSION } from '@/lib/money';
 import { useAggregate, useCountFromServer } from '@/lib/firebase-aggregate';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
@@ -210,6 +211,12 @@ function AdminDashboard() {
   const { data: shippingAgg, refresh: refreshShipping } = useAggregate(
     deliveredAggQuery, { total: sum('deliveryFee') }, { refreshOnFocus: true },
   );
+  // Comisión cobrada a las tiendas. Es el OTRO ingreso de la plataforma además de la
+  // tarifa de servicio, y antes no aparecía en ningún número del panel: la tarjeta
+  // rotulaba `sum(serviceFee)` como "Comisión de la plataforma", que es otra cosa.
+  const { data: commissionAgg, refresh: refreshCommission } = useAggregate(
+    deliveredAggQuery, { total: sum('commissionAmount') }, { refreshOnFocus: true },
+  );
 
   const usersCountQuery = useMemoFirebase(
     () => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) : null,
@@ -250,6 +257,14 @@ function AdminDashboard() {
   );
   const { data: recentOrders } = useCollection<OrderType>(recentOrdersQuery);
 
+  // Comisión global por defecto: se aplica a las tiendas sin tarifa propia, igual que en
+  // payout-service.ts. Sin esto la tabla mostraba $0 de comisión para esas tiendas.
+  const configRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'platform') : null), [firestore]);
+  const { data: platformConfig } = useDoc<{ defaultCommissionRate?: number }>(configRef);
+  const defaultCommission = typeof platformConfig?.defaultCommissionRate === 'number'
+    ? platformConfig.defaultCommissionRate
+    : FALLBACK_COMMISSION;
+
   const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<StoreType> : null, [firestore]);
   const { data: stores, isLoading: storesLoading } = useCollection<StoreType>(storesQuery);
 
@@ -273,7 +288,7 @@ function AdminDashboard() {
   const { data: paymentMismatches } = useCollection<any>(mismatchesQuery);
   const pendingMismatchesCount = (paymentMismatches || []).filter((m: any) => m.resolved !== true).length;
 
-  const refreshTotals = () => { refreshDelivered(); refreshFees(); refreshShipping(); refreshUsers(); rBuyers(); rStores(); rDrivers(); rOrders(); };
+  const refreshTotals = () => { refreshDelivered(); refreshFees(); refreshShipping(); refreshCommission(); refreshUsers(); rBuyers(); rStores(); rDrivers(); rOrders(); };
   const dashboardLoading = activeLoading || storesLoading || pendingLoading;
 
   // Solicitudes pendientes de aprobación (tiendas y repartidores)
@@ -433,12 +448,18 @@ function AdminDashboard() {
       const sid = o.storeId || '';
       const store = stores?.find(s => s.id === sid);
       const name = (o as any).storeName || store?.name || sid.slice(0,8);
-      const commRate = (store as any)?.commissionRate || 0;
-      const productTotal = (o.total || 0) - (o.deliveryFee || 0);
+      // Comisión: la congelada en el pedido, o la vigente de la tienda, o la global.
+      // 🚨 Antes era `commissionRate || 0`, así que las tiendas sin tarifa propia
+      // aparecían con comisión $0 mientras el servidor sí les cobraba el default.
+      const storeRate = (store as any)?.commissionRate;
+      const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : defaultCommission;
+      // Misma base que el reparto real: el valor de los productos, sin la tarifa de servicio.
+      const base = storeBaseAmount(o as any);
+      const commRate = commissionForOrder(o as any, fallbackRate);
       if (!map[sid]) map[sid] = { name, revenue: 0, delivered: 0, cancelled: 0, commission: 0, rating: 0, ratingCount: 0 };
       map[sid].revenue += o.total || 0;
       map[sid].delivered += 1;
-      map[sid].commission += productTotal * commRate / 100;
+      map[sid].commission += base * commRate / 100;
     });
     cancelled.forEach(o => {
       const sid = o.storeId || '';
@@ -801,9 +822,18 @@ function AdminDashboard() {
           const completed = stats.completedOrders;
           const fees      = feesAgg?.total ?? 0;
           const shipping  = shippingAgg?.total ?? 0;
-          // Lo que va a las tiendas: el total menos lo que se lleva la plataforma y menos
-          // el envío que cobra el repartidor.
-          const toStores  = Math.max(0, revenue - fees - shipping);
+          const commission = commissionAgg?.total ?? 0;
+          // El reparto REAL de cada pedido (ver src/lib/money.ts):
+          //   productos (subtotal) = total − tarifa − envío
+          //   → a la tienda: productos − comisión
+          //   → a la plataforma: tarifa + comisión
+          //   → al repartidor: envío
+          // Antes la tarjeta decía "Comisión de la plataforma = tarifa" y "A las tiendas =
+          // productos", o sea ignoraba la comisión por completo: mostraba un margen menor
+          // al real y le atribuía a las tiendas plata que no cobran.
+          const products  = Math.max(0, revenue - fees - shipping);
+          const toStores  = Math.max(0, products - commission);
+          const toPlatform = fees + commission;
           const avgTicket = completed > 0 ? revenue / completed : 0;
           const totalOrd  = allOrdersCount ?? 0;
           const rate      = totalOrd > 0 ? Math.round((completed / totalOrd) * 100) : 0;
@@ -828,11 +858,20 @@ function AdminDashboard() {
                     <p className="text-xs text-muted-foreground">total de pedidos entregados</p>
                   </div>
                   <div className="space-y-1.5 border-t pt-2.5">
-                    <Row label="Comisión de la plataforma" value={money(fees)} accent="text-success" />
-                    <Row label="Envíos (a repartidores)" value={money(shipping)} accent="text-info" />
+                    <Row label="Queda en la plataforma" value={money(toPlatform)} accent="text-success" />
+                    <Row label="· tarifa de servicio" value={money(fees)} accent="text-muted-foreground" />
+                    <Row label="· comisión a tiendas" value={money(commission)} accent="text-muted-foreground" />
                     <Row label="A las tiendas" value={money(toStores)} />
+                    <Row label="Envíos (a repartidores)" value={money(shipping)} accent="text-info" />
                     <Row label="Ticket promedio" value={money(avgTicket)} />
                   </div>
+                  {/* Los pedidos anteriores a esta versión no tienen `commissionAmount`, así
+                      que su comisión no suma acá y aparece como "a las tiendas". */}
+                  {commission === 0 && revenue > 0 && (
+                    <p className="text-[11px] text-warning">
+                      La comisión histórica no está registrada por pedido: estos pedidos son anteriores al cambio.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 

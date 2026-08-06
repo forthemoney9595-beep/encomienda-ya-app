@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
+import { storeBaseAmount, commissionForOrder, FALLBACK_COMMISSION } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -73,17 +74,23 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     }, [firestore, storeId]);
     const { data: reviews, isLoading: reviewsLoading } = useCollection<any>(reviewsQuery);
 
-    // Métricas
+    // Métricas.
+    // ⚠️ Se calculan sobre los ÚLTIMOS 50 pedidos (ver `limit(50)` arriba), no sobre el
+    // histórico completo. La UI lo aclara en cada tarjeta: antes no lo decía en ningún lado
+    // y con 300 pedidos mostraba ~1/6 de las ventas reales como si fuera el total.
     const metrics = useMemo(() => {
         if (!orders) return { revenue: 0, delivered: 0, cancelled: 0, commission: 0, avgTicket: 0 };
-        const commRate = store?.commissionRate || 0;
+        // Comisión: la de la tienda, o la global. Antes `|| 0` mostraba $0 de comisión
+        // para las tiendas sin tarifa propia, aunque el servidor sí se la cobra.
+        const storeRate = store?.commissionRate;
+        const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : FALLBACK_COMMISSION;
         const delivered  = orders.filter(o => o.status === 'Entregado');
         const cancelled  = orders.filter(o => o.status === 'Cancelado' || o.status === 'Rechazado');
         const revenue    = delivered.reduce((s, o) => s + (o.total || 0), 0);
-        const commission = delivered.reduce((s, o) => {
-            const prod = (o.total || 0) - (o.deliveryFee || 0);
-            return s + prod * commRate / 100;
-        }, 0);
+        // Misma base que el reparto real (src/lib/money.ts): productos, sin la tarifa de
+        // servicio, y con la comisión congelada del pedido si la tiene.
+        const commission = delivered.reduce(
+            (s, o) => s + storeBaseAmount(o as any) * commissionForOrder(o as any, fallbackRate) / 100, 0);
         return {
             revenue,
             delivered: delivered.length,
@@ -197,23 +204,30 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 </div>
             </div>
 
-            {/* Métricas */}
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-5">
-                {[
-                    { label: 'Ventas brutas', value: `$${metrics.revenue.toLocaleString()}`, icon: TrendingUp, color: 'text-success' },
-                    { label: 'Entregados',    value: metrics.delivered,  icon: ShoppingBag,   color: 'text-info' },
-                    { label: 'Cancelados',    value: metrics.cancelled,  icon: XCircle,       color: 'text-destructive' },
-                    { label: 'Comisión plat.', value: `$${Math.round(metrics.commission).toLocaleString()}`, icon: Wallet, color: 'text-primary' },
-                    { label: 'Ticket prom.',  value: `$${metrics.avgTicket.toFixed(0)}`, icon: Star, color: 'text-warning' },
-                ].map(({ label, value, icon: Icon, color }) => (
-                    <Card key={label} className="shadow-sm">
-                        <CardContent className="pt-3 pb-3">
-                            <Icon className={cn('h-4 w-4 mb-1', color)} />
-                            <div className={cn('text-xl font-bold', color)}>{value}</div>
-                            <div className="text-[11px] text-muted-foreground">{label}</div>
-                        </CardContent>
-                    </Card>
-                ))}
+            {/* Métricas — SOBRE LOS ÚLTIMOS 50 PEDIDOS, no el histórico. Antes las tarjetas
+                no lo decían y se leían como totales de la tienda. */}
+            <div>
+                <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-5">
+                    {[
+                        { label: 'Ventas brutas', value: `$${Math.round(metrics.revenue).toLocaleString('es-AR')}`, icon: TrendingUp, color: 'text-success' },
+                        { label: 'Entregados',    value: metrics.delivered,  icon: ShoppingBag,   color: 'text-info' },
+                        { label: 'Cancelados',    value: metrics.cancelled,  icon: XCircle,       color: 'text-destructive' },
+                        { label: 'Comisión plat.', value: `$${Math.round(metrics.commission).toLocaleString('es-AR')}`, icon: Wallet, color: 'text-primary' },
+                        { label: 'Ticket prom.',  value: `$${Math.round(metrics.avgTicket).toLocaleString('es-AR')}`, icon: Star, color: 'text-warning' },
+                    ].map(({ label, value, icon: Icon, color }) => (
+                        <Card key={label} className="shadow-sm">
+                            <CardContent className="pt-3 pb-3">
+                                <Icon className={cn('h-4 w-4 mb-1', color)} />
+                                <div className={cn('text-xl font-bold', color)}>{value}</div>
+                                <div className="text-[11px] text-muted-foreground">{label}</div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                    Calculado sobre los últimos {orders?.length ?? 0} pedidos cargados, no sobre todo el
+                    histórico. El saldo real a pagar está en Finanzas.
+                </p>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">

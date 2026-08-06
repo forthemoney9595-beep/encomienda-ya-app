@@ -223,11 +223,19 @@ function AdminUsersPage() {
     if (!confirm("⚠️ ¿Estás seguro? Esto elimina la cuenta permanentemente (Firebase Auth + Firestore).")) return;
 
     try {
-        const res = await authedFetch('/api/admin/delete-user', currentUser, { userId });
-        const data = await res.json();
+        let res = await authedFetch('/api/admin/delete-user', currentUser, { userId });
+        let data = await res.json();
+        // 409 = la cuenta tiene plata sin cobrar (ver /api/admin/delete-user).
+        if (res.status === 409 && data.needsForce) {
+            if (!confirm(`${data.error}
+
+¿Borrar igual? La deuda se pierde y queda registrada en el log.`)) return;
+            res = await authedFetch('/api/admin/delete-user', currentUser, { userId, force: true });
+            data = await res.json();
+        }
         if (!res.ok) throw new Error(data.error || 'Error al eliminar');
         toast({ title: 'Usuario eliminado', description: 'La cuenta fue borrada de Auth y Firestore.' });
-        if (firestore && currentUser) logAdminAction(firestore, currentUser.uid, 'delete_user', userId);
+        // La auditoria la escribe la propia API (admin-audit-server).
         resetLoad();
         refreshCounts();
     } catch (error: any) {

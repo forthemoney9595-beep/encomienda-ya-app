@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
+import { driverNetForOrder } from '@/lib/money';
 import { type Order as OrderType } from '@/lib/order-service';
 import Link from 'next/link';
 
@@ -85,10 +86,19 @@ function DriverProfilePage() {
 
   const stats = useMemo(() => {
     const delivered = (orders || []).filter(o => o.status === 'Entregado');
-    const totalEarned = delivered.reduce((s, o) => s + (o.deliveryFee || 0), 0);
-    const totalWithdrawn = (withdrawals || [])
-      .filter(w => w.status !== 'rejected')
-      .reduce((s, w) => s + (w.amount || 0), 0);
+    // ⚠️ Antes era `o.deliveryFee || 0` a secas: no descontaba reembolsos ni excluía los
+    // pedidos en efectivo, así que el admin veía un saldo MAYOR al que el servidor iba a
+    // autorizar (`/api/admin/approve-withdrawal`) y el retiro se rechazaba sin explicación.
+    // Ahora usa exactamente la misma regla de reparto que el servidor (src/lib/money.ts).
+    const totalEarned = delivered.reduce((s, o) => s + driverNetForOrder(o as any), 0);
+    // Retiros: hay que distinguir la plata que YA salió de la que está comprometida.
+    // `rejected` no cuenta (esa plata volvió al saldo).
+    let settled = 0, pending = 0;
+    for (const w of withdrawals || []) {
+      const amount = Number(w.amount) || 0;
+      if (w.status === 'approved') settled += amount;
+      else if (w.status === 'pending') pending += amount;
+    }
     return {
       totalDeliveries: delivered.length,
       // El promedio real vive en users/{driverId}.rating (mantenido por una transacción
@@ -96,7 +106,11 @@ function DriverProfilePage() {
       avgRating: driver?.rating || 0,
       ratingCount: driver?.ratingCount || 0,
       totalEarned,
-      availableBalance: Math.max(0, totalEarned - totalWithdrawn),
+      pending,
+      availableBalance: Math.max(0, totalEarned - settled - pending),
+      // Plata pagada de más (pasa si se reembolsa un pedido ya liquidado). Antes el
+      // Math.max la escondía dejando el saldo en $0 sin decir por qué.
+      debt: Math.max(0, settled - totalEarned),
     };
   }, [orders, withdrawals, driver]);
 
@@ -192,16 +206,23 @@ function DriverProfilePage() {
       {/* Métricas */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         {[
-          { label: 'Entregas', value: stats.totalDeliveries, icon: PackageCheck, color: 'text-info' },
-          { label: 'Rating', value: stats.ratingCount > 0 ? `${stats.avgRating.toFixed(1)} ★` : '—', icon: Star, color: 'text-warning' },
-          { label: 'Ganancias totales', value: `$${stats.totalEarned.toLocaleString()}`, icon: TrendingUp, color: 'text-success' },
-          { label: 'Saldo disponible', value: `$${stats.availableBalance.toLocaleString()}`, icon: DollarSign, color: 'text-primary' },
-        ].map(({ label, value, icon: Icon, color }) => (
+          { label: 'Entregas', value: stats.totalDeliveries, icon: PackageCheck, color: 'text-info', hint: '' },
+          { label: 'Rating', value: stats.ratingCount > 0 ? `${stats.avgRating.toFixed(1)} ★` : '—', icon: Star, color: 'text-warning', hint: '' },
+          { label: 'Ganancias totales', value: `$${Math.round(stats.totalEarned).toLocaleString('es-AR')}`, icon: TrendingUp, color: 'text-success', hint: 'envíos, neto de reembolsos' },
+          {
+            label: 'Saldo disponible', value: `$${Math.round(stats.availableBalance).toLocaleString('es-AR')}`,
+            icon: DollarSign, color: 'text-primary',
+            hint: stats.debt > 0
+              ? `debe $${Math.round(stats.debt).toLocaleString('es-AR')}`
+              : stats.pending > 0 ? `$${Math.round(stats.pending).toLocaleString('es-AR')} ya solicitados` : '',
+          },
+        ].map(({ label, value, icon: Icon, color, hint }) => (
           <Card key={label} className="shadow-sm">
             <CardContent className="pt-3 pb-3">
               <Icon className={cn('h-4 w-4 mb-1', color)} />
               <div className={cn('text-xl font-bold', color)}>{value}</div>
               <div className="text-[11px] text-muted-foreground">{label}</div>
+              {hint && <div className="text-[10px] text-muted-foreground/70 mt-0.5">{hint}</div>}
             </CardContent>
           </Card>
         ))}

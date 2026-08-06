@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context';
 // ✅ Usamos useCollection para buscar la tienda por ownerId
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, orderBy, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc } from 'firebase/firestore';
+import { authedFetch } from '@/lib/authed-fetch';
 import type { Order } from '@/lib/order-service';
 import { storeNetForOrder } from '@/lib/money';
 import { cn } from '@/lib/utils';
@@ -155,26 +156,22 @@ export default function StoreWalletPage() {
 
       setIsSubmitting(true);
       try {
-          await addDoc(collection(firestore, 'withdrawals'), {
-              userId: user.uid,
-              userName: userProfile?.displayName || myStore?.name || 'Tienda',
-              userRole: 'store',
-              amount: amount,
-              cbu: cbu,
-              status: 'pending',
-              source: 'manual',
-              createdAt: serverTimestamp()
+          // Va por API: el saldo se valida en el SERVIDOR con la misma fórmula que usa la
+          // aprobación. Antes era un addDoc directo y el único control del monto era este
+          // JavaScript — desde la consola del navegador se podía crear un retiro de
+          // cualquier monto, que además congelaba la liquidación automática de la tienda.
+          // La API también guarda el CBU para las liquidaciones.
+          const res = await authedFetch('/api/withdrawals/request', user, {
+              role: 'store', amount, cbu,
           });
-          // Guardar el CBU una vez para que las liquidaciones automáticas lo usen
-          if (storeId) {
-              try { await updateDoc(doc(firestore, 'stores', storeId), { payoutCbu: cbu }); } catch {}
-          }
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al procesar');
           toast({ title: "Solicitud enviada" });
           setIsWithdrawOpen(false);
           setWithdrawAmount('');
-      } catch (error) {
+      } catch (error: any) {
           console.error(error);
-          toast({ variant: "destructive", title: "Error al procesar" });
+          toast({ variant: "destructive", title: "Error al procesar", description: error.message });
       } finally {
           setIsSubmitting(false);
       }

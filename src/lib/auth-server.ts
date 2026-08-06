@@ -31,3 +31,11 @@ export async function verifyFullAdmin(uid: string): Promise<boolean> {
   if (!adminDoc.exists) return false;
   return adminDoc.data()?.level !== 'support';
 }
+
+// Admin de cualquier nivel (incluye 'support'). Mismo criterio que isAdmin() en
+// firestore.rules: el rol real lo decide roles_admin/{uid}, no users.role. Para rutas de
+// solo lectura; cualquier cosa que mueva plata o cuentas debe usar verifyFullAdmin().
+export async function verifyAdmin(uid: string): Promise<boolean> {
+  const adminDoc = await adminDb.collection('roles_admin').doc(uid).get();
+  return adminDoc.exists;
+}

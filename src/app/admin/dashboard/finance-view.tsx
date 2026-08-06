@@ -16,7 +16,7 @@ import {
     serverTimestamp, sum, count, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
-import { authedFetch } from '@/lib/authed-fetch';
+import { authedFetch, authedGet } from '@/lib/authed-fetch';
 import { logAdminAction } from '@/lib/admin-audit';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -65,13 +65,28 @@ export function FinanceView() {
     // Antes se bajaba la colección `withdrawals` ENTERA para sumar en el cliente. Es la
     // única colección de plata que crece sin techo (un doc por cada retiro histórico) y
     // era la última que quedaba sin paginar en el panel.
-    const pendingAggQ  = useMemoFirebase(() => firestore ? query(collection(firestore, 'withdrawals'), where('status', '==', 'pending')) : null, [firestore]);
-    const approvedAggQ = useMemoFirebase(() => firestore ? query(collection(firestore, 'withdrawals'), where('status', '==', 'approved')) : null, [firestore]);
-    const rejectedAggQ = useMemoFirebase(() => firestore ? query(collection(firestore, 'withdrawals'), where('status', '==', 'rejected')) : null, [firestore]);
-    const { data: pendingAgg, refresh: refreshPending }   = useAggregate(pendingAggQ,  { total: sum('amount'), n: count() }, { refreshOnFocus: true });
-    const { data: approvedAgg, refresh: refreshApproved } = useAggregate(approvedAggQ, { total: sum('amount'), n: count() }, { refreshOnFocus: true });
-    const { data: rejectedAgg, refresh: refreshRejected } = useAggregate(rejectedAggQ, { total: sum('amount'), n: count() }, { refreshOnFocus: true });
+    //
+    // 🚨 Las 3 tarjetas IGNORABAN el circuito elegido (tiendas / repartidores): al filtrar
+    // "A repartidores" la tabla mostraba solo repartidores pero los totales de arriba
+    // seguían siendo de toda la plataforma. Ahora el `userRole` viaja en la query, igual
+    // que en la tabla. Índice: (status, userRole, amount).
+    const aggQuery = useCallback((status: string) => {
+        if (!firestore) return null;
+        const cons: any[] = [where('status', '==', status)];
+        if (roleFilter !== 'all') cons.push(where('userRole', '==', roleFilter));
+        return query(collection(firestore, 'withdrawals'), ...cons);
+    }, [firestore, roleFilter]);
+
+    const pendingAggQ  = useMemoFirebase(() => aggQuery('pending'),  [aggQuery]);
+    const approvedAggQ = useMemoFirebase(() => aggQuery('approved'), [aggQuery]);
+    const rejectedAggQ = useMemoFirebase(() => aggQuery('rejected'), [aggQuery]);
+    const { data: pendingAgg, refresh: refreshPending, error: pendingErr }   = useAggregate(pendingAggQ,  { total: sum('amount'), n: count() }, { refreshOnFocus: true });
+    const { data: approvedAgg, refresh: refreshApproved, error: approvedErr } = useAggregate(approvedAggQ, { total: sum('amount'), n: count() }, { refreshOnFocus: true });
+    const { data: rejectedAgg, refresh: refreshRejected, error: rejectedErr } = useAggregate(rejectedAggQ, { total: sum('amount'), n: count() }, { refreshOnFocus: true });
     const refreshMetrics = useCallback(() => { refreshPending(); refreshApproved(); refreshRejected(); }, [refreshPending, refreshApproved, refreshRejected]);
+    // Si falta un índice, la aggregation devuelve null y las tarjetas mostrarían $0 como si
+    // no hubiera plata — el mismo síntoma silencioso que ya mordió en el dashboard (Fase HH).
+    const aggError = pendingErr || approvedErr || rejectedErr;
 
     const metrics = {
         pending: pendingAgg?.total ?? 0,
@@ -79,6 +94,32 @@ export function FinanceView() {
         paid: approvedAgg?.total ?? 0,
         rejected: rejectedAgg?.total ?? 0,
         totalCount: (pendingAgg?.n ?? 0) + (approvedAgg?.n ?? 0) + (rejectedAgg?.n ?? 0),
+    };
+
+    // ── Pasivo real: cuánto se debe HOY, incluida la plata que nadie solicitó ─────
+    // La tarjeta que había antes ("Total en sistema") sumaba pendiente + pagado + rechazado:
+    // mezclaba plata que ya salió con plata que nunca salió y contaba el mismo retiro dos
+    // veces a lo largo de su vida. No era ningún número real.
+    //
+    // El pasivo verdadero no vive en `withdrawals` — hay que calcularlo desde los pedidos
+    // entregados, con la MISMA fórmula que el servidor usa para autorizar un pago. Por eso
+    // va por API (`/api/admin/liability`) y bajo demanda: es O(tiendas + repartidores).
+    const [liability, setLiability] = useState<any | null>(null);
+    const [loadingLiability, setLoadingLiability] = useState(false);
+
+    const loadLiability = async () => {
+        if (!user) return;
+        setLoadingLiability(true);
+        try {
+            const res = await authedGet('/api/admin/liability', user);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al calcular');
+            setLiability(data);
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'No se pudo calcular el pasivo', description: err.message });
+        } finally {
+            setLoadingLiability(false);
+        }
     };
 
     // ── Tabla paginada con cursor + filtros SERVER-SIDE ──────────────────────────
@@ -186,7 +227,8 @@ export function FinanceView() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al aprobar');
             toast({ title: 'Pago registrado', description: `$${data.amountApproved?.toLocaleString()} descontados del saldo.` });
-            if (firestore) logAdminAction(firestore, user.uid, 'approve_withdrawal', approveTarget.id, `$${data.amountApproved} · op ${opRef}`);
+            // El registro de auditoría lo escribe la propia API (admin-audit-server), en la
+            // misma request que mueve la plata — antes se hacía acá y podía perderse.
             setApproveTarget(null);
             refreshAll();
         } catch (err: any) {
@@ -202,21 +244,23 @@ export function FinanceView() {
         setRejectDialogId(withdrawalId);
     };
 
+    // Rechazar devuelve la plata al saldo disponible del usuario: es una operación de dinero
+    // y hasta ahora era un updateDoc directo del cliente, sin registrar quién la hizo. Va por
+    // API (token verificado, `rejectedBy`, auditoría server-side) igual que la aprobación.
     const handleReject = async () => {
-        if (!rejectDialogId || !firestore || !user) return;
+        if (!rejectDialogId || !user) return;
         setSubmittingReject(true);
         try {
-            await updateDoc(doc(firestore, 'withdrawals', rejectDialogId), {
-                status: 'rejected',
-                rejectionReason: rejectReason.trim() || '',
-                processedAt: serverTimestamp(),
+            const res = await authedFetch('/api/admin/reject-withdrawal', user, {
+                withdrawalId: rejectDialogId, reason: rejectReason.trim(),
             });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al rechazar');
             toast({ title: 'Solicitud rechazada', description: 'El monto vuelve al saldo disponible del usuario.' });
-            logAdminAction(firestore, user.uid, 'reject_withdrawal', rejectDialogId, rejectReason.trim());
             setRejectDialogId(null);
             refreshAll();
-        } catch {
-            toast({ variant: 'destructive', title: 'Error al rechazar' });
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Error al rechazar', description: err.message });
         } finally {
             setSubmittingReject(false);
         }
@@ -225,7 +269,48 @@ export function FinanceView() {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
 
-            {/* Métricas */}
+            {aggError && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                    <strong>Los totales de arriba no se pudieron calcular.</strong> Probablemente
+                    falte un índice de Firestore (<code className="text-xs">withdrawals: status + userRole + amount</code>).
+                    No los tomes como $0 — desplegá el índice y volvé a entrar.
+                </div>
+            )}
+
+            {/* ── Separación por destinatario ──────────────────────────────────────
+                Pedido explícito: los pagos a TIENDAS y a REPARTIDORES no deben mezclarse.
+                Antes eran un chip más entre otros, así que era fácil aprobar el pago
+                equivocado. Ahora son pestañas grandes y TODO lo de abajo (totales incluidos)
+                queda acotado a ese circuito — antes las tarjetas ignoraban este filtro. */}
+            <div className="grid gap-2 sm:grid-cols-3">
+                {([
+                    { k: 'all',      label: 'Todos los pagos', hint: 'vista combinada', icon: Wallet },
+                    { k: 'store',    label: 'A tiendas',       hint: 'venta de productos', icon: DollarSign },
+                    { k: 'delivery', label: 'A repartidores',  hint: 'envíos realizados', icon: TrendingUp },
+                ] as { k: RoleFilter; label: string; hint: string; icon: any }[]).map(({ k, label, hint, icon: Icon }) => {
+                    const active = roleFilter === k;
+                    return (
+                        <button
+                            key={k}
+                            onClick={() => setRoleFilter(k)}
+                            className={cn(
+                                'rounded-xl border p-3 text-left transition-all',
+                                active
+                                    ? 'border-primary/40 bg-primary/10 shadow-sm'
+                                    : 'border-border bg-card/50 hover:bg-muted/40',
+                            )}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
+                                <span className={cn('text-sm font-semibold', active && 'text-primary')}>{label}</span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Métricas — de los retiros del circuito elegido arriba */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card className="shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -257,50 +342,94 @@ export function FinanceView() {
                         <p className="text-xs text-muted-foreground">Volvió al saldo del usuario</p>
                     </CardContent>
                 </Card>
-                <Card className="shadow-sm">
+                {/* Pasivo real — reemplaza a "Total en sistema", que sumaba
+                    pendiente + pagado + rechazado (un número que no significaba nada). */}
+                <Card className="shadow-sm border-primary/30">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Total en sistema</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Pasivo real</CardTitle>
                         <Wallet className="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${(metrics.pending + metrics.paid + metrics.rejected).toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">{metrics.totalCount} solicitudes totales</p>
+                        {liability ? (
+                            <>
+                                <div className="text-2xl font-bold text-primary">
+                                    ${(liability.storeLiability + liability.driverLiability).toLocaleString('es-AR')}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Tiendas ${liability.storeLiability.toLocaleString('es-AR')} ·
+                                    Repartidores ${liability.driverLiability.toLocaleString('es-AR')}
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <Button size="sm" variant="outline" className="h-8 w-full text-xs gap-1.5"
+                                    onClick={loadLiability} disabled={loadingLiability}>
+                                    {loadingLiability
+                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        : <Wallet className="h-3.5 w-3.5" />}
+                                    Calcular lo que se debe
+                                </Button>
+                                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                    Incluye el saldo que todavía nadie solicitó.
+                                </p>
+                            </>
+                        )}
                     </CardContent>
                 </Card>
             </div>
 
-            {/* ── Separación por destinatario ──────────────────────────────────────
-                Pedido explícito: los pagos a TIENDAS y a REPARTIDORES no deben mezclarse.
-                Antes eran un chip más entre otros, así que era fácil aprobar el pago
-                equivocado. Ahora son pestañas grandes, cada una con su propio pendiente en
-                plata, y la tabla queda acotada a ese circuito. */}
-            <div className="grid gap-2 sm:grid-cols-3">
-                {([
-                    { k: 'all',      label: 'Todos los pagos', hint: 'vista combinada', icon: Wallet },
-                    { k: 'store',    label: 'A tiendas',       hint: 'venta de productos', icon: DollarSign },
-                    { k: 'delivery', label: 'A repartidores',  hint: 'envíos realizados', icon: TrendingUp },
-                ] as { k: RoleFilter; label: string; hint: string; icon: any }[]).map(({ k, label, hint, icon: Icon }) => {
-                    const active = roleFilter === k;
-                    return (
-                        <button
-                            key={k}
-                            onClick={() => setRoleFilter(k)}
-                            className={cn(
-                                'rounded-xl border p-3 text-left transition-all',
-                                active
-                                    ? 'border-primary/40 bg-primary/10 shadow-sm'
-                                    : 'border-border bg-card/50 hover:bg-muted/40',
-                            )}
-                        >
-                            <div className="flex items-center gap-2">
-                                <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
-                                <span className={cn('text-sm font-semibold', active && 'text-primary')}>{label}</span>
+            {/* Detalle del pasivo: a quién se le debe y a quién se le pagó de más */}
+            {liability && (
+                <Card className="shadow-sm">
+                    <CardHeader className="py-3 px-4 border-b">
+                        <div className="flex items-center justify-between gap-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                A quién se le debe ({liability.counts.stores} tienda{liability.counts.stores !== 1 ? 's' : ''} · {liability.counts.drivers} repartidor{liability.counts.drivers !== 1 ? 'es' : ''})
+                            </CardTitle>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={loadLiability} disabled={loadingLiability}>
+                                {loadingLiability ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Recalcular'}
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-3">
+                        {liability.overpaid?.length > 0 && (
+                            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                                <strong className="text-destructive">Se le pagó de más a {liability.overpaid.length}:</strong>
+                                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                                    {liability.overpaid.map((o: any) => (
+                                        <li key={o.id}>{o.name} — debe ${o.debt.toLocaleString('es-AR')}</li>
+                                    ))}
+                                </ul>
+                                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                    Suele pasar al reembolsar un pedido ya liquidado. Se descuenta solo de sus ventas futuras.
+                                </p>
                             </div>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
-                        </button>
-                    );
-                })}
-            </div>
+                        )}
+                        {liability.top?.length === 0 && (
+                            <p className="text-sm text-muted-foreground">No se le debe nada a nadie ahora mismo.</p>
+                        )}
+                        {liability.top?.map((r: any) => (
+                            <div key={`${r.role}-${r.id}`} className="flex items-center justify-between gap-3 text-sm">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <Badge variant="outline" className={cn('text-[10px] uppercase shrink-0',
+                                        r.role === 'store' ? 'border-info/40 text-info' : 'border-primary/40 text-primary')}>
+                                        {r.role === 'store' ? 'Tienda' : 'Repartidor'}
+                                    </Badge>
+                                    <span className="truncate">{r.name}</span>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <div className="font-bold">${r.owed.toLocaleString('es-AR')}</div>
+                                    {r.pending > 0 && (
+                                        <div className="text-[10px] text-warning">
+                                            ${Math.round(r.pending).toLocaleString('es-AR')} ya solicitados
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Estado dentro del circuito elegido */}
             <div className="flex gap-1.5 flex-wrap">

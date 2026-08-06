@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, orderBy, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc } from 'firebase/firestore';
+import { authedFetch } from '@/lib/authed-fetch';
 import type { Order } from '@/lib/order-service';
 import { driverNetForOrder } from '@/lib/money';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -137,29 +138,26 @@ export default function DeliveryEarningsPage() {
 
       setIsSubmitting(true);
       try {
-          await addDoc(collection(firestore, 'withdrawals'), {
-              userId: user.uid,
-              userName: userProfile?.displayName || userProfile?.name || 'Repartidor',
-              userRole: 'delivery',
-              amount: amount,
-              cbu: cbu,
-              status: 'pending',
-              source: 'manual',
-              createdAt: serverTimestamp()
+          // Va por API: el saldo se valida en el SERVIDOR (misma fórmula que la aprobación).
+          // Antes era un addDoc directo — desde la consola se podía crear un retiro de
+          // cualquier monto, y eso congelaba la liquidación automática de esta cuenta.
+          // La API también guarda el CBU para las liquidaciones.
+          const res = await authedFetch('/api/withdrawals/request', user, {
+              role: 'delivery', amount, cbu,
           });
-          // Guardar el CBU una vez para que las liquidaciones automáticas lo usen
-          try { await updateDoc(doc(firestore, 'users', user.uid), { payoutCbu: cbu }); } catch {}
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al solicitar retiro');
 
-          toast({ 
-              title: "Solicitud enviada", 
-              description: "El administrador revisará tu retiro pronto." 
+          toast({
+              title: "Solicitud enviada",
+              description: "El administrador revisará tu retiro pronto."
           });
           setIsWithdrawOpen(false);
           setWithdrawAmount('');
           // No borramos el CBU para que sea cómodo la próxima vez (opcional)
-      } catch (error) {
+      } catch (error: any) {
           console.error(error);
-          toast({ variant: "destructive", title: "Error al solicitar retiro" });
+          toast({ variant: "destructive", title: "Error al solicitar retiro", description: error.message });
       } finally {
           setIsSubmitting(false);
       }

@@ -5,7 +5,7 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { Store, Loader2, Plus, Search, MapPin, AlertTriangle, Check, Trash2, Edit, Eye, Star, Pause, Download } from 'lucide-react';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
@@ -116,9 +116,34 @@ function AdminStoresPage() {
   // OJO: esto borra SOLO el documento de la tienda -- sus productos (subcolecciones
   // items/products) y sus pedidos históricos quedan en la base. Por eso el mensaje avisa
   // que conviene rechazar/pausar en vez de borrar salvo que sea un alta errónea.
-  const handleDelete = async (id: string, name?: string) => {
+  const handleDelete = async (id: string, name?: string, ownerId?: string) => {
       if (!firestore) return;
-      if (!confirm(`¿Eliminar "${name || 'esta tienda'}"?\n\nSe borra el registro de la tienda, pero sus pedidos históricos quedan en la base. Si solo querés que deje de operar, mejor pausala o quitale la aprobación.`)) return;
+
+      // 🚨 Borrar la tienda hace desaparecer su saldo: computeStoreBalance() arranca del doc
+      // de la tienda (ownerId + comisión), así que sin él la plata que se le debe deja de
+      // ser calculable y la tienda desaparece del pasivo. Si tiene un retiro pendiente, se
+      // frena directamente: eso es una solicitud de pago viva.
+      if (ownerId) {
+          try {
+              const pend = await getDocs(query(
+                  collection(firestore, 'withdrawals'),
+                  where('userId', '==', ownerId),
+                  where('userRole', '==', 'store'),
+                  where('status', '==', 'pending'),
+              ));
+              if (!pend.empty) {
+                  const total = pend.docs.reduce((s, d) => s + (Number(d.data().amount) || 0), 0);
+                  toast({
+                      variant: 'destructive',
+                      title: 'Tiene un pago pendiente',
+                      description: `${name || 'Esta tienda'} pidió $${total.toLocaleString('es-AR')} y todavía no se le pagó. Resolvé el retiro en Finanzas antes de borrarla.`,
+                  });
+                  return;
+              }
+          } catch { /* si la consulta falla, seguimos con la confirmación normal */ }
+      }
+
+      if (!confirm(`¿Eliminar "${name || 'esta tienda'}"?\n\nSe borra el registro de la tienda, pero sus pedidos históricos quedan en la base. IMPORTANTE: si le quedaba saldo sin retirar, deja de ser calculable. Si solo querés que deje de operar, mejor pausala o quitale la aprobación.`)) return;
       try {
           await deleteDoc(doc(firestore, 'stores', id));
           if (adminUser) logAdminAction(firestore, adminUser.uid, 'delete_store', id, name || '');
@@ -243,7 +268,7 @@ function AdminStoresPage() {
                                     <Button size="sm" variant="ghost" title="Editar" onClick={() => { setSelectedStore(store); setIsDialogOpen(true); }}>
                                         <Edit className="h-4 w-4 text-info" />
                                     </Button>
-                                    <Button size="sm" variant="ghost" title="Eliminar" onClick={() => handleDelete(store.id, store.name)}>
+                                    <Button size="sm" variant="ghost" title="Eliminar" onClick={() => handleDelete(store.id, store.name, store.ownerId)}>
                                         <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </div>
