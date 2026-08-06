@@ -1230,6 +1230,156 @@ $X... puede tardar unos días en acreditarse", y el diálogo aclara el orden cor
 autorizo" vs "ya transferí"). Hoy se resuelve con el comprobante obligatorio, pero si el
 volumen crece conviene un estado intermedio explícito.
 
+## Fase KK (ago 2026): auditoría completa del sistema de dinero
+Pedido textual: *"necesito entender completamente cómo va a funcionar el sistema de dinero...
+si hay algún número que no se cuente, si alguna operación quedaría sin registrarse, si puede
+llegar a pasar que desaparezca un número del registro, que el conteo del panel esté mal y
+pague mal. Si falla el dinero falla la confianza del sistema."* Se auditó el ciclo completo
+(creación → pago → entrega → liquidación → reembolso) con 3 agentes en paralelo y **cada
+hallazgo se re-verificó personalmente leyendo el código**. Salieron 10 agujeros reales.
+
+**Contexto que hizo seguro cambiar el reparto:** la base tenía **1 sola orden real** y
+**ningún pago aprobado real** (todo lo demás era seed). Nadie había cobrado nada todavía.
+
+**Corrección de método (vale para el futuro):** el primer análisis se apoyó en "37% de los
+pedidos entregados son en efectivo" — dato que salía **del seed que yo mismo generé**
+(`Math.random() > 0.35`). Nunca usar datos de prueba propios como evidencia del negocio.
+
+### 🚨 Lo que estaba roto en producción sin que se notara
+- **NINGUNA liquidación por el saldo completo era aprobable.** `computeStoreBalance` ya
+  restaba los retiros `pending`, y `approve-withdrawal` validaba contra ese mismo número —
+  o sea el retiro se restaba a sí mismo. Con saldo 10.000 y un pedido de 10.000: "supera el
+  saldo real disponible ($0)". Y el cron genera exactamente el saldo completo, así que
+  **toda la liquidación automática era inoperante**. Se separó en dos conceptos:
+  `availableBalance` (menos aprobados Y pendientes: lo que el usuario puede *pedir*) y
+  `approvableBalance` (menos aprobados solamente: contra lo que se valida al *aprobar*).
+- **El comprador fijaba el precio que pagaba.** La regla de `orders` dejaba reescribir
+  `items` (con su `price`) y `confirm-stock` recalculaba el subtotal desde ese array. Un
+  pedido de $20.000 se podía pagar $2.000. La calificación de productos (única razón por la
+  que `items` era escribible) se movió a un campo aparte `itemRatings`, y `confirm-stock`
+  ahora **relee los precios del catálogo** en vez de confiar en el documento.
+- **Reembolsos y contracargos de MercadoPago eran invisibles**: el webhook retornaba sin
+  registrar nada si el `status` no era `approved`. La orden quedaba `paid` para siempre y se
+  liquidaba plata ya devuelta. Ahora `refunded`/`charged_back`/`cancelled` quedan en
+  `payment_mismatches` (`payment_reversed`), lo mismo un **segundo `paymentId`** sobre una
+  orden ya pagada (`duplicate_payment` = doble cobro), y se persiste el `transaction_amount`
+  real (`paidAmount`) — sin ese dato no hay conciliación posible.
+- **Envío hardcodeado** (`FIXED_SHIPPING_COST = 2000`) en `confirm-stock` mientras `create`
+  ya leía `config/platform.deliveryFee`: cambiar el fee descuadraba los totales.
+- **El `serviceFee` se le pagaba a la tienda** (la base era `total − deliveryFee`, que
+  incluye el fee). Decisión del usuario: **el serviceFee es de la plataforma**. Medido: se
+  le estaba pagando **$53.496 de más** a las tiendas sobre la base actual.
+- **Retiros de monto arbitrario**: la regla solo podía validar `amount > 0`. No permitía
+  cobrar de más (la aprobación recalcula), pero **congelaba el cron** de esa cuenta (saltea
+  a quien tiene un `pending`). **Verificado en vivo con una cuenta real**: se creó un retiro
+  de $99.999.999 desde el SDK de cliente. Cerrado: `create: if false` + toda la creación por
+  `/api/withdrawals/request`, que valida contra el saldo real server-side.
+- **El admin podía reescribir/borrar plata sin rastro** (`orders` y `withdrawals` con update
+  libre). Borrar un `approved` subía el saldo → cobrar dos veces. Ahora `withdrawals` es
+  `delete: if false` y el update está acotado por `affectedKeys().hasOnly([...])`; el admin
+  tampoco puede tocar campos de dinero de `orders` por escritura directa.
+- **Cancelar un pedido ya pagado no dejaba ningún pasivo registrado.** Ahora genera un
+  `payment_mismatches` (`cancelled_after_payment`) y marca la orden.
+- **Comisión retroactiva:** el saldo histórico se recalculaba con la comisión *actual* de la
+  tienda. Decisión del usuario: **la comisión se congela en cada pedido**
+  (`commissionRate`/`commissionAmount` dentro de la orden).
+- **`Math.max(0, …)` escondía la deuda:** si se reembolsaba después de liquidar, el saldo
+  quedaba en $0 y nadie veía que se había pagado de más. Ahora hay un campo `debt` aparte.
+
+### La pieza que evita que esto vuelva a pasar: `src/lib/money.ts`
+La fórmula de reparto estaba escrita **tres veces** (servidor + las dos billeteras) y cada
+arreglo desincronizaba las otras: la tienda veía $1.646.253 disponibles mientras el servidor
+solo aprobaba $1.123.406, y el retiro rebotaba sin explicación. Ahora hay **un solo módulo
+de funciones puras** (`storeNetForOrder`, `driverNetForOrder`, `platformNetForOrder`,
+`storeBaseAmount`, `refundRatio`, `commissionForOrder`) sin Firestore adentro, importable
+tanto por el cliente como por el Admin SDK. `payout-service.ts` quedó reducido a consultar
+pedidos/retiros y restar. **Regla: cualquier cambio en cómo se reparte la plata va en
+`money.ts`, en ningún otro lado.**
+
+### Que el panel diga la verdad
+- `admin/stores/[storeId]` y `admin/delivery/[driverId]` calculaban el saldo con fórmulas
+  propias (sin reembolsos, sin excluir efectivo, con `commissionRate || 0`): el admin veía
+  un saldo MAYOR al que el servidor iba a autorizar. Ahora usan `money.ts`. Las métricas de
+  tienda además **aclaran que son sobre los últimos 50 pedidos** (antes mentían en silencio).
+- `finance-view` **ignoraba el circuito elegido**: al filtrar "A repartidores" la tabla
+  mostraba repartidores pero los totales de arriba seguían siendo de toda la plataforma.
+  Ahora el `userRole` viaja en la aggregation (índice nuevo `withdrawals (status, userRole,
+  amount)`), y las pestañas de circuito subieron ARRIBA de las tarjetas para que se entienda
+  qué filtra qué.
+- **"Total en sistema" era un número que no significaba nada** (pendiente + pagado +
+  rechazado: mezcla plata que salió con plata que nunca salió, y cuenta el mismo retiro dos
+  veces a lo largo de su vida). Reemplazada por **"Pasivo real"** vía
+  **`/api/admin/liability`** (nueva): cuánto se debe HOY *incluida la plata que nadie
+  solicitó todavía* — eso no vive en `withdrawals`, hay que calcularlo desde los pedidos
+  entregados. Usa las mismas funciones que la aprobación, así que no puede desincronizarse.
+  Se dispara **con un botón** (es O(tiendas + repartidores)); muestra el top 10 de a quién
+  se le debe y **quién quedó sobrepagado**.
+- `delivery/analytics` sumaba `deliveryFee` crudo; `my-store/analytics` mostraba el bruto sin
+  aclarar que incluye envío y comisiones (se leía como "lo que voy a cobrar").
+- Las dos billeteras filtran los retiros por `userRole`: quien fuera tienda **y** repartidor
+  veía descontados los retiros del otro circuito.
+
+### Trazabilidad
+- **`src/lib/admin-audit-server.ts` (nuevo):** aprobar/rechazar retiro, reembolsar y borrar
+  cuentas registran en la **misma request** que mueve la plata. Antes lo escribía el cliente
+  después de recibir el OK: si el navegador se cerraba justo ahí, la plata se movía **sin
+  autor**. Las entradas del servidor llevan `source: 'server'`.
+- **`/api/admin/reject-withdrawal` (nueva):** rechazar devuelve plata al saldo y era un
+  `updateDoc` directo sin `rejectedBy`. Además ya no se puede rechazar algo `approved` (eso
+  devolvería al saldo plata ya transferida → cobrarla dos veces).
+- **Borrar cuentas/tiendas con plata sin cobrar se frena.** El saldo se calcula desde el doc
+  de usuario/tienda: sin él la deuda deja de ser calculable y desaparece del pasivo. Borrar
+  igual exige un `force` explícito y queda el monto en el log.
+- **Log de acciones paginado con cursor** y con filtro por acción **server-side** (era
+  `limit(200)` fijo sobre justo la colección que no puede perder registros viejos; índice
+  nuevo `admin_audit_log (action, createdAt)`). Se agregaron `edit_store`/`delete_store` a
+  las etiquetas — `edit_store` es la acción que cambia la COMISIÓN de una tienda.
+- **Resolver una discrepancia de pago exige explicar cómo se resolvió** (`resolutionNote`):
+  "resuelto" sin decir qué se hizo con esa plata no sirve dentro de seis meses.
+- Los pedidos con problema de pago se marcan en `/admin/orders` con un badge que linkea a
+  `/admin/payment-issues` (antes solo se veían desde la lista de discrepancias).
+
+### Verificación (scripts fuera del repo, gitignored por `_*.js`)
+- **`_audit-money.js`** — conciliación completa, no escribe nada. Resultado sobre la base
+  real: **tienda $1.069.910 + repartidores $62.000 + plataforma $197.650 = $1.329.560 = total
+  cobrado ✅ CUADRA**, 0 discrepancias en 49 pedidos entregados, pasivo total $1.126.610.
+- **`_attack-money.js`** — 7 intentos de fraude con el **SDK de cliente** (el único que pasa
+  por las reglas), con lectura de ground truth por Admin SDK después. Antes de desplegar: 2
+  pasaban (crear retiros directos). Después: **los 7 bloqueados**.
+- **`_e2e-payout.js`** — flujo de pago completo contra la API real: pedir de más (rechaza),
+  pedir el saldo COMPLETO (crea), aprobar sin comprobante (rechaza), aprobar (OK), aprobar
+  dos veces (rechaza), saldo queda en 0, y el log de auditoría tiene UNA entrada escrita por
+  el servidor. **13/13 OK.** Limpia lo que crea.
+- **`_backfill-commission.js`** — congeló `commissionRate`/`commissionAmount` en los 101
+  pedidos existentes (dry-run primero). No movió ningún total ni ningún saldo.
+- Los dos caminos independientes (script de conciliación y `/api/admin/liability`) dan el
+  **mismo pasivo total**. El de la API encontró un caso que el script se perdía (una tienda
+  con retiro aprobado y 0 ventas) — el script se corrigió para recorrer también las cuentas
+  que cobraron sin tener pedidos.
+- **Reglas e índices desplegados a producción** (dry-run limpio antes).
+
+**OJO al escribir tests de reglas:** `diff(resource.data).affectedKeys()` compara **valores**.
+Reescribir un campo prohibido con **el mismo valor** da un diff vacío y la regla lo deja
+pasar — no es un agujero (no cambia nada), pero da un falso positivo en un script de ataque.
+Hay que escribir un valor distinto al actual.
+
+### Pendiente de Finanzas, anotado y NO resuelto
+- **Conciliación automática con MercadoPago** (contrastar contra la API de MP lo que
+  realmente entró): la única forma de detectar plata que MP retuvo o devolvió sin webhook.
+  Requiere decidir frecuencia y manejo de diferencias.
+- **Estado intermedio "autorizado" vs "transferido"** en los retiros (hoy `approved` mezcla
+  ambos; mitigado con el comprobante obligatorio).
+- **Estado de cuenta** por tienda/repartidor (facturado / cobrado / deuda con movimientos).
+- `computeStoreBalance` baja **todos** los pedidos entregados de la tienda sin `limit`, y
+  corre en cada aprobación de retiro y en cada cálculo de pasivo. A escala hay que
+  denormalizar (un `stats/` o un acumulador por cuenta).
+- **Devolución de stock** en cancelaciones y en ítems removidos por `confirm-stock`: es un
+  agujero de inventario real detectado en la auditoría, pero no es dinero — merece su propia
+  pasada.
+- 5 retiros del seed quedaron `approved` **sin número de operación** (son anteriores a que
+  fuera obligatorio) y una tienda del seed ("Pizzería de Prueba") figura con $8.000 de deuda.
+  Se van con la limpieza del seed pre-lanzamiento.
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local
