@@ -11,11 +11,12 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, orderBy, limit, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { authedFetch } from '@/lib/authed-fetch';
 import { logAdminAction } from '@/lib/admin-audit';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Loader2, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, ExternalLink, RefreshCw, ScanSearch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const REASON_LABELS: Record<string, string> = {
@@ -25,6 +26,9 @@ const REASON_LABELS: Record<string, string> = {
   payment_reversed: 'Pago revertido en MercadoPago',
   duplicate_payment: 'Doble pago del mismo pedido',
   cancelled_after_payment: 'Cancelado con el pago hecho',
+  // Detectadas por la conciliación (src/lib/reconcile-mp.ts, Fase NN bis).
+  reconcile_mismatch: 'MP no confirma este pago',
+  orphan_payment: 'Pago sin pedido',
 };
 
 // Qué tiene que hacer el admin con cada tipo. Sin esto, "marcar resuelto" es un botón que
@@ -35,6 +39,8 @@ const REASON_HINTS: Record<string, string> = {
   payment_reversed: 'MercadoPago devolvió o retuvo esta plata. Si el pedido se entregó, es una pérdida a registrar.',
   duplicate_payment: 'El comprador pagó dos veces. Hay que devolverle uno de los dos pagos.',
   cancelled_after_payment: 'El pedido se canceló con la plata ya cobrada: corresponde reembolsar al comprador.',
+  reconcile_mismatch: 'La orden figura pagada acá pero MP no muestra ese pago como aprobado. Verificá el pago en el panel de MP antes de entregar o liquidar.',
+  orphan_payment: 'Entró plata en MP con una referencia de pedido que no existe en el sistema. Buscá el pago en MP y devolvelo si no corresponde.',
 };
 
 const formatDate = (ts: any) => {
@@ -43,11 +49,41 @@ const formatDate = (ts: any) => {
 };
 
 function AdminPaymentIssuesPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [tab, setTab] = useState<'pending' | 'resolved'>('pending');
   const [resolving, setResolving] = useState<string | null>(null);
+  const isSupport = userProfile?.adminLevel === 'support';
+
+  // Última corrida de conciliación (el cron diario o el botón de acá).
+  const lastReconQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'reconciliations'), orderBy('finishedAt', 'desc'), limit(1));
+  }, [firestore]);
+  const { data: lastReconRows } = useCollection<any>(lastReconQuery);
+  const lastRecon = lastReconRows?.[0];
+  const [reconciling, setReconciling] = useState(false);
+  const [lastRunSummary, setLastRunSummary] = useState<any>(null);
+
+  const handleReconcile = async () => {
+    if (!user) return;
+    setReconciling(true);
+    try {
+      const res = await authedFetch('/api/admin/reconcile-mp', user, {});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo correr la conciliación.');
+      setLastRunSummary(data);
+      toast({
+        title: 'Conciliación terminada',
+        description: `${data.checkedOrders + data.checkedPayments} pagos revisados · ${data.repaired} reparados · ${data.flagged} marcados para revisar.`,
+      });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message });
+    } finally {
+      setReconciling(false);
+    }
+  };
 
   // Colección de anomalías -- por diseño debería quedar casi siempre vacía (solo se
   // escribe cuando el webhook de MP encuentra algo raro), a diferencia de las colecciones
@@ -102,6 +138,41 @@ function AdminPaymentIssuesPage() {
         description="Pagos de MercadoPago que no coincidieron en monto o estado con el pedido -- el webhook los deja acá en vez de marcarlos pagados a ciegas."
       />
 
+      {/* Conciliación con MP: el webhook es el camino rápido; esto es la red de seguridad
+          que compara los dos registros en ambas direcciones (corre sola todos los días). */}
+      <Card className="border-info/30 bg-info/5">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold flex items-center gap-2">
+              <ScanSearch className="h-4 w-4 text-info" /> Conciliación con MercadoPago
+            </p>
+            {lastRecon ? (
+              <p className="text-xs text-muted-foreground">
+                Última corrida: {formatDate(lastRecon.finishedAt)} ({lastRecon.source === 'cron' ? 'automática' : 'manual'}) ·{' '}
+                {(lastRecon.checkedOrders || 0) + (lastRecon.checkedPayments || 0)} pagos revisados ·{' '}
+                {lastRecon.repaired || 0} reparados · {lastRecon.flagged || 0} marcados
+                {lastRecon.errors ? ` · ${lastRecon.errors} errores` : ''}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Todavía no corrió ninguna conciliación. Corre sola una vez por día; también podés dispararla ahora.
+              </p>
+            )}
+            {lastRunSummary?.notes?.length > 0 && (
+              <ul className="text-xs text-muted-foreground list-disc pl-4 pt-1">
+                {lastRunSummary.notes.slice(0, 6).map((n: string, i: number) => <li key={i}>{n}</li>)}
+              </ul>
+            )}
+          </div>
+          {!isSupport && (
+            <Button variant="outline" size="sm" onClick={handleReconcile} disabled={reconciling} className="shrink-0">
+              {reconciling ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+              {reconciling ? 'Conciliando…' : 'Conciliar ahora'}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       <Tabs value={tab} onValueChange={(v) => setTab(v as 'pending' | 'resolved')}>
         <TabsList>
           <TabsTrigger value="pending">Pendientes ({pending.length})</TabsTrigger>
@@ -145,6 +216,10 @@ function AdminPaymentIssuesPage() {
                       <>MercadoPago revirtió <strong>${m.paidAmount?.toLocaleString()}</strong> (estado: {m.mpStatus})</>
                     ) : m.reason === 'cancelled_after_payment' ? (
                       <>Se canceló con <strong>${m.paidAmount?.toLocaleString()}</strong> ya cobrados (canceló: {m.cancelledBy})</>
+                    ) : m.reason === 'reconcile_mismatch' ? (
+                      <>La orden figura pagada pero MP dice <strong>&quot;{m.mpStatus}&quot;</strong> para ese pago</>
+                    ) : m.reason === 'orphan_payment' ? (
+                      <>Entraron <strong>${m.paidAmount?.toLocaleString()}</strong> en MP para un pedido que no existe</>
                     ) : (
                       <>Revisar manualmente</>
                     )}

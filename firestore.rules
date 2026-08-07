@@ -279,6 +279,14 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // 5c-sexies. CONCILIACIONES CON MERCADOPAGO — historial de corridas del cron/botón
+    // "Conciliar ahora" (src/lib/reconcile-mp.ts, Admin SDK). Solo lectura para el admin;
+    // es un registro histórico, no se fabrica ni se edita desde el cliente.
+    match /reconciliations/{runId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     // 5c-bis. LOG DE ACCIONES ADMIN — BUG DE LARGA DATA (Fase GG): esta colección existe
     // desde la Fase N pero NUNCA tuvo regla, así que Firestore denegaba por defecto TODAS
     // las escrituras. Como logAdminAction() traga el error con un console.warn para no

@@ -1595,7 +1595,63 @@ van contra producción; son aditivas, no tocan nada existente). Typecheck y buil
 **Anotado, no resuelto:** el chat de la orden post-entrega sigue notificando a la tienda (ok
 para coordinar, pero el admin no tiene pantalla para leer `order_chats` — las reglas ya lo
 dejan); `refunds` sigue sin pantalla propia (se ve vía el reclamo y el badge del pedido; si
-crece, hacer la lista); conciliación automática con MP sigue pendiente de la Fase KK.
+crece, hacer la lista). ~~Conciliación automática con MP~~ — **resuelta en la Fase NN bis**
+(abajo).
+
+## Fase NN bis (ago 2026): conciliación automática con MercadoPago
+Cerraba el pendiente grande de la Fase KK. **La idea:** el webhook es el único camino por el
+que el sistema se entera de un pago, y es un solo disparo — si no llega (MP a veces no lo
+manda, Vercel caído en ese segundo) o si DESPUÉS pasa algo sin webhook (devolución desde el
+panel de MP, contracargo), la base cuenta una historia distinta que la cuenta de MP y nadie
+se entera. La conciliación es la red de seguridad: compara los dos registros en las DOS
+direcciones, todos los días.
+
+- **`src/lib/reconcile-mp.ts`** (núcleo compartido):
+  - **Dirección A (sistema → MP):** órdenes `paymentStatus=='paid'` de los últimos 30 días
+    (cap 300; índice nuevo `orders (paymentStatus, createdAt)`) → `payment.get` a MP por
+    cada una. MP dice `refunded/charged_back/cancelled` → marca `payment_reversed` (misma
+    rama que el webhook, para cuando el webhook de reversa no llegó) + `paymentStatus:
+    'reversed'`. MP dice otra cosa que `approved` (o el pago no existe, 404) → marca
+    `reconcile_mismatch`. Nunca "des-marca" una orden pagada por su cuenta.
+  - **Dirección B (MP → sistema):** `payment.search` de aprobados de los últimos 7 días
+    (`begin_date: 'NOW-7DAYS'`, paginado hasta 200) → busca la orden por
+    `external_reference` (que `/api/checkout` ya mandaba con el orderId). Orden inexistente
+    → `orphan_payment`. Orden pagada con OTRO paymentId → `duplicate_payment`. Orden sin
+    pagar → **el único caso que repara solo: webhook perdido**, con la MISMA validación del
+    webhook (monto ±$1 + status 'Pendiente de Pago') marca pagada + notifica tienda/cliente
+    (`notifyUser`) + deja `recoveredByReconcile: true` en la orden y una entrada
+    `reconcile_repair` en el log de acciones. Cualquier otra combinación → a la bandeja.
+  - **Dedupe:** antes de crear una discrepancia consulta si ya hay una ABIERTA del mismo
+    pedido+motivo — la conciliación corre a diario y un problema sin resolver no debe
+    multiplicarse. Las que crea llevan `source: 'reconcile'`.
+  - Cada corrida queda en la colección **`reconciliations`** (cuándo, fuente cron/manual,
+    cuántos revisó, reparó, marcó, errores, notas) — sin historial no se sabe si viene
+    corriendo o desde cuándo está rota.
+- **`/api/cron/reconcile-mp`** — cron de Vercel diario **13:30 UTC, media hora ANTES de la
+  liquidación de las 14:00**: el día de liquidación, el cron liquida sobre datos ya
+  conciliados. OJO: el plan Hobby de Vercel permite máximo 2 crons — con este quedan
+  exactamente 2. Protegido por `CRON_SECRET`, `maxDuration: 60`.
+- **`/api/admin/reconcile-mp`** — el botón "Conciliar ahora" en `/admin/payment-issues`.
+  Exige admin **'full'** (puede marcar órdenes como pagadas = cambio de estado de plata).
+  Rate limit 3 por 5 min (cada corrida le pega a la API de MP pago por pago).
+- **UI (`/admin/payment-issues`):** tarjeta arriba con la última corrida (cuándo,
+  automática/manual, revisados/reparados/marcados) + botón (oculto para 'support') + las
+  notas de la corrida recién disparada. `REASON_LABELS`/`HINTS` nuevos:
+  `reconcile_mismatch` ("MP no confirma este pago") y `orphan_payment` ("Pago sin pedido").
+- **Reglas:** `reconciliations` solo lectura admin, todo lo demás `false`. Etiqueta
+  `reconcile_repair` en el audit-log. **Desplegado a producción** (reglas + índice).
+- **Verificado (8/8, script en scratchpad, no en repo):** se plantó una orden "pagada" con
+  un `mpPaymentId` inexistente → la conciliación la detectó (`reconcile_mismatch` /
+  `not_found`) y marcó la orden; segunda corrida NO duplicó la marca (dedupe); corrida
+  final limpia sin errores registrada en `reconciliations`. **Límite honesto de la
+  verificación:** no había pagos reales recientes en MP (checkedPayments=0), así que la
+  búsqueda quedó probada como integración (corre sin errores contra la API real) pero el
+  camino "webhook perdido reparado" con un pago real de verdad no se ejerció — es
+  literalmente la misma validación que el webhook ya probado en producción.
+- **Trampa de verificación anotada:** la primera corrida del script falló por una consulta
+  del PROPIO script (where byUid + orderBy → índice compuesto que la app no necesita) — se
+  cambió a filtro en memoria. Y el rate limit de la ruta admin (3/5min) se comparte entre
+  corridas del script: reiniciar el dev server lo resetea (vive en memoria del proceso).
 
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment

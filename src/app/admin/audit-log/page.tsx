@@ -29,6 +29,7 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   resolve_payment_mismatch: { label: 'Discrepancia resuelta',  color: 'bg-success/15 text-success border-success/30' },
   resolve_driver_incident:  { label: 'Incidente resuelto',     color: 'bg-success/15 text-success border-success/30' },
   resolve_claim:            { label: 'Reclamo resuelto',       color: 'bg-success/15 text-success border-success/30' },
+  reconcile_repair:         { label: 'Pago recuperado (conciliación)', color: 'bg-info/15 text-info border-info/30' },
   // Fase GG: acciones sensibles que se ejecutaban sin dejar NINGÚN rastro (aprobar una
   // tienda/repartidor, pausar una tienda, cancelar un pedido, cambiar un CBU o los fees
   // globales, mandar un broadcast a toda la plataforma).

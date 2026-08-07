@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/generate-settlements",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-mp",
+      "schedule": "30 13 * * *"
     }
   ]
 }
