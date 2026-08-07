@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore } from '@/lib/firebase';
-import { collection, query, where, orderBy, getDocs, getDoc, doc, limit, documentId, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, getDoc, doc, limit, Timestamp } from 'firebase/firestore';
 import {
   platformNetForOrder, storeNetForOrder, driverNetForOrder, refundRatio,
   isPlatformCollected, FALLBACK_COMMISSION, type MoneyOrder,
@@ -60,11 +60,13 @@ export function PlatformEarnings() {
 
   // Historial mensual (Fase OO ter): lee los cierres precalculados de `platform_monthly`
   // (un doc chico por mes, mantenidos por el cron de conciliación) — un mes = una
-  // lectura, sin bajar pedidos históricos. El id "YYYY-MM" ordena solo.
+  // lectura, sin bajar pedidos históricos. OJO: se ordena por el CAMPO `ym` y no por
+  // documentId() — orderBy(documentId(),'desc') no es un índice automático en Firestore
+  // (el asc sí) y falló en vivo con failed-precondition.
   const [monthly, setMonthly] = useState<MonthRow[]>([]);
   useEffect(() => {
     if (!firestore) return;
-    getDocs(query(collection(firestore, 'platform_monthly'), orderBy(documentId(), 'desc'), limit(24)))
+    getDocs(query(collection(firestore, 'platform_monthly'), orderBy('ym', 'desc'), limit(24)))
       .then(snap => setMonthly(snap.docs.map(d => ({ id: d.id, ...d.data() }) as MonthRow)))
       .catch(e => console.error('[platform-earnings] historial mensual:', e));
   }, [firestore]);

@@ -110,6 +110,11 @@ export async function updateMonthlyStats(): Promise<{ updated: string[] }> {
         const end = artMonthStart(m === 11 ? y + 1 : y, m === 11 ? 0 : m + 1);
         const bucket = await computeMonth(start, end, fallbackRate);
         await adminDb.collection("platform_monthly").doc(id).set({
+          // `ym` duplica el id como CAMPO a propósito: la UI ordena por acá
+          // (orderBy('ym','desc') = índice automático). Ordenar por documentId()
+          // DESCENDENTE no es automático en Firestore y exigía un índice manual —
+          // falló en vivo con failed-precondition al probar la primera versión.
+          ym: id,
           year: y,
           month: m + 1,
           ...Object.fromEntries(Object.entries(bucket).map(([k, v]) => [k, Math.round(v)])),
