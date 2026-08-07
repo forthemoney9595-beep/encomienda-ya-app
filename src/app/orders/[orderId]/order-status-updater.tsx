@@ -84,6 +84,25 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     if (!firestore) return;
     setIsUpdating(true);
     try {
+      // 'Rechazado' va por API, no por escritura directa: es el único cambio de estado de
+      // este dropdown que tiene que DEVOLVER stock al catálogo (las unidades que `create`
+      // había reservado). Este era el segundo camino de rechazo — el otro está en
+      // store-orders-view.tsx — y olvidarse de uno es exactamente lo que pasó en la Fase R1.
+      if (newStatus === 'Rechazado') {
+        if (!appUser) return;
+        const res = await authedFetch('/api/orders/reject', appUser, { orderId: order.id });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al rechazar');
+        toast({
+          title: 'Pedido Rechazado',
+          description: data.unitsReturned > 0
+            ? `${data.unitsReturned} unidad(es) volvieron al stock.`
+            : undefined,
+        });
+        router.refresh();
+        return;
+      }
+
       await updateOrderStatus(firestore, order.id, newStatus, appUser);
       toast({
           title: 'Estado Actualizado',

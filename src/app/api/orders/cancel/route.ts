@@ -3,6 +3,7 @@ import { adminDb, adminMessaging } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyAuthToken } from '@/lib/auth-server';
+import { returnStockForOrder } from '@/lib/stock-service';
 
 const CANCELABLE_STATUSES = ['Pendiente de Confirmación', 'Pendiente de Pago'];
 // El admin puede cancelar más estados (excepto los terminales)
@@ -85,6 +86,14 @@ export async function POST(request: Request) {
             // Marca visible desde el propio pedido: hay plata para devolver.
             ...(wasPaid ? { hasPaymentIssue: true, paymentIssueReason: 'cancelled_after_payment' } : {}),
         });
+
+        // 🚨 Devolver las unidades que `create` había reservado. Antes no se devolvían nunca:
+        // el pedido moría cancelado y el stock quedaba descontado para siempre, así que el
+        // catálogo iba mostrando menos unidades de las que la tienda realmente tenía.
+        const stockResult = await returnStockForOrder(orderId, { reason: 'cancelled' });
+        if (stockResult.missingProducts.length > 0) {
+            console.warn(`Stock no devuelto (productos borrados del catálogo): ${stockResult.missingProducts.join(', ')}`);
+        }
 
         const storeOwnerId = order.storeOwnerId;
         const notificationsRef = adminDb.collection('notifications');

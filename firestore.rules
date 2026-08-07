@@ -193,11 +193,15 @@ service cloud.firestore {
         // estado actual, así que la tienda podía rechazar un pedido YA PAGADO desde la
         // consola. Eso dejaba `paymentStatus:'paid'` + `status:'Rechazado'` sin ningún
         // registro de que había plata del cliente para devolver.
+        // 🚨 'Rechazado' ya NO se puede escribir desde el cliente: rechazar tiene que
+        // devolver al catálogo las unidades que /api/orders/create reservó, y eso solo
+        // puede pasar server-side. Ahora va por /api/orders/reject (Admin SDK). Si se
+        // dejara esta rama abierta, cualquiera de los dos botones de rechazo podría
+        // saltear la devolución y el stock quedaría descontado para siempre.
         (isStoreOwner(resource.data.storeId) &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'readyForPickup', 'lastDriverNotification']) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
-            (request.resource.data.status == 'Rechazado' && resource.data.status == 'Pendiente de Confirmación') ||
             (request.resource.data.status == 'Listo para recoger' && resource.data.status == 'En preparación'))) ||
 
         // REPARTIDOR ASIGNADO: avanzar su propio pedido + reportar posición GPS

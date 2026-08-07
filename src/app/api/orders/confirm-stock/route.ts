@@ -3,6 +3,7 @@ import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyStoreOwnership } from "@/lib/auth-server";
+import { zeroStockForItems } from "@/lib/stock-service";
 
 // Fallback si config/platform.deliveryFee no está configurado (mismo default que
 // /api/orders/create).
@@ -121,6 +122,16 @@ export async function POST(request: Request) {
       updatedAt: Timestamp.now(),
       ...(removedItems.length > 0 ? { removedItems } : {}),
     });
+
+    // La tienda dijo "no tengo esto": el stock de esos productos va a 0, no vuelve al número
+    // que acaba de desmentir. Si volviera, el catálogo los ofrecería otra vez y el próximo
+    // cliente chocaría con la misma falta. La tienda lo corrige al reponer.
+    if (removedItems.length > 0) {
+      const { zeroed } = await zeroStockForItems(storeId, removedItems);
+      if (zeroed.length > 0) {
+        console.log(`Stock puesto en 0 para ${zeroed.length} producto(s) sin existencia: ${zeroed.join(', ')}`);
+      }
+    }
 
     // Notificar al comprador qué se sacó (si algo se sacó) y el nuevo total.
     const notifTitle = removedItems.length > 0 ? "⚠️ Stock parcial confirmado" : "✅ Stock Confirmado";

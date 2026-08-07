@@ -117,14 +117,26 @@ export default function StoreOrdersView() {
       }
   };
 
+  // Va por API: rechazar tiene que DEVOLVER al catálogo las unidades que `create` reservó.
+  // Antes era un updateDoc directo, así que el pedido moría y el stock quedaba descontado
+  // para siempre. La API también notifica al comprador (antes se hacía acá, y se perdía si
+  // el navegador se cerraba justo después del update).
   const handleRejectOrder = async (order: any) => {
-      if (!firestore) return;
+      if (!user) return;
       if(!confirm("¿Estás seguro de rechazar este pedido?")) return;
       try {
-          await updateDoc(doc(firestore, 'orders', order.id), { status: 'Rechazado' });
-          await OrderService.sendNotification(firestore, order.userId, "Pedido Rechazado", "La tienda no puede tomar tu pedido.", "order_status", order.id, user);
-          toast({ title: "Pedido Rechazado" });
-      } catch (error) { toast({ variant: "destructive", title: "Error" }); }
+          const res = await authedFetch('/api/orders/reject', user, { orderId: order.id });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al rechazar');
+          toast({
+              title: "Pedido Rechazado",
+              description: data.unitsReturned > 0
+                  ? `${data.unitsReturned} unidad(es) volvieron a tu stock.`
+                  : undefined,
+          });
+      } catch (error: any) {
+          toast({ variant: "destructive", title: "Error al rechazar", description: error.message });
+      }
   };
 
   // ✅ AVISAR REPARTIDOR
