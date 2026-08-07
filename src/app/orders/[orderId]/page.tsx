@@ -365,7 +365,10 @@ export default function OrderTrackingPage() {
   const isDelivery = myUserProfile?.role === 'delivery';
 
   const isAvailableToAccept = isDelivery && !order.deliveryPersonId && (order.status === 'En preparación' || order.status === 'Listo para recoger');
-  const showRightColumn = isStoreOwner || isDelivery || isBuyer;
+  // Admin (Fase OO): ve la columna derecha para poder LEER el chat del pedido al arbitrar
+  // un reclamo (el ChatWindow le renderiza en modo solo lectura).
+  const isAdminViewer = myUserProfile?.role === 'admin';
+  const showRightColumn = isStoreOwner || isDelivery || isBuyer || isAdminViewer;
   const phoneToCall = isDeliveryPerson ? order.customerPhoneNumber : undefined;
   const paymentFailed = searchParams.get('retry') === 'true' && isBuyer && order.status === 'Pendiente de Pago';
 
@@ -596,7 +599,7 @@ export default function OrderTrackingPage() {
                 <CardContent className="h-96">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent><CardFooter><p className="text-xs text-muted-foreground"> {order.status === 'En reparto' ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación." : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."}</p></CardFooter>
             </Card>
             
-            {(isStoreOwner || isDeliveryPerson || isBuyer) && (
+            {(isStoreOwner || isDeliveryPerson || isBuyer || isAdminViewer) && (
                 <ChatWindow order={order} />
             )}
 

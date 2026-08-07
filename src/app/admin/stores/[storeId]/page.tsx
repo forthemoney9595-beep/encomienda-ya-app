@@ -17,13 +17,16 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
-import { storeBaseAmount, commissionForOrder, FALLBACK_COMMISSION } from '@/lib/money';
+import { storeBaseAmount, commissionForOrder, storeNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
+import { AccountStatement, type StatementMovement } from '@/components/account-statement';
+import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
 import { cn } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
     Store, MapPin, Star, ShoppingBag, TrendingUp, XCircle,
-    Pause, Play, Check, AlertTriangle, Wallet, ExternalLink, Save, Loader2
+    Pause, Play, Check, AlertTriangle, Wallet, ExternalLink, Save, Loader2,
+    MessageSquareWarning
 } from 'lucide-react';
 import Link from 'next/link';
 import type { Order } from '@/lib/order-service';
@@ -55,14 +58,16 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
         setCbuLoaded(true);
     }
 
-    // Pedidos de esta tienda (últimos 30 días)
+    // Pedidos de esta tienda. Fase OO: subió de 50 a 200 para que el estado de cuenta
+    // cubra más historia con la MISMA query (la tabla de abajo sigue mostrando 50).
+    const ORDERS_CAP = 200;
     const ordersQuery = useMemoFirebase(() => {
         if (!firestore) return null;
         return query(
             collection(firestore, 'orders'),
             where('storeId', '==', storeId),
             orderBy('createdAt', 'desc'),
-            limit(50)
+            limit(ORDERS_CAP)
         );
     }, [firestore, storeId]);
     const { data: orders, isLoading: ordersLoading } = useCollection<Order>(ordersQuery);
@@ -73,6 +78,26 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
         return query(collection(firestore, 'reviews'), where('storeId', '==', storeId), orderBy('createdAt', 'desc'), limit(10));
     }, [firestore, storeId]);
     const { data: reviews, isLoading: reviewsLoading } = useCollection<any>(reviewsQuery);
+
+    // Retiros de esta tienda (Fase OO — la ficha de repartidor ya los tenía, la de tienda
+    // no; sin ellos no hay estado de cuenta posible). userRole acotado igual que el cron.
+    const withdrawalsQuery = useMemoFirebase(() => {
+        if (!firestore || !store?.ownerId) return null;
+        return query(
+            collection(firestore, 'withdrawals'),
+            where('userId', '==', store.ownerId),
+            where('userRole', '==', 'store'),
+        );
+    }, [firestore, store?.ownerId]);
+    const { data: withdrawals } = useCollection<any>(withdrawalsQuery);
+
+    // Reclamos sobre pedidos de esta tienda (Fase OO): una tienda que acumula reclamos es
+    // un problema de calidad que antes solo se veía revisando /admin/claims a mano.
+    const claimsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'claims'), where('storeId', '==', storeId), orderBy('createdAt', 'desc'), limit(20));
+    }, [firestore, storeId]);
+    const { data: storeClaims } = useCollection<Claim>(claimsQuery);
 
     // Métricas.
     // ⚠️ Se calculan sobre los ÚLTIMOS 50 pedidos (ver `limit(50)` arriba), no sobre el
@@ -99,6 +124,69 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
             avgTicket: delivered.length > 0 ? revenue / delivered.length : 0,
         };
     }, [orders, store]);
+
+    // Estado de cuenta (Fase OO): pedidos netos con la MISMA fórmula que aprueba retiros
+    // (money.ts) + retiros. El reembolso no es una fila aparte a propósito: ya está
+    // descontado dentro del neto del pedido (refundRatio) — una fila separada lo
+    // descontaría dos veces; se muestra como detalle de la fila del pedido.
+    const statement = useMemo(() => {
+        const storeRate = store?.commissionRate;
+        const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : FALLBACK_COMMISSION;
+        const movements: StatementMovement[] = [];
+        let earned = 0, paid = 0, requested = 0;
+
+        for (const o of orders || []) {
+            if (o.status !== 'Entregado') continue;
+            const net = storeNetForOrder(o as any, fallbackRate);
+            earned += net;
+            movements.push({
+                id: `o-${o.id}`,
+                date: (o as any).deliveredAt || o.createdAt,
+                label: `Pedido entregado — ${o.customerName || 'Cliente'}`,
+                detail: `venta $${(o.total || 0).toLocaleString('es-AR')} · comisión ${commissionForOrder(o as any, fallbackRate)}%` +
+                    (o.refunded ? ` · reembolso −$${Math.round(o.refundAmount || 0).toLocaleString('es-AR')} aplicado` : ''),
+                amount: net,
+                tone: 'in',
+                href: `/orders/${o.id}`,
+            });
+        }
+        for (const w of withdrawals || []) {
+            const amount = Number(w.amount) || 0;
+            if (w.status === 'approved') {
+                paid += amount;
+                movements.push({
+                    id: `w-${w.id}`,
+                    date: w.processedAt || w.createdAt,
+                    label: w.source === 'auto' ? 'Liquidación pagada' : 'Retiro pagado',
+                    detail: w.operationRef ? `op ${w.operationRef}` : 'sin comprobante (anterior a que fuera obligatorio)',
+                    amount: -amount,
+                    tone: 'out',
+                });
+            } else if (w.status === 'pending') {
+                requested += amount;
+                movements.push({
+                    id: `w-${w.id}`, date: w.createdAt,
+                    label: w.source === 'auto' ? 'Liquidación generada' : 'Retiro solicitado',
+                    amount: -amount, tone: 'muted', badge: 'pendiente',
+                });
+            } else {
+                movements.push({
+                    id: `w-${w.id}`, date: w.createdAt,
+                    label: 'Retiro rechazado',
+                    detail: w.rejectionReason || undefined,
+                    amount: -amount, tone: 'muted', badge: 'rechazado',
+                });
+            }
+        }
+        return {
+            movements,
+            summary: {
+                earned, paid, requested,
+                balance: Math.max(0, earned - paid - requested),
+                debt: Math.max(0, paid - earned),
+            },
+        };
+    }, [orders, withdrawals, store]);
 
     // Acciones
     const handleSaveCbu = async () => {
@@ -230,6 +318,48 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 </p>
             </div>
 
+            {/* Estado de cuenta (Fase OO): la historia completa de la plata de esta cuenta */}
+            <AccountStatement
+                movements={statement.movements}
+                summary={statement.summary}
+                capReached={(orders?.length ?? 0) >= ORDERS_CAP}
+                csvName={`estado-cuenta-${(store.name || storeId).toString().replace(/\s+/g, '-').toLowerCase()}.csv`}
+            />
+
+            {/* Reclamos de clientes sobre pedidos de esta tienda */}
+            {storeClaims && storeClaims.length > 0 && (
+                <Card className="shadow-sm border-l-4 border-l-warning">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <MessageSquareWarning className="h-4 w-4 text-warning" /> Reclamos de clientes
+                            <span className="text-xs font-normal text-muted-foreground">({storeClaims.length} recientes)</span>
+                        </CardTitle>
+                        <CardDescription>
+                            Reclamos sobre pedidos de esta tienda — muchos reclamos acá es un problema de calidad del comercio.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {storeClaims.map(c => (
+                            <div key={c.id} className="flex items-center gap-2 text-sm rounded-lg border px-3 py-2">
+                                <Badge variant="outline" className={cn('text-[10px] shrink-0',
+                                    c.resolved
+                                        ? (c.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success')
+                                        : 'border-warning/40 text-warning')}>
+                                    {c.resolved ? (c.resolution === 'rejected' ? 'Rechazado' : 'Resuelto') : 'Pendiente'}
+                                </Badge>
+                                <span className="truncate">{CLAIM_TYPES[c.type as ClaimType]?.label || c.type}</span>
+                                <span className="text-xs text-muted-foreground truncate">· {c.userName}</span>
+                                <span className="text-xs text-muted-foreground ml-auto whitespace-nowrap">{formatDate(c.createdAt)}</span>
+                                <Link href={`/orders/${c.orderId}`} target="_blank" className="shrink-0">
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0"><ExternalLink className="h-3 w-3" /></Button>
+                                </Link>
+                            </div>
+                        ))}
+                        <Link href="/admin/claims" className="block text-xs text-primary hover:underline pt-1">Ver todos los reclamos →</Link>
+                    </CardContent>
+                </Card>
+            )}
+
             <div className="grid gap-6 lg:grid-cols-2">
                 {/* CBU para liquidaciones */}
                 <Card className="shadow-sm">
@@ -299,7 +429,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <ShoppingBag className="h-4 w-4 text-info" /> Últimos pedidos
-                        <span className="text-xs font-normal text-muted-foreground">({orders?.length ?? 0} cargados)</span>
+                        <span className="text-xs font-normal text-muted-foreground">(50 de {orders?.length ?? 0} cargados)</span>
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -321,7 +451,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                                     {(!orders || orders.length === 0) && (
                                         <tr><td colSpan={5} className="text-center py-8 text-muted-foreground">Sin pedidos.</td></tr>
                                     )}
-                                    {orders?.map(o => {
+                                    {orders?.slice(0, 50).map(o => {
                                         const kind = getOrderStatusKind(o.status);
                                         return (
                                             <tr key={o.id} className="hover:bg-muted/20 transition-colors">

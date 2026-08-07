@@ -1653,6 +1653,40 @@ direcciones, todos los días.
   cambió a filtro en memoria. Y el rate limit de la ruta admin (3/5min) se comparte entre
   corridas del script: reiniciar el dev server lo resetea (vive en memoria del proceso).
 
+## Fase OO (ago 2026): estado de cuenta + ficha 360 del admin
+Salió de la pregunta del usuario "¿desde mi cuenta de admin puedo controlar todo de cada una
+de las cuentas?". La respuesta era "casi": las fichas mostraban el *estado* de cada cuenta
+pero no su *historia completa*. Cuatro huecos verificados en el código y cerrados:
+- **Estado de cuenta en las fichas de tienda y repartidor** (cerraba el último pendiente
+  grande de Finanzas de la Fase KK). Nuevo componente compartido
+  `src/components/account-statement.tsx`: línea de tiempo de TODOS los movimientos de plata
+  de la cuenta — cada pedido entregado con su neto (calculado con las MISMAS funciones de
+  `money.ts` que aprueban los retiros: `storeNetForOrder`/`driverNetForOrder`; el reembolso
+  se muestra como detalle de la fila del pedido, NO como fila aparte — ya está descontado en
+  el neto y una fila separada lo restaría dos veces), cada retiro pagado con su comprobante,
+  y las solicitudes pendientes/rechazadas como filas informativas (badge, no mueven totales).
+  Totales arriba (ganado/pagado/pendiente/saldo o pagado-de-más) + export CSV. Las páginas
+  arman los movimientos; el componente solo ordena y muestra — cero fórmulas duplicadas.
+- **La ficha de tienda no tenía los retiros** (la de repartidor sí, asimetría heredada) —
+  agregada la query `withdrawals (userId==ownerId, userRole=='store')`. Su query de pedidos
+  subió de 50 a 200 (misma query alimenta métricas, tabla —que sigue mostrando 50— y estado
+  de cuenta; con aviso visible si se toca el tope de 200).
+- **Reclamos cruzados por cuenta**: la ficha de tienda lista los reclamos sobre sus pedidos
+  (mucho reclamo = problema de calidad del comercio) y la ficha de cliente
+  (`user-detail-dialog.tsx`) lista los suyos con el resumen "N reclamos, M con reembolso" +
+  badge "Reemb. $X" en su historial de pedidos. Índices nuevos `claims (userId, createdAt)`
+  y `claims (storeId, createdAt)` — **desplegados a producción**. La ficha de repartidor NO
+  los tiene: `claims` no guarda `driverId` (anotado; si hiciera falta, denormalizarlo al
+  crear el reclamo).
+- **El chat del pedido ahora es visible para el admin, en SOLO LECTURA**
+  (`chat-window.tsx` + condición de render en `orders/[orderId]/page.tsx`): las reglas de
+  `order_chats` siempre dejaron leer al admin pero ninguna pantalla lo mostraba — para
+  arbitrar un reclamo hay que poder ver qué se dijeron. A propósito NO puede escribir: el
+  enrutamiento de notificaciones del hilo solo conoce a los tres participantes, y meter un
+  cuarto actor lo rompería en silencio.
+- Verificación: typecheck y build limpios; revisión visual pendiente del usuario (las
+  fichas renderizan datos existentes con fórmulas ya verificadas en KK/NN).
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

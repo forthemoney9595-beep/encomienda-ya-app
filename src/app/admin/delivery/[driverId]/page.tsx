@@ -26,6 +26,7 @@ import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { driverNetForOrder } from '@/lib/money';
+import { AccountStatement, type StatementMovement } from '@/components/account-statement';
 import { type Order as OrderType } from '@/lib/order-service';
 import Link from 'next/link';
 
@@ -107,12 +108,58 @@ function DriverProfilePage() {
       ratingCount: driver?.ratingCount || 0,
       totalEarned,
       pending,
+      settled,
       availableBalance: Math.max(0, totalEarned - settled - pending),
       // Plata pagada de más (pasa si se reembolsa un pedido ya liquidado). Antes el
       // Math.max la escondía dejando el saldo en $0 sin decir por qué.
       debt: Math.max(0, settled - totalEarned),
     };
   }, [orders, withdrawals, driver]);
+
+  // Estado de cuenta (Fase OO) — mismo componente y criterio que la ficha de tienda:
+  // entregas netas via money.ts + retiros; el reembolso vive como detalle de la entrega
+  // (ya está descontado en el neto, una fila aparte lo restaría dos veces).
+  const statement = useMemo(() => {
+    const movements: StatementMovement[] = [];
+    for (const o of orders || []) {
+      if (o.status !== 'Entregado') continue;
+      const net = driverNetForOrder(o as any);
+      movements.push({
+        id: `o-${o.id}`,
+        date: (o as any).deliveredAt || o.createdAt,
+        label: `Entrega — ${(o as any).storeName || 'Tienda'}`,
+        detail: `envío $${(o.deliveryFee || 0).toLocaleString('es-AR')}` +
+          ((o as any).refunded ? ` · reembolso aplicado` : ''),
+        amount: net,
+        tone: 'in',
+        href: `/orders/${o.id}`,
+      });
+    }
+    for (const w of withdrawals || []) {
+      const amount = Number(w.amount) || 0;
+      if (w.status === 'approved') {
+        movements.push({
+          id: `w-${w.id}`, date: w.processedAt || w.createdAt,
+          label: w.source === 'auto' ? 'Liquidación pagada' : 'Retiro pagado',
+          detail: w.operationRef ? `op ${w.operationRef}` : 'sin comprobante (anterior a que fuera obligatorio)',
+          amount: -amount, tone: 'out',
+        });
+      } else if (w.status === 'pending') {
+        movements.push({
+          id: `w-${w.id}`, date: w.createdAt,
+          label: w.source === 'auto' ? 'Liquidación generada' : 'Retiro solicitado',
+          amount: -amount, tone: 'muted', badge: 'pendiente',
+        });
+      } else {
+        movements.push({
+          id: `w-${w.id}`, date: w.createdAt,
+          label: 'Retiro rechazado', detail: w.rejectionReason || undefined,
+          amount: -amount, tone: 'muted', badge: 'rechazado',
+        });
+      }
+    }
+    return movements;
+  }, [orders, withdrawals]);
 
   const recentOrders = useMemo(() => {
     return [...(orders || [])]
@@ -227,6 +274,20 @@ function DriverProfilePage() {
           </Card>
         ))}
       </div>
+
+      {/* Estado de cuenta (Fase OO) — los totales son los de las tarjetas de arriba
+          (misma fuente: stats), acá se ve el detalle movimiento por movimiento */}
+      <AccountStatement
+        movements={statement}
+        summary={{
+          earned: stats.totalEarned,
+          paid: stats.settled,
+          requested: stats.pending,
+          balance: stats.availableBalance,
+          debt: stats.debt,
+        }}
+        csvName={`estado-cuenta-${(driver.name || driverId).toString().replace(/\s+/g, '-').toLowerCase()}.csv`}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* CBU */}

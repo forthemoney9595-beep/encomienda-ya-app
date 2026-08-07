@@ -51,13 +51,20 @@ export function ChatWindow({ order }: ChatWindowProps) {
 
     const { data: messages, isLoading: loadingMessages } = useCollection<ChatMessage>(chatQuery);
     
-    const myRole = userProfile?.role as 'store' | 'delivery' | 'buyer' | undefined;
-    
+    const myRole = userProfile?.role as 'store' | 'delivery' | 'buyer' | 'admin' | undefined;
+
+    // Admin en modo SOLO LECTURA (Fase OO): las reglas de order_chats siempre lo dejaron
+    // leer, pero ninguna pantalla lo mostraba — para arbitrar un reclamo hay que poder ver
+    // qué se dijeron cliente/tienda/repartidor. No escribe: metería un cuarto actor en un
+    // hilo cuyo enrutamiento de notificaciones solo conoce a los tres participantes.
+    const isAdminViewer = myRole === 'admin';
+
     // Validación de permisos
-    const isAllowed = 
+    const isAllowed =
+        isAdminViewer ||
         (myRole === 'store' && order.storeId === userProfile?.storeId) ||
         (myRole === 'delivery' && order.deliveryPersonId === myUser?.uid) ||
-        (myUser?.uid === order.userId); 
+        (myUser?.uid === order.userId);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -84,7 +91,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
         if (e) e.preventDefault();
         const text = textToSend || newMessage;
 
-        if (!myUser || !userProfile || !text.trim() || !isAllowed || isSending || !firestore) return;
+        if (!myUser || !userProfile || !text.trim() || !isAllowed || isAdminViewer || isSending || !firestore) return;
         
         setIsSending(true);
         try {
@@ -130,7 +137,11 @@ export function ChatWindow({ order }: ChatWindowProps) {
     let ChatIcon = MessageSquare;
     let chatSubtitle = "";
 
-    if (myRole === 'store') {
+    if (isAdminViewer) {
+        chatTitle = "Chat del pedido (solo lectura)";
+        ChatIcon = MessageSquare;
+        chatSubtitle = `Conversación entre ${order.customerName || 'el cliente'}, la tienda y el repartidor`;
+    } else if (myRole === 'store') {
         chatTitle = `Chat con Cliente: ${order.customerName}`;
         ChatIcon = User;
         chatSubtitle = "Responde dudas sobre el pedido";
@@ -191,7 +202,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
         );
     };
 
-    const currentReplies = myRole && QUICK_REPLIES[myRole] ? QUICK_REPLIES[myRole] : QUICK_REPLIES['buyer'];
+    const currentReplies = (myRole && myRole !== 'admin') ? QUICK_REPLIES[myRole] : QUICK_REPLIES['buyer'];
 
     return (
         <Card className="h-[500px] flex flex-col shadow-md border-t-4 border-t-primary bg-card text-card-foreground">
@@ -223,6 +234,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                 <div ref={messagesEndRef} />
             </CardContent>
 
+            {!isAdminViewer && (
             <CardFooter className="p-3 border-t bg-background flex-col gap-2 items-start">
                 <div className="flex flex-wrap gap-2 w-full overflow-x-auto pb-1 no-scrollbar">
                     {currentReplies.map((reply, index) => (
@@ -251,6 +263,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                     </Button>
                 </form>
             </CardFooter>
+            )}
         </Card>
     );
 }
