@@ -1686,6 +1686,16 @@ pero no su *historia completa*. Cuatro huecos verificados en el código y cerrad
   cuarto actor lo rompería en silencio.
 - Verificación: typecheck y build limpios; revisión visual pendiente del usuario (las
   fichas renderizan datos existentes con fórmulas ya verificadas en KK/NN).
+- **OO bis — "Ganancias de la plataforma"** (`admin/finances/platform-earnings.tsx`, arriba
+  de la tabla de retiros en `/admin/finances`): lo que gana la APP en sí — tarifa de
+  servicio + comisiones, neto de reembolsos — por período (7d/30d/mes, sin "Todo" por la
+  regla de la Fase Z) con comparación vs período anterior (`PctBadge`/`analytics-period`,
+  patrón M3: se baja el doble de la ventana en una sola query sobre el índice
+  `orders (status, createdAt)` que ya existía). Fórmulas 100% de `money.ts`
+  (`platformNetForOrder`; la parte "tarifa" se separa con `serviceFee × (1−refundRatio)` y
+  el resto es comisión). `getDocs` one-shot, no listener. Salió de la pregunta del usuario
+  "¿dónde veo lo que gana la aplicación?" — antes vivía repartido entre el desglose
+  histórico del dashboard y la tarjeta "Comisión plat." de cada ficha de tienda.
 
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
