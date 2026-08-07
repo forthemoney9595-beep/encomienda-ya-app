@@ -1722,6 +1722,13 @@ denormalización que la Fase HH venía anticipando ("un stats/ precalculado cuan
 - **Verificado contra la base real**: backfill corrido en vivo → 4 cierres (2026-04 a
   2026-07) con 45 pedidos y $190.745 de ganancia acumulada de la plataforma, consistente
   con el seed. Segunda corrida solo recalcula los 3 recientes (no duplica).
+- **Segunda trampa de Firestore encontrada en vivo (la UI mostraba "sin meses" con los
+  docs ya creados): `orderBy(documentId(), 'desc')` NO es un índice automático** — el
+  ascendente sí, el descendente exige un índice manual sobre `__name__`. Fix: los cierres
+  duplican su id en un campo `ym` ("YYYY-MM") y la UI ordena por ese campo (índice de un
+  solo campo = automático en ambas direcciones). Los 4 docs existentes se parchearon con
+  un script puntual. Regla: para listar "lo más nuevo primero" por id, usar siempre un
+  campo espejo, nunca documentId() descendente.
 
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
