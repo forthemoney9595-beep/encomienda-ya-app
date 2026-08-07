@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -392,41 +393,79 @@ export function FinanceView() {
                         </div>
                     </CardHeader>
                     <CardContent className="p-4 space-y-3">
+                        {/* La cuenta que produce cada número, siempre visible: sin esto el
+                            panel era una lista de montos sueltos que confundía. */}
+                        <p className="text-xs text-muted-foreground rounded-lg bg-muted/30 border p-2.5">
+                            <strong>Cómo se calcula:</strong> lo que cada cuenta <strong>ganó</strong> por
+                            sus pedidos entregados (neto: sin envío ni tarifa, menos comisión y reembolsos)
+                            <strong> − lo que ya se le pagó</strong> por retiros. Lo &quot;solicitado&quot; es
+                            parte de la deuda que ya tiene un retiro pendiente esperando tu aprobación.
+                        </p>
+
                         {liability.overpaid?.length > 0 && (
-                            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm space-y-2">
                                 <strong className="text-destructive">Se le pagó de más a {liability.overpaid.length}:</strong>
-                                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                                    {liability.overpaid.map((o: any) => (
-                                        <li key={o.id}>{o.name} — debe ${o.debt.toLocaleString('es-AR')}</li>
-                                    ))}
-                                </ul>
-                                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                                    Suele pasar al reembolsar un pedido ya liquidado. Se descuenta solo de sus ventas futuras.
+                                {liability.overpaid.map((o: any) => (
+                                    <div key={o.id} className="flex items-center justify-between gap-2 text-xs">
+                                        <Link
+                                            href={o.role === 'store' ? `/admin/stores/${o.id}` : `/admin/delivery/${o.id}`}
+                                            className="truncate hover:underline text-foreground"
+                                        >
+                                            {o.name}
+                                        </Link>
+                                        <span className="text-muted-foreground whitespace-nowrap">
+                                            cobró ${o.paid?.toLocaleString('es-AR')} · sus ventas justifican ${o.earned?.toLocaleString('es-AR')} →
+                                            <strong className="text-destructive"> debe ${o.debt.toLocaleString('es-AR')}</strong>
+                                        </span>
+                                    </div>
+                                ))}
+                                <p className="text-[11px] text-muted-foreground">
+                                    Suele pasar al reembolsar un pedido ya liquidado (o por retiros de datos de
+                                    prueba sin ventas que los respalden). No se le vuelve a pagar hasta que sus
+                                    ventas futuras absorban la deuda. Tocá el nombre para ver su estado de cuenta.
                                 </p>
                             </div>
                         )}
+
                         {liability.top?.length === 0 && (
                             <p className="text-sm text-muted-foreground">No se le debe nada a nadie ahora mismo.</p>
                         )}
                         {liability.top?.map((r: any) => (
-                            <div key={`${r.role}-${r.id}`} className="flex items-center justify-between gap-3 text-sm">
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <Badge variant="outline" className={cn('text-[10px] uppercase shrink-0',
-                                        r.role === 'store' ? 'border-info/40 text-info' : 'border-primary/40 text-primary')}>
-                                        {r.role === 'store' ? 'Tienda' : 'Repartidor'}
-                                    </Badge>
-                                    <span className="truncate">{r.name}</span>
+                            <div key={`${r.role}-${r.id}`} className="flex items-center justify-between gap-3 text-sm border-b border-border/40 pb-2 last:border-0 last:pb-0">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className={cn('text-[10px] uppercase shrink-0',
+                                            r.role === 'store' ? 'border-info/40 text-info' : 'border-primary/40 text-primary')}>
+                                            {r.role === 'store' ? 'Tienda' : 'Repartidor'}
+                                        </Badge>
+                                        {/* Link a la ficha: ahí está el estado de cuenta movimiento
+                                            por movimiento que explica este número. */}
+                                        <Link
+                                            href={r.role === 'store' ? `/admin/stores/${r.id}` : `/admin/delivery/${r.id}`}
+                                            className="truncate font-medium hover:underline"
+                                        >
+                                            {r.name}
+                                        </Link>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                                        ganó ${r.earned?.toLocaleString('es-AR')} · ya cobró ${r.paid?.toLocaleString('es-AR')}
+                                        {r.pending > 0 && <> · <span className="text-warning">${Math.round(r.pending).toLocaleString('es-AR')} solicitados esperando aprobación</span></>}
+                                    </p>
                                 </div>
                                 <div className="text-right shrink-0">
                                     <div className="font-bold">${r.owed.toLocaleString('es-AR')}</div>
-                                    {r.pending > 0 && (
-                                        <div className="text-[10px] text-warning">
-                                            ${Math.round(r.pending).toLocaleString('es-AR')} ya solicitados
-                                        </div>
-                                    )}
+                                    <div className="text-[10px] text-muted-foreground">se le debe</div>
                                 </div>
                             </div>
                         ))}
+
+                        {liability.top?.length > 0 && (
+                            <p className="text-xs text-muted-foreground text-right pt-1">
+                                Total: <strong className="text-foreground">
+                                    ${(liability.storeLiability + liability.driverLiability).toLocaleString('es-AR')}
+                                </strong> — coincide con la tarjeta &quot;Pasivo real&quot;.
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
             )}

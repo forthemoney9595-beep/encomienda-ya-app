@@ -44,8 +44,11 @@ export async function GET(request: Request) {
       adminDb.collection('users').where('role', '==', 'delivery').get(),
     ]);
 
+    // Fase OO quater: cada fila viaja con su desglose completo (ganado / ya pagado /
+    // solicitado) — el número solo, sin la cuenta que lo produce, confundía en el panel.
     type Row = {
       id: string; name: string; role: 'store' | 'delivery';
+      earned: number; paid: number;
       available: number; pending: number; debt: number;
     };
     const rows: Row[] = [];
@@ -56,6 +59,7 @@ export async function GET(request: Request) {
       if (b.availableBalance > 0 || b.withdrawnPending > 0 || b.debt > 0) {
         rows.push({
           id: d.id, name: d.data()?.name || 'Tienda sin nombre', role: 'store',
+          earned: Math.round(b.totalRevenue), paid: Math.round(b.withdrawnSettled),
           available: b.availableBalance, pending: b.withdrawnPending, debt: b.debt,
         });
       }
@@ -66,6 +70,7 @@ export async function GET(request: Request) {
       if (b.availableBalance > 0 || b.withdrawnPending > 0 || b.debt > 0) {
         rows.push({
           id: d.id, name: d.data()?.displayName || d.data()?.email || 'Repartidor', role: 'delivery',
+          earned: Math.round(b.totalEarned), paid: Math.round(b.withdrawnSettled),
           available: b.availableBalance, pending: b.withdrawnPending, debt: b.debt,
         });
       }
@@ -85,14 +90,20 @@ export async function GET(request: Request) {
       totalPending:    sumBy(rows, 'pending'),
       totalDebt:       sumBy(rows, 'debt'),
       counts: { stores: stores.length, drivers: drivers.length },
-      // Top 10 por lo que se les debe, para saber a quién hay que pagarle primero.
+      // TODAS las cuentas con deuda, ordenadas por lo que se les debe (el set es chico:
+      // solo las que tienen algo). Antes era top 10 y el título decía "15 tiendas" pero
+      // la lista mostraba 10 — otra fuente de confusión.
       top: rows
+        .filter(r => r.available + r.pending > 0)
         .map(r => ({ ...r, owed: Math.round(r.available + r.pending) }))
-        .sort((a, b) => b.owed - a.owed)
-        .slice(0, 10),
+        .sort((a, b) => b.owed - a.owed),
       // Quien quedó con saldo negativo (se le pagó de más, típicamente por un reembolso
-      // posterior a la liquidación). Antes esto era invisible.
-      overpaid: rows.filter(r => r.debt > 0).map(r => ({ id: r.id, name: r.name, role: r.role, debt: Math.round(r.debt) })),
+      // posterior a la liquidación). Antes esto era invisible. Viaja con la cuenta
+      // completa (cobró X, sus ventas justifican Y) para que el "debe" se explique solo.
+      overpaid: rows.filter(r => r.debt > 0).map(r => ({
+        id: r.id, name: r.name, role: r.role,
+        earned: r.earned, paid: r.paid, debt: Math.round(r.debt),
+      })),
       computedAt: Date.now(),
     });
   } catch (error: any) {

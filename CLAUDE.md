@@ -1743,6 +1743,20 @@ denormalización que la Fase HH venía anticipando ("un stats/ precalculado cuan
   la primera fila de la tabla (badge "en curso", calculado en vivo, sin % contra el mes
   cerrado anterior — sería el mismo engaño de días parciales).
 
+## Fase OO quater (ago 2026): pasivo real con desglose por cuenta
+Pedido del usuario: "el pasivo real tiende a confundir, que muestre datos más detallados".
+El panel listaba montos sueltos sin la cuenta que los produce. Ahora:
+- **`/api/admin/liability`** manda por fila el desglose completo (`earned`/`paid` además de
+  available/pending/debt), la lista dejó de ser top-10 (el título decía "15 tiendas" y la
+  lista mostraba 10 — otra confusión) y los sobrepagados viajan con su aritmética completa.
+- **`finance-view.tsx`**: leyenda fija de CÓMO se calcula (ganado por pedidos entregados −
+  ya pagado por retiros), cada fila muestra "ganó $X · ya cobró $Y · $Z solicitados
+  esperando aprobación" con el "se le debe" a la derecha, **cada nombre linkea a su ficha**
+  (donde vive el estado de cuenta movimiento por movimiento de la Fase OO), los
+  sobrepagados muestran "cobró $X · sus ventas justifican $Y → debe $Z" (con la nota de que
+  también pasa por retiros del seed sin ventas — el caso "Pizzería de Prueba debe $8.000"),
+  y un total al pie que declara coincidir con la tarjeta.
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local
