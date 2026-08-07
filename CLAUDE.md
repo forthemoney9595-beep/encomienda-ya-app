@@ -1448,6 +1448,65 @@ real, y sin ese segundo chequeo el falso positivo pasa desapercibido.
   auditoría de test, pedidos con campos rotos). **Base limpia.**
 - Reglas desplegadas a producción (dry-run limpio antes). Build, typecheck y lint limpios.
 
+## Fase MM (ago 2026): el inventario descontado nunca volvía
+Último pendiente anotado de la Fase KK ("devolución de stock… es un agujero de inventario
+real, pero no es dinero — merece su propia pasada"). Se verificó primero en el código en vez
+de confiar en la nota: `/api/orders/create` descuenta stock dentro de una transacción
+(línea 194), y `cancel` / `confirm-stock` / `refund-order` **no lo mencionan ni una vez**.
+
+**Medido antes de tocar nada** (`_audit-stock.js`): 7 pedidos cancelados/rechazados con 25
+unidades colgadas — **todos del seed, 0 reales** — y solo 6 de 36 productos con stock finito.
+O sea el bug **todavía no había mordido**, por dos razones que no iban a durar: casi ningún
+producto lleva stock cargado y todavía no hubo una cancelación real. Se activaba solo el día
+que una tienda cargara stock y le cancelaran un pedido.
+
+### `src/lib/stock-service.ts` (nuevo)
+Espejo exacto de `create`, y por eso repite sus dos reglas: busca el producto en `products` y
+después en `items` (compat legacy), y **solo toca productos con `stock != null`** — sin valor
+significa "sin límite", y escribir el campo ahí le pondría un techo al producto por accidente.
+- **Idempotencia:** la marca (`stockReturnedAt`) se escribe en la **misma transacción** que el
+  stock. Cancelar dos veces no infla el inventario — el error inverso, y bastante más difícil
+  de detectar que el original.
+- Usa `FieldValue.increment` en vez de leer-sumar-escribir: si la tienda repuso mientras tanto,
+  la devolución se suma a lo nuevo en vez de pisarlo.
+- No relanza (devolver stock no debe abortar una cancelación que ya ocurrió) pero reporta a
+  Sentry: es inventario real, el fallo no puede morir en un log.
+
+### Los tres caminos
+- **Cancelar** (`/api/orders/cancel`) devuelve las unidades.
+- **Rechazar**: era un `updateDoc` directo del cliente, así que no había servidor que pudiera
+  devolver nada. Ahora va por **`/api/orders/reject`** (nueva). **Había DOS caminos de rechazo**
+  — `store-orders-view.tsx` y `order-status-updater.tsx` — y los dos apuntan ahora a la API;
+  olvidarse de uno es exactamente lo que pasó en la Fase R1. La regla de `orders` dejó de
+  aceptar `'Rechazado'` del cliente para que el bypass no exista.
+- **`confirm-stock`**: los ítems que la tienda destilda van a **stock 0**, no vuelven.
+  **Decisión de producto del usuario**, y a propósito NO es el inverso de `create`: la tienda
+  acaba de decir "no tengo esto", así que devolver las unidades dejaría el catálogo con el
+  mismo número que acaba de desmentir y el próximo cliente chocaría con la misma falta. La
+  tienda corrige el número al reponer. Contra aceptado: si el cliente pedía 10 y la tienda
+  tenía 3, esas 3 quedan escondidas hasta que las cargue.
+
+### Verificación (`_e2e-stock.js`, gitignored)
+Ciclo completo contra la API real, **13/13**: crear descuenta (10 → 8), cancelar devuelve
+(8 → 10), **cancelar dos veces NO infla** (10 → 10), rechazo por API devuelve, la tienda **no**
+puede rechazar por escritura directa, y un producto ilimitado sigue sin el campo `stock`.
+Limpia los pedidos que crea y restaura el stock que tocó.
+- **Antes de desplegar las reglas, 3 de los 13 fallaban** — justamente los del bypass: la
+  tienda escribía `'Rechazado'` directo, la API después rechazaba con "ya está Rechazado" y el
+  stock no volvía. Es la misma disciplina de la Fase LL: correr el test antes y después del
+  deploy, para que el "✅" signifique algo.
+- **Detalle del test que costó encontrar:** `create` valida el horario server-side, así que el
+  script tiene que elegir una tienda **sin horario configurado** (`store-hours.ts` las trata
+  como siempre abiertas). Elegir cualquier tienda aprobada falla con "La tienda está cerrada".
+
+**Desplegado:** código primero (Vercel), reglas después — la regla nueva bloquea el rechazo
+directo, así que al revés el botón de rechazar de producción tiraría `permission-denied` hasta
+que Vercel terminara.
+
+**Anotado, no resuelto:** los 7 pedidos muertos que ya tenían stock colgado no se reconciliaron
+— son todos del seed y se van con la limpieza pre-lanzamiento. Si algún día hay pedidos reales
+en ese estado, hace falta una pasada única que les aplique `returnStockForOrder`.
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local
