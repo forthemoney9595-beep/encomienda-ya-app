@@ -1697,6 +1697,32 @@ pero no su *historia completa*. Cuatro huecos verificados en el código y cerrad
   "¿dónde veo lo que gana la aplicación?" — antes vivía repartido entre el desglose
   histórico del dashboard y la tarjeta "Comisión plat." de cada ficha de tienda.
 
+## Fase OO ter (ago 2026): historial mensual de ganancias (cierres precalculados)
+Pedido del usuario: además del 7d/30d/mes, "poder ver mes a mes y meses anteriores, años".
+Ver el histórico NO puede bajar todos los pedidos en cada visita (regla Fases Y/Z) — es la
+denormalización que la Fase HH venía anticipando ("un stats/ precalculado cuando toque"):
+- **`src/lib/platform-stats.ts`** → colección **`platform_monthly`**, un doc por mes
+  calendario (id `"YYYY-MM"`) con ganancia de la app (tarifas + comisiones), reparto (a
+  tiendas / a repartidores), facturación y pedidos del mes. Fórmulas de `money.ts`.
+  Meses en hora ARGENTINA (UTC-3 fijo — mismo criterio que el día de liquidación, Fase JJ).
+- **Mantenido por el cron de conciliación** (`reconcile-mp`, y también el botón "Conciliar
+  ahora") — NO hay cron nuevo: Vercel Hobby permite 2 y ya están usados. Cada corrida:
+  recalcula los últimos **3 meses cerrados** (un reembolso retroactivo cambia un mes ya
+  cerrado; más atrás se considera congelado) y **backfillea** cualquier mes histórico que
+  falte (desde el pedido entregado más viejo). El mes EN CURSO nunca se guarda — cambia
+  todos los días, la UI lo muestra en vivo con el filtro "Este mes".
+- **UI**: sección "Historial mensual" dentro de la tarjeta de Ganancias
+  (`platform-earnings.tsx`): tabla mes por mes (pedidos, tarifas, comisiones, ganancia,
+  % vs mes anterior con `PctBadge`), leyendo hasta 24 cierres — lecturas mínimas constantes.
+- **Regla**: `platform_monthly` solo lectura admin. **Índice nuevo
+  `orders (status, createdAt ASC)`** — el DESC de la Fase HH no sirve para el `orderBy`
+  ascendente del backfill (misma trampa de dirección exacta que la HH documenta), falló en
+  vivo con `failed-precondition` y se detectó porque `updateMonthlyStats` reporta a Sentry
+  y loguea. Reglas + índice **desplegados a producción**.
+- **Verificado contra la base real**: backfill corrido en vivo → 4 cierres (2026-04 a
+  2026-07) con 45 pedidos y $190.745 de ganancia acumulada de la plataforma, consistente
+  con el seed. Segunda corrida solo recalcula los 3 recientes (no duplica).
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

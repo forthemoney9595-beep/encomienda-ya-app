@@ -287,6 +287,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // 5c-septies. CIERRES MENSUALES DE LA PLATAFORMA — un doc por mes (id "YYYY-MM") con
+    // las ganancias de la app y el reparto de ese mes, precalculados por el cron de
+    // conciliación (src/lib/platform-stats.ts, Admin SDK). Los lee la tarjeta de
+    // Ganancias en /admin/finances: un mes = una lectura, sin bajar pedidos históricos.
+    match /platform_monthly/{monthId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     // 5c-bis. LOG DE ACCIONES ADMIN — BUG DE LARGA DATA (Fase GG): esta colección existe
     // desde la Fase N pero NUNCA tuvo regla, así que Firestore denegaba por defecto TODAS
     // las escrituras. Como logAdminAction() traga el error con un console.warn para no

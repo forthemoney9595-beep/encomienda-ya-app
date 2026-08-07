@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 import { runReconciliation } from "@/lib/reconcile-mp";
+import { updateMonthlyStats } from "@/lib/platform-stats";
 
 // Botón "Conciliar ahora" de /admin/payment-issues. Exige admin 'full': la conciliación
 // puede marcar órdenes como pagadas (webhook perdido) — es un cambio de estado de plata,
@@ -24,7 +25,9 @@ export async function POST(request: Request) {
 
   try {
     const summary = await runReconciliation("manual", callerUid);
-    return NextResponse.json({ status: "ok", ...summary });
+    // Mismo criterio que el cron: los cierres mensuales se refrescan tras conciliar.
+    const { updated } = await updateMonthlyStats();
+    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated });
   } catch (error: any) {
     console.error("❌ Error en conciliación manual:", error);
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });

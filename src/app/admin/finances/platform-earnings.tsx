@@ -18,14 +18,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore } from '@/lib/firebase';
-import { collection, query, where, orderBy, getDocs, getDoc, doc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, getDoc, doc, limit, documentId, Timestamp } from 'firebase/firestore';
 import {
   platformNetForOrder, storeNetForOrder, driverNetForOrder, refundRatio,
   isPlatformCollected, FALLBACK_COMMISSION, type MoneyOrder,
 } from '@/lib/money';
 import { getPeriodBounds, PERIOD_LABELS, type Period } from '@/lib/analytics-period';
 import { PctBadge } from '@/components/pct-badge';
-import { Landmark } from 'lucide-react';
+import { Landmark, CalendarRange } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`;
 
@@ -43,12 +45,29 @@ interface Bucket {
 
 const emptyBucket = (): Bucket => ({ platform: 0, serviceFees: 0, commissions: 0, toStores: 0, toDrivers: 0, orders: 0 });
 
+interface MonthRow extends Bucket {
+  id: string;    // "YYYY-MM"
+  year: number;
+  month: number; // 1-12
+}
+
 export function PlatformEarnings() {
   const firestore = useFirestore();
   const [period, setPeriod] = useState<EarningsPeriod>('30d');
   const [loading, setLoading] = useState(true);
   const [current, setCurrent] = useState<Bucket>(emptyBucket());
   const [previous, setPrevious] = useState<Bucket>(emptyBucket());
+
+  // Historial mensual (Fase OO ter): lee los cierres precalculados de `platform_monthly`
+  // (un doc chico por mes, mantenidos por el cron de conciliación) — un mes = una
+  // lectura, sin bajar pedidos históricos. El id "YYYY-MM" ordena solo.
+  const [monthly, setMonthly] = useState<MonthRow[]>([]);
+  useEffect(() => {
+    if (!firestore) return;
+    getDocs(query(collection(firestore, 'platform_monthly'), orderBy(documentId(), 'desc'), limit(24)))
+      .then(snap => setMonthly(snap.docs.map(d => ({ id: d.id, ...d.data() }) as MonthRow)))
+      .catch(e => console.error('[platform-earnings] historial mensual:', e));
+  }, [firestore]);
 
   useEffect(() => {
     if (!firestore) return;
@@ -164,6 +183,56 @@ export function PlatformEarnings() {
             </p>
           </>
         )}
+
+        {/* Historial mensual: meses CERRADOS precalculados. El mes en curso se mira con
+            el filtro "Este mes" de arriba (cambia todos los días, no se congela). */}
+        <div className="pt-2 space-y-2">
+          <h4 className="text-sm font-semibold flex items-center gap-1.5">
+            <CalendarRange className="h-3.5 w-3.5 text-primary" /> Historial mensual
+          </h4>
+          {monthly.length === 0 ? (
+            <p className="text-xs text-muted-foreground border-2 border-dashed rounded-lg p-3 text-center">
+              Todavía no hay meses cerrados registrados. Se generan solos con el cron diario
+              — o al tocar &quot;Conciliar ahora&quot; en Discrepancias de Pago.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="border-b bg-muted/30">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Mes</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Pedidos</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Tarifas</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Comisiones</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Ganancia</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">vs mes anterior</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {monthly.map((m, i) => {
+                    const prevMonth = monthly[i + 1];
+                    return (
+                      <tr key={m.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-3 py-2 capitalize whitespace-nowrap">
+                          {format(new Date(m.year, m.month - 1, 1), 'MMMM yyyy', { locale: es })}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{m.orders}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-success">{money(m.serviceFees)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-info">{money(m.commissions)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-bold text-primary">{money(m.platform)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex justify-end">
+                            {prevMonth ? <PctBadge current={m.platform} prev={prevMonth.platform} /> : <span className="text-xs text-muted-foreground">—</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
