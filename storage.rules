@@ -56,6 +56,16 @@ service firebase.storage {
       allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();
     }
 
+    // Evidencia de reclamos del comprador (Fase NN) — foto del producto en mal estado /
+    // producto equivocado. NO es pública: es evidencia de una disputa. Mismo patrón que
+    // licenses/: el dueño sube a su propia carpeta (claims/{uid}/..., via image-upload.tsx
+    // con storeRawPath) y la app nunca lee el archivo directo -- el admin y el propio
+    // comprador lo ven con una URL firmada de 5 min via /api/claims/photo-url (Admin SDK).
+    match /claims/{uid}/{allPaths=**} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();
+    }
+
     // Cualquier otra ruta: denegado por defecto
     match /{allPaths=**} {
       allow read, write: if false;

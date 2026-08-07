@@ -79,6 +79,21 @@ export interface Order {
   // este tipo, así que las billeteras los ignoraban y pagaban el pedido completo igual.
   refunded?: boolean;
   refundAmount?: number;
+  refundReason?: string;
+  refundedAt?: Timestamp | Date;
+
+  // Reclamo del comprador (Fase NN) -- lo escribe /api/claims/create (Admin SDK).
+  // Un solo reclamo por pedido: claimId apunta al doc en `claims`.
+  hasClaim?: boolean;
+  claimId?: string;
+
+  // Timestamps del ciclo de entrega. deliveredAt es la base de la ventana de reclamo
+  // (claimWindowHours) -- lo escriben los 3 caminos que marcan 'Entregado' (ver
+  // updateOrderStatus abajo y delivery-orders-view.tsx).
+  takenAt?: Timestamp | Date | null;
+  pickedUpAt?: Timestamp | Date;
+  deliveredAt?: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
 
   // Datos del driver para el mapa en tiempo real
   driverCoords?: { latitude: number; longitude: number };
@@ -130,8 +145,14 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
   if (!db) throw new Error("Firestore instance is required");
   
   const orderRef = doc(db, 'orders', orderId);
-  
-  await updateDoc(orderRef, { status });
+
+  // deliveredAt: la ventana de reclamo del comprador se cuenta desde acá. Antes solo lo
+  // escribía delivery-orders-view.tsx (1 de los 3 caminos que marcan 'Entregado'), así que
+  // había pedidos Entregado sin fecha de entrega confiable. La regla del repartidor
+  // asignado en firestore.rules ya permite 'deliveredAt' junto con 'status'.
+  await updateDoc(orderRef, status === 'Entregado'
+    ? { status, deliveredAt: serverTimestamp() }
+    : { status });
 
   try {
       const orderSnap = await getDoc(orderRef);

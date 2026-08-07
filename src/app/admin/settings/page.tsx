@@ -21,6 +21,7 @@ interface PlatformConfig {
   defaultCommissionRate?: number;
   maintenanceMode: boolean;
   settlementDayOfWeek?: number;
+  claimWindowHours?: number;
 }
 
 function AdminSettingsPage() {
@@ -31,11 +32,11 @@ function AdminSettingsPage() {
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
   const { data: configData } = useDoc<PlatformConfig>(configRef);
 
-  const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, maintenanceMode: false, settlementDayOfWeek: 5 });
+  const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, maintenanceMode: false, settlementDayOfWeek: 5, claimWindowHours: 24 });
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (configData) setLocalConfig({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, settlementDayOfWeek: 5, maintenanceMode: false, ...configData });
+    if (configData) setLocalConfig({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, settlementDayOfWeek: 5, maintenanceMode: false, claimWindowHours: 24, ...configData });
   }, [configData]);
 
   const handleSave = async () => {
@@ -59,6 +60,7 @@ function AdminSettingsPage() {
           configData?.deliveryFee !== localConfig.deliveryFee ? `envío: $${configData?.deliveryFee ?? '—'} → $${localConfig.deliveryFee}` : null,
           configData?.defaultCommissionRate !== localConfig.defaultCommissionRate ? `comisión default: ${configData?.defaultCommissionRate ?? '—'}% → ${localConfig.defaultCommissionRate}%` : null,
           configData?.settlementDayOfWeek !== localConfig.settlementDayOfWeek ? `día liquidación: ${localConfig.settlementDayOfWeek}` : null,
+          configData?.claimWindowHours !== localConfig.claimWindowHours ? `ventana de reclamo: ${configData?.claimWindowHours ?? '—'}h → ${localConfig.claimWindowHours}h` : null,
           configData?.maintenanceMode !== localConfig.maintenanceMode ? `mantenimiento: ${localConfig.maintenanceMode ? 'ON' : 'OFF'}` : null,
         ].filter(Boolean).join(' · ');
         if (changes) logAdminAction(firestore, adminUser.uid, 'update_config', 'platform', changes);
@@ -115,6 +117,18 @@ function AdminSettingsPage() {
             <p className="text-xs text-muted-foreground">
               Se aplica a las tiendas que no tengan una comisión propia cargada. Antes esas
               tiendas quedaban en 0% sin que nadie lo notara — o sea, operaban gratis.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="claimWindow" className="text-sm font-semibold">Ventana de reclamo del comprador (horas)</Label>
+            <Input id="claimWindow" type="number" min={1} value={localConfig.claimWindowHours ?? 24}
+              onChange={(e) => setLocalConfig({ ...localConfig, claimWindowHours: Number(e.target.value) })}
+              className="border-primary/30" />
+            <p className="text-xs text-muted-foreground">
+              Cuántas horas después de la entrega el cliente puede reportar un problema con su
+              pedido. Default: 24h. Si algún rubro (ej. supermercados) necesita más margen, se
+              sube acá sin tocar código.
             </p>
           </div>
 

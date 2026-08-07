@@ -26,7 +26,8 @@ import { useCart } from '@/context/cart-context';
 import { ReviewDialog } from '@/components/review-dialog'; 
 import { Button } from '@/components/ui/button';
 import { DeliveryReviewCard } from './delivery-review-card';
-import { ChatWindow } from './chat-window'; 
+import { ChatWindow } from './chat-window';
+import { ClaimSection } from './claim-section';
 import { LocationTracker } from '@/components/location-tracker';
 
 const OrderMap = dynamic(() => import('./order-map'), { 
@@ -598,6 +599,9 @@ export default function OrderTrackingPage() {
             {(isStoreOwner || isDeliveryPerson || isBuyer) && (
                 <ChatWindow order={order} />
             )}
+
+            {/* Reclamos + reembolso visibles para el comprador (Fase NN) */}
+            {isBuyer && <ClaimSection order={order} />}
 
             {isBuyer && order.status === 'Entregado' && (
                 <Card>

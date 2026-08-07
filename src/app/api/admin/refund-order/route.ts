@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { orderId, amount, reason, operationRef } = await request.json();
+    const { orderId, amount, reason, operationRef, claimId } = await request.json();
     if (!orderId) return NextResponse.json({ error: "Falta orderId" }, { status: 400 });
 
     const numAmount = Number(amount);
@@ -56,8 +56,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `El reembolso ($${numAmount}) supera el total del pedido ($${order.total}).` }, { status: 400 });
     }
 
+    // Si el reembolso sale de un reclamo del comprador (Fase NN), se validan y linkean
+    // los dos registros ANTES de escribir nada: el reclamo queda resuelto como
+    // 'refunded' en la misma request que registra la plata.
+    let claimRef = null as FirebaseFirestore.DocumentReference | null;
+    if (claimId) {
+      claimRef = adminDb.collection('claims').doc(String(claimId));
+      const claimSnap = await claimRef.get();
+      if (!claimSnap.exists) return NextResponse.json({ error: "Reclamo no encontrado" }, { status: 404 });
+      const claim = claimSnap.data()!;
+      if (claim.orderId !== orderId) {
+        return NextResponse.json({ error: "El reclamo no corresponde a este pedido." }, { status: 400 });
+      }
+      if (claim.resolved === true) {
+        return NextResponse.json({ error: "Este reclamo ya fue resuelto." }, { status: 400 });
+      }
+    }
+
     // Registrar el reembolso
-    await adminDb.collection('refunds').add({
+    const refundRef = await adminDb.collection('refunds').add({
       orderId,
       buyerId: order.userId,
       storeId: order.storeId || null,
@@ -65,8 +82,20 @@ export async function POST(request: Request) {
       reason: reason || '',
       operationRef: opRef,
       adminUid: callerUid,
+      ...(claimRef ? { claimId: claimRef.id } : {}),
       createdAt: Timestamp.now(),
     });
+
+    if (claimRef) {
+      await claimRef.update({
+        resolved: true,
+        resolution: 'refunded',
+        resolutionNote: `Reembolso de $${numAmount.toLocaleString('es-AR')} · op ${opRef}`,
+        refundId: refundRef.id,
+        resolvedAt: Timestamp.now(),
+        resolvedBy: callerUid,
+      });
+    }
 
     // Marcar el pedido
     await orderRef.update({

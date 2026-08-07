@@ -61,6 +61,7 @@ export async function POST(request: Request) {
       storeId: orderData.storeId || null,
       storeName: orderData.storeName || null,
       reason: reasonText,
+      resolved: false,
       createdAt: Timestamp.now(),
     });
 

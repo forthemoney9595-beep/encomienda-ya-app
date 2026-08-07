@@ -27,6 +27,7 @@ import {
   DollarSign,
   Tag,
   AlertTriangle,
+  MessageSquareWarning,
   ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -186,6 +187,12 @@ export function MainNav({
       </NavSection>
 
       <NavSection id="confianza" title="Confianza y Seguridad">
+        <Link href="/admin/claims">
+          <Button variant={pathname.startsWith('/admin/claims') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <MessageSquareWarning className="mr-2 h-4 w-4" />
+            Reclamos de Clientes
+          </Button>
+        </Link>
         <Link href="/admin/reviews">
           <Button variant={pathname.startsWith('/admin/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
             <MessageSquare className="mr-2 h-4 w-4" />

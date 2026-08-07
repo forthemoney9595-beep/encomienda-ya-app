@@ -255,8 +255,28 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if false;
       allow update: if isAdmin() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedAt', 'resolvedBy']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedAt', 'resolvedBy', 'resolutionNote']);
       allow delete: if isAdmin();
+    }
+
+    // 5c-quater. RECLAMOS DEL COMPRADOR (Fase NN) — solo vía /api/claims/create (valida
+    // dueño del pedido, ventana de reclamo, foto según tipo y monto sugerido server-side;
+    // un reclamo por pedido). El comprador lee el suyo (estado en el detalle del pedido);
+    // el admin lee todos (/admin/claims + bandeja del dashboard). Resolver también pasa
+    // por API (/api/claims/resolve o /api/admin/refund-order con claimId): notifica al
+    // comprador y deja auditoría, cosas que un updateDoc directo se saltearía.
+    match /claims/{claimId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // 5c-quinquies. REEMBOLSOS — los escribe /api/admin/refund-order (Admin SDK). Hasta la
+    // Fase NN esta colección no tenía NINGUNA regla ni pantalla (mismo agujero que
+    // payment_mismatches antes de la Fase FF). Es un registro de dinero: no se edita ni se
+    // borra, ni siquiera un admin 'full' -- mismo criterio que withdrawals/admin_audit_log.
+    match /refunds/{refundId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     // 5c-bis. LOG DE ACCIONES ADMIN — BUG DE LARGA DATA (Fase GG): esta colección existe

@@ -2,7 +2,8 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw, Clock, CreditCard, ChefHat, Truck, ChevronRight } from 'lucide-react';
+import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw, Clock, CreditCard, ChefHat, Truck, ChevronRight, MessageSquareWarning } from 'lucide-react';
+import { CLAIM_TYPES, type ClaimType } from '@/lib/claim-types';
 import { downloadCsv } from '@/lib/csv-export';
 import { PendingList } from './pending-list';
 import { useRouter } from 'next/navigation';
@@ -58,11 +59,12 @@ const ALERT_PREVIEW = 6;
 // Tipos de alerta que se unifican en el panel "Requiere tu atención". Antes cada uno era
 // un bloque aparte con su propio marco de color, apilados: tres cajas rojas/ámbar
 // compitiendo por la atención y empujando el resto del dashboard fuera de pantalla.
-type AlertKind = 'stuck' | 'payment' | 'incident';
+type AlertKind = 'stuck' | 'payment' | 'incident' | 'claim';
 const ALERT_KINDS: { k: AlertKind; label: string; icon: any; href: string }[] = [
-  { k: 'stuck',    label: 'Pedidos trabados', icon: Clock,       href: '/admin/orders' },
-  { k: 'payment',  label: 'Pagos',            icon: DollarSign,  href: '/admin/payment-issues' },
-  { k: 'incident', label: 'Repartidores',     icon: Bike,        href: '/admin/incidents' },
+  { k: 'stuck',    label: 'Pedidos trabados', icon: Clock,                href: '/admin/orders' },
+  { k: 'payment',  label: 'Pagos',            icon: DollarSign,           href: '/admin/payment-issues' },
+  { k: 'incident', label: 'Repartidores',     icon: Bike,                 href: '/admin/incidents' },
+  { k: 'claim',    label: 'Reclamos',         icon: MessageSquareWarning, href: '/admin/claims' },
 ];
 
 /**
@@ -288,6 +290,11 @@ function AdminDashboard() {
   const { data: paymentMismatches } = useCollection<any>(mismatchesQuery);
   const pendingMismatchesCount = (paymentMismatches || []).filter((m: any) => m.resolved !== true).length;
 
+  // Reclamos de compradores (Fase NN) -- mismo criterio que las discrepancias: ventana
+  // acotada para la bandeja; el historial completo con acciones vive en /admin/claims.
+  const claimsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'claims'), orderBy('createdAt', 'desc'), limit(50)) : null, [firestore]);
+  const { data: buyerClaims } = useCollection<any>(claimsQuery);
+
   const refreshTotals = () => { refreshDelivered(); refreshFees(); refreshShipping(); refreshCommission(); refreshUsers(); rBuyers(); rStores(); rDrivers(); rOrders(); };
   const dashboardLoading = activeLoading || storesLoading || pendingLoading;
 
@@ -413,14 +420,29 @@ function AdminDashboard() {
       href: `/orders/${i.orderId}`,
     }));
 
+    // Reclamos de compradores sin resolver: debajo de las discrepancias de pago (plata sin
+    // conciliar sigue primero) pero por encima de los incidentes -- hay un cliente esperando
+    // una respuesta, y "nunca me llegó" / "no llega" son directamente plata en disputa.
+    (buyerClaims || []).filter((c: any) => c.resolved !== true).forEach((c: any) => items.push({
+      id: `c-${c.id}`,
+      kind: 'claim',
+      severity: (c.type === 'not_received' || c.type === 'stuck_order') ? 'high' : 'medium',
+      title: `Reclamo: ${CLAIM_TYPES[c.type as ClaimType]?.label || c.type}`,
+      subtitle: `${c.userName || 'Comprador'} · ${c.storeName || 'Tienda'}${c.suggestedAmount ? ` · $${Math.round(c.suggestedAmount).toLocaleString('es-AR')}` : ''}`,
+      meta: 'sin responder',
+      sortKey: 2e6,
+      href: '/admin/claims',
+    }));
+
     return items.sort((a, b) => b.sortKey - a.sortKey);
-  }, [stuckOrders, paymentMismatches, driverIncidents]);
+  }, [stuckOrders, paymentMismatches, driverIncidents, buyerClaims]);
 
   const alertCounts = useMemo(() => ({
     all: alerts.length,
     stuck: alerts.filter(a => a.kind === 'stuck').length,
     payment: alerts.filter(a => a.kind === 'payment').length,
     incident: alerts.filter(a => a.kind === 'incident').length,
+    claim: alerts.filter(a => a.kind === 'claim').length,
   }), [alerts]);
 
   const visibleAlerts = (alertFilter === 'all' ? alerts : alerts.filter(a => a.kind === alertFilter));

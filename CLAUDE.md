@@ -1507,6 +1507,96 @@ que Vercel terminara.
 — son todos del seed y se van con la limpieza pre-lanzamiento. Si algún día hay pedidos reales
 en ese estado, hace falta una pasada única que les aplique `returnStockForOrder`.
 
+## Fase NN (ago 2026): reclamos del comprador — cierre del circuito de dinero
+Pedido del usuario: "revisemos y finalicemos bien el tema del dinero, también en qué momento
+el cliente puede hacer un reclamo; quiero saber cómo manejan toda esa información Rappi o
+PedidosYa". Se investigó primero la política oficial de Rappi Argentina y el proceso de
+PedidosYa: reclamo estructurado desde el propio pedido (tipo de una lista cerrada + fotos),
+revisión humana caso por caso (nunca reembolso automático), reembolso al medio de pago, y
+antifraude explícito (rechazan por demora en reportar, dirección mal cargada, info falsa).
+
+**Lo que la auditoría del código encontró antes de diseñar** (agente de exploración, verificado):
+el comprador NO tenía NINGÚN camino para reclamar — solo el chat de la orden (que post-entrega
+le escribe a la TIENDA, no al admin) y un `mailto:` simulado en `/support`. El reembolso existía
+pero desconectado: el admin lo disparaba a mano sin ningún input del comprador. La colección
+`refunds` no tenía reglas ni pantalla (mismo agujero que `payment_mismatches` pre-Fase FF y
+`admin_audit_log` pre-GG — tercera vez que aparece el patrón). El comprador no veía su reembolso
+en ningún lado (solo la notificación). Y `deliveredAt` se escribía en 1 de los 3 caminos que
+marcan 'Entregado' — sin reloj confiable no hay ventana de reclamo posible.
+
+**Decisiones de producto del usuario:** ventana de **24h** (no 48 — dudaba entre rubros:
+restaurante ≠ mercado, por eso quedó **configurable** en `/admin/settings` →
+`config/platform.claimWindowHours`, mismo patrón que deliveryFee); solo reembolso por MP (sin
+créditos en la app); foto obligatoria SOLO donde hay algo que fotografiar (mal estado /
+producto distinto — "me faltó" y "no llegó" no pueden fotografiar una ausencia); reclamo de
+pedido trabado incluido (D2); la tienda NO ve los reclamos (es entre cliente y plataforma,
+como Rappi).
+
+**Las piezas:**
+- **`deliveredAt` confiable primero**: `updateOrderStatus` (order-service.ts) ahora lo escribe
+  al marcar 'Entregado' — cubre los 2 caminos que no lo escribían; la regla del repartidor ya
+  permitía el campo. Tipo `Order` ganó `deliveredAt/takenAt/pickedUpAt/updatedAt/hasClaim/
+  claimId/refundReason/refundedAt`.
+- **`src/lib/claim-types.ts`** — lista cerrada compartida cliente/servidor/admin: `missing_item`
+  / `bad_condition` (foto ⭐) / `wrong_item` (foto ⭐) / `not_received` / `stuck_order` / `other`,
+  con `itemBased` (selector de ítems → monto sugerido), `requiresPhoto` y `context`
+  (delivered|stuck). También `lastMovementMillis()` — "último movimiento" para el umbral de
+  trabado (max de createdAt/updatedAt/takenAt/pickedUpAt, porque no hay un updatedAt confiable).
+- **`/api/claims/create`** — todo server-side: dueño del pedido, un reclamo por pedido
+  (`order.claimId`, chequeado DENTRO de la transacción que crea el claim y marca la orden),
+  ventana configurable desde `deliveredAt` (fallback a favor del comprador si falta), foto según
+  tipo y SOLO con path propio (`claims/{uid}/...` — nunca un path arbitrario, sería un oráculo
+  de firmado), ítems releídos del documento (el body solo manda ids; el monto sugerido se
+  calcula acá, nunca del cliente), y `stuck_order` exige pagado + estado activo + >1h sin
+  movimiento. **Antifraude denormalizado al crear**: `previousClaims`/`previousRefunded`
+  (aggregation counts) — el admin ve "3er reclamo, 2 reembolsados" sin bloqueo automático.
+  Rate limit 15/min (los 400 de validación también cuentan — con 5/min el propio e2e se
+  auto-bloqueó).
+- **`/api/claims/resolve`** — rechazar / otra vía, nota obligatoria (en el rechazo es lo que
+  lee el comprador), notifica vía `notifyUser`, auditoría server-side (`resolve_claim`).
+  Cualquier nivel de admin (trabajo operativo, no mueve plata).
+- **`/api/admin/refund-order` + `claimId`** — la tercera salida: valida que el reclamo sea de
+  ese pedido y no esté resuelto, linkea en ambos sentidos (`refunds.claimId` ↔
+  `claim.refundId`) y resuelve como `refunded` en la misma request que registra la plata.
+- **`/api/claims/photo-url`** — URL firmada 5 min para la evidencia (mismo criterio que
+  licencias: disputa ≠ imagen pública; el path SIEMPRE se lee del doc del reclamo). Storage:
+  nueva carpeta `claims/{uid}/**` (dueño escribe/lee; admin ve por URL firmada).
+- **UI comprador** (`orders/[orderId]/claim-section.tsx`, autocontenido): botón "Reportar un
+  problema" en Entregado dentro de la ventana (vencida → texto explicando el plazo, no
+  desaparición silenciosa); "¿Problemas con tu pedido?" en pedidos pagados trabados >1h;
+  tarjeta con el estado del reclamo (en revisión / rechazado con motivo / resuelto); y
+  **tarjeta verde del reembolso** (`refundAmount`/`refundReason`) — antes invisible.
+- **`/admin/claims`** — molde de `/admin/incidents` (cursor 25, pestañas por `resolved` en
+  memoria) + contador antifraude a la vista + foto + diálogo de reembolso precargado (monto
+  sugerido, motivo, comprobante obligatorio). Botón Reembolsar oculto para admin 'support'
+  (el server igual lo rechaza). Link "Reclamos de Clientes" en Confianza y Seguridad; tipo
+  `claim` en la bandeja del dashboard (ordena debajo de discrepancias de pago, arriba de
+  incidentes); etiqueta `resolve_claim` en el Log de Acciones.
+- **Reglas**: `claims` (lee admin o el dueño; create/update/delete `false` — todo por API,
+  que notifica y audita); **`refunds` por fin con reglas** (lee admin; nada más — registro de
+  dinero, ni siquiera 'full' edita/borra); `driver_incidents` acepta `resolutionNote` y los
+  incidentes nuevos nacen con `resolved: false` explícito (report-problem y release).
+
+**Verificado — `_e2e-claims.js` (gitignored), 31/31 contra dev server + Firestore real:**
+validaciones (sin ítems / sin foto / path ajeno / descripción corta / pedido ajeno / plazo
+vencido), reclamo válido con monto sugerido correcto, duplicado bloqueado, notificaciones
+(confirmación, motivo del rechazo), stuck (2h pasa, 10min no), reglas con SDK de cliente
+(leer lo propio ✅, fabricar/auto-resolverse/leer refunds ❌), doble resolución bloqueada, y el
+ciclo completo de reembolso desde reclamo con link bidireccional + comprobante. Login por
+**custom tokens del Admin SDK** (`signInWithCustomToken`) — sin adivinar passwords ni chocar
+con el rate limit de Auth (lección Fase GG/HH). La limpieza es **por consulta** (busca
+`e2eClaims:true` y todo lo que cuelga) y corre también en el catch — el primer run crasheó a
+mitad y dejó 5 pedidos huérfanos; por diseño el run siguiente los levanta igual. Cuentas de
+seed W (`cliente.multi@`...) **ya no existen** — el e2e usa `cliente@test.com`/`admin@test.com`.
+
+**Reglas + Storage desplegados a producción** ANTES de correr el e2e (las pruebas de reglas
+van contra producción; son aditivas, no tocan nada existente). Typecheck y build limpios.
+
+**Anotado, no resuelto:** el chat de la orden post-entrega sigue notificando a la tienda (ok
+para coordinar, pero el admin no tiene pantalla para leer `order_chats` — las reglas ya lo
+dejan); `refunds` sigue sin pantalla propia (se ve vía el reclamo y el badge del pedido; si
+crece, hacer la lista); conciliación automática con MP sigue pendiente de la Fase KK.
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local
