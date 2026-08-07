@@ -1729,6 +1729,19 @@ denormalización que la Fase HH venía anticipando ("un stats/ precalculado cuan
   solo campo = automático en ambas direcciones). Los 4 docs existentes se parchearon con
   un script puntual. Regla: para listar "lo más nuevo primero" por id, usar siempre un
   campo espejo, nunca documentId() descendente.
+- **Fix de comparación "Este mes" (salió de una captura del usuario: ▼94% falso).**
+  `getPeriodBounds('month')` en `analytics-period.ts` devolvía como período anterior el
+  mes pasado COMPLETO — a mitad de mes la comparación siempre daba desplome (7 días de
+  agosto contra 31 de julio). Ahora compara contra el MISMO TRAMO del mes pasado (1-7 ago
+  vs 1-7 jul). Beneficia también a `my-store/analytics` y `delivery/analytics` (ya usaban
+  `prevTo`, solo que venía mal calculado). `platform-earnings` además IGNORABA `prevTo`
+  al armar el bucket anterior — corregido.
+- **Desglose de transacciones por mes** (pedido del usuario): cada fila del historial se
+  expande y baja bajo demanda los pedidos entregados de ESE mes (consulta acotada por
+  rango sobre el índice `(status, createdAt)`) — fecha, cliente, tienda, venta, ganancia
+  de la app por pedido y badge de reembolso, con link al pedido. El mes EN CURSO ahora es
+  la primera fila de la tabla (badge "en curso", calculado en vivo, sin % contra el mes
+  cerrado anterior — sería el mismo engaño de días parciales).
 
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment

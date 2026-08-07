@@ -22,10 +22,13 @@ export function getPeriodBounds(period: Period): { from: Date | null; prevFrom: 
   if (period === '30d') {
     return { from: subDays(now, 30), prevFrom: subDays(now, 60), prevTo: subDays(now, 30) };
   }
-  // 'month' = mes calendario actual, vs el mismo período el mes pasado
+  // 'month' = mes calendario actual, vs el MISMO TRAMO del mes pasado (si hoy es 7 de
+  // agosto, se compara 1-7 de agosto contra 1-7 de julio). Antes prevTo era el inicio de
+  // este mes, o sea el mes pasado COMPLETO: a mitad de mes la comparación siempre daba
+  // desplomes falsos (▼94% con 7 días de agosto contra 31 de julio).
   const thisMonthStart = startOfMonth(now);
-  const prevMonthStart = subMonths(thisMonthStart, 1);
-  return { from: thisMonthStart, prevFrom: prevMonthStart, prevTo: thisMonthStart };
+  const sameDayLastMonth = subMonths(now, 1);
+  return { from: thisMonthStart, prevFrom: startOfMonth(sameDayLastMonth), prevTo: sameDayLastMonth };
 }
 
 export function pct(current: number, prev: number): { value: number; up: boolean; zero: boolean } {
