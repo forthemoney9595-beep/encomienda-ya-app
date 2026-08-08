@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminAuthGuard from '../../admin-auth-guard';
 import PageHeader from '@/components/page-header';
@@ -12,12 +12,12 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
-import { storeBaseAmount, commissionForOrder, storeNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
+import { storeBaseAmount, commissionForOrder, storeNetForOrder, refundRatio, isPlatformCollected, FALLBACK_COMMISSION } from '@/lib/money';
 import { AccountStatement, type StatementMovement } from '@/components/account-statement';
 import { setAccountApproval } from '@/lib/approval-service';
 import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
@@ -52,6 +52,21 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     // Datos de la tienda
     const storeRef = useMemoFirebase(() => firestore ? doc(firestore, 'stores', storeId) : null, [firestore, storeId]);
     const { data: store, isLoading: storeLoading } = useDoc<any>(storeRef);
+
+    // Comisión por defecto de config (Fase PP, N6): esta página usaba el 10 hardcodeado
+    // de money.ts como respaldo, mientras payout-service/wallet/platform-earnings leen la
+    // configurable — si el admin la cambiaba en Ajustes, esta ficha divergía del saldo
+    // que el servidor aprueba para tiendas sin tarifa propia.
+    const [defaultCommission, setDefaultCommission] = useState<number>(FALLBACK_COMMISSION);
+    useEffect(() => {
+        if (!firestore) return;
+        getDoc(doc(firestore, 'config', 'platform'))
+            .then(s => {
+                const v = Number(s.data()?.defaultCommissionRate);
+                if (Number.isFinite(v) && v > 0) setDefaultCommission(v);
+            })
+            .catch(() => {});
+    }, [firestore]);
 
     // Pre-cargar CBU cuando lleguen los datos de la tienda
     if (store && !cbuLoaded) {
@@ -106,17 +121,20 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     // y con 300 pedidos mostraba ~1/6 de las ventas reales como si fuera el total.
     const metrics = useMemo(() => {
         if (!orders) return { revenue: 0, delivered: 0, cancelled: 0, commission: 0, avgTicket: 0 };
-        // Comisión: la de la tienda, o la global. Antes `|| 0` mostraba $0 de comisión
-        // para las tiendas sin tarifa propia, aunque el servidor sí se la cobra.
+        // Comisión: la de la tienda, o la global CONFIGURABLE (Fase PP, N6).
         const storeRate = store?.commissionRate;
-        const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : FALLBACK_COMMISSION;
+        const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : defaultCommission;
         const delivered  = orders.filter(o => o.status === 'Entregado');
         const cancelled  = orders.filter(o => o.status === 'Cancelado' || o.status === 'Rechazado');
         const revenue    = delivered.reduce((s, o) => s + (o.total || 0), 0);
         // Misma base que el reparto real (src/lib/money.ts): productos, sin la tarifa de
         // servicio, y con la comisión congelada del pedido si la tiene.
+        // Neta (Fase PP, N13): reembolsos descontados, efectivo excluido — misma regla
+        // que la tarjeta de Ganancias de Finanzas.
         const commission = delivered.reduce(
-            (s, o) => s + storeBaseAmount(o as any) * commissionForOrder(o as any, fallbackRate) / 100, 0);
+            (s, o) => s + (isPlatformCollected(o as any)
+                ? storeBaseAmount(o as any) * commissionForOrder(o as any, fallbackRate) / 100 * (1 - refundRatio(o as any))
+                : 0), 0);
         return {
             revenue,
             delivered: delivered.length,
@@ -124,7 +142,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
             commission,
             avgTicket: delivered.length > 0 ? revenue / delivered.length : 0,
         };
-    }, [orders, store]);
+    }, [orders, store, defaultCommission]);
 
     // Estado de cuenta (Fase OO): pedidos netos con la MISMA fórmula que aprueba retiros
     // (money.ts) + retiros. El reembolso no es una fila aparte a propósito: ya está
@@ -132,7 +150,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     // descontaría dos veces; se muestra como detalle de la fila del pedido.
     const statement = useMemo(() => {
         const storeRate = store?.commissionRate;
-        const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : FALLBACK_COMMISSION;
+        const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : defaultCommission;
         const movements: StatementMovement[] = [];
         let earned = 0, paid = 0, requested = 0;
 
@@ -187,7 +205,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 debt: Math.max(0, paid - earned),
             },
         };
-    }, [orders, withdrawals, store]);
+    }, [orders, withdrawals, store, defaultCommission]);
 
     // Acciones
     const handleSaveCbu = async () => {
@@ -285,7 +303,15 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                         <MapPin className="h-3.5 w-3.5" /> {store.address}
                     </p>
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="text-xs text-muted-foreground">Comisión: <strong>{store.commissionRate || 0}%</strong></span>
+                        {/* Fase PP (N12): antes decía "0%" para tiendas sin tarifa propia,
+                            aunque el servidor les cobra el default configurable. */}
+                        <span className="text-xs text-muted-foreground">
+                            Comisión: <strong>
+                                {(typeof store.commissionRate === 'number' && store.commissionRate > 0)
+                                    ? `${store.commissionRate}%`
+                                    : `${defaultCommission}% (default)`}
+                            </strong>
+                        </span>
                         {store.rating > 0 && (
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Star className="h-3 w-3 fill-warning text-warning" />

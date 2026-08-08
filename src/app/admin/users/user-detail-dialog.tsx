@@ -42,8 +42,10 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
   const stats = useMemo(() => {
     const delivered = (orders || []).filter(o => o.status === 'Entregado');
     const cancelled = (orders || []).filter(o => o.status === 'Cancelado' || o.status === 'Rechazado');
-    const spent = delivered.reduce((s, o) => s + (o.total || 0), 0);
-    return { total: orders?.length ?? 0, delivered: delivered.length, cancelled: cancelled.length, spent };
+    // Fase PP (N11): neto de reembolsos — la propia lista de abajo muestra el badge
+    // "Reemb. $X" por pedido, pero el total los ignoraba.
+    const spent = delivered.reduce((s, o) => s + (o.total || 0) - (o.refunded ? (o.refundAmount || 0) : 0), 0);
+    return { total: orders?.length ?? 0, delivered: delivered.length, cancelled: cancelled.length, spent: Math.round(spent) };
   }, [orders]);
 
   return (
@@ -71,7 +73,7 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
             { label: 'Pedidos', value: stats.total, icon: ShoppingBag, color: 'text-info' },
             { label: 'Entregados', value: stats.delivered, icon: ShoppingBag, color: 'text-success' },
             { label: 'Cancelados', value: stats.cancelled, icon: XCircle, color: 'text-destructive' },
-            { label: 'Gastado', value: `$${stats.spent.toLocaleString()}`, icon: DollarSign, color: 'text-primary' },
+            { label: 'Gastado (neto, últ. 30)', value: `$${stats.spent.toLocaleString()}`, icon: DollarSign, color: 'text-primary' },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="rounded-lg border bg-muted/30 p-2.5">
               <Icon className={cn('h-3.5 w-3.5 mb-1', color)} />

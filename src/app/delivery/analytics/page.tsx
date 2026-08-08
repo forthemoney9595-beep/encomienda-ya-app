@@ -69,12 +69,16 @@ export default function DeliveryAnalyticsPage() {
 
   // Igual que en my-store/analytics: la consulta arranca desde prevFrom para poder
   // calcular ambos períodos (actual + anterior) con un solo listener.
+  // 🚨 Fase PP (N9): la query filtra por CREACIÓN pero los buckets agrupan por ENTREGA —
+  // un pedido creado antes del corte y entregado dentro del período no se bajaba y
+  // faltaba plata. El margen de 7 días cubre cualquier pedido "a caballo" realista.
   const analyticsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     if (prevFrom) {
+      const buffered = new Date(prevFrom.getTime() - 7 * 86_400_000);
       return query(collection(firestore, 'orders'),
         where('deliveryPersonId', '==', user.uid),
-        where('createdAt', '>=', Timestamp.fromDate(prevFrom)),
+        where('createdAt', '>=', Timestamp.fromDate(buffered)),
         orderBy('createdAt', 'desc')
       );
     }
@@ -122,7 +126,7 @@ export default function DeliveryAnalyticsPage() {
 
   return (
     <div className="container mx-auto pb-20 space-y-6">
-      <PageHeader title="Analíticas" description="Resumen de tu actividad como repartidor." />
+      <PageHeader title="Analíticas" description="Resumen de tu actividad como repartidor, agrupado por fecha de entrega (netos, ya con reembolsos descontados)." />
 
       <div className="flex gap-2 flex-wrap">
         {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (

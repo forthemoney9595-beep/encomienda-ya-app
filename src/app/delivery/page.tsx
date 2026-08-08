@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where } from 'firebase/firestore';
+import { driverNetForOrder } from '@/lib/money';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -60,7 +61,9 @@ export default function DeliveryDashboardPage() {
       const d = o.deliveredAt?.seconds || o.createdAt?.seconds || 0;
       return d >= todaySec;
     });
-    const earningsToday = deliveredToday.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
+    // Neto real (Fase PP, N3): antes era `deliveryFee` crudo y contradecía a
+    // /delivery/earnings y /delivery/analytics, que ya usan driverNetForOrder.
+    const earningsToday = Math.round(deliveredToday.reduce((sum, o) => sum + driverNetForOrder(o), 0));
 
     return {
       availableCount: availableOrders?.length || 0,

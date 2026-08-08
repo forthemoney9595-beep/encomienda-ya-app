@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { doc, collection, query, where, updateDoc } from 'firebase/firestore';
+import { doc, collection, query, where, updateDoc, getDoc } from 'firebase/firestore';
+import { useState } from 'react';
+import { storeNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,6 +63,18 @@ export default function StoreDashboardPage() {
   );
   const { data: legacyItems } = useCollection<any>(legacyQuery);
 
+  // Comisión por defecto (para tiendas sin tarifa propia) — mismo fallback que la billetera.
+  const [defaultCommission, setDefaultCommission] = useState(FALLBACK_COMMISSION);
+  useEffect(() => {
+    if (!firestore) return;
+    getDoc(doc(firestore, 'config', 'platform'))
+      .then(s => {
+        const v = Number(s.data()?.defaultCommissionRate);
+        if (Number.isFinite(v) && v > 0) setDefaultCommission(v);
+      })
+      .catch(() => {});
+  }, [firestore]);
+
   const stats = useMemo(() => {
     const all = orders || [];
     const startOfToday = new Date();
@@ -70,15 +84,21 @@ export default function StoreDashboardPage() {
     const pending = all.filter(o => o.status === 'Pendiente de Confirmación');
     const active = all.filter(o => PRODUCT_STATES.includes(o.status));
     const deliveredToday = all.filter(o => o.status === 'Entregado' && (o.createdAt?.seconds || 0) >= todaySec);
-    const salesToday = deliveredToday.reduce((sum, o) => sum + Math.max(0, (o.total || 0) - (o.deliveryFee || 0)), 0);
+    // 🚨 Fase PP (N2): antes era `total − envío`, o sea subtotal + TARIFA DE SERVICIO —
+    // le atribuía a la tienda plata de la plataforma, sin comisión, sin reembolsos y sin
+    // excluir efectivo (justo el error que money.ts corrigió en las billeteras). La
+    // tarjeta enlaza a la billetera: ahora muestran el MISMO criterio (neto real).
+    const storeRate = store?.commissionRate;
+    const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : defaultCommission;
+    const salesToday = deliveredToday.reduce((sum, o) => sum + storeNetForOrder(o, fallbackRate), 0);
 
     return {
       pendingCount: pending.length,
       activeCount: active.length,
       deliveredTodayCount: deliveredToday.length,
-      salesToday,
+      salesToday: Math.round(salesToday),
     };
-  }, [orders]);
+  }, [orders, store, defaultCommission]);
 
   const lowStock = useMemo(() => {
     const all = [...(items || []), ...(legacyItems || [])];
@@ -167,7 +187,7 @@ export default function StoreDashboardPage() {
         <StatCard label="En curso" value={stats.activeCount} icon={ShoppingBag} tone="info" href="/orders" />
         <StatCard label="Entregados hoy" value={stats.deliveredTodayCount} icon={ListOrdered} tone="muted" href="/orders" />
         <StatCard
-          label="Ventas de hoy"
+          label="Tuyo de hoy (neto)"
           value={`$${stats.salesToday.toLocaleString()}`}
           icon={Wallet}
           tone="success"

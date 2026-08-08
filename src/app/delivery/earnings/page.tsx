@@ -350,7 +350,14 @@ export default function DeliveryEarningsPage() {
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <span className="block font-bold text-success">+${order.deliveryFee}</span>
+                                    {/* Neto (Fase PP, N4): antes mostraba deliveryFee crudo y las
+                                        filas no sumaban el titular de la misma pantalla. */}
+                                    <span className="block font-bold text-success">
+                                        +${Math.round(driverNetForOrder(order as any)).toLocaleString('es-AR')}
+                                    </span>
+                                    {(order as any).refunded && (
+                                        <span className="block text-[10px] text-info">reembolso aplicado</span>
+                                    )}
                                 </div>
                             </div>
                         ))

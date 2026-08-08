@@ -379,7 +379,9 @@ function DriverProfilePage() {
                       <td className="px-4 py-2.5 font-medium">{o.customerName}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">{(o as any).storeName || '—'}</td>
                       <td className="px-4 py-2.5 text-right font-bold text-success">
-                        {o.status === 'Entregado' ? `$${(o.deliveryFee || 0).toLocaleString()}` : '—'}
+                        {/* Neto (Fase PP, N5): la tarjeta de arriba ya era neta y esta
+                            columna mostraba el envío crudo — misma pantalla, dos bases. */}
+                        {o.status === 'Entregado' ? `$${Math.round(driverNetForOrder(o as any)).toLocaleString('es-AR')}` : '—'}
                       </td>
                       <td className="px-4 py-2.5">
                         <Badge variant="outline" className={cn('text-[10px] uppercase', orderStatusBadgeClass[kind])}>{o.status}</Badge>

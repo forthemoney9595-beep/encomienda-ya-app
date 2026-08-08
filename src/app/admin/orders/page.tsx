@@ -183,6 +183,8 @@ function AdminOrdersPage() {
   }, [rows, search, idResult]);
 
   const handleExportCsv = () => {
+    // Fase PP (N12): columnas de subtotal/comisión/reembolso agregadas — sin ellas el CSV
+    // no permitía reconciliar el neto de ningún pedido (solo mostraba brutos).
     const rows = displayed.map(o => ({
       'ID':           o.id,
       'Fecha':        formatDt(o.createdAt),
@@ -190,8 +192,12 @@ function AdminOrdersPage() {
       'Tienda':       (o as any).storeName || '',
       'Estado':       o.status,
       'Total':        o.total ?? 0,
+      'Subtotal':     (o as any).subtotal ?? '',
       'Envío':        o.deliveryFee ?? 0,
       'Service Fee':  (o as any).serviceFee ?? 0,
+      'Comisión %':   (o as any).commissionRate ?? '',
+      'Comisión $':   (o as any).commissionAmount != null ? Math.round((o as any).commissionAmount) : '',
+      'Reembolsado':  (o as any).refunded ? ((o as any).refundAmount ?? 'sí') : '',
       'Pago':         (o as any).paymentMethod || '',
     }));
     const now = format(new Date(), 'yyyy-MM-dd', { locale: es });

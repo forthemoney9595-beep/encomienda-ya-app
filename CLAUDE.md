@@ -1852,6 +1852,38 @@ pendientes de ejecutar.
   registro de unsubs + cleanup completo.
 - Typecheck y build limpios. FCM real se prueba con dispositivos en la gran prueba.
 
+**Tanda 3 ejecutada (números coherentes — los hallazgos N del frente 1):**
+- **N7 (raíz):** `confirm-stock` ahora recalcula `commissionAmount` al sacar ítems — era
+  el único campo de plata que quedaba obsoleto (el desglose del dashboard lo suma tal cual).
+- **N1:** el desglose "Facturado" del dashboard admin quedó rotulado **BRUTO** explícito
+  (las aggregations no pueden aplicar money.ts) con link "Ver la ganancia neta real en
+  Finanzas →" — se acabaron las dos pantallas contándose distinto sin decir cuál manda.
+- **N13:** tabla "Por tienda" (comisión ahora neta: reembolsos + efectivo) y "Por
+  repartidor" (`driverNetForOrder` en vez de envío crudo) del dashboard; header "Ventas"
+  → "Ventas brutas".
+- **N2:** `my-store` "Ventas de hoy" calculaba `total − envío` (= le atribuía a la tienda
+  la TARIFA DE SERVICIO de la plataforma, sin comisión/reembolsos/efectivo — el error que
+  money.ts documenta como corregido, sobrevivía en el dashboard). Ahora
+  `storeNetForOrder` con el default de config, rotulada **"Tuyo de hoy (neto)"** —
+  coincide con la billetera a la que enlaza.
+- **N3/N4/N5:** "Ganancias de hoy" del repartidor, las filas del historial de
+  `/delivery/earnings` (no sumaban el titular de su propia pantalla, + formato es-AR) y
+  la columna "Ganó" de la ficha admin — todo a `driverNetForOrder`.
+- **N6:** la ficha de tienda del admin dejó el 10% hardcodeado y lee
+  `config/platform.defaultCommissionRate` (como payout-service/wallet); el header muestra
+  "X% (default)" en vez de "0%" para tiendas sin tarifa propia.
+- **N8:** "Movimientos" de analytics de tienda ya no pinta pedidos CANCELADOS como
+  "+$X" en verde (solo entregados llevan + y verde).
+- **N9:** analytics del repartidor — la query filtraba por CREACIÓN y los buckets agrupan
+  por ENTREGA: pedidos "a caballo" del corte no se bajaban y faltaba plata. Buffer de 7
+  días en la query (el filtro real por deliveredAt lo hace computeStats).
+- **N10:** asimetría de fecha documentada al usuario en ambas analíticas ("por fecha del
+  pedido" tienda/admin vs "por fecha de entrega" repartidor).
+- **N11:** "Gastado" de la ficha de cliente: neto de reembolsos + rotulado "últ. 30".
+- **N12:** CSV de pedidos exporta Subtotal/Comisión %/Comisión $/Reembolsado (antes no se
+  podía reconciliar ningún neto); CSV de tiendas dice "default" en vez de "0" de comisión.
+- Typecheck y build limpios.
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —

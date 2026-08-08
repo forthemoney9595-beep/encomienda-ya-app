@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { storeBaseAmount, commissionForOrder, FALLBACK_COMMISSION } from '@/lib/money';
+import { storeBaseAmount, commissionForOrder, refundRatio, isPlatformCollected, driverNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
 import { useAggregate, useCountFromServer } from '@/lib/firebase-aggregate';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
@@ -485,7 +485,12 @@ function AdminDashboard() {
       if (!map[sid]) map[sid] = { name, revenue: 0, delivered: 0, cancelled: 0, commission: 0, rating: 0, ratingCount: 0 };
       map[sid].revenue += o.total || 0;
       map[sid].delivered += 1;
-      map[sid].commission += base * commRate / 100;
+      // Comisión NETA (Fase PP, N13): con reembolsos descontados y sin efectivo — misma
+      // regla que platformNetForOrder; antes esta tabla y la tarjeta de Finanzas del
+      // mismo período daban distinto.
+      map[sid].commission += isPlatformCollected(o as any)
+        ? (base * commRate / 100) * (1 - refundRatio(o as any))
+        : 0;
     });
     cancelled.forEach(o => {
       const sid = o.storeId || '';
@@ -512,7 +517,9 @@ function AdminDashboard() {
       const name = (o as any).deliveryPersonName || driver?.displayName || driver?.name || did.slice(0,8);
       if (!map[did]) map[did] = { name, deliveries: 0, earnings: 0, rating: 0, ratingCount: 0 };
       map[did].deliveries += 1;
-      map[did].earnings += o.deliveryFee || 0;
+      // Neto real (Fase PP, N13): antes sumaba el envío crudo (sin reembolsos/efectivo)
+      // y contradecía la ficha del repartidor, que ya usa driverNetForOrder.
+      map[did].earnings += driverNetForOrder(o as any);
     });
     // Rating from user docs (mismo criterio que storeAnalytics con stores/{id}.rating).
     Object.keys(map).forEach(did => {
@@ -881,16 +888,27 @@ function AdminDashboard() {
                 <CardContent className="space-y-3">
                   <div>
                     <div className="text-3xl font-bold tabular-nums">{money(revenue)}</div>
-                    <p className="text-xs text-muted-foreground">total de pedidos entregados</p>
+                    <p className="text-xs text-muted-foreground">total BRUTO de pedidos entregados</p>
                   </div>
+                  {/* 🚨 DESGLOSE BRUTO (Fase PP, N1): estas sumas server-side (aggregation)
+                      NO descuentan reembolsos ni excluyen pedidos en efectivo — no pueden
+                      (la aggregation no aplica money.ts). El número REAL de la plataforma,
+                      neto, vive en Finanzas → Ganancias de la plataforma. Antes las dos
+                      pantallas mostraban cifras distintas sin decir cuál manda. */}
                   <div className="space-y-1.5 border-t pt-2.5">
-                    <Row label="Queda en la plataforma" value={money(toPlatform)} accent="text-success" />
+                    <Row label="Queda en la plataforma (bruto)" value={money(toPlatform)} accent="text-success" />
                     <Row label="· tarifa de servicio" value={money(fees)} accent="text-muted-foreground" />
                     <Row label="· comisión a tiendas" value={money(commission)} accent="text-muted-foreground" />
-                    <Row label="A las tiendas" value={money(toStores)} />
+                    <Row label="A las tiendas (bruto)" value={money(toStores)} />
                     <Row label="Envíos (a repartidores)" value={money(shipping)} accent="text-info" />
                     <Row label="Ticket promedio" value={money(avgTicket)} />
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Cifras brutas (sin descontar reembolsos ni efectivo).{' '}
+                    <Link href="/admin/finances" className="text-primary hover:underline">
+                      Ver la ganancia neta real en Finanzas →
+                    </Link>
+                  </p>
                   {/* Los pedidos anteriores a esta versión no tienen `commissionAmount`, así
                       que su comisión no suma acá y aparece como "a las tiendas". */}
                   {commission === 0 && revenue > 0 && (
@@ -1041,7 +1059,7 @@ function AdminDashboard() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tienda</TableHead>
-                    <TableHead className="text-right">Ventas</TableHead>
+                    <TableHead className="text-right">Ventas brutas</TableHead>
                     <TableHead className="text-right">Entregados</TableHead>
                     <TableHead className="text-right">Comisión</TableHead>
                     <TableHead className="text-right">Rating</TableHead>

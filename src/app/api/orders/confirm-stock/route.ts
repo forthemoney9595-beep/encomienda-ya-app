@@ -120,6 +120,13 @@ export async function POST(request: Request) {
       total: newTotal,
       status: "Pendiente de Pago",
       updatedAt: Timestamp.now(),
+      // commissionAmount congelado al crear: si el subtotal cambió (ítems sacados), hay
+      // que recalcularlo -- era el único campo de plata que quedaba viejo acá, y el
+      // desglose del dashboard admin lo suma tal cual (Fase PP, N7). Las fórmulas de
+      // pago no lo usan (recalculan desde subtotal), por eso nunca pagó mal.
+      ...(typeof orderData.commissionRate === 'number'
+        ? { commissionAmount: newSubtotal * orderData.commissionRate / 100 }
+        : {}),
       ...(removedItems.length > 0 ? { removedItems } : {}),
     });
 

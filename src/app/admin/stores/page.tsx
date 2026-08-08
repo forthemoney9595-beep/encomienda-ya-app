@@ -65,7 +65,10 @@ function AdminStoresPage() {
       'Tienda': s.name || '',
       'Rubro': s.category || '',
       'Dirección': s.address || '',
-      'Comisión (%)': s.commissionRate ?? 0,
+      // Fase PP (N12): "0" mentía — las tiendas sin tarifa propia pagan el default global.
+      'Comisión (%)': (typeof s.commissionRate === 'number' && s.commissionRate > 0)
+        ? s.commissionRate
+        : 'default',
       'Rating': s.rating ?? '',
       'Reseñas': s.ratingCount ?? 0,
       'Estado': s.isApproved ? 'Aprobada' : 'Pendiente/Rechazada',

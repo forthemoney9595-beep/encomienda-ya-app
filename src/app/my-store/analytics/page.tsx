@@ -155,7 +155,7 @@ export default function StoreAnalyticsPage() {
     <div className="container mx-auto pb-20 space-y-6">
       <PageHeader
         title={`Analíticas: ${myStore?.name || 'Mi Tienda'}`}
-        description="Resumen de rendimiento y ventas."
+        description="Resumen de rendimiento y ventas, agrupado por fecha del pedido. (Las analíticas del repartidor agrupan por fecha de entrega.)"
       />
 
       {/* Selector de período */}
@@ -349,7 +349,13 @@ export default function StoreAnalyticsPage() {
                         </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                        <div className="font-bold text-success">+${order.total.toLocaleString()}</div>
+                        {/* Fase PP (N8): un pedido CANCELADO se mostraba como "+$X" en verde,
+                            como si fuera plata que entró. Solo los entregados van en verde
+                            con +; el resto en gris y sin signo. */}
+                        <div className={cn('font-bold',
+                            order.status === 'Entregado' ? 'text-success' : 'text-muted-foreground')}>
+                            {order.status === 'Entregado' ? '+' : ''}${order.total.toLocaleString()}
+                        </div>
                         <Badge variant="outline" className={cn('text-[10px] uppercase',
                             order.status === 'Entregado' ? 'bg-success/15 text-success border-success/30' :
                             order.status === 'Rechazado' ? 'bg-destructive/15 text-destructive border-destructive/30' :
