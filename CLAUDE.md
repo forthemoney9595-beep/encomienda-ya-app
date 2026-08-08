@@ -1828,6 +1828,15 @@ pendientes de ejecutar.
 - **Anotado**: la reserva de teléfono es AL REGISTRARSE — editar el teléfono en /profile
   no re-chequea unicidad (ciclo de vida completo = pieza aparte, si algún día hace falta).
 
+## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
+**Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
+particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —
+en particular, la **devolución por API de MP** (anotada para el bloque de MP
+pre-lanzamiento): la API solo EJECUTA la devolución que el admin ya aprobó en el diálogo
+de reembolso (reemplaza el paso manual del panel de MP), jamás se dispara sola. Lo único
+automático permitido es (a) generar SOLICITUDES para aprobar (cron de liquidación) y
+(b) registrar plata que ENTRA (webhook/conciliación marcando pagos aprobados en MP).
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local
@@ -1835,6 +1844,10 @@ pendientes de ejecutar.
   explícito pedido por el usuario: avisarle antes del lanzamiento si todavía no se hizo.
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
 - Regenerar el `MP_WEBHOOK_SECRET` (quedó expuesto durante pruebas)
+- **Devolución por API de MP** (`POST /v1/payments/{id}/refunds`, el `mpPaymentId` ya se
+  guarda): implementar JUNTO con lo de arriba (mismas credenciales, y probarlo requiere un
+  pago real chico + su devolución). Respetar el principio de "el dinero nunca sale solo":
+  la API solo ejecuta lo que el admin aprobó en el diálogo, caso por caso.
 - Sacar la tabla de cuentas demo visible en `/login` (sirve para pruebas, no para producción)
 - Limpiar datos de prueba (órdenes/notificaciones, reseñas `Cliente de Prueba N` en
   "DonalPizza" de la Fase Q, **el seed masivo de la Fase W**, y **el seed de QA de la Fase
