@@ -7,7 +7,7 @@ import { useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { useCountFromServer } from '@/lib/firebase-aggregate';
 import {
   collection, query, where, orderBy, limit, startAfter, getDocs, documentId,
-  doc, updateDoc, deleteDoc, setDoc, serverTimestamp, deleteField, type QueryDocumentSnapshot,
+  doc, updateDoc, deleteDoc, setDoc, serverTimestamp, deleteField, writeBatch, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
 import PageHeader from '@/components/page-header';
@@ -150,8 +150,11 @@ function AdminUsersPage() {
     // confuso, o peor, deje al usuario con role:'admin' en su perfil pero sin acceso real
     // porque roles_admin no se pudo escribir — el mismo tipo de desincronización que ya
     // mordió una vez en la Fase R).
-    if ((promotingToAdmin || demotingFromAdmin) && !isFullAdmin) {
-        toast({ variant: 'destructive', title: 'No autorizado', description: 'Necesitás acceso completo de administrador para esto.' });
+    // Fase PP-P3: CUALQUIER cambio de rol exige admin completo (antes solo los de admin —
+    // un 'support' podía convertir compradores en tiendas/repartidores). La regla de
+    // Firestore ahora también lo exige; esto evita el botón que siempre falla.
+    if (!isFullAdmin) {
+        toast({ variant: 'destructive', title: 'No autorizado', description: 'Cambiar roles requiere acceso completo de administrador.' });
         return;
     }
 
@@ -185,17 +188,20 @@ function AdminUsersPage() {
         // role en users/{uid} es lo que decide la UI del lado del cliente,
         // pero el acceso real a datos sensibles depende de roles_admin/{uid}
         // (asi lo exige firestore.rules) — hay que mantener los dos en sync.
-        await updateDoc(doc(firestore, 'users', userId), {
+        // BATCH ATÓMICO (Fase PP-P4): antes eran dos writes sueltos — si el segundo
+        // fallaba, quedaba un "admin" fantasma (role sin roles_admin) o al revés.
+        const batch = writeBatch(firestore);
+        batch.update(doc(firestore, 'users', userId), {
             role: newRole,
             ...(promotingToAdmin ? { adminLevel: level } : {}),
             ...(demotingFromAdmin ? { adminLevel: deleteField() } : {}),
         });
-
         if (promotingToAdmin) {
-            await setDoc(doc(firestore, 'roles_admin', userId), { role: 'admin', level, createdAt: serverTimestamp() });
+            batch.set(doc(firestore, 'roles_admin', userId), { role: 'admin', level, createdAt: serverTimestamp() });
         } else if (demotingFromAdmin) {
-            await deleteDoc(doc(firestore, 'roles_admin', userId));
+            batch.delete(doc(firestore, 'roles_admin', userId));
         }
+        await batch.commit();
 
         toast({ title: 'Rol actualizado', description: `El usuario ahora es ${newRole}${promotingToAdmin ? ` (${level === 'full' ? 'completo' : 'soporte'})` : ''}.` });
         if (firestore && currentUser) logAdminAction(firestore, currentUser.uid, 'change_role', userId, `${oldRole} → ${newRole}${promotingToAdmin ? ` (${level})` : ''}`);
@@ -220,8 +226,12 @@ function AdminUsersPage() {
         : '¿Darle a este admin acceso TOTAL?')) return;
 
     try {
-        await updateDoc(doc(firestore, 'users', userId), { adminLevel: newLevel });
-        await updateDoc(doc(firestore, 'roles_admin', userId), { level: newLevel });
+        // Batch atómico (Fase PP-P4): la UI (users.adminLevel) y el acceso real
+        // (roles_admin.level) no pueden quedar discrepando por un write fallido.
+        const batch = writeBatch(firestore);
+        batch.update(doc(firestore, 'users', userId), { adminLevel: newLevel });
+        batch.update(doc(firestore, 'roles_admin', userId), { level: newLevel });
+        await batch.commit();
         toast({ title: 'Nivel actualizado', description: `Ahora es admin ${newLevel === 'full' ? 'completo' : 'de soporte'}.` });
         if (currentUser) logAdminAction(firestore, currentUser.uid, 'change_admin_level', userId, newLevel);
         resetLoad();

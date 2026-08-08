@@ -20,13 +20,19 @@ service cloud.firestore {
       return isAdmin() &&
         get(/databases/$(database)/documents/roles_admin/$(request.auth.uid)).data.get('level', 'full') != 'support';
     }
-    // Un cambio de rol hacia o desde 'admin', o al campo adminLevel, es en sí mismo un acto
-    // de otorgar/quitar privilegios -- no alcanza con ser admin 'support' para hacerlo (si
-    // no, un admin 'support' podría promoverse a otra cuenta cómplice a full admin).
+    // Un cambio de ROL (cualquiera, Fase PP-P3: antes solo protegía hacia/desde 'admin' y
+    // un 'support' podía convertir compradores en tiendas/repartidores) o del campo
+    // adminLevel es un acto de otorgar/quitar privilegios -- exige admin 'full' (si no,
+    // un 'support' podría promoverse a otra cuenta cómplice).
     function isAdminRoleChange() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['adminLevel']) ||
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['adminLevel', 'role']) ||
         request.resource.data.get('role', '') == 'admin' ||
         resource.data.get('role', '') == 'admin';
+    }
+    // Campos de PLATA que un admin 'support' no puede tocar (Fase PP-P1): el CBU define a
+    // QUÉ CUENTA se transfiere la plata, y la comisión cuánto se queda la plataforma.
+    function isMoneyFieldChange() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['payoutCbu', 'commissionRate']);
     }
     function isStoreOwner(storeId) {
       return get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid;
@@ -87,7 +93,7 @@ service cloud.firestore {
       // estado, CBU — acceso completo, igual que antes. O el PROPIO usuario sobre su doc,
       // pero limitado a perfil/direcciones/favoritos/disponibilidad/CBU/tokens: nunca puede
       // tocar isApproved/role/status/rating por este camino.
-      allow update: if (isAdmin() && (!isAdminRoleChange() || isFullAdmin())) || (
+      allow update: if (isAdmin() && (!isAdminRoleChange() || isFullAdmin()) && (!isMoneyFieldChange() || isFullAdmin())) || (
         isOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'displayName', 'photoURL', 'profileImageUrl', 'phoneNumber',
@@ -131,11 +137,12 @@ service cloud.firestore {
         ])
       );
 
-      // ADMIN sobre cualquier tienda: acceso completo, igual que antes. O el PROPIO dueño
-      // sobre SU PROPIA tienda: edición de perfil, horarios, pausa manual, categorías, CBU,
-      // y el recálculo automático de maxDiscountPercent (Fase V). Nunca isApproved / rating
-      // / ratingCount / ownerId / commissionRate por este camino.
-      allow update: if isAdmin() || (
+      // ADMIN sobre cualquier tienda — pero comisión y CBU (plata) solo admin 'full'
+      // (Fase PP-P1: un 'support' podía cambiar a qué cuenta se transfiere). O el PROPIO
+      // dueño sobre SU PROPIA tienda: edición de perfil, horarios, pausa manual,
+      // categorías, CBU, y el recálculo automático de maxDiscountPercent (Fase V). Nunca
+      // isApproved / rating / ratingCount / ownerId / commissionRate por este camino.
+      allow update: if (isAdmin() && (!isMoneyFieldChange() || isFullAdmin())) || (
         isSignedIn() && isOwner(resource.data.ownerId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'description', 'category', 'address', 'imageUrl', 'deliveryTime',
@@ -144,7 +151,10 @@ service cloud.firestore {
         ])
       );
 
-      allow delete: if isAdmin();
+      // Borrar una tienda hace desaparecer su saldo del pasivo (el saldo se deriva de los
+      // pedidos + el doc de la tienda) — mismo criterio que borrar cuentas: solo 'full'
+      // (Fase PP-P1; /api/admin/delete-user ya lo exigía, esto estaba en isAdmin() a secas).
+      allow delete: if isFullAdmin();
 
       // Subcolección PRODUCTOS (Soportamos 'products' y 'items' por compatibilidad)
       match /products/{productId} {

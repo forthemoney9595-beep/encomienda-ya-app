@@ -353,7 +353,9 @@ export default function OrderTrackingPage() {
                 createdAt: serverTimestamp(),
             };
             await addDoc(collection(firestore, 'order_chats', order.id, 'messages'), messageData);
-            await updateDoc(orderRef, { readyForPickup: true });
+            // lastDriverNotification también acá (Fase PP-P6): el otro camino de "avisar
+            // repartidor" (store-orders-view) lo escribía y este no — dato desparejo.
+            await updateDoc(orderRef, { readyForPickup: true, lastDriverNotification: serverTimestamp() });
             if (order.deliveryPersonId) {
                 await OrderService.sendNotification(
                     firestore,

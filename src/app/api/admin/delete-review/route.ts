@@ -1,16 +1,24 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import { verifyAuthToken } from "@/lib/auth-server";
+import { verifyAuthToken, verifyAdmin } from "@/lib/auth-server";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // Elimina una reseña y recalcula el rating de la tienda.
 // Es el proceso inverso de /api/reviews/create.
+// Moderar reseñas es tarea operativa legítima: cualquier nivel de admin (incl. 'support').
 export async function POST(request: Request) {
+  // Fase PP-P5: era la ÚNICA ruta admin sin rate limit (tocaba el rating de tiendas sin tope).
+  const ip = getClientIp(request);
+  const { allowed } = checkRateLimit(ip, 'admin:delete-review', 20, 60_000);
+  if (!allowed) return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
+
   const callerUid = await verifyAuthToken(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const adminDoc = await adminDb.collection('roles_admin').doc(callerUid).get();
-  if (!adminDoc.exists) return NextResponse.json({ error: "Se requiere rol admin" }, { status: 403 });
+  if (!(await verifyAdmin(callerUid))) {
+    return NextResponse.json({ error: "Se requiere rol admin" }, { status: 403 });
+  }
 
   try {
     const { reviewId } = await request.json();

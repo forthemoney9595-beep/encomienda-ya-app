@@ -55,7 +55,10 @@ const formatDt = (ts: any) => {
 };
 
 function AdminOrdersPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
+  // Reembolsar exige admin 'full' en el server — sin este gate, un 'support' veía un
+  // botón que siempre fallaba con 403 (Fase PP-P2).
+  const isSupport = userProfile?.adminLevel === 'support';
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -416,7 +419,7 @@ function AdminOrdersPage() {
                             <ExternalLink className="h-3 w-3" /> Ver
                           </Button>
                         </Link>
-                        {(order as any).paymentStatus === 'paid' && !(order as any).refunded && (
+                        {(order as any).paymentStatus === 'paid' && !(order as any).refunded && !isSupport && (
                           <Button
                             size="sm" variant="ghost"
                             className="h-7 px-2 text-xs text-warning hover:bg-warning/10 gap-1"

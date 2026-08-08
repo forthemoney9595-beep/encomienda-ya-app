@@ -1884,6 +1884,33 @@ pendientes de ejecutar.
   podía reconciliar ningún neto); CSV de tiendas dice "default" en vez de "0" de comisión.
 - Typecheck y build limpios.
 
+**Tanda 4 ejecutada (gobernanza admin — los hallazgos P) → FASE PP COMPLETA:**
+- **P1 (reglas + UI):** nuevo helper `isMoneyFieldChange()` en firestore.rules — un admin
+  'support' ya NO puede tocar `commissionRate` ni `payoutCbu` (ni en `stores` ni en
+  `users`) ni **borrar tiendas** (`stores delete: isFullAdmin()` — borrar una tienda hace
+  desaparecer su saldo del pasivo). UI: inputs de CBU deshabilitados con explicación en
+  ambas fichas, botón Eliminar oculto en Gestión Tiendas, y el diálogo de edición excluye
+  `commissionRate` del update para support (si no, TODO el guardado fallaría).
+- **P2:** botón "Reembolsar" de Gestión Pedidos oculto para 'support' (el server ya daba
+  403; era el último botón-que-siempre-falla).
+- **P3:** `isAdminRoleChange()` ahora cubre CUALQUIER cambio de `role` (antes solo
+  hacia/desde admin — un 'support' podía convertir compradores en tiendas/repartidores);
+  `handleRoleChange` exige full para todo cambio de rol.
+- **P4:** rol/nivel de admin se escriben en **batch atómico** (users + roles_admin juntos;
+  antes dos writes sueltos podían dejar un "admin" fantasma).
+- **P5:** `delete-review` era la única ruta admin sin rate limit → 20/min + `verifyAdmin`
+  helper (sigue disponible para 'support': moderar es tarea operativa).
+- **P6:** "Avisar repartidor" desde el detalle del pedido ahora escribe también
+  `lastDriverNotification` (el otro camino ya lo hacía — dato desparejo).
+- **P7:** borrados los componentes muertos `stores/[storeId]/product-list.tsx` y
+  `manage-item-dialog.tsx` (segundo camino de edición de productos sin ningún import).
+- **Verificado en vivo 9/9** (ataque + regresión en la MISMA corrida, disciplina LL):
+  admin bajado temporalmente a 'support' con SDK de cliente → comisión/CBU tienda/CBU
+  usuario/borrar tienda/cambiar rol TODOS bloqueados; pausar tienda y aprobar cuentas
+  SIGUEN funcionando; nivel y datos restaurados con lectura fresca. Tienda TEMPORAL para
+  el test de borrado (jamás intentar borrar una real). Reglas desplegadas antes de
+  verificar; typecheck y build limpios.
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —

@@ -40,7 +40,9 @@ const formatDate = (ts: any) => {
 function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     const { storeId } = params;
     const firestore = useFirestore();
-    const { user: adminUser } = useAuth();
+    const { user: adminUser, userProfile: adminProfile } = useAuth();
+    // El CBU define a qué cuenta se transfiere la plata: solo admin 'full' (regla + UI).
+    const isSupport = (adminProfile as any)?.adminLevel === 'support';
     const router = useRouter();
     const { toast } = useToast();
 
@@ -427,12 +429,16 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                                 value={cbuInput}
                                 onChange={e => setCbuInput(e.target.value)}
                                 placeholder="CBU, CVU o alias de MercadoPago"
+                                disabled={isSupport}
                             />
-                            <Button onClick={handleSaveCbu} disabled={savingCbu || cbuInput.trim() === (store.payoutCbu || '')} className="gap-1.5 shrink-0">
+                            <Button onClick={handleSaveCbu} disabled={isSupport || savingCbu || cbuInput.trim() === (store.payoutCbu || '')} className="gap-1.5 shrink-0">
                                 {savingCbu ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                 Guardar
                             </Button>
                         </div>
+                        {isSupport && (
+                            <p className="text-[11px] text-muted-foreground">Editar el CBU requiere un admin con acceso completo.</p>
+                        )}
                     </CardContent>
                 </Card>
 

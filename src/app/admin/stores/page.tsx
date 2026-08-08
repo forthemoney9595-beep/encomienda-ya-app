@@ -26,7 +26,9 @@ type StoreFilter = 'all' | 'approved' | 'pending' | 'paused';
 function AdminStoresPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
-  const { user: adminUser } = useAuth();
+  const { user: adminUser, userProfile: adminProfile } = useAuth();
+  // Borrar tienda y editar comisión son plata: solo admin 'full' (Fase PP-P1).
+  const isSupport = (adminProfile as any)?.adminLevel === 'support';
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StoreFilter>('all');
 
@@ -89,7 +91,9 @@ function AdminStoresPage() {
               await updateDoc(storeRef, {
                   name: storeData.name,
                   address: storeData.address,
-                  commissionRate: Number(storeData.commissionRate),
+                  // La comisión es plata: un admin 'support' no puede tocarla (la regla lo
+                  // rechazaría de todos modos; excluirla evita que TODO el guardado falle).
+                  ...(isSupport ? {} : { commissionRate: Number(storeData.commissionRate) }),
                   updatedAt: serverTimestamp()
               });
 
@@ -290,9 +294,11 @@ function AdminStoresPage() {
                                     <Button size="sm" variant="ghost" title="Editar" onClick={() => { setSelectedStore(store); setIsDialogOpen(true); }}>
                                         <Edit className="h-4 w-4 text-info" />
                                     </Button>
-                                    <Button size="sm" variant="ghost" title="Eliminar" onClick={() => handleDelete(store.id, store.name, store.ownerId)}>
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
+                                    {!isSupport && (
+                                        <Button size="sm" variant="ghost" title="Eliminar" onClick={() => handleDelete(store.id, store.name, store.ownerId)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    )}
                                 </div>
                             </TableCell>
                         </TableRow>
