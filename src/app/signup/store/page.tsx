@@ -14,8 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { createStoreForUser } from '@/lib/user-service';
+import { doc, getDoc, collection, writeBatch } from 'firebase/firestore';
+import { buildNewStoreData } from '@/lib/user-service';
 import { STORE_CATEGORIES } from '@/lib/store-categories';
 import { Loader2 } from 'lucide-react';
 
@@ -59,58 +59,85 @@ export default function SignupStorePage() {
     }
     setIsSubmitting(true);
     
+    // CUIT normalizado (solo dígitos) para el registro anti multi-cuenta.
+    const cuitDigits = values.cuit.replace(/\D/g, '');
+
+    let createdUser = null as import('firebase/auth').User | null;
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
+        createdUser = user;
 
-        // ✅ CORRECCIÓN: Inicializamos la tienda con campos críticos para las reglas de seguridad
+        // Anti multi-cuenta (Fase PP): un CUIT = una tienda. Pre-chequeo para dar un
+        // error claro; la garantía REAL es el create del batch de abajo (dos registros
+        // simultáneos: el segundo choca contra el doc reservado y todo el batch falla).
+        const uniqueRef = doc(firestore, 'unique_ids', `cuit_${cuitDigits}`);
+        const existing = await getDoc(uniqueRef);
+        if (existing.exists()) {
+            await user.delete().catch(() => { /* queda huérfana en Auth; el email ya no se puede reusar hasta limpiarla */ });
+            toast({
+                variant: "destructive",
+                title: "Ese CUIT ya tiene una tienda registrada",
+                description: "Si es tu negocio y perdiste el acceso, escribinos desde la página de soporte.",
+            });
+            setIsSubmitting(false);
+            return;
+        }
+
         const storeData = {
             name: values.storeName,
             category: values.category,
             address: values.address,
             cuit: values.cuit, // Para poder facturar el día que haga falta
-            maintenanceMode: false, // CRUCIAL: Para que la regla isNotMaintenanceMode pase
+            maintenanceMode: false,
             isApproved: false,      // Requiere aprobación del admin
-            rating: 0,
-            deliveryTime: "30-45 min",
-            minOrder: 500,
-            ownerId: user.uid,
             ownerName: values.ownerName,
             createdAt: new Date()
         };
 
-        // Usamos createStoreForUser pero pasándole el objeto completo
-        const newStoreRef = await createStoreForUser(firestore, user.uid, storeData);
-
-        const userProfile = {
+        // TODO EN UN SOLO BATCH ATÓMICO (Fase PP): tienda + perfil + reserva del CUIT.
+        // Antes eran 3 writes sueltos: si el primero fallaba (pasó de verdad, ver R1 en
+        // CLAUDE.md), la cuenta de Auth quedaba creada sin perfil ni tienda.
+        const storeRef = doc(collection(firestore, 'stores'));
+        const batch = writeBatch(firestore);
+        batch.set(storeRef, buildNewStoreData(user.uid, storeData as any));
+        batch.set(doc(firestore, "users", user.uid), {
             uid: user.uid,
             name: values.ownerName,
             email: values.email,
             phoneNumber: values.phoneNumber,
             role: 'store' as const,
-            storeId: newStoreRef.id,
-            isApproved: false // El usuario también nace como no aprobado
-        };
-        
-        await setDoc(doc(firestore, "users", user.uid), userProfile);
+            storeId: storeRef.id,
+            isApproved: false
+        });
+        batch.set(uniqueRef, { type: 'cuit', value: cuitDigits, uid: user.uid, createdAt: new Date() });
+        await batch.commit();
+
         await sendEmailVerification(user);
 
         toast({
             title: "¡Solicitud de Tienda Enviada!",
             description: "Revisá tu correo para verificar tu cuenta. Tu tienda está pendiente de aprobación.",
         });
-        
+
         // Recarga completa para reinicializar el contexto de autenticación
         window.location.href = '/';
 
     } catch (error: any) {
         console.error("Error creating store account:", error);
+        // Si la cuenta de Auth llegó a crearse pero Firestore falló, se revierte para no
+        // dejar una cuenta a medias (podía loguear sin perfil ni tienda).
+        if (createdUser && error?.code !== 'auth/email-already-in-use') {
+            await createdUser.delete().catch(() => {});
+        }
         toast({
             variant: "destructive",
             title: "Error al Registrarse",
-            description: error.code === 'auth/email-already-in-use' 
+            description: error.code === 'auth/email-already-in-use'
                 ? "Este correo electrónico ya está en uso."
-                : "No se pudo registrar la tienda. Por favor, inténtalo de nuevo.",
+                : error.code === 'permission-denied'
+                    ? "Ese CUIT ya tiene una tienda registrada."
+                    : "No se pudo registrar la tienda. Por favor, inténtalo de nuevo.",
         });
     } finally {
         setIsSubmitting(false);

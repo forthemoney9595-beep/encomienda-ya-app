@@ -1757,6 +1757,61 @@ El panel listaba montos sueltos sin la cuenta que los produce. Ahora:
   también pasa por retiros del seed sin ventas — el caso "Pizzería de Prueba debe $8.000"),
   y un total al pie que declara coincidir con la tarjeta.
 
+## Fase PP (ago 2026): auditoría de coherencia total + Tanda 1 de correcciones
+Pedido del usuario: "necesito que estemos totalmente seguros... no pueden fallar los números
+y no puede fallar nada". Auditoría en 3 frentes con agentes en paralelo + verificación
+manual de cada hallazgo clave: (1) coherencia de números (toda pantalla con plata vs
+`money.ts`), (2) matriz rol × acción (regla vs API vs UI), (3) mapa de notificaciones.
+**Informe completo entregado en PDF** (`Escritorio/Auditoria-EncomiendaYA-Fase-PP.pdf`):
+4 críticos, 9 altos, ~14 medios. Veredicto global: la plata que se PAGA está bien (todo lo
+que decide pagos usa money.ts); lo que confunde son pantallas informativas pre-KK y avisos
+que no llegan. Los hallazgos con archivo:línea están en los informes de los 3 agentes de la
+sesión — las Tandas 2-4 (push/avisos, números coherentes, gobernanza admin) quedan
+pendientes de ejecutar.
+
+**Tanda 1 ejecutada (los 4 críticos + registro definitivo, verificada 6/6 en vivo):**
+- **R1 — el registro de tiendas estaba ROTO en producción**: la regla de `create` de
+  `stores` (Fase BB) no incluía `status`, que `createStoreForUser` siempre escribe
+  ('Pendiente') → permission-denied en TODO signup de tienda, con la cuenta de Auth creada
+  a medias. Invisible porque el alta manual del admin pasa por la rama `isAdmin()`. Fix:
+  `status` en la lista + regla `status == 'Pendiente'` en el create no-admin. Verificado
+  en vivo con el payload exacto (antes rechazado, ahora pasa; con otro status, bloqueado).
+- **Registro definitivo (pedido explícito):** nueva colección **`unique_ids`**
+  (id = `dni_XXXXXXXX` / `cuit_XXXXXXXXXXX`) reservada en el MISMO batch que crea la
+  cuenta — dos cuentas con el mismo DNI/CUIT imposibles a nivel reglas (create sobre doc
+  existente = denegado; verificado en vivo, incluida la suplantación de uid). Pre-chequeo
+  con `get` para error claro + rollback `user.delete()` si Firestore falla (adiós cuentas
+  a medias — los 2 signups ahora escriben TODO en un batch atómico). Alta de repartidor en
+  **2 pasos**: datos + **patente** (obligatoria salvo bicicleta; `vehicle` pasó a objeto
+  `{type, plate}`) → **documentos OBLIGATORIOS** para enviar la solicitud (moto/auto:
+  licencia frente/dorso + selfie + **cédula del vehículo** `vehicleDocUrl`; bicicleta: DNI
+  frente/dorso + selfie), todo por `storeRawPath` a `licenses/{uid}` (URLs firmadas). El
+  admin ve la 4ª foto en pending-list y delivery-personnel-list; `/profile` permite
+  cargarla a los ya registrados; `/api/licenses/signed-url` firma el campo nuevo;
+  `/api/admin/delete-user` **libera los `unique_ids`** al borrar la cuenta (si no, esa
+  persona no podría re-registrarse nunca).
+- **R2 — segundo camino de tomar pedido sin gates** (`orders/[orderId]`): el botón de
+  aceptar aparecía para repartidores NO aprobados (botón que siempre falla) y salteaba el
+  tope de 3 pedidos. Ahora exige `isApproved` para verse y cuenta los activos
+  (`getCountFromServer`) antes de asignar. `MAX_ACTIVE_ORDERS` movido a `order-service.ts`
+  (compartido por los dos caminos).
+- **R3 — aprobación unificada.** Nuevo **`src/lib/approval-service.ts`**
+  (`setAccountApproval`): users.isApproved + users.status + stores.isApproved SIEMPRE
+  juntos en un batch, auditado, y **la persona SE ENTERA** (F3: aprobar era silencioso).
+  Reemplaza los 5 caminos (dashboard, gestión repartidores, ficha repartidor —usa
+  'Inactivo' al desactivar—, ficha tienda, diálogo de gestión tiendas — este además dejó
+  de escribir la aprobación por su cuenta y solo llama al servicio si cambió). La cola de
+  solicitudes y los badges del sidebar filtran `status !== 'Rechazado'` (los rechazados
+  quedaban en la cola PARA SIEMPRE: isApproved:false es justo el filtro).
+- **R4 — `/checkout` muerto eliminado** (creaba el pedido y lo mandaba a pagar salteando
+  la confirmación de stock; sin ningún link desde la Fase V) y **`/api/checkout` ahora
+  exige `status == 'Pendiente de Pago'`** y rechaza pedidos ya pagados — antes generaba
+  links de pago para pedidos cancelados/rechazados/pagados.
+- De paso (del mapa de notificaciones): `sendNotification` ya no puede perder una
+  notificación por `orderId: undefined` (el SDK lanza con undefined) y el push loguea las
+  respuestas HTTP de error (antes un 401 se perdía sin rastro).
+- Reglas desplegadas ANTES de verificar; typecheck y build limpios.
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

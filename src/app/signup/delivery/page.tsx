@@ -1,6 +1,15 @@
 
 'use client';
 
+// Alta de repartidor (Fase X + Fase PP). Es el alta que más datos reales necesita: es
+// quien entra a la casa de un cliente. Dos pasos:
+//   1. Datos + patente → crea la cuenta con el DNI RESERVADO en `unique_ids` (batch
+//      atómico: dos cuentas con el mismo DNI son imposibles a nivel de reglas).
+//   2. Documentos OBLIGATORIOS antes de poder enviar la solicitud: moto/auto = licencia
+//      frente/dorso + selfie con la licencia + cédula del vehículo; bicicleta = DNI
+//      frente/dorso + selfie con el DNI. Se suben como PATH crudo (storeRawPath) a la
+//      carpeta privada `licenses/{uid}` — el admin los ve por URL firmada de 5 minutos.
+
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,19 +17,17 @@ import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { Bike, Car, Loader2 } from 'lucide-react';
+import { Bike, Car, Loader2, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, sendEmailVerification, type User } from 'firebase/auth';
+import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { ImageUpload } from '@/components/image-upload';
 
-// Repartidor: el alta que más datos reales necesita (es quien maneja plata en efectivo
-// y entra a la casa de un cliente) -- antes solo pedía nombre/email/contraseña/vehículo,
-// sin nada objetivo para identificar a la persona (el DNI/fecha de nacimiento recién se
-// verían, indirectamente, en la foto del carnet que se sube después en /profile).
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
@@ -36,7 +43,20 @@ const formSchema = z.object({
   vehicleType: z.enum(["motocicleta", "automovil", "bicicleta"], {
     required_error: "Debes seleccionar un tipo de vehículo.",
   }),
-});
+  plate: z.string(),
+}).refine(
+  (v) => v.vehicleType === 'bicicleta' || /^[A-Za-z0-9\s-]{6,10}$/.test(v.plate.trim()),
+  { message: "Ingresá la patente del vehículo (ej: AB 123 CD).", path: ['plate'] },
+);
+
+// Los documentos requeridos según el vehículo. Los campos de licencia se reusan para el
+// DNI cuando es bicicleta (no necesita licencia de conducir) — el rótulo cambia, el campo no.
+const DOC_FIELDS = (isBike: boolean) => [
+  { key: 'licenseUrl', label: isBike ? 'DNI — frente' : 'Licencia de conducir — frente' },
+  { key: 'licenseBackUrl', label: isBike ? 'DNI — dorso' : 'Licencia de conducir — dorso' },
+  { key: 'licenseSelfieUrl', label: isBike ? 'Selfie sosteniendo tu DNI' : 'Selfie sosteniendo tu licencia' },
+  ...(isBike ? [] : [{ key: 'vehicleDocUrl', label: 'Cédula / papeles del vehículo' }]),
+] as { key: string; label: string }[];
 
 export default function SignupDeliveryPage() {
   const { toast } = useToast();
@@ -44,6 +64,12 @@ export default function SignupDeliveryPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Paso 2: cuenta ya creada, faltan los documentos.
+  const [createdUser, setCreatedUser] = useState<User | null>(null);
+  const [isBike, setIsBike] = useState(false);
+  const [docPaths, setDocPaths] = useState<Record<string, string>>({});
+  const [savingDocs, setSavingDocs] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -54,8 +80,11 @@ export default function SignupDeliveryPage() {
       phoneNumber: "",
       dni: "",
       birthDate: "",
+      plate: "",
     },
   });
+
+  const vehicleType = form.watch('vehicleType');
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!auth || !firestore) {
@@ -64,12 +93,29 @@ export default function SignupDeliveryPage() {
     }
     setIsSubmitting(true);
 
+    let newUser: User | null = null;
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
+        newUser = user;
 
-        // Create user profile in Firestore
-        const userProfile = {
+        // Anti multi-cuenta (Fase PP): un DNI = una cuenta de repartidor. El pre-chequeo
+        // da el error claro; la garantía real es el create dentro del batch.
+        const uniqueRef = doc(firestore, 'unique_ids', `dni_${values.dni}`);
+        const existing = await getDoc(uniqueRef);
+        if (existing.exists()) {
+            await user.delete().catch(() => {});
+            toast({
+                variant: "destructive",
+                title: "Ese DNI ya tiene una cuenta",
+                description: "Si es tuyo y perdiste el acceso, escribinos desde la página de soporte.",
+            });
+            setIsSubmitting(false);
+            return;
+        }
+
+        const batch = writeBatch(firestore);
+        batch.set(doc(firestore, "users", user.uid), {
             uid: user.uid,
             name: values.name,
             email: values.email,
@@ -77,34 +123,111 @@ export default function SignupDeliveryPage() {
             dni: values.dni,
             birthDate: values.birthDate,
             role: 'delivery' as const,
-            vehicle: values.vehicleType,
-            status: 'Pendiente', // Delivery personnel needs approval
+            // Objeto {type, plate}: los consumidores existentes ya toleran ambas formas
+            // (string legacy u objeto) — ver admin/delivery.
+            vehicle: values.vehicleType === 'bicicleta'
+                ? { type: values.vehicleType }
+                : { type: values.vehicleType, plate: values.plate.trim().toUpperCase() },
+            status: 'Pendiente',
             isApproved: false,
-        };
-        
-        await setDoc(doc(firestore, "users", user.uid), userProfile);
+        });
+        batch.set(uniqueRef, { type: 'dni', value: values.dni, uid: user.uid, createdAt: new Date() });
+        await batch.commit();
+
         await sendEmailVerification(user);
 
-        toast({
-            title: "¡Solicitud Enviada!",
-            description: "Revisá tu correo para verificar tu cuenta. Tu perfil de repartidor está pendiente de aprobación.",
-        });
-        router.push('/');
-        
+        // Paso 2: documentos. La cuenta existe pero la solicitud no está completa hasta
+        // que suba todo.
+        setIsBike(values.vehicleType === 'bicicleta');
+        setCreatedUser(user);
+
     } catch (error: any) {
         console.error("Error creating delivery account:", error);
+        if (newUser && error?.code !== 'auth/email-already-in-use') {
+            await newUser.delete().catch(() => {});
+        }
         toast({
             variant: "destructive",
             title: "Error al Registrarse",
-            description: error.code === 'auth/email-already-in-use' 
+            description: error.code === 'auth/email-already-in-use'
                 ? "Este correo electrónico ya está en uso."
-                : "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
+                : error.code === 'permission-denied'
+                    ? "Ese DNI ya tiene una cuenta registrada."
+                    : "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
         });
     } finally {
         setIsSubmitting(false);
     }
   }
 
+  const requiredDocs = DOC_FIELDS(isBike);
+  const allDocsUploaded = requiredDocs.every(d => !!docPaths[d.key]);
+
+  const handleFinishDocs = async () => {
+    if (!firestore || !createdUser || !allDocsUploaded) return;
+    setSavingDocs(true);
+    try {
+        await updateDoc(doc(firestore, 'users', createdUser.uid), docPaths);
+        toast({
+            title: "¡Solicitud Enviada!",
+            description: "Revisá tu correo para verificar la cuenta. Te avisamos cuando el equipo apruebe tu perfil.",
+        });
+        window.location.href = '/';
+    } catch (e) {
+        console.error(e);
+        toast({ variant: "destructive", title: "Error", description: "No se pudieron guardar los documentos. Probá de nuevo." });
+    } finally {
+        setSavingDocs(false);
+    }
+  };
+
+  // ── Paso 2: documentos obligatorios ──
+  if (createdUser) {
+    return (
+      <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center py-10">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl flex items-center gap-2">
+              <ShieldCheck className="h-6 w-6 text-primary" /> Último paso: tus documentos
+            </CardTitle>
+            <CardDescription>
+              Para aprobar tu cuenta necesitamos verificar quién sos{isBike ? '' : ' y el vehículo con el que vas a trabajar'}.
+              Las fotos son privadas: solo las ve el equipo de aprobación.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {requiredDocs.map(({ key, label }) => (
+              <div key={key} className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  {docPaths[key] && <CheckCircle2 className="h-4 w-4 text-success" />}
+                  {label} <span className="text-destructive">*</span>
+                </Label>
+                <ImageUpload
+                  ownerId={createdUser.uid}
+                  folder="licenses"
+                  variant="banner"
+                  storeRawPath
+                  onImageUploaded={(path) => setDocPaths(prev => ({ ...prev, [key]: path }))}
+                />
+              </div>
+            ))}
+          </CardContent>
+          <CardFooter className="flex flex-col gap-2">
+            <Button className="w-full" onClick={handleFinishDocs} disabled={!allDocsUploaded || savingDocs}>
+              {savingDocs ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Guardando…</> : "Enviar solicitud"}
+            </Button>
+            {!allDocsUploaded && (
+              <p className="text-xs text-muted-foreground text-center">
+                Subí {requiredDocs.length === 4 ? 'las 4 fotos' : 'las 3 fotos'} para poder enviar la solicitud.
+              </p>
+            )}
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Paso 1: datos de la cuenta ──
   return (
     <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center">
       <Card className="w-full max-w-sm">
@@ -238,10 +361,25 @@ export default function SignupDeliveryPage() {
                   </FormItem>
                 )}
               />
+              {vehicleType && vehicleType !== 'bicicleta' && (
+                <FormField
+                  control={form.control}
+                  name="plate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Patente del vehículo</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej. AB 123 CD" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </CardContent>
             <CardFooter className="flex flex-col">
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando solicitud...</> : "Crear Cuenta de Repartidor"}
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creando cuenta...</> : "Continuar → subir documentos"}
               </Button>
               <div className="mt-4 text-center text-sm">
                 ¿Ya tienes una cuenta?{" "}

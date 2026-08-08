@@ -194,11 +194,13 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                         <FileText className="h-4 w-4 text-info" /> Licencia de Conducir
                     </h4>
                     {(selectedDriver?.licenseUrl || selectedDriver?.licenseBackUrl || selectedDriver?.licenseSelfieUrl) ? (
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                             {([
                                 { label: 'Frente', has: !!selectedDriver?.licenseUrl, url: licenseUrls.licenseUrl },
                                 { label: 'Dorso', has: !!selectedDriver?.licenseBackUrl, url: licenseUrls.licenseBackUrl },
                                 { label: 'Selfie', has: !!selectedDriver?.licenseSelfieUrl, url: licenseUrls.licenseSelfieUrl },
+                                // Cédula/papeles del vehículo (Fase PP)
+                                { label: 'Cédula vehículo', has: !!(selectedDriver as any)?.vehicleDocUrl, url: (licenseUrls as any).vehicleDocUrl },
                             ]).map(({ label, has, url }) => (
                                 <div key={label} className="space-y-1">
                                     <p className="text-[10px] text-muted-foreground text-center">{label}</p>

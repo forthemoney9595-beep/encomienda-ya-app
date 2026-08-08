@@ -99,6 +99,11 @@ export interface Order {
   driverCoords?: { latitude: number; longitude: number };
 }
 
+// Tope de pedidos simultáneos por repartidor (Fase DD). Compartido para que los DOS
+// caminos de "tomar pedido" (panel de entregas y detalle del pedido) apliquen el mismo
+// límite — en la Fase PP se encontró que el detalle no validaba nada y lo salteaba.
+export const MAX_ACTIVE_ORDERS = 3;
+
 export const OrderService = {
     // Notificaciones Genéricas (Campanita)
     // callerUser es quien DISPARA la notificación (la tienda avisando al repartidor, etc.),
@@ -112,7 +117,10 @@ export const OrderService = {
                 title,
                 message,
                 type,
-                orderId,
+                // Nunca `orderId: undefined` suelto: el SDK de Firestore lanza con valores
+                // undefined y la notificación entera se perdería en silencio (bug latente
+                // encontrado en la Fase PP — hasta ahora todos los call sites lo pasaban).
+                ...(orderId ? { orderId } : {}),
                 read: false,
                 createdAt: serverTimestamp(),
                 icon: 'bell'
@@ -132,6 +140,10 @@ export const OrderService = {
                     body: message,
                     link: orderId ? `/orders/${orderId}` : '/orders'
                 })
+            }).then(res => {
+                // Un 401/500 es una respuesta "exitosa" para fetch: sin este chequeo el
+                // push se perdía sin dejar rastro (solo el .catch de fallos de red).
+                if (!res.ok) console.error(`[notify] push rechazado (${res.status}) para ${userId}`);
             }).catch(err => console.error("Error API Push:", err));
 
         } catch (error) {

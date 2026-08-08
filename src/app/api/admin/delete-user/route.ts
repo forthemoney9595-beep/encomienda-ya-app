@@ -67,6 +67,13 @@ export async function POST(request: Request) {
     // Si era admin, limpiar también roles_admin
     await adminDb.collection('roles_admin').doc(userId).delete().catch(() => {});
 
+    // Liberar sus identificadores únicos (DNI/CUIT, Fase PP): si no, la persona no podría
+    // volver a registrarse nunca — el doc de `unique_ids` quedaría reservado para siempre.
+    try {
+      const uniques = await adminDb.collection('unique_ids').where('uid', '==', userId).get();
+      for (const d of uniques.docs) await d.ref.delete();
+    } catch { /* no bloquear el borrado por esto */ }
+
     await logAdminActionServer(
       callerUid, 'delete_user', userId,
       `${label} (${u.role || 'sin rol'})${owed > 1 ? ` · se le debía $${Math.round(owed).toLocaleString('es-AR')}` : ''}`,

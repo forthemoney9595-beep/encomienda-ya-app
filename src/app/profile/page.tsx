@@ -58,6 +58,7 @@ export default function ProfilePage() {
     const [licenseUrl, setLicenseUrl] = useState('');          // frente del carnet (compat con el campo viejo)
     const [licenseBackUrl, setLicenseBackUrl] = useState('');   // dorso del carnet
     const [licenseSelfieUrl, setLicenseSelfieUrl] = useState(''); // selfie sosteniendo el carnet
+    const [vehicleDocUrl, setVehicleDocUrl] = useState('');       // cédula/papeles del vehículo (Fase PP)
     // URLs YA GUARDADAS se muestran vía una URL firmada de 5 min (/api/licenses/signed-url),
     // nunca directo -- ver Fase BB: guardar un link público con token permanente para un DNI
     // es el propio hallazgo de seguridad que esto corrige. Si el campo recién se subió y
@@ -87,6 +88,7 @@ export default function ProfilePage() {
                 setLicenseUrl((userProfile as any).licenseUrl || '');
                 setLicenseBackUrl((userProfile as any).licenseBackUrl || '');
                 setLicenseSelfieUrl((userProfile as any).licenseSelfieUrl || '');
+                setVehicleDocUrl((userProfile as any).vehicleDocUrl || '');
             }
         }
     }, [userProfile]);
@@ -134,7 +136,7 @@ export default function ProfilePage() {
 
             let extraData = {};
             if (userProfile?.role === 'delivery') {
-                extraData = { vehicle: vehicleInfo, licenseUrl, licenseBackUrl, licenseSelfieUrl };
+                extraData = { vehicle: vehicleInfo, licenseUrl, licenseBackUrl, licenseSelfieUrl, vehicleDocUrl };
             }
 
             await updateDoc(userDocRef, { ...baseData, ...extraData });
@@ -470,11 +472,12 @@ export default function ProfilePage() {
                                             <p className="text-xs text-muted-foreground -mt-1">
                                                 Subí las 3 fotos para agilizar tu aprobación. Deben ser claras y legibles.
                                             </p>
-                                            <div className="grid gap-3 sm:grid-cols-3">
+                                            <div className="grid gap-3 sm:grid-cols-2">
                                                 {([
                                                     { label: 'Frente del carnet', field: 'licenseUrl', value: licenseUrl, set: setLicenseUrl },
                                                     { label: 'Dorso del carnet', field: 'licenseBackUrl', value: licenseBackUrl, set: setLicenseBackUrl },
                                                     { label: 'Selfie con el carnet', field: 'licenseSelfieUrl', value: licenseSelfieUrl, set: setLicenseSelfieUrl },
+                                                    { label: 'Cédula / papeles del vehículo', field: 'vehicleDocUrl', value: vehicleDocUrl, set: setVehicleDocUrl },
                                                 ] as const).map(({ label, field, value, set }) => {
                                                     // Compat con datos viejos (URL completa con token ya guardada); lo nuevo es
                                                     // un path que se resuelve a una URL firmada de 5 min vía el useEffect de arriba.

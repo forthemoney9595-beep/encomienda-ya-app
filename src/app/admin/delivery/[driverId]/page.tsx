@@ -24,6 +24,7 @@ import { collection, query, where, doc, updateDoc, orderBy, limit, CollectionRef
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
+import { setAccountApproval } from '@/lib/approval-service';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { driverNetForOrder } from '@/lib/money';
 import { AccountStatement, type StatementMovement } from '@/components/account-statement';
@@ -187,14 +188,20 @@ function DriverProfilePage() {
   };
 
   const handleUpdateStatus = async (status: string) => {
-    if (!driverRef) return;
+    if (!firestore) return;
     setUpdatingStatus(true);
     try {
-      await updateDoc(driverRef, { status, isApproved: status === 'Activo' });
-      if (firestore && adminUser) {
-        logAdminAction(firestore, adminUser.uid, status === 'Activo' ? 'approve_account' : 'reject_account', driverId, `repartidor — ${status}`);
-      }
-      toast({ title: status === 'Activo' ? 'Repartidor activado' : `Estado: ${status}` });
+      // Servicio único de aprobación (Fase PP): isApproved+status juntos, auditado y con
+      // aviso al repartidor. Este camino usa 'Inactivo' al desactivar (no 'Rechazado').
+      await setAccountApproval(firestore, {
+        userId: driverId,
+        approved: status === 'Activo',
+        role: 'delivery',
+        rejectedStatus: status === 'Activo' ? undefined : status,
+        adminUser,
+        label: `repartidor — ${status}`,
+      });
+      toast({ title: status === 'Activo' ? 'Repartidor activado y notificado' : `Estado: ${status}` });
     } catch {
       toast({ variant: 'destructive', title: 'Error al cambiar estado' });
     } finally {

@@ -4,6 +4,7 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw, Clock, CreditCard, ChefHat, Truck, ChevronRight, MessageSquareWarning } from 'lucide-react';
 import { CLAIM_TYPES, type ClaimType } from '@/lib/claim-types';
+import { setAccountApproval } from '@/lib/approval-service';
 import { downloadCsv } from '@/lib/csv-export';
 import { PendingList } from './pending-list';
 import { useRouter } from 'next/navigation';
@@ -147,22 +148,23 @@ function AdminDashboard() {
   const { toast } = useToast();
   const { user: adminUser } = useAuth();
 
-  // Aprobar / rechazar solicitudes de tiendas y repartidores
+  // Aprobar / rechazar solicitudes de tiendas y repartidores — SIEMPRE vía el servicio
+  // único (Fase PP): escribe isApproved + status + stores.isApproved juntos, audita y le
+  // avisa a la persona. Antes este camino no escribía users.status y el aprobado quedaba
+  // "Pendiente" en las otras pantallas; el rechazado nunca salía de la cola.
   const handleUpdateUserStatus = async (userId: string, isApproved: boolean) => {
     if (!firestore) return;
     try {
-      await updateDoc(doc(firestore, 'users', userId), { isApproved });
       const relatedStore = (stores as any[])?.find((s: any) => s.ownerId === userId);
-      if (relatedStore) {
-        await updateDoc(doc(firestore, 'stores', relatedStore.id), { isApproved });
-      }
-      // Aprobar una cuenta es de lo más sensible del panel (habilita a operar y cobrar) y
-      // sin embargo era de lo poco que NO quedaba en el log de acciones.
-      if (adminUser) {
-        logAdminAction(firestore, adminUser.uid, isApproved ? 'approve_account' : 'reject_account', userId,
-          relatedStore ? `tienda: ${relatedStore.name || relatedStore.id}` : 'repartidor');
-      }
-      toast({ title: isApproved ? 'Usuario aprobado' : 'Usuario rechazado' });
+      await setAccountApproval(firestore, {
+        userId,
+        approved: isApproved,
+        role: relatedStore ? 'store' : 'delivery',
+        storeId: relatedStore?.id ?? null,
+        adminUser,
+        label: relatedStore ? `tienda: ${relatedStore.name || relatedStore.id}` : 'repartidor',
+      });
+      toast({ title: isApproved ? 'Usuario aprobado y notificado' : 'Solicitud rechazada' });
     } catch (error) {
       console.error(error);
       toast({ variant: 'destructive', title: 'Error al actualizar' });
@@ -298,10 +300,12 @@ function AdminDashboard() {
   const refreshTotals = () => { refreshDelivered(); refreshFees(); refreshShipping(); refreshCommission(); refreshUsers(); rBuyers(); rStores(); rDrivers(); rOrders(); };
   const dashboardLoading = activeLoading || storesLoading || pendingLoading;
 
-  // Solicitudes pendientes de aprobación (tiendas y repartidores)
+  // Solicitudes pendientes de aprobación (tiendas y repartidores).
+  // `status !== 'Rechazado'` (Fase PP): la query trae isApproved==false, pero los
+  // RECHAZADOS también cumplen eso — sin este filtro nunca salían de la cola.
   const pendingStores = useMemo(() => {
     return (pendingUsers || [])
-      .filter((u: any) => u.role === 'store')
+      .filter((u: any) => u.role === 'store' && u.status !== 'Rechazado')
       .map((u: any) => {
         const storeData = (stores as any[])?.find((s: any) => s.ownerId === u.id);
         return { ...u, ...storeData, id: u.id };
@@ -309,7 +313,7 @@ function AdminDashboard() {
   }, [pendingUsers, stores]);
 
   const pendingDelivery = useMemo(() => {
-    return (pendingUsers || []).filter((u: any) => u.role === 'delivery');
+    return (pendingUsers || []).filter((u: any) => u.role === 'delivery' && u.status !== 'Rechazado');
   }, [pendingUsers]);
 
   // Totales históricos vía aggregation server-side (revenue/completados) + conteo de usuarios.
@@ -456,8 +460,8 @@ function AdminDashboard() {
     const totalActive = Object.values(byStatus).reduce((a, b) => a + b, 0);
     const pausedStores = (stores || []).filter((s: any) => s.manuallyPaused).length;
     const activeDrivers = (drivers || []).filter((u: any) => u.status === 'Activo').length;
-    const pendingApprovalStores   = (pendingUsers || []).filter((u: any) => u.role === 'store').length;
-    const pendingApprovalDrivers  = (pendingUsers || []).filter((u: any) => u.role === 'delivery').length;
+    const pendingApprovalStores   = (pendingUsers || []).filter((u: any) => u.role === 'store' && u.status !== 'Rechazado').length;
+    const pendingApprovalDrivers  = (pendingUsers || []).filter((u: any) => u.role === 'delivery' && u.status !== 'Rechazado').length;
     return { byStatus, totalActive, pausedStores, activeDrivers, pendingApprovalStores, pendingApprovalDrivers };
   }, [activeOrders, stores, drivers, pendingUsers]);
 

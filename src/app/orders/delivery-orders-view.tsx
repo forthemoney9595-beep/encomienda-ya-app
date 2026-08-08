@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { OrderService } from '@/lib/order-service';
+import { OrderService, MAX_ACTIVE_ORDERS } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -40,13 +40,6 @@ import {
 
 const RELEASE_REASONS = ['Se me rompió el vehículo', 'Emergencia personal', 'No pude ubicar la dirección'];
 const PROBLEM_REASONS = ['El cliente no responde', 'Dirección incorrecta/inaccesible', 'El cliente rechazó el pedido'];
-
-// Tope de pedidos simultáneos por repartidor -- antes no existía ningún límite (el código
-// permitía tomar pedidos sin fin), lo que podía saturar a un repartidor sin que se diera
-// cuenta y demorar entregas ya tomadas. Guardrail de UX, no de seguridad: se valida acá y
-// no en firestore.rules porque contar "pedidos activos del repartidor" requeriría una
-// aggregation query dentro de la regla, que Firestore no soporta bien.
-const MAX_ACTIVE_ORDERS = 3;
 
 // Definimos la interfaz localmente
 interface Order {

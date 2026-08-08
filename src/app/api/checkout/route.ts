@@ -54,6 +54,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
+        // 🔒 Solo se puede generar un link de pago para un pedido ESPERANDO el pago
+        // (Fase PP): antes no se validaba el estado y se podía pagar un pedido cancelado,
+        // rechazado, ya pagado, o uno cuyo stock la tienda todavía no confirmó (el total
+        // podría cambiar en la confirmación).
+        if (orderData.status !== 'Pendiente de Pago') {
+            return NextResponse.json(
+                { error: `Este pedido no está esperando el pago (estado: ${orderData.status}).` },
+                { status: 400 },
+            );
+        }
+        if (orderData.paymentStatus === 'paid') {
+            return NextResponse.json({ error: "Este pedido ya está pagado." }, { status: 400 });
+        }
+
         if (!Array.isArray(orderData.items) || orderData.items.length === 0) {
             return NextResponse.json({ error: "El pedido no tiene items" }, { status: 400 });
         }

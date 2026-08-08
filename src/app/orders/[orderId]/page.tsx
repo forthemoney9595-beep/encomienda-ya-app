@@ -4,7 +4,7 @@ import { useParams, useRouter, notFound, useSearchParams } from 'next/navigation
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { type Order, OrderService, updateOrderStatus } from '@/lib/order-service';
+import { type Order, OrderService, updateOrderStatus, MAX_ACTIVE_ORDERS } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -14,7 +14,7 @@ import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'; 
+import { doc, updateDoc, addDoc, collection, serverTimestamp, query, where, getCountFromServer } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { CircularProgress } from '@/components/ui/circular-progress';
@@ -274,6 +274,24 @@ export default function OrderTrackingPage() {
         if (!user || !orderRef || !order || !firestore) return;
         setIsAccepting(true);
         try {
+            // Mismo tope que el panel de entregas (Fase PP): este era un segundo camino
+            // que permitía acaparar pedidos sin límite. La regla de Firestore no puede
+            // contar pedidos activos, así que el guardrail vive en los DOS caminos de UI.
+            const activeSnap = await getCountFromServer(query(
+                collection(firestore, 'orders'),
+                where('deliveryPersonId', '==', user.uid),
+                where('status', 'in', ['En camino', 'En reparto']),
+            ));
+            if (activeSnap.data().count >= MAX_ACTIVE_ORDERS) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Ya tenés el máximo de pedidos en curso',
+                    description: `Terminá alguno de tus ${MAX_ACTIVE_ORDERS} pedidos activos antes de tomar otro.`,
+                });
+                setIsAccepting(false);
+                return;
+            }
+
             const driverName = myUserProfile?.displayName || 'Repartidor';
             await updateDoc(orderRef, {
                 deliveryPersonId: user.uid,
@@ -364,7 +382,11 @@ export default function OrderTrackingPage() {
   const isDeliveryPerson = myUserProfile?.role === 'delivery' && user?.uid === order.deliveryPersonId;
   const isDelivery = myUserProfile?.role === 'delivery';
 
-  const isAvailableToAccept = isDelivery && !order.deliveryPersonId && (order.status === 'En preparación' || order.status === 'Listo para recoger');
+  // `isApproved === true` (Fase PP): antes este segundo camino mostraba el botón de
+  // aceptar a repartidores NO aprobados — la regla lo rechazaba con un error genérico
+  // (botón que siempre falla). Mismo campo que isApprovedDriver() en firestore.rules.
+  const isAvailableToAccept = isDelivery && (myUserProfile as any)?.isApproved === true &&
+    !order.deliveryPersonId && (order.status === 'En preparación' || order.status === 'Listo para recoger');
   // Admin (Fase OO): ve la columna derecha para poder LEER el chat del pedido al arbitrar
   // un reclamo (el ChatWindow le renderiza en modo solo lectura).
   const isAdminViewer = myUserProfile?.role === 'admin';

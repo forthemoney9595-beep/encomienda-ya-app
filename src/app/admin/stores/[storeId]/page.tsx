@@ -19,6 +19,7 @@ import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { storeBaseAmount, commissionForOrder, storeNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
 import { AccountStatement, type StatementMovement } from '@/components/account-statement';
+import { setAccountApproval } from '@/lib/approval-service';
 import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
 import { cn } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
@@ -220,11 +221,26 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     };
 
     const handleToggleApproval = async () => {
-        if (!firestore || !storeRef || !store) return;
+        if (!firestore || !store) return;
         try {
-            await updateDoc(storeRef, { isApproved: !store.isApproved });
-            if (adminUser) logAdminAction(firestore, adminUser.uid, store.isApproved ? 'reject_account' : 'approve_account', storeId, `tienda: ${store.name || ''}`);
-            toast({ title: store.isApproved ? 'Aprobación retirada' : 'Tienda aprobada' });
+            // Servicio único (Fase PP): antes este camino tocaba SOLO stores.isApproved y
+            // el dueño quedaba para siempre en la cola de solicitudes del dashboard (que
+            // filtra por users.isApproved).
+            if (store.ownerId) {
+                await setAccountApproval(firestore, {
+                    userId: store.ownerId,
+                    approved: !store.isApproved,
+                    role: 'store',
+                    storeId,
+                    adminUser,
+                    label: `tienda: ${store.name || ''}`,
+                });
+            } else if (storeRef) {
+                // Tienda sin dueño (caso anómalo): al menos publicarla/despublicarla.
+                await updateDoc(storeRef, { isApproved: !store.isApproved });
+                if (adminUser) logAdminAction(firestore, adminUser.uid, store.isApproved ? 'reject_account' : 'approve_account', storeId, `tienda sin dueño: ${store.name || ''}`);
+            }
+            toast({ title: store.isApproved ? 'Aprobación retirada' : 'Tienda aprobada y dueño notificado' });
         } catch {
             toast({ variant: 'destructive', title: 'Error' });
         }

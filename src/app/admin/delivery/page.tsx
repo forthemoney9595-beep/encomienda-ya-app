@@ -16,6 +16,7 @@ import { ManageDriverDialog } from './manage-driver-dialog';
 import AdminAuthGuard from '../admin-auth-guard';
 import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { logAdminAction } from '@/lib/admin-audit';
+import { setAccountApproval } from '@/lib/approval-service';
 import { authedFetch } from '@/lib/authed-fetch';
 
 type DriverFilter = 'all' | 'pending' | 'active' | 'rejected';
@@ -57,31 +58,25 @@ function AdminDeliveryPage() {
     rejected: (personnel || []).filter(p => ['Rechazado', 'Inactivo'].includes(p.status)).length,
   }), [personnel]);
 
-  // Aprobar / Rechazar
+  // Aprobar / Rechazar — vía el servicio único (Fase PP): isApproved + status juntos,
+  // auditado, y el repartidor SE ENTERA (antes la aprobación era silenciosa).
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
     if (!firestore) return;
 
     try {
-        const newStatus = status === 'approved' ? 'Activo' : 'Rechazado';
-        const userRef = doc(firestore, 'users', personnelId);
-
-        // isApproved SIEMPRE junto con status: la regla de Firestore que deja tomar
-        // pedidos (isApprovedDriver() en firestore.rules) solo lee isApproved, no status.
-        // Si se actualiza uno sin el otro, la cuenta queda "Activa" en la UI pero bloqueada
-        // de verdad (permission-denied silencioso al intentar tomar un pedido).
-        await updateDoc(userRef, {
-            status: newStatus,
-            isApproved: status === 'approved',
-            updatedAt: serverTimestamp()
+        await setAccountApproval(firestore, {
+            userId: personnelId,
+            approved: status === 'approved',
+            role: 'delivery',
+            adminUser: user,
+            label: 'repartidor',
         });
-        
-        // Aprobar/rechazar un repartidor habilita o corta su capacidad de operar y cobrar
-        // -- de las acciones más sensibles del panel, y no quedaba registrada en ningún lado.
-        if (user) logAdminAction(firestore, user.uid, status === 'approved' ? 'approve_account' : 'reject_account', personnelId, 'repartidor');
 
         toast({
             title: 'Estado Actualizado',
-            description: `El repartidor ha sido marcado como ${newStatus}.`,
+            description: status === 'approved'
+              ? 'El repartidor fue aprobado y notificado.'
+              : 'La solicitud fue rechazada y el repartidor notificado.',
             className: status === 'approved' ? "bg-success/10 text-foreground" : "bg-destructive/10 text-foreground"
         });
 

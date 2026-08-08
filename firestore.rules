@@ -91,7 +91,7 @@ service cloud.firestore {
         isOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'displayName', 'photoURL', 'profileImageUrl', 'phoneNumber',
-          'vehicle', 'licenseUrl', 'licenseBackUrl', 'licenseSelfieUrl',
+          'vehicle', 'licenseUrl', 'licenseBackUrl', 'licenseSelfieUrl', 'vehicleDocUrl',
           'addresses', 'favoriteProducts', 'isOnline', 'payoutCbu',
           'fcmToken', 'fcmTokens', 'notificationsEnabled'
         ])
@@ -116,13 +116,18 @@ service cloud.firestore {
       // el panel. El dueño nunca puede nacer ya aprobado.
       // Mismo cuidado que en users/{uid}: en `create` se valida con .keys(), no con
       // .diff(resource.data) (el doc anterior no existe todavía).
+      // 🚨 Fase PP: faltaba 'status' en esta lista y createStoreForUser SIEMPRE lo escribe
+      // ('Pendiente') — el alta pública de tiendas fallaba completa con permission-denied
+      // (la cuenta de Auth quedaba creada a medias). Invisible desde el panel porque el
+      // alta manual del admin pasa por la rama isAdmin().
       allow create: if isAdmin() || (
         isSignedIn() && isOwner(request.resource.data.ownerId) &&
         (!('isApproved' in request.resource.data) || request.resource.data.isApproved == false) &&
+        request.resource.data.get('status', 'Pendiente') == 'Pendiente' &&
         request.resource.data.keys().hasOnly([
           'name', 'category', 'address', 'cuit', 'maintenanceMode', 'isApproved', 'rating',
           'deliveryTime', 'minOrder', 'ownerId', 'ownerName', 'createdAt', 'productCategories',
-          'imageUrl', 'imageHint', 'products', 'horario'
+          'imageUrl', 'imageHint', 'products', 'horario', 'status'
         ])
       );
 
@@ -394,6 +399,26 @@ service cloud.firestore {
       // total retirado y le devuelve el saldo al usuario -> habilita cobrar dos veces la
       // misma plata, sin ninguna entrada en el log. Un registro de dinero no se borra.
       allow delete: if false;
+    }
+
+    // 8b. REGISTRO DE IDENTIFICADORES ÚNICOS (Fase PP) — anti multi-cuenta. Un doc por
+    // documento real: id "dni_12345678" (repartidores) o "cuit_20123456789" (tiendas),
+    // reservado en el MISMO batch que crea la cuenta. Como acá el id ES el dato, dos
+    // cuentas con el mismo DNI/CUIT son imposibles a nivel de reglas: el segundo create
+    // choca contra el doc existente (create sobre doc existente = denegado).
+    // - get: para que el signup pueda pre-chequear y mostrar un error claro ("ese DNI ya
+    //   tiene cuenta") en vez de un permission-denied críptico. Solo revela existencia.
+    // - list: nadie (no se puede enumerar DNIs).
+    // - create: solo a nombre propio y con la forma exacta.
+    // - delete: solo admin (al borrar una cuenta se libera su documento).
+    match /unique_ids/{key} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['type', 'value', 'uid', 'createdAt']);
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // 9. RESEÑAS DE TIENDA

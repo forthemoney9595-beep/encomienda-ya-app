@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
+import { setAccountApproval } from '@/lib/approval-service';
 import { downloadCsv } from '@/lib/csv-export';
 import { cn } from '@/lib/utils';
 import { ManageStoreDialog } from './manage-store-dialog';
@@ -81,16 +82,34 @@ function AdminStoresPage() {
           if (selectedStore) {
               // --- MODO EDICIÓN ---
               const storeRef = doc(firestore, 'stores', selectedStore.id);
-              
-              // ✅ CORRECCIÓN: Aseguramos que commissionRate se guarde
+
               await updateDoc(storeRef, {
                   name: storeData.name,
                   address: storeData.address,
-                  status: storeData.status,
-                  isApproved: storeData.isApproved, // Derivado de status === 'Aprobado'
-                  commissionRate: Number(storeData.commissionRate), // 👈 ESTO FALTABA
+                  commissionRate: Number(storeData.commissionRate),
                   updatedAt: serverTimestamp()
               });
+
+              // Aprobación SIEMPRE por el servicio único (Fase PP): antes este diálogo
+              // escribía stores.isApproved/status sin tocar users.isApproved — la tienda
+              // salía publicada pero el dueño quedaba para siempre en la cola de
+              // solicitudes del dashboard.
+              if (storeData.isApproved !== selectedStore.isApproved) {
+                  if ((selectedStore as any).ownerId) {
+                      await setAccountApproval(firestore, {
+                          userId: (selectedStore as any).ownerId,
+                          approved: !!storeData.isApproved,
+                          role: 'store',
+                          storeId: selectedStore.id,
+                          adminUser,
+                          label: `tienda: ${storeData.name}`,
+                      });
+                  } else {
+                      // Tienda sin dueño (caso anómalo): al menos publicar/despublicar.
+                      await updateDoc(storeRef, { isApproved: !!storeData.isApproved, status: storeData.status });
+                  }
+              }
+
               // Cambiar la comisión define cuánto se queda la plataforma de cada venta --
               // se audita igual que el resto de las acciones que tocan plata.
               if (adminUser) logAdminAction(firestore, adminUser.uid, 'edit_store', selectedStore.id, `${storeData.name} — comisión ${storeData.commissionRate}% · ${storeData.status}`);

@@ -106,10 +106,8 @@ export function deleteUserAddress(db: Firestore, uid: string, addressId: string)
  * @param ownerId The UID of the user who owns the store.
  * @param storeData Data for the new store.
  */
-export async function createStoreForUser(db: Firestore, ownerId: string, storeData: { name: string, category: string, address: string }): Promise<DocumentReference> {
-    const storesCollectionRef = collection(db, 'stores');
-    
-    const newStoreData: Omit<Store, 'id'> = {
+export function buildNewStoreData(ownerId: string, storeData: { name: string, category: string, address: string }): Omit<Store, 'id'> {
+    return {
         ...storeData,
         ownerId: ownerId,
         status: 'Pendiente' as const,
@@ -122,9 +120,11 @@ export async function createStoreForUser(db: Firestore, ownerId: string, storeDa
         deliveryTime: "30-45 min",
         minOrder: 500,
     };
+}
 
-    const storeDocRef = await addDoc(storesCollectionRef, newStoreData);
-
+export async function createStoreForUser(db: Firestore, ownerId: string, storeData: { name: string, category: string, address: string }): Promise<DocumentReference> {
+    const storesCollectionRef = collection(db, 'stores');
+    const storeDocRef = await addDoc(storesCollectionRef, buildNewStoreData(ownerId, storeData));
     return storeDocRef;
 }
 

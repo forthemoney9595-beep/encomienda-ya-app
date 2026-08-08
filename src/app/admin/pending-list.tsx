@@ -147,11 +147,14 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                     <FileText className="h-4 w-4 text-info" /> Licencia de conducir
                   </h4>
                   {(selectedUser.licenseUrl || selectedUser.licenseBackUrl || selectedUser.licenseSelfieUrl) ? (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {([
                         { label: 'Frente', has: !!selectedUser.licenseUrl, url: licenseUrls.licenseUrl },
                         { label: 'Dorso', has: !!selectedUser.licenseBackUrl, url: licenseUrls.licenseBackUrl },
                         { label: 'Selfie', has: !!selectedUser.licenseSelfieUrl, url: licenseUrls.licenseSelfieUrl },
+                        // Cédula/papeles del vehículo (Fase PP) — obligatoria en el alta
+                        // para moto/auto; en bicicleta no existe y se marca N/A abajo.
+                        { label: 'Cédula vehículo', has: !!(selectedUser as any).vehicleDocUrl, url: (licenseUrls as any).vehicleDocUrl },
                       ]).map(({ label, has, url }) => (
                         <div key={label} className="space-y-1">
                           <p className="text-[10px] text-muted-foreground text-center">{label}</p>
