@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
+import { notifyUser } from "@/lib/notify-server";
 
 // El repartidor suelta un pedido que tomó pero no puede completar -- ANTES de
 // retirarlo de la tienda. Va por API (no por escritura directa permitida en
@@ -88,17 +89,28 @@ export async function POST(request: Request) {
       });
     }
 
+    // Avisar al COMPRADOR (Fase PP): antes su repartidor asignado desaparecía sin
+    // explicación — la tienda se enteraba pero el dueño del pedido no.
+    if (orderData.userId) {
+      await notifyUser({
+        userId: orderData.userId,
+        title: "🔄 Cambio de repartidor",
+        body: "El repartidor no pudo continuar con tu pedido. Ya estamos buscando otro — no hace falta que hagas nada.",
+        type: "order_status",
+        orderId,
+      });
+    }
+
     // Re-broadcast a repartidores aprobados y disponibles (mismo criterio que
     // /api/orders/notify-drivers).
     const driversSnap = await adminDb.collection("users")
       .where("role", "==", "delivery")
       .where("isApproved", "==", true)
       .get();
-    const onlineDrivers = driversSnap.docs.filter(d => d.data().isOnline !== false);
+    const onlineDrivers = driversSnap.docs.filter(d => d.data().isOnline !== false && d.id !== callerUid);
     if (onlineDrivers.length > 0) {
       const batch = adminDb.batch();
       onlineDrivers.forEach((driverDoc) => {
-        if (driverDoc.id === callerUid) return; // no re-notificar a quien lo soltó
         const notifRef = adminDb.collection("notifications").doc();
         batch.set(notifRef, {
           userId: driverDoc.id,
@@ -112,6 +124,31 @@ export async function POST(request: Request) {
         });
       });
       await batch.commit();
+
+      // 🔔 PUSH (Fase PP) — mismo hueco que notify-drivers: solo campanita, el celular
+      // cerrado nunca sonaba.
+      try {
+        const tokens: string[] = [];
+        for (const d of onlineDrivers) {
+          const u = d.data();
+          if (u.fcmToken) tokens.push(u.fcmToken);
+          if (Array.isArray(u.fcmTokens)) tokens.push(...u.fcmTokens);
+        }
+        const uniq = [...new Set(tokens)].filter(Boolean);
+        if (uniq.length > 0) {
+          await adminMessaging.sendEachForMulticast({
+            tokens: uniq,
+            notification: {
+              title: "📦 Pedido Disponible",
+              body: `${orderData.storeName || "Una tienda"} tiene un pedido liberado. ¡Aceptalo!`,
+            },
+            webpush: { fcmOptions: { link: "/orders" } },
+            data: { url: "/orders" },
+          });
+        }
+      } catch (e) {
+        console.error("[release] push falló:", e);
+      }
     }
 
     return NextResponse.json({ success: true });

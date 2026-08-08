@@ -39,8 +39,13 @@ export function ChatListener(): null {
     const myRole = userProfile.role;
     let q;
 
-    // Solo nos interesan los pedidos "vivos"
-    const activeStatuses = ['Pendiente de Confirmación', 'Pendiente de Pago', 'En preparación', 'En reparto'];
+    // Solo nos interesan los pedidos "vivos".
+    // Fase PP: faltaban 'Listo para recoger' y 'En camino' — justo la ventana en la que
+    // el chat comprador↔repartidor está habilitado (chat-window elige al repartidor como
+    // destinatario en 'En camino'), y el ding nunca sonaba ahí. 'Entregado' NO se escucha
+    // a propósito: sería un listener por CADA pedido histórico (sin techo); los mensajes
+    // post-entrega llegan igual por la campanita.
+    const activeStatuses = ['Pendiente de Confirmación', 'Pendiente de Pago', 'En preparación', 'Listo para recoger', 'En camino', 'En reparto'];
 
     if (myRole === 'store') {
         if (!userProfile.storeId) return;
@@ -52,13 +57,28 @@ export function ChatListener(): null {
         q = query(collection(firestore, 'orders'), where('userId', '==', user.uid), where('status', 'in', activeStatuses));
     }
 
+    // Un listener de mensajes POR PEDIDO, con registro para poder desuscribir.
+    // 🚨 Fuga corregida (Fase PP): antes cada `modified` de una orden apilaba OTRO
+    // onSnapshot sobre la misma subcolección de mensajes (nunca se desuscribía ninguno),
+    // así que el sonido podía dispararse N veces por un solo mensaje.
+    const chatUnsubs = new Map<string, () => void>();
+
     // Escuchar la lista de pedidos activos
     const unsubscribeOrders = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        // Si entra un pedido nuevo o se modifica uno existente en la lista
+        const orderId = change.doc.id;
+
+        // Pedido que salió de los estados activos: soltar su listener de chat.
+        if (change.type === 'removed') {
+          chatUnsubs.get(orderId)?.();
+          chatUnsubs.delete(orderId);
+          return;
+        }
+
         if (change.type === 'added' || change.type === 'modified') {
-          const orderId = change.doc.id;
-          
+          // Ya escuchando este chat: no apilar otro listener.
+          if (chatUnsubs.has(orderId)) return;
+
           // Por cada pedido activo, escuchamos SOLAMENTE el último mensaje
           const messagesQuery = query(
             collection(firestore, 'order_chats', orderId, 'messages'),
@@ -67,7 +87,7 @@ export function ChatListener(): null {
           );
 
           // Listener anidado para los mensajes de este pedido
-          onSnapshot(messagesQuery, (msgSnapshot) => {
+          const unsubMsgs = onSnapshot(messagesQuery, (msgSnapshot) => {
             msgSnapshot.docChanges().forEach((msgChange) => {
               if (msgChange.type === 'added') {
                 const msgData = msgChange.doc.data();
@@ -93,11 +113,18 @@ export function ChatListener(): null {
               }
             });
           });
+          chatUnsubs.set(orderId, unsubMsgs);
         }
       });
     });
 
-    return () => unsubscribeOrders();
+    return () => {
+      unsubscribeOrders();
+      // Soltar TODOS los listeners de chat (antes el cleanup solo cortaba el de órdenes
+      // y los anidados quedaban vivos para siempre).
+      chatUnsubs.forEach(unsub => unsub());
+      chatUnsubs.clear();
+    };
   }, [user, firestore, userProfile, pathname, incrementUnread]);
 
   // Este componente es invisible, solo lógica

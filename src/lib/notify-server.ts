@@ -53,10 +53,14 @@ export async function notifyUser(opts: {
     const uniq = [...new Set(tokens)].filter(Boolean);
     if (uniq.length === 0) return;
 
+    const target = orderId ? `/orders/${orderId}` : (link || '/');
     await adminMessaging.sendEachForMulticast({
       tokens: uniq,
       notification: { title, body },
-      webpush: { fcmOptions: { link: orderId ? `/orders/${orderId}` : (link || '/') } },
+      webpush: { fcmOptions: { link: target } },
+      // `data.url` además del fcmOptions.link (Fase PP): el service worker en segundo
+      // plano lee data.url — sin esto, todos los push de notifyUser abrían la home.
+      data: { url: target },
     }).catch(() => { /* tokens vencidos: no es un error que valga la pena reportar */ });
   } catch (e) {
     console.error('[notify-server] No se pudo mandar el push:', e);

@@ -186,10 +186,11 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
                   message = `${storeName} está preparando tu pedido.`;
                   break;
               case 'Listo para recoger':
-                   // Opcional: Avisar al cliente que ya casi sale
-                   // title = "🥡 Pedido Listo";
-                   // message = "Esperando que el repartidor lo retire.";
-                   break;
+                  // Fase PP: este case estaba COMENTADO — la transición era muda para el
+                  // comprador (y es un hito que le importa: su pedido ya está armado).
+                  title = "🥡 ¡Tu pedido está listo!";
+                  message = `${storeName} ya lo tiene preparado. Buscando un repartidor para llevártelo.`;
+                  break;
               case 'En camino': // ✅ NUEVO: Cuando el delivery toma el viaje
                   title = "🛵 Repartidor Asignado";
                   message = "Un repartidor está yendo a retirar tu pedido.";

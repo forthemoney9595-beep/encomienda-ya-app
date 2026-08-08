@@ -22,9 +22,12 @@ messaging.onBackgroundMessage(function(payload) {
     body: payload.notification.body,
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-72x72.png',
-    // Pasamos el link dentro de 'data' para leerlo en el click
+    // Pasamos el link dentro de 'data' para leerlo en el click.
+    // OJO (Fase PP): el payload que recibe el cliente NO tiene nivel `webpush` — el SDK
+    // entrega { notification, data, fcmOptions }. El viejo `payload.webpush?...` era
+    // siempre undefined y todos los push sin data.url abrían la home.
     data: {
-        url: payload.webpush?.fcmOptions?.link || payload.data?.url || '/'
+        url: payload.fcmOptions?.link || payload.data?.url || '/'
     }
   };
 
@@ -43,11 +46,14 @@ self.addEventListener('notificationclick', function(event) {
 
   // Abre la ventana
   event.waitUntil(
-    clients.matchAll({type: 'window'}).then(windowClients => {
-      // Si ya hay una pestaña abierta, la enfoca
+    clients.matchAll({type: 'window', includeUncontrolled: true}).then(windowClients => {
+      // Si ya hay una pestaña de la app abierta, la enfoca y navega al destino.
+      // OJO (Fase PP): antes comparaba la URL ABSOLUTA de la pestaña contra el path
+      // relativo del link -- nunca coincidía y siempre se abría una ventana nueva.
       for (var i = 0; i < windowClients.length; i++) {
         var client = windowClients[i];
-        if (client.url === link && 'focus' in client) {
+        if ('focus' in client) {
+          if (client.navigate && link) client.navigate(link);
           return client.focus();
         }
       }

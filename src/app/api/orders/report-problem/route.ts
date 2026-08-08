@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
+import { notifyUser } from "@/lib/notify-server";
 
 // El repartidor reporta un problema DESPUÉS de retirar el pedido de la tienda (ya tiene
 // el producto físico). A propósito NO cancela ni cambia el estado de la orden -- a
@@ -75,6 +76,24 @@ export async function POST(request: Request) {
         read: false,
         createdAt: Timestamp.now(),
       });
+    }
+
+    // Avisar a los ADMINS de verdad (Fase PP): el mensaje de arriba decía "el admin fue
+    // avisado" desde la Fase T... pero ningún aviso al admin existía — solo el doc en
+    // driver_incidents, visible recién si alguien entraba a mirar la bandeja.
+    try {
+      const adminsSnap = await adminDb.collection("roles_admin").get();
+      for (const a of adminsSnap.docs) {
+        await notifyUser({
+          userId: a.id,
+          title: "🚨 Problema reportado en un reparto",
+          body: `${driverName} reportó: "${reasonText}" — pedido de ${orderData.storeName || 'una tienda'} ya retirado. Requiere tu decisión.`,
+          type: "order_status",
+          orderId,
+        });
+      }
+    } catch (e) {
+      console.error("[report-problem] aviso a admins falló:", e);
     }
 
     return NextResponse.json({ success: true });

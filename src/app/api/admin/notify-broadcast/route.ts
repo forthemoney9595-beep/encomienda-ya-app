@@ -57,6 +57,9 @@ export async function POST(request: Request) {
         title,
         body,
         type: 'admin_broadcast',
+        // Un anuncio no tiene destino natural; con link '/' al menos tocar la campanita
+        // hace algo (antes era un botón muerto — Fase PP).
+        link: '/',
         read: false,
         createdAt: Timestamp.now(),
       });
@@ -84,6 +87,7 @@ export async function POST(request: Request) {
           tokens: chunk,
           notification: { title, body },
           webpush: { fcmOptions: { link: '/' } },
+          data: { url: '/' },
         }).catch(() => ({ successCount: 0 }));
         pushSent += result.successCount;
       }

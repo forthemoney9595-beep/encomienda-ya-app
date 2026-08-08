@@ -1828,6 +1828,30 @@ pendientes de ejecutar.
 - **Anotado**: la reserva de teléfono es AL REGISTRARSE — editar el teléfono en /profile
   no re-chequea unicidad (ciclo de vida completo = pieza aparte, si algún día hace falta).
 
+**Tanda 2 ejecutada (push y avisos — los hallazgos F del mapa de notificaciones):**
+- **F2 — el service worker leía el link por una ruta inexistente** (`payload.webpush?...`
+  no existe en el payload del cliente; es `payload.fcmOptions.link`) → todos los push sin
+  `data.url` abrían la home. Corregido + el "enfocar pestaña abierta" comparaba URL
+  absoluta contra path relativo (nunca acertaba; ahora navega la pestaña existente).
+  `notifyUser` ahora manda `data.url` además de `fcmOptions.link`.
+- **F1 — el aviso más urgente del sistema no sonaba**: `notify-drivers` y el re-broadcast
+  de `release` eran SOLO campanita (repartidor con la app cerrada no se enteraba nunca).
+  Ahora multicast FCM real a aprobados y disponibles, link a `/orders`.
+- **F4 — avisos ausentes del ciclo**: 'Listo para recoger' no avisaba a NADIE (case
+  comentado en `updateOrderStatus`) → avisa al comprador; cancelar con repartidor asignado
+  → aviso al repartidor (`cancel`); soltar → aviso al COMPRADOR (`release`);
+  `report-problem` decía "el admin fue avisado" SIN ningún aviso → notifica a todos los
+  `roles_admin`; retirar/entregar → aviso a la TIENDA (delivery-orders-view).
+- **F5 — campanitas muertas** (sin link, tocarlas no navegaba): liquidaciones del cron
+  (la rama repartidor además sin push), reseñas de tienda y repartidor → `notifyUser` con
+  link; broadcast del admin con `link:'/'` y `data.url`.
+- **F6 — chat-listener**: + 'Listo para recoger' y 'En camino' (la ventana del chat
+  comprador↔repartidor no sonaba). 'Entregado' NO a propósito (listener por cada pedido
+  histórico = sin techo; post-entrega llega por campanita). **Fuga corregida**: cada
+  `modified` apilaba otro listener sin desuscribir (sonido N veces por mensaje) — ahora
+  registro de unsubs + cleanup completo.
+- Typecheck y build limpios. FCM real se prueba con dispositivos en la gran prueba.
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —

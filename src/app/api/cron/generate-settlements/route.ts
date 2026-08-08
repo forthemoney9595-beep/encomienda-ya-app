@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
+import { notifyUser } from "@/lib/notify-server";
 import { Timestamp } from "firebase-admin/firestore";
 import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
 import { nowInArgentina } from "@/lib/store-hours";
@@ -71,29 +72,15 @@ export async function GET(request: Request) {
           createdAt: Timestamp.now(),
         });
 
-        // Notificar al dueño
-        const ownerDoc = await adminDb.collection('users').doc(ownerId).get();
-        const tokens: string[] = [];
-        const od = ownerDoc.data();
-        if (od?.fcmToken) tokens.push(od.fcmToken);
-        if (Array.isArray(od?.fcmTokens)) tokens.push(...od.fcmTokens);
-
-        await adminDb.collection('notifications').add({
+        // Notificar al dueño — via notifyUser (Fase PP): la campanita vieja no tenía
+        // `link` y tocarla no llevaba a ningún lado.
+        await notifyUser({
           userId: ownerId,
           title: "💰 Liquidación generada",
           body: `Tu liquidación de $${Math.floor(availableBalance).toLocaleString()} fue generada. El admin la procesará pronto.`,
           type: "payout",
-          read: false,
-          createdAt: Timestamp.now(),
+          link: "/my-store/wallet",
         });
-
-        if (tokens.length > 0) {
-          await adminMessaging.sendEachForMulticast({
-            tokens: [...new Set(tokens)],
-            notification: { title: "💰 Liquidación generada", body: `$${Math.floor(availableBalance).toLocaleString()} disponibles para cobrar.` },
-            webpush: { fcmOptions: { link: '/my-store/wallet' } },
-          }).catch(() => {});
-        }
 
         results.created++;
       } catch (e) {
@@ -143,13 +130,14 @@ export async function GET(request: Request) {
           createdAt: Timestamp.now(),
         });
 
-        await adminDb.collection('notifications').add({
+        // Via notifyUser (Fase PP): la rama del repartidor ni siquiera mandaba push
+        // (la de tiendas sí — asimetría pura) y su campanita no navegaba a ningún lado.
+        await notifyUser({
           userId: driverDoc.id,
           title: "💰 Liquidación generada",
-          body: `Tu liquidación de $${Math.floor(availableBalance).toLocaleString()} fue generada.`,
+          body: `Tu liquidación de $${Math.floor(availableBalance).toLocaleString()} fue generada. El admin la procesará pronto.`,
           type: "payout",
-          read: false,
-          createdAt: Timestamp.now(),
+          link: "/delivery/earnings",
         });
 
         results.created++;

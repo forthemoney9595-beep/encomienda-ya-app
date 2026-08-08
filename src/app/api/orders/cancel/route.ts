@@ -4,6 +4,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyAuthToken } from '@/lib/auth-server';
 import { returnStockForOrder } from '@/lib/stock-service';
+import { notifyUser } from '@/lib/notify-server';
 
 const CANCELABLE_STATUSES = ['Pendiente de Confirmación', 'Pendiente de Pago'];
 // El admin puede cancelar más estados (excepto los terminales)
@@ -108,6 +109,18 @@ export async function POST(request: Request) {
             read: false,
             createdAt: Timestamp.now(),
         });
+
+        // Notificar al REPARTIDOR asignado (Fase PP): si ya lo había tomado, antes nadie
+        // le avisaba y podía seguir viajando a la tienda por un pedido que ya no existe.
+        if (order.deliveryPersonId) {
+            await notifyUser({
+                userId: order.deliveryPersonId,
+                title: '🚫 Pedido cancelado',
+                body: `El pedido de ${order.storeName || 'la tienda'} que tenías asignado fue cancelado. No hace falta que vayas.`,
+                type: 'order_status',
+                orderId,
+            });
+        }
 
         // Notificar a la tienda
         if (storeOwnerId) {

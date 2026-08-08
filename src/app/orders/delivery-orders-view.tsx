@@ -206,6 +206,14 @@ export default function DeliveryOrdersView() {
             "El repartidor ya tiene tu pedido y va hacia ti.", "order_status", order.id, user
           ).catch(console.error);
         }
+        // La TIENDA también (Fase PP): antes nunca se enteraba de que su pedido salió
+        // del local — el retiro era mudo para quien preparó el pedido.
+        if ((order as any).storeOwnerId) {
+          OrderService.sendNotification(
+            firestore, (order as any).storeOwnerId, "📦 Pedido retirado",
+            `El repartidor retiró el pedido de ${order.customerName || 'un cliente'} y va en camino.`, "order_status", order.id, user
+          ).catch(console.error);
+        }
     } catch (error) {
         toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar." });
     }
@@ -233,6 +241,13 @@ export default function DeliveryOrdersView() {
         OrderService.sendNotification(
           firestore, confirmDeliveryOrder.userId, "🏠 ¡Llegamos!",
           "Disfruta tu pedido. No olvides calificar.", "order_status", confirmDeliveryOrder.id, user
+        ).catch(console.error);
+      }
+      // La TIENDA cierra su ciclo (Fase PP): antes nunca sabía si el pedido llegó.
+      if ((confirmDeliveryOrder as any).storeOwnerId) {
+        OrderService.sendNotification(
+          firestore, (confirmDeliveryOrder as any).storeOwnerId, "✅ Pedido entregado",
+          `El pedido de ${confirmDeliveryOrder.customerName || 'un cliente'} fue entregado con éxito.`, "order_status", confirmDeliveryOrder.id, user
         ).catch(console.error);
       }
 

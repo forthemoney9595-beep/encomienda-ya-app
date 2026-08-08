@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
+import { notifyUser } from "@/lib/notify-server";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
@@ -99,39 +100,15 @@ export async function POST(request: Request) {
       });
     });
 
-    // 3. Notificar al repartidor (campana + push).
-    const notifTitle = "⭐ Nueva reseña";
-    const notifBody = `${orderData.customerName || "Un cliente"} calificó tu entrega con ${ratingNum} estrella${ratingNum === 1 ? "" : "s"}.`;
-
-    await adminDb.collection("notifications").add({
+    // 3. Notificar al repartidor — via notifyUser (Fase PP): la campanita vieja no
+    // llevaba `link` y tocarla no navegaba a ningún lado.
+    await notifyUser({
       userId: driverId,
-      title: notifTitle,
-      body: notifBody,
+      title: "⭐ Nueva reseña",
+      body: `${orderData.customerName || "Un cliente"} calificó tu entrega con ${ratingNum} estrella${ratingNum === 1 ? "" : "s"}.`,
       type: "delivery_review",
-      read: false,
-      createdAt: Timestamp.now(),
-      icon: "star",
+      link: "/delivery/reviews",
     });
-
-    try {
-      const driverUserDoc = await adminDb.collection("users").doc(driverId).get();
-      const driverUserData = driverUserDoc.data();
-      let tokens: string[] = [];
-      if (driverUserData?.fcmToken && typeof driverUserData.fcmToken === "string") tokens.push(driverUserData.fcmToken);
-      if (driverUserData?.fcmTokens && Array.isArray(driverUserData.fcmTokens)) tokens.push(...driverUserData.fcmTokens);
-      tokens = [...new Set(tokens)];
-
-      if (tokens.length > 0) {
-        await adminMessaging.sendEachForMulticast({
-          tokens,
-          notification: { title: notifTitle, body: notifBody },
-          webpush: { fcmOptions: { link: "/delivery/reviews" } },
-          data: { url: "/delivery/reviews" },
-        });
-      }
-    } catch (pushError) {
-      console.error("Error enviando push de reseña al repartidor:", pushError);
-    }
 
     return NextResponse.json({ success: true, reviewId: reviewRef.id });
   } catch (error: any) {

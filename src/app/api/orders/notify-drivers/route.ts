@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyStoreOwnership } from "@/lib/auth-server";
@@ -66,7 +66,35 @@ export async function POST(request: Request) {
     });
     await batch.commit();
 
-    return NextResponse.json({ notified: onlineDrivers.length });
+    // 🔔 PUSH al celular (Fase PP): el aviso más urgente del sistema era SOLO campanita —
+    // un repartidor con la app cerrada no se enteraba nunca de que había un pedido para
+    // tomar. Ahora suena el teléfono de todos los aprobados y disponibles.
+    let pushed = 0;
+    try {
+      const tokens: string[] = [];
+      for (const d of onlineDrivers) {
+        const u = d.data();
+        if (u.fcmToken) tokens.push(u.fcmToken);
+        if (Array.isArray(u.fcmTokens)) tokens.push(...u.fcmTokens);
+      }
+      const uniq = [...new Set(tokens)].filter(Boolean);
+      if (uniq.length > 0) {
+        const res = await adminMessaging.sendEachForMulticast({
+          tokens: uniq,
+          notification: {
+            title: "📦 Nuevo Pedido Disponible",
+            body: `${storeName} tiene un pedido listo. ¡Aceptalo rápido!`,
+          },
+          webpush: { fcmOptions: { link: "/orders" } },
+          data: { url: "/orders" },
+        });
+        pushed = res.successCount;
+      }
+    } catch (e) {
+      console.error("[notify-drivers] push falló:", e);
+    }
+
+    return NextResponse.json({ notified: onlineDrivers.length, pushed });
   } catch (error: any) {
     console.error("❌ [Notify Drivers] Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

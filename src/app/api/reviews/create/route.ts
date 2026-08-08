@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
+import { notifyUser } from "@/lib/notify-server";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
@@ -84,41 +85,17 @@ export async function POST(request: Request) {
       });
     });
 
-    // 3. Notificar al dueño (campana + push), mismo patrón que orders/create.
+    // 3. Notificar al dueño — via notifyUser (Fase PP): la campanita vieja no llevaba
+    // `link` y tocarla no navegaba (el push sí iba bien: incoherencia dentro del evento).
     const ownerId = orderData.storeOwnerId;
     if (ownerId) {
-      const notifTitle = "⭐ Nueva reseña";
-      const notifBody = `${orderData.customerName || "Un cliente"} calificó tu tienda con ${ratingNum} estrella${ratingNum === 1 ? "" : "s"}.`;
-
-      await adminDb.collection("notifications").add({
+      await notifyUser({
         userId: ownerId,
-        title: notifTitle,
-        body: notifBody,
+        title: "⭐ Nueva reseña",
+        body: `${orderData.customerName || "Un cliente"} calificó tu tienda con ${ratingNum} estrella${ratingNum === 1 ? "" : "s"}.`,
         type: "store_review",
-        read: false,
-        createdAt: Timestamp.now(),
-        icon: "star",
+        link: "/my-store/reviews",
       });
-
-      try {
-        const ownerUserDoc = await adminDb.collection("users").doc(ownerId).get();
-        const ownerUserData = ownerUserDoc.data();
-        let tokens: string[] = [];
-        if (ownerUserData?.fcmToken && typeof ownerUserData.fcmToken === "string") tokens.push(ownerUserData.fcmToken);
-        if (ownerUserData?.fcmTokens && Array.isArray(ownerUserData.fcmTokens)) tokens.push(...ownerUserData.fcmTokens);
-        tokens = [...new Set(tokens)];
-
-        if (tokens.length > 0) {
-          await adminMessaging.sendEachForMulticast({
-            tokens,
-            notification: { title: notifTitle, body: notifBody },
-            webpush: { fcmOptions: { link: "/my-store/reviews" } },
-            data: { url: "/my-store/reviews" },
-          });
-        }
-      } catch (pushError) {
-        console.error("Error enviando push de reseña al dueño:", pushError);
-      }
     }
 
     return NextResponse.json({ success: true, reviewId: reviewRef.id });
