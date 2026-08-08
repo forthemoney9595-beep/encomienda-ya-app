@@ -38,8 +38,9 @@ export async function POST(request: Request) {
   const data = userDoc.data()!;
 
   const bucket = adminStorage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-  // vehicleDocUrl (Fase PP): cédula/papeles del vehículo, mismo tratamiento sensible.
-  const fields = ['licenseUrl', 'licenseBackUrl', 'licenseSelfieUrl', 'vehicleDocUrl'] as const;
+  // vehicleDocUrl / vehicleInsuranceUrl (Fase PP): cédula y seguro del vehículo, mismo
+  // tratamiento sensible que la licencia.
+  const fields = ['licenseUrl', 'licenseBackUrl', 'licenseSelfieUrl', 'vehicleDocUrl', 'vehicleInsuranceUrl'] as const;
   const result: Record<string, string | null> = {};
 
   await Promise.all(fields.map(async (field) => {

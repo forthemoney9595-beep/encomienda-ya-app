@@ -1812,6 +1812,22 @@ pendientes de ejecutar.
   respuestas HTTP de error (antes un 401 se perdía sin rastro).
 - Reglas desplegadas ANTES de verificar; typecheck y build limpios.
 
+**Registro final según especificación del usuario (2ª pasada, misma fase):**
+- **Cliente**: nombre y apellido (label + mínimo 5), email único (Auth), **teléfono ÚNICO**
+  (`tel_XXXXXXXXXX` en `unique_ids`, batch atómico + rollback).
+- **Tienda**: + **DNI del dueño** (obligatorio y único) y **teléfono único** — reserva
+  cuit + dni + tel en el mismo batch. `users` del dueño guarda `dni`.
+- **Repartidor**: + **CUIT/CUIL** (obligatorio, se guarda `cuil` normalizado — necesario
+  para pagarle en regla) y **teléfono único**; el paso 2 de documentos ahora exige también
+  el **SEGURO del vehículo vigente** (`vehicleInsuranceUrl`) para moto/auto (5 fotos:
+  licencia frente/dorso + selfie + cédula + seguro; bicicleta sigue con 3 de DNI).
+- Helper compartido `src/lib/unique-ids.ts` (uniqueRef/uniquePayload/isTaken/digitsOnly);
+  reglas: `cuil` en el create de users, `vehicleInsuranceUrl` editable por el dueño;
+  `/api/licenses/signed-url` firma los 5 campos; pending-list, gestión de repartidores y
+  `/profile` muestran/cargan los 2 documentos nuevos. Verificado en vivo (tel único 2/2).
+- **Anotado**: la reserva de teléfono es AL REGISTRARSE — editar el teléfono en /profile
+  no re-chequea unicidad (ciclo de vida completo = pieza aparte, si algún día hace falta).
+
 ## Pendientes pre-lanzamiento
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local

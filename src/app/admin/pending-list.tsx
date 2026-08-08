@@ -152,9 +152,10 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                         { label: 'Frente', has: !!selectedUser.licenseUrl, url: licenseUrls.licenseUrl },
                         { label: 'Dorso', has: !!selectedUser.licenseBackUrl, url: licenseUrls.licenseBackUrl },
                         { label: 'Selfie', has: !!selectedUser.licenseSelfieUrl, url: licenseUrls.licenseSelfieUrl },
-                        // Cédula/papeles del vehículo (Fase PP) — obligatoria en el alta
-                        // para moto/auto; en bicicleta no existe y se marca N/A abajo.
+                        // Cédula y seguro del vehículo (Fase PP) — obligatorios en el
+                        // alta para moto/auto; en bicicleta no existen.
                         { label: 'Cédula vehículo', has: !!(selectedUser as any).vehicleDocUrl, url: (licenseUrls as any).vehicleDocUrl },
+                        { label: 'Seguro vigente', has: !!(selectedUser as any).vehicleInsuranceUrl, url: (licenseUrls as any).vehicleInsuranceUrl },
                       ]).map(({ label, has, url }) => (
                         <div key={label} className="space-y-1">
                           <p className="text-[10px] text-muted-foreground text-center">{label}</p>

@@ -80,7 +80,7 @@ service cloud.firestore {
         (!('isApproved' in request.resource.data) || request.resource.data.isApproved == false) &&
         request.resource.data.keys().hasOnly([
           'uid', 'name', 'email', 'phoneNumber', 'role', 'addresses', 'storeId', 'isApproved',
-          'dni', 'birthDate', 'vehicle', 'status', 'displayName', 'profileImageUrl', 'createdAt'
+          'dni', 'cuil', 'birthDate', 'vehicle', 'status', 'displayName', 'profileImageUrl', 'createdAt'
         ]);
 
       // ADMIN sobre el doc de cualquier usuario: aprobar/rechazar, cambiar rol, sincronizar
@@ -91,7 +91,7 @@ service cloud.firestore {
         isOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'displayName', 'photoURL', 'profileImageUrl', 'phoneNumber',
-          'vehicle', 'licenseUrl', 'licenseBackUrl', 'licenseSelfieUrl', 'vehicleDocUrl',
+          'vehicle', 'licenseUrl', 'licenseBackUrl', 'licenseSelfieUrl', 'vehicleDocUrl', 'vehicleInsuranceUrl',
           'addresses', 'favoriteProducts', 'isOnline', 'payoutCbu',
           'fcmToken', 'fcmTokens', 'notificationsEnabled'
         ])

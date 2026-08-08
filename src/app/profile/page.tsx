@@ -59,6 +59,7 @@ export default function ProfilePage() {
     const [licenseBackUrl, setLicenseBackUrl] = useState('');   // dorso del carnet
     const [licenseSelfieUrl, setLicenseSelfieUrl] = useState(''); // selfie sosteniendo el carnet
     const [vehicleDocUrl, setVehicleDocUrl] = useState('');       // cédula/papeles del vehículo (Fase PP)
+    const [vehicleInsuranceUrl, setVehicleInsuranceUrl] = useState(''); // seguro del vehículo (Fase PP)
     // URLs YA GUARDADAS se muestran vía una URL firmada de 5 min (/api/licenses/signed-url),
     // nunca directo -- ver Fase BB: guardar un link público con token permanente para un DNI
     // es el propio hallazgo de seguridad que esto corrige. Si el campo recién se subió y
@@ -89,6 +90,7 @@ export default function ProfilePage() {
                 setLicenseBackUrl((userProfile as any).licenseBackUrl || '');
                 setLicenseSelfieUrl((userProfile as any).licenseSelfieUrl || '');
                 setVehicleDocUrl((userProfile as any).vehicleDocUrl || '');
+                setVehicleInsuranceUrl((userProfile as any).vehicleInsuranceUrl || '');
             }
         }
     }, [userProfile]);
@@ -136,7 +138,7 @@ export default function ProfilePage() {
 
             let extraData = {};
             if (userProfile?.role === 'delivery') {
-                extraData = { vehicle: vehicleInfo, licenseUrl, licenseBackUrl, licenseSelfieUrl, vehicleDocUrl };
+                extraData = { vehicle: vehicleInfo, licenseUrl, licenseBackUrl, licenseSelfieUrl, vehicleDocUrl, vehicleInsuranceUrl };
             }
 
             await updateDoc(userDocRef, { ...baseData, ...extraData });
@@ -470,7 +472,7 @@ export default function ProfilePage() {
                                                 <FileText className="h-4 w-4" /> Verificación de Licencia de Conducir
                                             </Label>
                                             <p className="text-xs text-muted-foreground -mt-1">
-                                                Subí las 3 fotos para agilizar tu aprobación. Deben ser claras y legibles.
+                                                Subí las fotos de tus documentos para agilizar tu aprobación. Deben ser claras y legibles.
                                             </p>
                                             <div className="grid gap-3 sm:grid-cols-2">
                                                 {([
@@ -478,6 +480,7 @@ export default function ProfilePage() {
                                                     { label: 'Dorso del carnet', field: 'licenseBackUrl', value: licenseBackUrl, set: setLicenseBackUrl },
                                                     { label: 'Selfie con el carnet', field: 'licenseSelfieUrl', value: licenseSelfieUrl, set: setLicenseSelfieUrl },
                                                     { label: 'Cédula / papeles del vehículo', field: 'vehicleDocUrl', value: vehicleDocUrl, set: setVehicleDocUrl },
+                                                    { label: 'Seguro del vehículo vigente', field: 'vehicleInsuranceUrl', value: vehicleInsuranceUrl, set: setVehicleInsuranceUrl },
                                                 ] as const).map(({ label, field, value, set }) => {
                                                     // Compat con datos viejos (URL completa con token ya guardada); lo nuevo es
                                                     // un path que se resuelve a una URL firmada de 5 min vía el useEffect de arriba.

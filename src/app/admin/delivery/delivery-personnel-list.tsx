@@ -199,8 +199,9 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                                 { label: 'Frente', has: !!selectedDriver?.licenseUrl, url: licenseUrls.licenseUrl },
                                 { label: 'Dorso', has: !!selectedDriver?.licenseBackUrl, url: licenseUrls.licenseBackUrl },
                                 { label: 'Selfie', has: !!selectedDriver?.licenseSelfieUrl, url: licenseUrls.licenseSelfieUrl },
-                                // Cédula/papeles del vehículo (Fase PP)
+                                // Cédula y seguro del vehículo (Fase PP)
                                 { label: 'Cédula vehículo', has: !!(selectedDriver as any)?.vehicleDocUrl, url: (licenseUrls as any).vehicleDocUrl },
+                                { label: 'Seguro vigente', has: !!(selectedDriver as any)?.vehicleInsuranceUrl, url: (licenseUrls as any).vehicleInsuranceUrl },
                             ]).map(({ label, has, url }) => (
                                 <div key={label} className="space-y-1">
                                     <p className="text-[10px] text-muted-foreground text-center">{label}</p>

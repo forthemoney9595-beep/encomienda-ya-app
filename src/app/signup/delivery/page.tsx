@@ -25,15 +25,18 @@ import { useRouter } from 'next/navigation';
 import { Bike, Car, Loader2, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification, type User } from 'firebase/auth';
-import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { ImageUpload } from '@/components/image-upload';
+import { isTaken, uniqueRef, uniquePayload } from '@/lib/unique-ids';
 
 const formSchema = z.object({
-  name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
+  name: z.string().min(5, "Ingresá tu nombre y apellido completos."),
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
   phoneNumber: z.string().min(8, "Ingresá un teléfono válido (con código de área).").regex(/^[0-9+\s-]+$/, "Solo números, espacios, + y -."),
   dni: z.string().regex(/^\d{7,8}$/, "El DNI debe tener 7 u 8 números, sin puntos."),
+  // CUIT/CUIL (Fase PP): necesario para pagarle en regla (factura/monotributo).
+  cuil: z.string().regex(/^\d{2}-?\d{7,8}-?\d{1}$/, "Formato de CUIT/CUIL inválido (ej: 20-12345678-9)."),
   birthDate: z.string().refine((val) => {
     if (!val) return false;
     const birth = new Date(val);
@@ -55,7 +58,10 @@ const DOC_FIELDS = (isBike: boolean) => [
   { key: 'licenseUrl', label: isBike ? 'DNI — frente' : 'Licencia de conducir — frente' },
   { key: 'licenseBackUrl', label: isBike ? 'DNI — dorso' : 'Licencia de conducir — dorso' },
   { key: 'licenseSelfieUrl', label: isBike ? 'Selfie sosteniendo tu DNI' : 'Selfie sosteniendo tu licencia' },
-  ...(isBike ? [] : [{ key: 'vehicleDocUrl', label: 'Cédula / papeles del vehículo' }]),
+  ...(isBike ? [] : [
+    { key: 'vehicleDocUrl', label: 'Cédula / papeles del vehículo' },
+    { key: 'vehicleInsuranceUrl', label: 'Seguro del vehículo vigente' },
+  ]),
 ] as { key: string; label: string }[];
 
 export default function SignupDeliveryPage() {
@@ -79,6 +85,7 @@ export default function SignupDeliveryPage() {
       password: "",
       phoneNumber: "",
       dni: "",
+      cuil: "",
       birthDate: "",
       plate: "",
     },
@@ -99,19 +106,23 @@ export default function SignupDeliveryPage() {
         const user = userCredential.user;
         newUser = user;
 
-        // Anti multi-cuenta (Fase PP): un DNI = una cuenta de repartidor. El pre-chequeo
-        // da el error claro; la garantía real es el create dentro del batch.
-        const uniqueRef = doc(firestore, 'unique_ids', `dni_${values.dni}`);
-        const existing = await getDoc(uniqueRef);
-        if (existing.exists()) {
-            await user.delete().catch(() => {});
-            toast({
-                variant: "destructive",
-                title: "Ese DNI ya tiene una cuenta",
-                description: "Si es tuyo y perdiste el acceso, escribinos desde la página de soporte.",
-            });
-            setIsSubmitting(false);
-            return;
+        // Anti multi-cuenta (Fase PP): DNI y teléfono ÚNICOS. El pre-chequeo da el error
+        // claro; la garantía real es el create dentro del batch.
+        const dupChecks: { type: 'dni' | 'tel'; raw: string; label: string }[] = [
+            { type: 'dni', raw: values.dni, label: 'Ese DNI ya tiene una cuenta' },
+            { type: 'tel', raw: values.phoneNumber, label: 'Ese teléfono ya tiene una cuenta' },
+        ];
+        for (const c of dupChecks) {
+            if (await isTaken(firestore, c.type, c.raw)) {
+                await user.delete().catch(() => {});
+                toast({
+                    variant: "destructive",
+                    title: c.label,
+                    description: "Si es tuyo y perdiste el acceso, escribinos desde la página de soporte.",
+                });
+                setIsSubmitting(false);
+                return;
+            }
         }
 
         const batch = writeBatch(firestore);
@@ -121,6 +132,7 @@ export default function SignupDeliveryPage() {
             email: values.email,
             phoneNumber: values.phoneNumber,
             dni: values.dni,
+            cuil: values.cuil.replace(/\D/g, ''),
             birthDate: values.birthDate,
             role: 'delivery' as const,
             // Objeto {type, plate}: los consumidores existentes ya toleran ambas formas
@@ -131,7 +143,8 @@ export default function SignupDeliveryPage() {
             status: 'Pendiente',
             isApproved: false,
         });
-        batch.set(uniqueRef, { type: 'dni', value: values.dni, uid: user.uid, createdAt: new Date() });
+        batch.set(uniqueRef(firestore, 'dni', values.dni), uniquePayload('dni', values.dni, user.uid));
+        batch.set(uniqueRef(firestore, 'tel', values.phoneNumber), uniquePayload('tel', values.phoneNumber, user.uid));
         await batch.commit();
 
         await sendEmailVerification(user);
@@ -152,7 +165,7 @@ export default function SignupDeliveryPage() {
             description: error.code === 'auth/email-already-in-use'
                 ? "Este correo electrónico ya está en uso."
                 : error.code === 'permission-denied'
-                    ? "Ese DNI ya tiene una cuenta registrada."
+                    ? "El DNI o el teléfono ya tienen una cuenta registrada."
                     : "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
         });
     } finally {
@@ -245,9 +258,9 @@ export default function SignupDeliveryPage() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre</FormLabel>
+                    <FormLabel>Nombre y apellido</FormLabel>
                     <FormControl>
-                      <Input placeholder="Tu Nombre" {...field} />
+                      <Input placeholder="Ej. Juan Pérez" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -320,6 +333,19 @@ export default function SignupDeliveryPage() {
                   )}
                 />
               </div>
+              <FormField
+                control={form.control}
+                name="cuil"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CUIT / CUIL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej. 20-12345678-9" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="vehicleType"

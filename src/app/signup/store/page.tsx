@@ -14,8 +14,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { doc, getDoc, collection, writeBatch } from 'firebase/firestore';
+import { doc, collection, writeBatch } from 'firebase/firestore';
 import { buildNewStoreData } from '@/lib/user-service';
+import { isTaken, uniqueRef, uniquePayload } from '@/lib/unique-ids';
 import { STORE_CATEGORIES } from '@/lib/store-categories';
 import { Loader2 } from 'lucide-react';
 
@@ -24,8 +25,10 @@ const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
   category: z.string({ required_error: "Por favor selecciona una categoría." }),
   address: z.string().min(5, "La dirección debe tener al menos 5 caracteres."),
-  ownerName: z.string().min(2, "Tu nombre debe tener al menos 2 caracteres."),
+  ownerName: z.string().min(5, "Ingresá tu nombre y apellido completos."),
   phoneNumber: z.string().min(8, "Ingresá un teléfono válido (con código de área).").regex(/^[0-9+\s-]+$/, "Solo números, espacios, + y -."),
+  // DNI del dueño (Fase PP): la tienda es un negocio, pero el responsable es una persona.
+  dni: z.string().regex(/^\d{7,8}$/, "El DNI debe tener 7 u 8 números, sin puntos."),
   // CUIT: 11 dígitos, con o sin guiones (XX-XXXXXXXX-X) -- se guarda solo el número.
   cuit: z.string().regex(/^\d{2}-?\d{8}-?\d{1}$/, "Formato de CUIT inválido (ej: 20-12345678-9)."),
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
@@ -46,6 +49,7 @@ export default function SignupStorePage() {
       address: "",
       ownerName: "",
       phoneNumber: "",
+      dni: "",
       cuit: "",
       email: "",
       password: "",
@@ -68,20 +72,25 @@ export default function SignupStorePage() {
         const user = userCredential.user;
         createdUser = user;
 
-        // Anti multi-cuenta (Fase PP): un CUIT = una tienda. Pre-chequeo para dar un
-        // error claro; la garantía REAL es el create del batch de abajo (dos registros
-        // simultáneos: el segundo choca contra el doc reservado y todo el batch falla).
-        const uniqueRef = doc(firestore, 'unique_ids', `cuit_${cuitDigits}`);
-        const existing = await getDoc(uniqueRef);
-        if (existing.exists()) {
-            await user.delete().catch(() => { /* queda huérfana en Auth; el email ya no se puede reusar hasta limpiarla */ });
-            toast({
-                variant: "destructive",
-                title: "Ese CUIT ya tiene una tienda registrada",
-                description: "Si es tu negocio y perdiste el acceso, escribinos desde la página de soporte.",
-            });
-            setIsSubmitting(false);
-            return;
+        // Anti multi-cuenta (Fase PP): CUIT, DNI del dueño y teléfono ÚNICOS. Pre-chequeo
+        // para dar un error claro; la garantía REAL es el create del batch de abajo (dos
+        // registros simultáneos: el segundo choca contra el doc reservado y todo falla).
+        const dupChecks: { type: 'cuit' | 'dni' | 'tel'; raw: string; label: string }[] = [
+            { type: 'cuit', raw: cuitDigits, label: 'Ese CUIT ya tiene una tienda registrada' },
+            { type: 'dni', raw: values.dni, label: 'Ese DNI ya tiene una cuenta' },
+            { type: 'tel', raw: values.phoneNumber, label: 'Ese teléfono ya tiene una cuenta' },
+        ];
+        for (const c of dupChecks) {
+            if (await isTaken(firestore, c.type, c.raw)) {
+                await user.delete().catch(() => {});
+                toast({
+                    variant: "destructive",
+                    title: c.label,
+                    description: "Si es tuyo y perdiste el acceso, escribinos desde la página de soporte.",
+                });
+                setIsSubmitting(false);
+                return;
+            }
         }
 
         const storeData = {
@@ -106,11 +115,14 @@ export default function SignupStorePage() {
             name: values.ownerName,
             email: values.email,
             phoneNumber: values.phoneNumber,
+            dni: values.dni,
             role: 'store' as const,
             storeId: storeRef.id,
             isApproved: false
         });
-        batch.set(uniqueRef, { type: 'cuit', value: cuitDigits, uid: user.uid, createdAt: new Date() });
+        batch.set(uniqueRef(firestore, 'cuit', cuitDigits), uniquePayload('cuit', cuitDigits, user.uid));
+        batch.set(uniqueRef(firestore, 'dni', values.dni), uniquePayload('dni', values.dni, user.uid));
+        batch.set(uniqueRef(firestore, 'tel', values.phoneNumber), uniquePayload('tel', values.phoneNumber, user.uid));
         await batch.commit();
 
         await sendEmailVerification(user);
@@ -136,7 +148,7 @@ export default function SignupStorePage() {
             description: error.code === 'auth/email-already-in-use'
                 ? "Este correo electrónico ya está en uso."
                 : error.code === 'permission-denied'
-                    ? "Ese CUIT ya tiene una tienda registrada."
+                    ? "El CUIT, DNI o teléfono ya tienen una cuenta registrada."
                     : "No se pudo registrar la tienda. Por favor, inténtalo de nuevo.",
         });
     } finally {
@@ -223,9 +235,22 @@ export default function SignupStorePage() {
                 name="ownerName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tu Nombre</FormLabel>
+                    <FormLabel>Tu nombre y apellido</FormLabel>
                     <FormControl>
-                      <Input placeholder="Tu Nombre" {...field} />
+                      <Input placeholder="Ej. Juana Pérez" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="dni"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tu DNI</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Sin puntos" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

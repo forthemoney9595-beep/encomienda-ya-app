@@ -13,13 +13,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, AuthErrorCodes } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, writeBatch } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
-import { createUserProfile } from '@/lib/user-service';
+import { isTaken, uniqueRef, uniquePayload } from '@/lib/unique-ids';
 import type { Address } from '@/lib/placeholder-data';
 
 const formSchema = z.object({
-  name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
+  name: z.string().min(5, "Ingresá tu nombre y apellido completos."),
   email: z.string().email("Por favor ingresa un correo electrónico válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
   // El repartidor necesita poder contactarte para coordinar la entrega -- antes el
@@ -51,20 +51,37 @@ export default function SignupBuyerPage() {
     }
     setIsSubmitting(true);
     
+    let createdUser = null as import('firebase/auth').User | null;
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const user = userCredential.user;
+        createdUser = user;
 
-        const userDocRef = doc(firestore, 'users', user.uid);
-        const userProfile = {
+        // Teléfono ÚNICO (Fase PP, anti multi-cuenta): un número = una cuenta. El
+        // pre-chequeo da el error claro; la garantía real es el create del batch.
+        if (await isTaken(firestore, 'tel', values.phoneNumber)) {
+            await user.delete().catch(() => {});
+            toast({
+                variant: "destructive",
+                title: "Ese teléfono ya tiene una cuenta",
+                description: "Si es tuyo y perdiste el acceso, usá \"Olvidé mi contraseña\" o escribinos desde soporte.",
+            });
+            setIsSubmitting(false);
+            return;
+        }
+
+        const batch = writeBatch(firestore);
+        batch.set(doc(firestore, 'users', user.uid), {
             uid: user.uid,
             name: values.name,
             email: values.email,
             phoneNumber: values.phoneNumber,
             role: 'buyer' as const,
             addresses: [] as Address[],
-        };
-        await setDoc(userDocRef, userProfile);
+        });
+        batch.set(uniqueRef(firestore, 'tel', values.phoneNumber), uniquePayload('tel', values.phoneNumber, user.uid));
+        await batch.commit();
+
         await sendEmailVerification(user);
 
         toast({
@@ -92,10 +109,14 @@ export default function SignupBuyerPage() {
             }
         } else {
              console.error("Error creating buyer account:", error);
+            // Rollback: no dejar una cuenta de Auth sin perfil (podía loguear a medias).
+            if (createdUser) await createdUser.delete().catch(() => {});
             toast({
                 variant: "destructive",
                 title: "Error al Registrarse",
-                description: "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
+                description: error.code === 'permission-denied'
+                    ? "Ese teléfono ya tiene una cuenta registrada."
+                    : "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
             });
         }
     } finally {
@@ -120,9 +141,9 @@ export default function SignupBuyerPage() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre</FormLabel>
+                    <FormLabel>Nombre y apellido</FormLabel>
                     <FormControl>
-                      <Input placeholder="Tu Nombre" {...field} />
+                      <Input placeholder="Ej. Juana Pérez" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
