@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { getCategoryStyle } from '@/lib/category-style';
+import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 
 // Sección colapsable del menú admin -- antes eran 10 links sueltos bajo un solo título
 // "Supervisión". El estado abierto/cerrado se guarda en localStorage por sección para que
@@ -353,7 +353,7 @@ export function MainNav({
                     <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md', style.bg)}>
                       <Icon className={cn('h-3.5 w-3.5', style.text)} />
                     </span>
-                    {cat}
+                    {formatCategoryLabel(cat)}
                   </Button>
                 </Link>
               );

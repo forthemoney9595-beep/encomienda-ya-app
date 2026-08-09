@@ -16,7 +16,7 @@ import { useFirestore } from '@/lib/firebase';
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
 import { UserDetailDialog } from '@/app/admin/users/user-detail-dialog';
-import { getCategoryStyle } from '@/lib/category-style';
+import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { cn } from '@/lib/utils';
 
 interface StoreLite {
@@ -140,7 +140,7 @@ function BuyerSearch({ open, onOpenChange }: GlobalSearchProps) {
                     onSelect={() => go(() => router.push(`/?category=${encodeURIComponent(cat)}`))}
                   >
                     <Icon className={cn('mr-2 h-4 w-4', style.text)} />
-                    Ver todo en {cat}
+                    Ver todo en {formatCategoryLabel(cat)}
                   </CommandItem>
                 );
               })}
