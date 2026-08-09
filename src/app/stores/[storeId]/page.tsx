@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { getCategoryStyle } from '@/lib/category-style';
+import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLAY_ORDER, type WeeklySchedule } from '@/lib/store-hours';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -351,7 +351,7 @@ export default function StorePublicPage() {
       <Breadcrumbs
         items={[
           { label: 'Inicio', href: '/', icon: Home },
-          ...(storeCategory ? [{ label: storeCategory, href: `/?category=${encodeURIComponent(storeCategory)}` }] : []),
+          ...(storeCategory ? [{ label: formatCategoryLabel(storeCategory), href: `/?category=${encodeURIComponent(storeCategory)}` }] : []),
           { label: store.name },
         ]}
       />
@@ -525,7 +525,7 @@ export default function StorePublicPage() {
                               <span className={cn(
                                 'text-[11px] font-medium whitespace-nowrap',
                                 isActive ? 'text-foreground' : 'text-muted-foreground',
-                              )}>{category}</span>
+                              )}>{formatCategoryLabel(category)}</span>
                           </button>
                       );
                   })}
@@ -570,7 +570,7 @@ export default function StorePublicPage() {
       ) : products.length > 0 ? (
         groupedProducts.map(([category, items]) => (
             <div key={category} id={categorySlug(category)} data-category-section={category} className="mb-10 scroll-mt-[8.5rem]">
-                <h2 className="font-headline text-xl font-bold mb-2">{category}</h2>
+                <h2 className="font-headline text-xl font-bold mb-2">{formatCategoryLabel(category)}</h2>
                 <div>
                     {items.map(product => (
                         <ProductRow key={product.id} product={product} onAdd={handleAddToCart} onOpenDetail={setDetailProduct} isDisabled={!storeStatus.isOpen} />
@@ -682,7 +682,7 @@ export default function StorePublicPage() {
       {relatedStores.length > 0 && (
         <div className="mb-10 px-4 sm:px-0">
           <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
-            <StoreIcon className="h-5 w-5 text-primary" /> Más de {storeCategory}
+            <StoreIcon className="h-5 w-5 text-primary" /> Más de {formatCategoryLabel(storeCategory)}
           </h2>
           <div className="min-w-0">
             <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">

@@ -1911,6 +1911,39 @@ pendientes de ejecutar.
   el test de borrado (jamás intentar borrar una real). Reglas desplegadas antes de
   verificar; typecheck y build limpios.
 
+## Fase QQ (ago 2026): pasada visual/UX del comprador — primera tanda
+Método de las Fases Q/AA: mirar la app CORRIENDO, no el código — recorrido completo del
+flujo comprador con Playwright a 430px (login → home → tienda → producto → carrito →
+checkout → pedidos → detalle entregado → favoritos → perfil), capturas revisadas una por
+una. Veredicto general: el rediseño AA envejeció bien (home/tienda/favoritos/checkout se
+ven sólidos, 0 overflow horizontal). Corregido lo encontrado:
+- **Login: pestaña "Modo Prueba" ELIMINADA** (ítem pre-lanzamiento adelantado): exponía
+  cuentas/contraseñas demo a cualquier visitante y su fetch fallaba con permission-denied
+  en la consola de todos los anónimos.
+- **Detalle del pedido: "Empanadas del VallePedido a"** — texto pegado y al revés en la
+  CardDescription; y para la tienda decía "para **nombre**" con asteriscos literales.
+  Reescrito ("Pedido a X" / "Pedido de X").
+- **Detalle del pedido: montos "$34000.00"** (toFixed(2), sin miles y con el punto donde
+  va la coma) → formato es-AR sin decimales en ítems, subtotal/envío/tarifa/total y las
+  dos vistas del repartidor ("+$2.000" oferta, "Ganaste $2.000").
+- **Perfil: el botón "Cambiar Foto" PISABA el badge de rol** (absolute sobre el avatar en
+  celular) → el badge ahora vive junto al nombre.
+- **Rubros crudos** ("comida-rapida") en migas, chips de la tienda, títulos de sección,
+  "Más de {rubro}", chips del home y tarjeta de tienda → nuevo
+  `formatCategoryLabel()` en `category-style.ts` (mapa con acentos para los conocidos +
+  fallback guiones→espacios Capitalizado).
+- **Tarjetas de "Mis Pedidos": borde izquierdo por PAGO, no por estado** — un pedido
+  cancelado que estuvo pagado quedaba verde. Ahora el borde sigue el color semántico del
+  estado (`getOrderStatusKind`).
+- **Hallazgo de config, no de código:** `config/platform.claimWindowHours` estaba en **3**
+  (¿prueba del usuario en Ajustes?) — lo acordado fue 24. Avisado; se cambia en /admin/
+  settings, no se tocó por código.
+- Verificación: re-capturas post-fix (login sin errores de consola, perfil sin overlap,
+  labels legibles); typecheck y build limpios. **Pendiente de la pasada visual:** flujos
+  de tienda/repartidor/admin en celular, y el checkout con dirección guardada (la cuenta
+  de prueba no tenía direcciones — se vio el camino "GPS obligatorio", correcto por
+  diseño). Playwright quedó como devDependency del repo.
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —

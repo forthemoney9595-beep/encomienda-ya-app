@@ -94,6 +94,36 @@ function hashString(s: string): number {
   return h;
 }
 
+// Etiqueta LEGIBLE de un rubro/categoría (Fase QQ): los valores viejos son slugs crudos
+// ("comida-rapida") que se mostraban tal cual en migas, chips y títulos ("Más de
+// comida-rapida"). Mapa para los conocidos con acentos + fallback genérico
+// (guiones → espacios, Capitalizado).
+const CATEGORY_LABELS: Record<string, string> = {
+  'comida-rapida': 'Comida Rápida',
+  'comida': 'Comida',
+  'almacen': 'Almacén',
+  'panaderia': 'Panadería',
+  'heladeria': 'Heladería',
+  'rotiseria': 'Rotisería',
+  'verduleria': 'Verdulería',
+  'ferreteria': 'Ferretería',
+  'kiosco': 'Kiosco',
+  'farmacia': 'Farmacia',
+  'supermercado': 'Supermercado',
+  'bebidas': 'Bebidas',
+  'ropa': 'Ropa',
+  'hogar': 'Hogar',
+};
+
+export function formatCategoryLabel(category: string): string {
+  if (!category) return '';
+  const key = category.trim().toLowerCase();
+  if (CATEGORY_LABELS[key]) return CATEGORY_LABELS[key];
+  return category
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
 export function getCategoryKey(category: string): string {
   const c = (category || '').toLowerCase().trim();
   if (!c) return 'other';

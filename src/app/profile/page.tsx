@@ -247,7 +247,7 @@ export default function ProfilePage() {
                 {/* COLUMNA IZQUIERDA: FOTO Y DATOS BÁSICOS */}
                 <Card className="lg:col-span-4 h-fit shadow-md border-t-4 border-t-primary">
                     <CardHeader className="text-center pb-2">
-                        <div className="mx-auto mb-4 relative">
+                        <div className="mx-auto mb-2">
                             <ImageUpload
                                 currentImageUrl={profileImageUrl}
                                 onImageUploaded={setProfileImageUrl}
@@ -255,11 +255,13 @@ export default function ProfilePage() {
                                 ownerId={user!.uid}
                                 variant="avatar"
                             />
-                            <div className="absolute -bottom-2 -right-2">
-                                {getRoleBadge(userProfile.role)}
-                            </div>
                         </div>
-                        <CardTitle>{displayName || 'Usuario'}</CardTitle>
+                        {/* El badge de rol iba en absolute sobre el avatar y PISABA el botón
+                            "Cambiar Foto" en celular (Fase QQ) — ahora vive junto al nombre. */}
+                        <div className="flex items-center justify-center gap-2">
+                            <CardTitle>{displayName || 'Usuario'}</CardTitle>
+                            {getRoleBadge(userProfile.role)}
+                        </div>
                         <CardDescription>{userProfile.email}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4 pt-4">

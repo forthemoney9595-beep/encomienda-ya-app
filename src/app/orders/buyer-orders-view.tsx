@@ -145,12 +145,20 @@ export default function BuyerOrdersView() {
             filteredOrders.map(order => {
                 const displayTotal = order.total || 0;
                 // Detectamos si fue pagado por MP
-                const isPaid = order.paymentStatus === 'paid'; 
+                const isPaid = order.paymentStatus === 'paid';
+                // Borde por ESTADO del pedido, no por pago (Fase QQ): un pedido
+                // cancelado que estuvo pagado quedaba con borde verde de "todo bien".
+                const cardKind = getOrderStatusKind(order.status);
+                const borderClass =
+                    cardKind === 'success' ? 'border-l-success' :
+                    cardKind === 'destructive' ? 'border-l-destructive' :
+                    cardKind === 'info' ? 'border-l-info' :
+                    cardKind === 'warning' ? 'border-l-warning' : 'border-l-border';
                 
                 return (
                     <Card
                         key={order.id}
-                        className={`cursor-pointer hover:shadow-md transition-all border-l-4 group ${isPaid ? 'border-l-success' : 'border-l-border'}`}
+                        className={`cursor-pointer hover:shadow-md transition-all border-l-4 group ${borderClass}`}
                         onClick={() => router.push(`/orders/${order.id}`)}
                     >
                         <div className="p-4 flex items-center justify-between">

@@ -473,7 +473,7 @@ export default function OrderTrackingPage() {
                         <div className="mb-6 bg-success/10 border border-success/30 rounded-xl overflow-hidden shadow-sm animate-in fade-in zoom-in duration-300">
                             <div className="p-4 bg-success/15 border-b border-success/30 flex justify-between items-center">
                                 <h3 className="text-lg font-bold text-success flex items-center gap-2"><Bike className="h-5 w-5" /> Solicitud de Entrega</h3>
-                                <span className="bg-success text-success-foreground px-3 py-1 rounded-full font-bold text-sm">+${order.deliveryFee.toFixed(2)}</span>
+                                <span className="bg-success text-success-foreground px-3 py-1 rounded-full font-bold text-sm">+${Math.round(order.deliveryFee).toLocaleString('es-AR')}</span>
                             </div>
                             <div className="p-4 space-y-3 text-center">
                                 <p className="text-foreground mb-2">Este pedido está listo o preparándose. ¿Quieres llevarlo?</p>
@@ -555,14 +555,17 @@ export default function OrderTrackingPage() {
                          <div className="mb-6 bg-muted/30 border border-border rounded-xl p-4 flex flex-col items-center text-center">
                             <div className="h-12 w-12 bg-success/15 rounded-full flex items-center justify-center mb-3"><CheckCircle className="h-6 w-6 text-success" /></div>
                             <h3 className="text-lg font-bold text-foreground">¡Entrega Completada!</h3>
-                            <div className="mt-2 px-4 py-2 bg-success text-success-foreground rounded-full font-bold text-lg flex items-center gap-2 shadow-sm"><DollarSign className="h-5 w-5" />Ganaste ${order.deliveryFee.toFixed(2)}</div>
+                            <div className="mt-2 px-4 py-2 bg-success text-success-foreground rounded-full font-bold text-lg flex items-center gap-2 shadow-sm"><DollarSign className="h-5 w-5" />Ganaste ${Math.round(order.deliveryFee).toLocaleString('es-AR')}</div>
                         </div>
                     )}
 
+                    {/* Fase QQ: antes renderizaba "Empanadas del VallePedido a" (texto pegado
+                        y al revés) y, para la tienda, "para **nombre**" con asteriscos
+                        literales de un markdown que nunca se procesó. */}
                     <CardDescription>
-                        <span className="font-semibold text-primary">{order.storeName}</span> 
-                        {isStoreOwner && order.customerName && (<span className="text-muted-foreground ml-2">para **{order.customerName}**</span>)}
-                        {!isStoreOwner && <span className="text-muted-foreground">Pedido a</span>}
+                        {isStoreOwner && order.customerName
+                            ? <>Pedido de <span className="font-semibold text-foreground">{order.customerName}</span></>
+                            : <>Pedido a <span className="font-semibold text-primary">{order.storeName}</span></>}
                     </CardDescription>
 
                     <CardDescription>Estado actual: <span className="font-bold text-primary">{order.status}</span></CardDescription>
@@ -583,17 +586,19 @@ export default function OrderTrackingPage() {
                                    return rated
                                      ? (<div className="flex items-center gap-1 text-sm text-warning"><Star className="h-4 w-4 fill-current" /><span className="font-bold">{rated}</span></div>)
                                      : (<Button variant="outline" size="sm" onClick={() => setReviewingItem(item)}><Star className="mr-2 h-4 w-4" /> Valorar</Button>);
-                                })()}<p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                                })()}<p className="font-semibold">${Math.round(item.price * item.quantity).toLocaleString('es-AR')}</p>
                             </div>
                         </div>
                     ))}
                     <Separator/>
-                     <div className="flex justify-between text-sm"><p>Subtotal</p><p>${(order.subtotal || (displayTotal - order.deliveryFee)).toFixed(2)}</p></div>
-                     <div className="flex justify-between text-sm"><p>Envío</p><p>${order.deliveryFee.toFixed(2)}</p></div>
+                     {/* Formato es-AR sin decimales (Fase QQ): antes "$34000.00" — sin
+                         separador de miles y con el punto donde va la coma. */}
+                     <div className="flex justify-between text-sm"><p>Subtotal</p><p>${Math.round(order.subtotal || (displayTotal - order.deliveryFee)).toLocaleString('es-AR')}</p></div>
+                     <div className="flex justify-between text-sm"><p>Envío</p><p>${Math.round(order.deliveryFee).toLocaleString('es-AR')}</p></div>
                      {(order.serviceFee || 0) > 0 && (
-                        <div className="flex justify-between text-sm"><p>Tarifa de Servicio</p><p>${order.serviceFee?.toFixed(2)}</p></div>
+                        <div className="flex justify-between text-sm"><p>Tarifa de Servicio</p><p>${Math.round(order.serviceFee || 0).toLocaleString('es-AR')}</p></div>
                      )}
-                    <Separator/><div className="flex justify-between font-bold text-lg"><p>Total</p><p>${displayTotal.toFixed(2)}</p></div>
+                    <Separator/><div className="flex justify-between font-bold text-lg"><p>Total</p><p>${Math.round(displayTotal).toLocaleString('es-AR')}</p></div>
                      <Separator/>
                      
                      {isStoreOwner && (

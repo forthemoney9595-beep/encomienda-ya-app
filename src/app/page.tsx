@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight, type LucideIcon } from 'lucide-react';
 import { StoreCard, type StoreCardStore } from '@/components/store-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getCategoryStyle } from '@/lib/category-style';
+import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Rating } from '@/components/ui/rating';
@@ -189,7 +189,7 @@ const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, coun
             <Icon className={cn('h-6 w-6', isActive ? '' : style.text)} />
           </div>
           <span className={cn('text-[11px] font-medium whitespace-nowrap', isActive ? 'text-foreground' : 'text-muted-foreground')}>
-            {cat}
+            {formatCategoryLabel(cat)}
           </span>
           {counts[cat] !== undefined && (
             <span className="text-[10px] leading-none text-muted-foreground/70">{counts[cat]}</span>

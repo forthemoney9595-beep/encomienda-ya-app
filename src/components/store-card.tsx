@@ -5,7 +5,7 @@ import { Heart, Star, MapPin, Clock, Bike } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { StoreImage } from '@/components/store-image';
-import { getCategoryStyle } from '@/lib/category-style';
+import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 
 export interface StoreCardStore {
   id: string;
@@ -109,7 +109,7 @@ export function StoreCard({
           {/* Rubro con el color de su categoría */}
           <div className="flex items-center gap-1.5">
             <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', catStyle.bg, catStyle.text)}>
-              {store.category || 'General'}
+              {formatCategoryLabel(store.category) || 'General'}
             </span>
           </div>
 
