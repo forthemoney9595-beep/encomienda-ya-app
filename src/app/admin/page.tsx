@@ -887,7 +887,9 @@ function AdminDashboard() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <div className="text-3xl font-bold tabular-nums">{money(revenue)}</div>
+                    {/* "…" mientras la aggregation carga (Fase QQ): mostraba "$0" varios
+                        segundos — un cero falso en la tarjeta más importante del panel. */}
+                    <div className="text-3xl font-bold tabular-nums">{deliveredAgg === undefined ? '…' : money(revenue)}</div>
                     <p className="text-xs text-muted-foreground">total BRUTO de pedidos entregados</p>
                   </div>
                   {/* 🚨 DESGLOSE BRUTO (Fase PP, N1): estas sumas server-side (aggregation)
@@ -973,8 +975,11 @@ function AdminDashboard() {
         })()}
       </div>
 
+       {/* min-w-0 + overflow-hidden (Fase QQ): sin esto los gráficos de recharts imponen
+           su ancho intrínseco al Card y TODA la página scrollea horizontal en celular
+           (599px en un viewport de 430) — misma familia que el bug del carrusel del shell. */}
        <div className="grid gap-4 mt-6 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="lg:col-span-4">
+        <Card className="lg:col-span-4 min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle>Ventas de los Últimos 7 Días</CardTitle>
           </CardHeader>
@@ -990,10 +995,10 @@ function AdminDashboard() {
             </ChartContainer>
           </CardContent>
         </Card>
-        <Card className="lg:col-span-3">
+        <Card className="lg:col-span-3 min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle>Distribución de Pedidos</CardTitle>
-             <CardDescription>Estado actual de todos los pedidos.</CardDescription>
+             <CardDescription>Estado del período seleccionado.</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={{}} className="h-[300px] w-full">
@@ -1035,8 +1040,9 @@ function AdminDashboard() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Por tienda */}
-          <Card>
+          {/* Por tienda. min-w-0 (Fase QQ): la tabla tiene scroll interno pero el Card
+              no se dejaba encoger y empujaba TODA la página en celular. */}
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-base"><StoreIcon className="h-4 w-4 text-info" /> Por tienda</CardTitle>
@@ -1084,7 +1090,7 @@ function AdminDashboard() {
           </Card>
 
           {/* Por repartidor */}
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base"><Bike className="h-4 w-4 text-primary" /> Por repartidor</CardTitle>
             </CardHeader>

@@ -188,7 +188,7 @@ export default function DeliveryAnalyticsPage() {
       </div>
 
       {dailyEarningsData && dailyEarningsData.length > 0 && (
-        <Card className="shadow-md">
+        <Card className="shadow-md min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-success" /> Ganancias por día</CardTitle>
             <CardDescription>{PERIOD_LABELS[period]}</CardDescription>

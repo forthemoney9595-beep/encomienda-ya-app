@@ -222,7 +222,7 @@ export default function StoreAnalyticsPage() {
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${current.avgTicket.toFixed(0)}</div>
+            <div className="text-2xl font-bold">${Math.round(current.avgTicket).toLocaleString('es-AR')}</div>
             <div className="flex items-center gap-1.5 mt-1">
                 <p className="text-xs text-muted-foreground">Valor medio por venta</p>
                 {hasPrev && <PctBadge current={current.avgTicket} prev={prev.avgTicket} />}
@@ -248,9 +248,10 @@ export default function StoreAnalyticsPage() {
         </Card>
       </div>
 
-      {/* Gráfico de ventas por día */}
+      {/* Gráfico de ventas por día. overflow-hidden (Fase QQ): los ticks de recharts
+          desbordaban el Card unos px y toda la página scrolleaba horizontal en celular. */}
       {dailySalesData && dailySalesData.length > 0 && (
-        <Card className="shadow-md">
+        <Card className="shadow-md min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-success" /> Ventas por día</CardTitle>
             <CardDescription>Ingresos de pedidos entregados — {PERIOD_LABELS[period]}</CardDescription>
@@ -304,7 +305,7 @@ export default function StoreAnalyticsPage() {
         </Card>
 
         {/* Horas pico */}
-        <Card className="shadow-md">
+        <Card className="shadow-md min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-info" /> Horas pico</CardTitle>
             <CardDescription>Cuándo llegan más pedidos — {PERIOD_LABELS[period]}</CardDescription>

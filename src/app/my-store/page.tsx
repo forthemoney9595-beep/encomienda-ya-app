@@ -158,12 +158,14 @@ export default function StoreDashboardPage() {
           <div className="flex items-center gap-3">
             <PauseCircle className={`h-6 w-6 ${paused ? 'text-destructive' : 'text-muted-foreground'}`} />
             <div>
-              <p className="font-semibold flex items-center gap-2">
+              {/* div, no <p>: Badge renderiza un <div> y un div dentro de <p> es HTML
+                  inválido — tiraba un error de hidratación en consola (Fase QQ). */}
+              <div className="font-semibold flex items-center gap-2">
                 Estado de la tienda
                 <Badge className={paused ? 'bg-destructive/15 text-destructive border-destructive/30' : 'bg-success/15 text-success border-success/30'}>
                   {paused ? 'Pausada' : 'Activa'}
                 </Badge>
-              </p>
+              </div>
               <p className="text-sm text-muted-foreground">
                 {paused
                   ? 'No te llegan pedidos nuevos aunque estés en horario.'

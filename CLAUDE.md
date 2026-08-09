@@ -1939,10 +1939,31 @@ ven sólidos, 0 overflow horizontal). Corregido lo encontrado:
   (¿prueba del usuario en Ajustes?) — lo acordado fue 24. Avisado; se cambia en /admin/
   settings, no se tocó por código.
 - Verificación: re-capturas post-fix (login sin errores de consola, perfil sin overlap,
-  labels legibles); typecheck y build limpios. **Pendiente de la pasada visual:** flujos
-  de tienda/repartidor/admin en celular, y el checkout con dirección guardada (la cuenta
-  de prueba no tenía direcciones — se vio el camino "GPS obligatorio", correcto por
-  diseño). Playwright quedó como devDependency del repo.
+  labels legibles); typecheck y build limpios. Playwright quedó como devDependency.
+
+**Segunda tanda de la pasada visual (tienda/repartidor/admin en celular + checkout con
+dirección) — PASADA VISUAL COMPLETA:**
+- Recorridos los 3 roles a 430px (16 pantallas) con detección automática de overflow.
+- **Checkout con dirección guardada VERIFICADO** (el camino de la Fase V que nunca se
+  había visto): chip preseleccionado + "Usando el GPS de tu dirección guardada" + campo
+  de referencias precargado. Se le agregó una dirección con coords a cliente@test.com.
+- **Overflow horizontal en `/my-store/analytics` (457px)** — los ticks de recharts
+  desbordaban sus Cards → `min-w-0 overflow-hidden` en los Cards de gráficos (también
+  preventivo en `delivery/analytics`).
+- **Overflow en `/admin` (599px, DOS culpables encontrados por diagnóstico DOM):** el
+  gráfico "Ventas de los Últimos 7 Días" + la tabla "Por tienda" (tiene scroll interno
+  pero el Card no se dejaba encoger) → `min-w-0 overflow-hidden` en los 4 Cards. Misma
+  familia que el bug del carrusel del shell (min-width:auto). Verificado 430px exactos.
+- **Error de hidratación real**: `<Badge>` (renderiza `<div>`) dentro de un `<p>` en el
+  dashboard de tienda ("Estado de la tienda") — HTML inválido → `<div>`.
+- **El dashboard admin mostraba "$0" varios segundos** mientras cargaban las aggregations
+  (diagnóstico: NO estaban rotas, es la carga; pero un cero falso en la tarjeta más
+  importante confunde) → muestra "…" hasta que llega el dato.
+- "Ticket Promedio $17960" sin separador de miles → formato es-AR.
+- Descripción de "Distribución de Pedidos" decía "todos los pedidos" siendo del período.
+- Lo demás se veía BIEN: paneles de tienda (dashboard/pedidos/productos/billetera/editar),
+  repartidor completo (incl. sección de 5 documentos en perfil) y admin
+  pedidos/finanzas/reclamos en celular.
 
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
