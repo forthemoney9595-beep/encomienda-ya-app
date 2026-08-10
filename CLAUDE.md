@@ -550,12 +550,10 @@ del listado + la fragmentación de rubros. Todo en `src/app/page.tsx` salvo el r
   decisión de producto aparte, no técnica.
 - **Diferido a v2 (del análisis, no urgente para Tinogasta):** envío gratis desde $X (toca
   pago), combo estructurado / variantes de producto (tamaño/extras, la vieja Fase J),
-  cupones, mostrar distancia en km (bajo valor real en un pueblo chico, además depende
-  de que tienda y comprador tengan GPS cargado, cosa que hoy es opcional en ambos
-  lados). Pin ajustable a mano en el mapa al guardar una dirección (patrón "gold
-  standard" de Rappi/PedidosYa — hoy solo se confía en la lectura cruda del GPS) queda
-  como mejora futura de UX, no urgente. (Un wizard de *onboarding* en `/signup/store`
-  quedó descartado por ahora; el alta actual es suficiente.)
+  cupones, ~~mostrar distancia en km~~ y ~~pin ajustable a mano en el mapa~~ — estos dos
+  últimos **hechos en la Fase RR** (ver abajo: distancia tienda→cliente en la tarjeta del
+  repartidor, y pin ajustable en checkout/perfil/editor de tienda). (Un wizard de
+  *onboarding* en `/signup/store` quedó descartado por ahora; el alta actual es suficiente.)
 
 ## Fase X (jul 2026): registro más real — teléfono/DNI/CUIT + bug de Google
 Se corrigió esta nota, que estaba desactualizada: "olvidé mi contraseña" **ya existía**
@@ -1964,6 +1962,97 @@ dirección) — PASADA VISUAL COMPLETA:**
 - Lo demás se veía BIEN: paneles de tienda (dashboard/pedidos/productos/billetera/editar),
   repartidor completo (incl. sección de 5 documentos en perfil) y admin
   pedidos/finanzas/reclamos en celular.
+
+## Fase RR (ago 2026): sistema de GPS revisado de punta a punta
+Pedido del usuario: "revisemos el sistema de gps y veamos que tanto lo podemos mejorar".
+Contexto nuevo del usuario: la app va a distribuirse como **app de celular instalable**
+además de la web — todo lo hecho acá funciona igual en un empaquetado (TWA/Capacitor), y
+cuando exista la app nativa se destraba el **tracking en segundo plano** (hoy imposible
+en web; anotado para ese momento). Se auditó primero (agente de exploración, informe con
+archivo:línea) y se implementó el paquete completo aprobado:
+
+**Piezas nuevas:**
+- **`src/lib/geo.ts`** — módulo puro compartido (cliente y server): `capturePosition()`
+  (getCurrentPosition como promesa con timeout 15s — antes el spinner podía colgarse
+  infinito —, mensajes en criollo por tipo de error vía `geoErrorMessage()` — antes
+  "permiso denegado", "GPS apagado" y "timeout" daban el mismo texto —, y conserva
+  `accuracy`), `isValidCoords()` (forma+rango), `distanceMeters()` (haversine),
+  `formatDistance()` (es-AR), `gmapsDirectionsUrl()` (deep link), `TINOGASTA_CENTER`.
+  Reemplaza la captura de GPS que estaba TRIPLICADA (checkout-dialog, /profile,
+  /my-store/edit) con los mismos defectos en cada copia. OJO: `capturePosition` nunca
+  incluye claves `undefined` (Firestore las rechaza en updateDoc/arrayUnion).
+- **`src/components/location-picker.tsx`** (+ `location-picker-map.tsx` interno, dynamic
+  ssr:false) — **pin ajustable en mapa Leaflet**, el "gold standard" de Rappi/PedidosYa
+  pendiente desde la Fase V. Marcador arrastrable + tocar el mapa lo mueve; círculo de
+  precisión si el fix vino impreciso (>25 m) con aviso; re-centra solo si el pin queda
+  fuera de vista (no salta abajo del dedo al arrastrar). El wrapper contiene los z-index
+  de Leaflet (`relative z-0`) para no tapar el contenido de un Dialog.
+
+**Dónde se usa el pin (los 3 formularios de ubicación):**
+- **Checkout (`checkout-dialog.tsx`):** el mapa aparece con las coords elegidas (del GPS
+  o de la dirección guardada) para VERIFICAR antes de pedir; y si el GPS está
+  denegado/apagado, "¿Sin GPS? Marcá tu ubicación a mano en el mapa" es un camino
+  alternativo VÁLIDO — antes sin GPS no había pedido posible (bloqueo duro).
+- **`/profile` (direcciones):** mapa siempre visible en el form; "Detectar" pone el pin
+  con GPS o se marca a mano. `coords` solo se incluye en el objeto si existe (arrayUnion
+  rechaza `undefined`).
+- **`/my-store/edit` (Ubicación):** antes la ÚNICA forma de cargar la ubicación del local
+  era el GPS del dueño parado físicamente ahí; ahora puede marcar/corregir en el mapa
+  desde cualquier lado.
+
+**Repartidor:**
+- **Botón "Navegar (Google Maps)"** — deep link `google.com/maps/dir` con destino según
+  estado: a la TIENDA en 'En camino', al CLIENTE en 'En reparto'. En las tarjetas de "En
+  Curso" (`delivery-orders-view.tsx`) y en el pie del mapa del detalle del pedido. Antes
+  no existía NINGUNA navegación externa (y `cleanAddress()` hasta le ocultaba las
+  coordenadas al repartidor).
+- **Distancia estimada del viaje** en la tarjeta de pedidos Disponibles ("≈ 1,2 km de la
+  tienda al cliente, línea recta") — ayuda a decidir si tomarlo. Sin servicio de routing
+  a propósito: en un pueblo en grilla la línea recta alcanza para comparar.
+- **Tracking sano (`location-tracker.tsx`):** throttle de escrituras (cada ≥30 m o cada
+  15 s, nunca más seguido que 5 s) — antes escribía CADA fix (~1/s): ~900 writes por
+  entrega de 15 min, ahora ~60-80; trackea también **'En camino'** (la rama del mapa
+  repartidor→tienda existía pero nunca se ejecutaba porque solo se trackeaba 'En
+  reparto'); el toast "GPS Activo" recién con el primer fix real (antes salía incluso con
+  el permiso denegado); errores con mensaje específico y sin repetirse.
+- **`driverCoords` se BORRA al entregar** (deleteField en los 2 caminos que marcan
+  'Entregado': `updateOrderStatus` y `confirmFinishDelivery`) — antes la última posición
+  del repartidor quedaba guardada en la orden para siempre.
+
+**Mapa y comprador:**
+- **`order-map.tsx`:** `FitBoundsOnce` encuadra tienda+cliente(+repartidor) al abrir
+  (antes zoom fijo 14 centrado en la tienda — el cliente podía arrancar fuera de
+  pantalla); tipado real de `driverCoords` (se fue el `(order as any)`); rama muerta
+  "Esperando coordenadas..." eliminada (el padre ya corta antes).
+- **`DriverSignal`** (en `orders/[orderId]/page.tsx`): "● Ubicación del repartidor en
+  vivo" / "⚠️ Última señal hace N min" usando `driverCoords.lastUpdate`, que se escribía
+  desde siempre y NADIE leía — si el repartidor cerraba la app, el comprador veía el pin
+  congelado sin ninguna pista. (El tracking sigue dependiendo de que el repartidor tenga
+  abierta la pantalla del pedido — límite de web, ver nota de app nativa arriba.)
+
+**Endurecimiento server/reglas:**
+- `/api/orders/create` valida y sanitiza `customerCoords` (era el ÚNICO dato del body que
+  se escribía crudo: un body manipulado podía guardar strings o coords imposibles);
+  guarda también `accuracy` si vino.
+- `firestore.rules` — escribir `driverCoords` exige lat/lng numéricos en rango y pedido
+  en la calle (`resource.status in ['En camino','En reparto']`); BORRARLO siempre
+  permitido (es lo que hace marcar 'Entregado'). Antes aceptaba cualquier basura en
+  cualquier estado. **Desplegado a producción** (dry-run limpio antes).
+
+**Verificación:** reglas con ataque+regresión en la misma corrida (disciplina LL) contra
+producción, script puntual con custom tokens: 5/5 (válida en reparto ✅ pasa, string ❌,
+fuera de rango ❌, en pedido Entregado ❌, borrado ✅ pasa; driverCoords restaurado y
+verificado con lectura fresca). Visual con Playwright (dev server + Firestore real, 430px):
+picker renderiza y el click coloca el pin en /profile, checkout (dirección guardada
+preseleccionada + estado verde) y /my-store/edit (marca ubicación SIN GPS) — capturas
+revisadas, 0 errores de consola. Typecheck y build limpios. Los tests NO guardaron ningún
+formulario (sin efectos en datos).
+
+**Anotado, no hecho a propósito:** ruta real calculada (necesita servicio de routing
+externo; línea recta + Google Maps del botón Navegar lo cubre mejor y gratis), tracking
+en segundo plano (requiere app nativa), edición de coords de tienda desde el admin, y el
+matcher hardcodeado `'(-28.'` de `cleanAddress()` (3 copias: delivery-orders-view,
+page.tsx del home y tienda pública — solo limpia texto legacy, sin urgencia).
 
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso

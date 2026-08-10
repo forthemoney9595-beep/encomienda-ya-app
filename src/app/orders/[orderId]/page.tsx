@@ -29,11 +29,43 @@ import { DeliveryReviewCard } from './delivery-review-card';
 import { ChatWindow } from './chat-window';
 import { ClaimSection } from './claim-section';
 import { LocationTracker } from '@/components/location-tracker';
+import { gmapsDirectionsUrl, isValidCoords } from '@/lib/geo';
 
-const OrderMap = dynamic(() => import('./order-map'), { 
-    ssr: false, 
-    loading: () => <Skeleton className="h-full w-full bg-muted animate-pulse" /> 
+const OrderMap = dynamic(() => import('./order-map'), {
+    ssr: false,
+    loading: () => <Skeleton className="h-full w-full bg-muted animate-pulse" />
 });
+
+// Frescura de la señal del repartidor (Fase RR): driverCoords.lastUpdate se escribía
+// pero NADIE lo leía — si el repartidor cerraba la app, el comprador veía el pin
+// congelado sin ninguna pista de que la señal se cortó. Se re-evalúa cada 30 s.
+function DriverSignal({ lastUpdate }: { lastUpdate?: string }) {
+    const [, setTick] = useState(0);
+    useEffect(() => {
+        const id = setInterval(() => setTick(t => t + 1), 30_000);
+        return () => clearInterval(id);
+    }, []);
+    if (!lastUpdate) return null;
+    const ms = Date.now() - new Date(lastUpdate).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return null;
+    const min = Math.floor(ms / 60_000);
+    if (min < 2) {
+        return (
+            <p className="text-xs text-success flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+                </span>
+                Ubicación del repartidor en vivo
+            </p>
+        );
+    }
+    return (
+        <p className="text-xs text-warning">
+            ⚠️ Última señal del repartidor hace {min} min — puede haber perdido conexión.
+        </p>
+    );
+}
 
 const formatDate = (date: any) => {
     if (!date) return 'Fecha desconocida';
@@ -625,7 +657,29 @@ export default function OrderTrackingPage() {
         <div className={cn("space-y-8", showRightColumn ? "lg:col-span-2" : "hidden")}>
              <Card>
                 <CardHeader><CardTitle>Mapa de Entrega</CardTitle></CardHeader>
-                <CardContent className="h-96">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent><CardFooter><p className="text-xs text-muted-foreground"> {order.status === 'En reparto' ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación." : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."}</p></CardFooter>
+                <CardContent className="h-96">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent>
+                <CardFooter className="flex-col items-start gap-2">
+                    {/* Señal del repartidor (Fase RR): visible mientras hay tracking activo. */}
+                    {(order.status === 'En camino' || order.status === 'En reparto') && (
+                        <DriverSignal lastUpdate={order.driverCoords?.lastUpdate} />
+                    )}
+                    {/* Navegación real para el repartidor (Fase RR): el mapa embebido orienta,
+                        pero la navegación calle a calle la hace Google Maps del teléfono. */}
+                    {isDeliveryPerson && (order.status === 'En camino' || order.status === 'En reparto') && (() => {
+                        const goingToStore = order.status === 'En camino';
+                        const dest = goingToStore ? order.storeCoords : order.customerCoords;
+                        if (!isValidCoords(dest)) return null;
+                        return (
+                            <Button asChild variant="outline" className="w-full border-info/40 text-info hover:bg-info/10 hover:text-info">
+                                <a href={gmapsDirectionsUrl(dest)} target="_blank" rel="noopener noreferrer">
+                                    <Navigation className="mr-2 h-4 w-4" />
+                                    Navegar {goingToStore ? 'a la tienda' : 'al cliente'} (Google Maps)
+                                </a>
+                            </Button>
+                        );
+                    })()}
+                    <p className="text-xs text-muted-foreground"> {order.status === 'En reparto' ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación." : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."}</p>
+                </CardFooter>
             </Card>
             
             {(isStoreOwner || isDeliveryPerson || isBuyer || isAdminViewer) && (

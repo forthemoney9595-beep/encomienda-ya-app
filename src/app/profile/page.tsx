@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/badge';
 import { ImageUpload } from '@/components/image-upload';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { capturePosition, type GeoCoords } from '@/lib/geo';
+import { LocationPicker } from '@/components/location-picker';
 
 interface Address {
     id: string;
@@ -27,7 +29,7 @@ interface Address {
     city: string;
     zipCode: string;
     label?: string;
-    coords?: { latitude: number; longitude: number };
+    coords?: GeoCoords;
 }
 
 export default function ProfilePage() {
@@ -50,7 +52,7 @@ export default function ProfilePage() {
     const [newAddress, setNewAddress] = useState<Omit<Address, 'id'> & { isEditing: boolean, id: string }>({ 
         id: '', street: '', city: '', zipCode: '', isEditing: false 
     });
-    const [tempCoords, setTempCoords] = useState<{ latitude: number; longitude: number } | undefined>(undefined);
+    const [tempCoords, setTempCoords] = useState<GeoCoords | undefined>(undefined);
     const [isLocating, setIsLocating] = useState(false);
 
     // Estados Repartidor (Solo Delivery)
@@ -160,27 +162,20 @@ export default function ProfilePage() {
         setNewAddress(prev => ({ ...prev, [name]: value }));
     };
 
-    // Función para detectar GPS
-    const handleGetLocation = () => {
-        if (!navigator.geolocation) {
-            toast({ variant: "destructive", title: "Error", description: "Navegador sin soporte GPS." });
-            return;
-        }
+    // Detectar GPS (Fase RR: captura compartida de geo.ts — timeout, mensajes por tipo
+    // de error, y guarda la precisión para que el pin del mapa la muestre).
+    const handleGetLocation = async () => {
         setIsLocating(true);
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const { latitude, longitude } = position.coords;
-                setTempCoords({ latitude, longitude });
-                setIsLocating(false);
-                toast({ title: "Ubicación detectada", description: "Coordenadas listas para guardar." });
-            },
-            (error) => {
-                console.error("Error GPS:", error);
-                setIsLocating(false);
-                toast({ variant: "destructive", title: "Error GPS", description: "Activa tu ubicación." });
-            },
-            { enableHighAccuracy: true }
-        );
+        try {
+            const coords = await capturePosition();
+            setTempCoords(coords);
+            toast({ title: "Ubicación detectada", description: "Verificá el pin en el mapa y ajustalo si hace falta." });
+        } catch (error: any) {
+            console.error("Error GPS:", error);
+            toast({ variant: "destructive", title: "Error GPS", description: error.message });
+        } finally {
+            setIsLocating(false);
+        }
     };
 
     const handleAddAddress = async () => {
@@ -189,14 +184,15 @@ export default function ProfilePage() {
             return;
         }
         
-        // Objeto de dirección final
+        // Objeto de dirección final. `coords` solo si existe: el SDK de Firestore
+        // rechaza claves con valor `undefined` dentro de arrayUnion.
         const addressToSave: Address = {
             id: newAddress.id || Math.random().toString(36).substring(2, 9),
             street: newAddress.street.trim(),
             city: newAddress.city.trim(),
             zipCode: newAddress.zipCode.trim(),
             label: `${newAddress.street.trim()}`,
-            coords: tempCoords 
+            ...(tempCoords ? { coords: tempCoords } : {}),
         };
         
         try {
@@ -355,21 +351,33 @@ export default function ProfilePage() {
                                                 {/* BOTÓN GPS */}
                                                 <div className="flex items-center justify-between bg-muted p-2 rounded border">
                                                     <span className="text-sm text-muted-foreground ml-2">
-                                                        {tempCoords ? "✅ GPS detectado" : "📍 Ubicación exacta (Recomendado)"}
+                                                        {tempCoords ? "✅ Ubicación marcada" : "📍 Ubicación exacta (Recomendado)"}
                                                     </span>
-                                                    <Button 
-                                                        type="button" 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        onClick={handleGetLocation} 
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={handleGetLocation}
                                                         disabled={isLocating}
                                                         className={tempCoords ? "text-success border-success/30 bg-success/10" : ""}
                                                     >
-                                                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin"/> : 
+                                                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin"/> :
                                                          tempCoords ? <CheckCircle2 className="h-4 w-4"/> : <LocateFixed className="h-4 w-4"/>}
                                                         {tempCoords ? "Actualizar" : "Detectar"}
                                                     </Button>
                                                 </div>
+
+                                                {/* PIN AJUSTABLE (Fase RR): el GPS crudo puede errarle por cuadras.
+                                                    El mapa deja verificar/corregir el punto arrastrando el pin, o
+                                                    marcarlo a mano si el GPS está apagado/denegado. */}
+                                                <LocationPicker
+                                                    value={tempCoords ?? null}
+                                                    onChange={(c) => setTempCoords(c)}
+                                                    className="h-44"
+                                                    hint={tempCoords
+                                                        ? 'Arrastrá el pin 📍 hasta la entrada exacta de tu casa.'
+                                                        : 'Tocá el mapa donde está tu casa para colocar el pin 📍 (o usá "Detectar").'}
+                                                />
 
                                                 <div className="flex justify-end gap-2 pt-2">
                                                     <Button variant="ghost" size="sm" onClick={() => setIsAddingAddress(false)}>Cancelar</Button>

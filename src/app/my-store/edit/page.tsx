@@ -20,6 +20,8 @@ import {
   type WeeklySchedule, normalizeSchedule, defaultWeeklySchedule, DAY_LABELS, DISPLAY_ORDER,
 } from '@/lib/store-hours';
 import { STORE_CATEGORIES } from '@/lib/store-categories';
+import { capturePosition } from '@/lib/geo';
+import { LocationPicker } from '@/components/location-picker';
 
 // Deriva un {open,close} representativo (primera franja de un día abierto) para mantener
 // vivos lectores legacy que todavía no usan el helper store-hours.
@@ -138,30 +140,21 @@ export default function EditStorePage() {
     ));
   };
 
-  // ✅ FUNCIÓN GPS CORREGIDA (NO INSERTA TEXTO FEO)
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-        toast({ variant: "destructive", title: "Error", description: "Tu navegador no soporta geolocalización." });
-        return;
-    }
-
+  // ✅ GPS del dueño (Fase RR: captura compartida de geo.ts — timeout y mensajes por
+  // tipo de error). Ya no es la ÚNICA forma de cargar la ubicación: el mapa con pin
+  // ajustable de abajo permite marcarla a mano sin estar físicamente en el local.
+  const handleGetLocation = async () => {
     setIsLocating(true);
-
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const { latitude, longitude } = position.coords;
-            setCoords({ latitude, longitude });
-            // 🚫 ELIMINADO: Ya no sobreescribimos el address con coordenadas feas
-            setIsLocating(false);
-            toast({ title: "¡Ubicación Detectada!", description: "Coordenadas guardadas internamente." });
-        },
-        (error) => {
-            console.error("Error GPS:", error);
-            setIsLocating(false);
-            toast({ variant: "destructive", title: "Error GPS", description: "Asegúrate de permitir el acceso a tu ubicación." });
-        },
-        { enableHighAccuracy: true }
-    );
+    try {
+        const position = await capturePosition();
+        setCoords({ latitude: position.latitude, longitude: position.longitude });
+        toast({ title: "¡Ubicación Detectada!", description: "Verificá el pin en el mapa y ajustalo si hace falta." });
+    } catch (error: any) {
+        console.error("Error GPS:", error);
+        toast({ variant: "destructive", title: "Error GPS", description: error.message });
+    } finally {
+        setIsLocating(false);
+    }
   };
 
   // 4. Guardar cambios
@@ -386,9 +379,21 @@ export default function EditStorePage() {
                 </div>
             ) : (
                 <p className="text-xs text-warning flex items-center gap-1 font-medium">
-                    <AlertTriangle className="h-3 w-3"/> Importante: Presiona el botón GPS para activar el mapa.
+                    <AlertTriangle className="h-3 w-3"/> Importante: marcá tu local en el mapa (o usá el botón GPS si estás en el local).
                 </p>
             )}
+
+            {/* PIN AJUSTABLE (Fase RR): antes la ÚNICA forma de cargar la ubicación era
+                el GPS del dueño parado en el local. Ahora puede marcar/corregir el punto
+                tocando el mapa o arrastrando el pin, desde cualquier lado. */}
+            <LocationPicker
+                value={coords}
+                onChange={(c) => setCoords({ latitude: c.latitude, longitude: c.longitude })}
+                className="h-56"
+                hint={coords
+                    ? 'Arrastrá el pin 📍 hasta la entrada de tu local — es a donde va a llegar el repartidor.'
+                    : 'Tocá el mapa donde está tu local para colocar el pin 📍.'}
+            />
           </div>
         </CardContent>
       </Card>

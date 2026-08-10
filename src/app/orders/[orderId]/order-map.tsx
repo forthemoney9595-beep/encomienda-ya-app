@@ -43,34 +43,44 @@ function MapUpdater({ center }: { center: [number, number] }): null {
     return null;
 }
 
+// Encuadre inicial (Fase RR): antes el mapa abría con zoom fijo 14 centrado en la
+// tienda — si tienda y cliente quedaban lejos, uno de los dos arrancaba fuera de
+// pantalla. fitBounds los mete a ambos (y al repartidor si ya está) UNA sola vez al
+// montar; después la cámara la maneja MapUpdater siguiendo al repartidor.
+function FitBoundsOnce({ points }: { points: [number, number][] }): null {
+    const map = useMap();
+    useEffect(() => {
+        if (points.length >= 2) {
+            map.fitBounds(L.latLngBounds(points).pad(0.25), { maxZoom: 16 });
+        }
+        // Solo al montar, a propósito — no re-encuadrar en cada movimiento del repartidor.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [map]);
+    return null;
+}
+
 interface OrderMapProps {
     order: Order;
 }
 
 export default function OrderMap({ order }: OrderMapProps) {
     // Coordenadas base
-    const storePos: [number, number] | null = order.storeCoords 
-        ? [order.storeCoords.latitude, order.storeCoords.longitude] 
-        : null;
-        
-    const customerPos: [number, number] | null = order.customerCoords 
-        ? [order.customerCoords.latitude, order.customerCoords.longitude] 
+    const storePos: [number, number] | null = order.storeCoords
+        ? [order.storeCoords.latitude, order.storeCoords.longitude]
         : null;
 
-    // Coordenadas dinámicas del Repartidor
-    const driverCoords = (order as any).driverCoords;
-    const driverPos: [number, number] | null = driverCoords 
-        ? [driverCoords.latitude, driverCoords.longitude] 
+    const customerPos: [number, number] | null = order.customerCoords
+        ? [order.customerCoords.latitude, order.customerCoords.longitude]
         : null;
 
-    if (!storePos || !customerPos) {
-        return (
-            <div className="h-full w-full flex items-center justify-center bg-gray-100 text-gray-500 flex-col gap-2">
-                <p>Esperando coordenadas...</p>
-                <span className="text-xs">Tienda: {storePos ? 'OK' : 'Falta'} | Cliente: {customerPos ? 'OK' : 'Falta'}</span>
-            </div>
-        );
-    }
+    // Coordenadas dinámicas del Repartidor (tipadas en Order desde la Fase RR)
+    const driverPos: [number, number] | null = order.driverCoords
+        ? [order.driverCoords.latitude, order.driverCoords.longitude]
+        : null;
+
+    // El padre (page.tsx) ya corta con "Sin datos de ubicación." antes de montar este
+    // componente — esta guarda queda solo como cinturón de seguridad de tipos.
+    if (!storePos || !customerPos) return null;
 
     // Configuración de la Ruta Visual
     const routeColor = '#3b82f6'; // Azul Tienda -> Cliente
@@ -78,6 +88,7 @@ export default function OrderMap({ order }: OrderMapProps) {
 
     return (
         <MapContainer center={storePos} zoom={14} style={{ height: '100%', width: '100%' }}>
+            <FitBoundsOnce points={driverPos ? [storePos, customerPos, driverPos] : [storePos, customerPos]} />
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

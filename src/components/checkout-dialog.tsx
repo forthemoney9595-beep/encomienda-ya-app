@@ -15,6 +15,8 @@ import { useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { capturePosition, type GeoCoords } from '@/lib/geo';
+import { LocationPicker } from '@/components/location-picker';
 
 // Fallback si config/platform.deliveryFee no está cargado (mismo default que el resto
 // de la app, ver DEFAULT_DELIVERY_FEE en /api/orders/create).
@@ -37,9 +39,12 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [phone, setPhone] = useState(userProfile?.phoneNumber || '');
   
   // ✅ Estado para guardar coordenadas GPS
-  const [locationCoords, setLocationCoords] = useState<{latitude: number, longitude: number} | null>(null);
+  const [locationCoords, setLocationCoords] = useState<GeoCoords | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  // Pin manual sin GPS (Fase RR): si el permiso está denegado o el GPS falla, el mapa
+  // con pin ajustable es un camino alternativo VÁLIDO — antes "sin GPS no hay pedido".
+  const [showManualMap, setShowManualMap] = useState(false);
 
   // Direcciones guardadas en el perfil (con su GPS ya cargado desde /profile) -- así,
   // igual que Rappi/PedidosYa, no hace falta volver a pedir GPS en cada compra: se
@@ -55,7 +60,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [storeMaintenanceMode, setStoreMaintenanceMode] = useState(false);
 
   // 🔒 Clave de idempotencia: una por apertura del diálogo, evita pedidos duplicados
-  // por doble click — igual que en checkout/page.tsx
+  // por doble click (este diálogo es el único checkout desde la Fase PP)
   const [idempotencyKey] = useState(() =>
     typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
@@ -122,6 +127,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
 
   const selectAddress = (id: string) => {
     setSelectedAddressId(id);
+    setShowManualMap(false);
     if (id === 'new') {
       setAddress('');
       setLocationCoords(null);
@@ -142,31 +148,22 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     }
   };
 
-  // ✅ FUNCION: Obtener GPS del navegador
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-        toast({ variant: "destructive", title: "Error", description: "Tu navegador no soporta geolocalización." });
-        return;
-    }
-
+  // ✅ Obtener GPS del navegador (Fase RR: captura compartida de geo.ts — con timeout,
+  // mensajes por tipo de error y guardando la precisión reportada).
+  const handleGetLocation = async () => {
     setIsLocating(true);
-
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const { latitude, longitude } = position.coords;
-            setLocationCoords({ latitude, longitude });
-            setLocationStatus('success');
-            setIsLocating(false);
-            toast({ title: "Ubicación detectada", description: "Coordenadas guardadas para el mapa." });
-        },
-        (error) => {
-            console.error("Error GPS:", error);
-            setIsLocating(false);
-            setLocationStatus('error');
-            toast({ variant: "destructive", title: "Error GPS", description: "Asegúrate de permitir el acceso a tu ubicación." });
-        },
-        { enableHighAccuracy: true }
-    );
+    try {
+        const coords = await capturePosition();
+        setLocationCoords(coords);
+        setLocationStatus('success');
+        toast({ title: "Ubicación detectada", description: "Verificá el pin en el mapa y ajustalo si hace falta." });
+    } catch (error: any) {
+        console.error("Error GPS:", error);
+        setLocationStatus('error');
+        toast({ variant: "destructive", title: "Error GPS", description: error.message });
+    } finally {
+        setIsLocating(false);
+    }
   };
 
   const handleRequestOrder = async () => {
@@ -180,7 +177,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         return;
     }
 
-    // 🔒 BLOQUEAR SI EMAIL NO VERIFICADO (igual que en checkout/page.tsx)
+    // 🔒 BLOQUEAR SI EMAIL NO VERIFICADO
     if (!user.emailVerified) {
         toast({
             variant: "destructive",
@@ -190,12 +187,12 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         return;
     }
 
-    // 🔒 VALIDACIÓN ESTRICTA DE GPS
+    // 🔒 VALIDACIÓN ESTRICTA DE UBICACIÓN (GPS o pin marcado a mano en el mapa)
     if (!locationCoords) {
-        toast({ 
-            variant: "destructive", 
-            title: "Falta Ubicación GPS", 
-            description: "Por favor presiona '📍 Usar mi ubicación actual' para que el delivery sepa dónde ir." 
+        toast({
+            variant: "destructive",
+            title: "Falta tu Ubicación",
+            description: "Usá '📍 Usar mi ubicación actual' o marcá tu casa en el mapa para que el delivery sepa dónde ir."
         });
         return;
     }
@@ -254,7 +251,8 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             setAddress('');
             setLocationCoords(null);
             setLocationStatus('idle');
-            
+            setShowManualMap(false);
+
             if (result.orderId) {
                 router.push(`/orders/${result.orderId}`); 
             } else {
@@ -353,19 +351,42 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                     {isLocating ? (
                         <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
                     ) : (
-                        <><Crosshair className="mr-2 h-4 w-4"/> 📍 Usar mi ubicación actual (Obligatorio)</>
+                        <><Crosshair className="mr-2 h-4 w-4"/> 📍 Usar mi ubicación actual</>
                     )}
                 </Button>
             )}
             {locationStatus === 'success' && (
                 <div className="flex items-center gap-2 text-sm text-success bg-success/10 border border-success/30 rounded-md px-3 py-2">
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    {selectedAddressId !== 'new' ? 'Usando el GPS de tu dirección guardada.' : 'Ubicación guardada correctamente.'}
+                    {selectedAddressId !== 'new' ? 'Usando el GPS de tu dirección guardada.' : 'Ubicación marcada correctamente.'}
                 </div>
             )}
 
             {locationStatus === 'error' && (
-                <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No pudimos obtener tu ubicación. Activa el GPS.</p>
+                <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No pudimos obtener tu ubicación. Podés marcarla a mano en el mapa.</p>
+            )}
+
+            {/* PIN AJUSTABLE (Fase RR): si hay coords (del GPS o de la dirección guardada)
+                se muestra el mapa para VERIFICAR y corregir arrastrando — la lectura cruda
+                del GPS puede errarle por cuadras si triangula por WiFi. Si no hay coords,
+                un link abre el mapa para marcar a mano (camino alternativo sin GPS). */}
+            {(locationCoords || showManualMap) ? (
+                <LocationPicker
+                    value={locationCoords}
+                    onChange={(c) => { setLocationCoords(c); setLocationStatus('success'); }}
+                    className="h-44"
+                    hint={locationCoords
+                        ? 'Verificá que el pin 📍 esté en tu entrada. Podés arrastrarlo o tocar el mapa para corregirlo.'
+                        : 'Tocá el mapa donde está tu casa para colocar el pin 📍.'}
+                />
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => setShowManualMap(true)}
+                    className="text-xs text-info underline underline-offset-2 w-full text-left"
+                >
+                    ¿Sin GPS? Marcá tu ubicación a mano en el mapa
+                </button>
             )}
 
             {/* INPUT REFERENCIA VISUAL */}

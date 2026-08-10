@@ -5,6 +5,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
 import { normalizeSchedule, getStoreOpenStatus, nowInArgentina } from "@/lib/store-hours";
+import { isValidCoords } from "@/lib/geo";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 // Valor fallback si config/platform.deliveryFee no está configurado en Firestore
@@ -40,6 +41,25 @@ export async function POST(request: Request) {
         { error: "Método de pago no disponible. Solo se aceptan pagos digitales." },
         { status: 400 },
       );
+    }
+
+    // 🔒 Validar customerCoords (Fase RR): era el ÚNICO dato del body que se escribía
+    // crudo sin validar tipo ni rango — un body manipulado podía guardar strings o
+    // coordenadas imposibles y romper el mapa del repartidor. Se sanitiza a solo los
+    // campos conocidos (latitude/longitude/accuracy).
+    let safeCustomerCoords: { latitude: number; longitude: number; accuracy?: number } | null = null;
+    if (customerCoords != null) {
+      if (!isValidCoords(customerCoords)) {
+        return NextResponse.json(
+          { error: "Ubicación inválida. Volvé a marcar tu ubicación en el mapa." },
+          { status: 400 },
+        );
+      }
+      safeCustomerCoords = { latitude: customerCoords.latitude, longitude: customerCoords.longitude };
+      const accuracy = (customerCoords as Record<string, unknown>).accuracy;
+      if (typeof accuracy === 'number' && Number.isFinite(accuracy)) {
+        safeCustomerCoords.accuracy = Math.round(accuracy);
+      }
     }
 
     // 🔒 El uid del token tiene que ser el mismo userId que dice el body — si no, alguien
@@ -206,7 +226,7 @@ export async function POST(request: Request) {
             storeOwnerId: ownerId || null,
 
             storeCoords: storeCoords,
-            customerCoords: customerCoords || null,
+            customerCoords: safeCustomerCoords,
 
             deliveryPersonId: null as string | null,
             readyForPickup: false,

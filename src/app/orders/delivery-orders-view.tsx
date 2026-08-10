@@ -3,9 +3,10 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
-import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { OrderService, MAX_ACTIVE_ORDERS } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
+import { gmapsDirectionsUrl, distanceMeters, formatDistance, isValidCoords } from '@/lib/geo';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,10 @@ interface Order {
   storeId?: string;
   deliveryPersonId?: string;
   hasReportedProblem?: boolean;
+  // Snapshot de coords guardado por /api/orders/create — alimenta el botón "Navegar"
+  // y la distancia estimada del viaje (Fase RR).
+  storeCoords?: { latitude: number; longitude: number } | null;
+  customerCoords?: { latitude: number; longitude: number } | null;
 }
 
 export default function DeliveryOrdersView() {
@@ -230,7 +235,9 @@ export default function DeliveryOrdersView() {
       const orderRef = doc(firestore, 'orders', confirmDeliveryOrder.id);
       await updateDoc(orderRef, {
         status: 'Entregado',
-        deliveredAt: serverTimestamp()
+        deliveredAt: serverTimestamp(),
+        // La posición en vivo del repartidor no queda guardada en la orden (Fase RR).
+        driverCoords: deleteField()
       });
       toast({ title: "¡Entrega Completada!", description: "Ganancia registrada en tu Billetera." });
 
@@ -379,6 +386,15 @@ export default function DeliveryOrdersView() {
                             <p className="text-sm">{order.shippingInfo?.address}</p>
                         </div>
                     </div>
+                    {/* Distancia estimada del viaje (Fase RR) — ayuda a decidir si tomarlo.
+                        Línea recta a propósito: sin servicio de routing, y en un pueblo en
+                        grilla la aproximación alcanza para comparar pedidos entre sí. */}
+                    {isValidCoords(order.storeCoords) && isValidCoords(order.customerCoords) && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 pl-8">
+                            <Truck className="h-3.5 w-3.5" />
+                            ≈ {formatDistance(distanceMeters(order.storeCoords!, order.customerCoords!))} de la tienda al cliente (línea recta)
+                        </p>
+                    )}
                 </CardContent>
                 <CardFooter>
                     <Button
@@ -471,7 +487,23 @@ export default function DeliveryOrdersView() {
                             )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
-                            {/* ✅ BOTÓN DE NAVEGACIÓN */}
+                            {/* NAVEGAR CON GOOGLE MAPS (Fase RR): deep link a la app de mapas del
+                                teléfono — a la TIENDA mientras va a retirar, al CLIENTE una vez
+                                retirado. Es como navegan los repartidores de Rappi/PedidosYa. */}
+                            {(() => {
+                                const goingToStore = order.status !== 'En reparto';
+                                const dest = goingToStore ? order.storeCoords : order.customerCoords;
+                                if (!isValidCoords(dest)) return null;
+                                return (
+                                    <Button asChild variant="outline" className="w-full h-11 border-info/40 text-info hover:bg-info/10 hover:text-info">
+                                        <a href={gmapsDirectionsUrl(dest)} target="_blank" rel="noopener noreferrer">
+                                            <Navigation className="mr-2 h-4 w-4" />
+                                            Navegar {goingToStore ? 'a la tienda' : 'al cliente'} (Google Maps)
+                                        </a>
+                                    </Button>
+                                );
+                            })()}
+
                             <Button variant="secondary" className="w-full h-10" onClick={() => goToDetails(order.id)}>
                                 <MapIcon className="mr-2 h-4 w-4" /> Ver Detalles / Mapa / Chat
                             </Button>

@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   serverTimestamp,
+  deleteField,
   Firestore,
   Timestamp
 } from 'firebase/firestore';
@@ -95,8 +96,11 @@ export interface Order {
   deliveredAt?: Timestamp | Date;
   updatedAt?: Timestamp | Date;
 
-  // Datos del driver para el mapa en tiempo real
-  driverCoords?: { latitude: number; longitude: number };
+  // Datos del driver para el mapa en tiempo real. lastUpdate (ISO) alimenta el
+  // indicador de "señal en vivo / señal perdida" del comprador (Fase RR). El campo se
+  // BORRA al marcar 'Entregado' — la última posición del repartidor no tiene por qué
+  // quedar guardada en la orden para siempre.
+  driverCoords?: { latitude: number; longitude: number; lastUpdate?: string };
 }
 
 // Tope de pedidos simultáneos por repartidor (Fase DD). Compartido para que los DOS
@@ -162,8 +166,10 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
   // escribía delivery-orders-view.tsx (1 de los 3 caminos que marcan 'Entregado'), así que
   // había pedidos Entregado sin fecha de entrega confiable. La regla del repartidor
   // asignado en firestore.rules ya permite 'deliveredAt' junto con 'status'.
+  // driverCoords se BORRA al entregar (Fase RR): antes la última posición del repartidor
+  // quedaba persistida en la orden para siempre, legible por comprador/tienda/admin.
   await updateDoc(orderRef, status === 'Entregado'
-    ? { status, deliveredAt: serverTimestamp() }
+    ? { status, deliveredAt: serverTimestamp(), driverCoords: deleteField() }
     : { status });
 
   try {

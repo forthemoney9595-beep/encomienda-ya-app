@@ -221,11 +221,26 @@ service cloud.firestore {
 
         // REPARTIDOR ASIGNADO: avanzar su propio pedido + reportar posición GPS
         // (driverCoords, sin tocar status — tiene que seguir siendo una escritura barata).
+        // 🔒 Fase RR — driverCoords con forma validada: antes aceptaba cualquier basura
+        // (strings, coords imposibles) y en cualquier estado, incluso 'Entregado'. Ahora:
+        //   - BORRARLO siempre se puede (es lo que hace marcar 'Entregado');
+        //   - ESCRIBIRLO exige lat/lng numéricos en rango y que el pedido esté en la
+        //     calle ('En camino' va a la tienda, 'En reparto' va al cliente).
         (resource.data.deliveryPersonId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'pickedUpAt', 'deliveredAt', 'driverCoords']) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
-            request.resource.data.status in ['En reparto', 'Entregado'])) ||
+            request.resource.data.status in ['En reparto', 'Entregado']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['driverCoords']) ||
+            !('driverCoords' in request.resource.data) ||
+            (request.resource.data.driverCoords is map &&
+              request.resource.data.driverCoords.latitude is number &&
+              request.resource.data.driverCoords.longitude is number &&
+              request.resource.data.driverCoords.latitude >= -90 &&
+              request.resource.data.driverCoords.latitude <= 90 &&
+              request.resource.data.driverCoords.longitude >= -180 &&
+              request.resource.data.driverCoords.longitude <= 180 &&
+              resource.data.status in ['En camino', 'En reparto']))) ||
 
         // REPARTIDOR LIBRE: autoasignación de un pedido sin repartidor.
         // Solo repartidores APROBADOS por el admin (users/{uid}.isApproved == true).
