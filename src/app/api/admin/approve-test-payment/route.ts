@@ -4,6 +4,7 @@ import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { notifyUser } from "@/lib/notify-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
+import { broadcastOrderToDrivers } from "@/lib/driver-broadcast";
 
 // ============================================================================
 // 🧪 SOLO PARA LA GRAN PRUEBA PRE-LANZAMIENTO — SACAR ANTES DE LANZAR
@@ -102,6 +103,18 @@ export async function POST(request: Request) {
         link: `/orders/${orderId}`,
         orderId,
       });
+    }
+
+    // Broadcast a repartidores (Fase RR bis) — igual que el webhook real: el pedido
+    // entra al pool de "Disponibles" en este momento, así que el aviso sale solo.
+    try {
+      await broadcastOrderToDrivers({
+        orderId,
+        title: "📦 Nuevo Pedido Disponible",
+        body: `${order.storeName || "Una tienda"} tiene un pedido pagado para entregar. ¡Tomalo!`,
+      });
+    } catch (e) {
+      console.error("[approve-test-payment] broadcast falló:", e);
     }
 
     await logAdminActionServer(

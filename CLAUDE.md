@@ -2054,7 +2054,33 @@ en segundo plano (requiere app nativa), edición de coords de tienda desde el ad
 matcher hardcodeado `'(-28.'` de `cleanAddress()` (3 copias: delivery-orders-view,
 page.tsx del home y tienda pública — solo limpia texto legacy, sin urgencia).
 
-## Herramienta para la gran prueba: `_approve-payment.js` (ago 2026, gitignored)
+## Fase RR bis (ago 2026): 2 bugs encontrados por el usuario probando en vivo
+Primera prueba real del circuito completo tras la limpieza. Los dos diagnósticos se
+hicieron contra la base (no supuestos) y ambos fixes quedaron verificados en vivo (3/3:
+pago aprobado → campanita `delivery_request` creada; panel con GPS → `driverCoords`
+escrito).
+- **🚨 El aviso a repartidores casi nunca salía.** El pedido entra al pool de
+  "Disponibles" desde que se paga ('En preparación' — la query del panel lo incluye),
+  pero el broadcast SOLO se disparaba si la tienda tocaba el botón "¡Pedido Listo!
+  Llamar Repartidor" del panel; marcar "Listo para recoger" desde el detalle
+  (order-status-updater) no avisaba a NADIE (misma familia que R1: dos caminos, uno
+  mudo). En la prueba: 0 docs `delivery_request` en la base — el repartidor vio el
+  pedido de casualidad. Fix de raíz: nuevo **`src/lib/driver-broadcast.ts`**
+  (`broadcastOrderToDrivers`, único lugar del broadcast: campanita + push a aprobados
+  y disponibles) y ahora **el aviso sale solo al confirmarse el pago** (webhook de MP
+  + approve-test-payment), que es el momento exacto en que el pedido se puede tomar.
+  Los dos caminos de la tienda quedaron como re-aviso "ya está listo": el botón del
+  panel (via `/api/orders/notify-drivers`, que ahora escribe
+  `readyForPickup`/`lastDriverNotification` server-side) y el updater del detalle
+  (llama a la misma API si no hay repartidor asignado). `/api/orders/release` mantiene
+  su re-broadcast propio (mensaje distinto), sin tocar.
+- **🚨 El mapa nunca mostraba la moto.** `LocationTracker` solo se montaba en la página
+  de DETALLE del pedido, pero el repartidor opera desde el panel (`/orders` — tomar/
+  retirar/entregar están ahí): en la prueba real `driverCoords` nunca se escribió. Ahora
+  el panel monta un tracker por pedido activo (se auto-apaga fuera de 'En camino'/'En
+  reparto'); el toast "GPS Activo" quedó deduplicado a nivel módulo (con 3 pedidos
+  activos hay 3 trackers y salía 3 veces). Sigue el límite de web: con la app/pestaña
+  cerrada no hay tracking (ver nota de app nativa en Fase RR).
 Para recorrer el circuito completo en la prueba rol por rol sin pagar de verdad.
 `/api/orders/confirm-payment` está muerto a propósito (410, seguridad) — el pago solo lo
 confirma el webhook de MP. Este script replica EXACTAMENTE lo que el webhook escribe al

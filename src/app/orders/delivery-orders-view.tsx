@@ -8,6 +8,7 @@ import { OrderService, MAX_ACTIVE_ORDERS } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { gmapsDirectionsUrl, distanceMeters, formatDistance, isValidCoords } from '@/lib/geo';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
+import { LocationTracker } from '@/components/location-tracker';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -308,7 +309,16 @@ export default function DeliveryOrdersView() {
 
   return (
     <div className="container mx-auto pb-24">
-      
+
+      {/* Tracking GPS desde el PANEL (Fase RR bis): el tracker vivía solo en la página
+          de detalle del pedido — pero el repartidor opera desde acá (tomar/retirar/
+          entregar están en estas tarjetas), así que en la prueba real nunca se montó y
+          el mapa del comprador no mostraba la moto. Uno por pedido activo; el componente
+          se auto-apaga fuera de 'En camino'/'En reparto' y el toast está deduplicado. */}
+      {myActiveOrders?.map(o => (
+        <LocationTracker key={`tracker-${o.id}`} orderId={o.id} isDriver={true} status={o.status} />
+      ))}
+
       <div className="flex items-center justify-between mb-6 gap-3">
           <h2 className="text-2xl font-bold tracking-tight">Panel de Repartidor</h2>
           <div className="flex items-center gap-3">

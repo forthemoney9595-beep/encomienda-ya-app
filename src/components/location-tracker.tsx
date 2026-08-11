@@ -26,6 +26,10 @@ const HEARTBEAT_MS = 15_000;   // aunque esté quieto, refrescar lastUpdate cada
 const MIN_MOVE_METERS = 30;    // o si se movió esto...
 const MIN_MOVE_MS = 5_000;     // ...pero nunca más seguido que esto
 
+// A nivel módulo: con varios pedidos activos hay un tracker por pedido (el panel monta
+// uno por cada orden en curso) — el toast "GPS Activo" tiene que salir UNA vez, no tres.
+let lastGpsToastAt = 0;
+
 export function LocationTracker({ orderId, isDriver, status }: LocationTrackerProps): null {
     const firestore = useFirestore();
     const { toast } = useToast();
@@ -50,7 +54,10 @@ export function LocationTracker({ orderId, isDriver, status }: LocationTrackerPr
                 // al montar, incluso con el permiso denegado (y después llegaba el error).
                 if (notifiedRef.current !== 'ok') {
                     notifiedRef.current = 'ok';
-                    toast({ title: 'GPS Activo', description: 'Compartiendo ubicación en tiempo real.' });
+                    if (Date.now() - lastGpsToastAt > 60_000) {
+                        lastGpsToastAt = Date.now();
+                        toast({ title: 'GPS Activo', description: 'Compartiendo ubicación en tiempo real.' });
+                    }
                 }
 
                 const now = Date.now();

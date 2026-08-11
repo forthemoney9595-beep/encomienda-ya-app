@@ -104,6 +104,22 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
       }
 
       await updateOrderStatus(firestore, order.id, newStatus, appUser);
+
+      // 'Listo para recoger' desde acá era el CAMINO MUDO (Fase RR bis): avisaba al
+      // comprador pero a ningún repartidor — el otro camino (botón del panel de la
+      // tienda) sí. Misma familia de bug que la Fase R1: dos caminos, uno mudo.
+      if (newStatus === 'Listo para recoger' && !order.deliveryPersonId && appUser) {
+        try {
+          const res = await authedFetch('/api/orders/notify-drivers', appUser, { orderId: order.id });
+          const data = await res.json();
+          if (res.ok && data.notified > 0) {
+            toast({ title: '📢 Repartidores avisados', description: `Se notificó a ${data.notified} repartidor(es).` });
+          }
+        } catch (e) {
+          console.error('No se pudo avisar a los repartidores:', e);
+        }
+      }
+
       toast({
           title: 'Estado Actualizado',
           description: `El pedido ahora está "${newStatus}".`,

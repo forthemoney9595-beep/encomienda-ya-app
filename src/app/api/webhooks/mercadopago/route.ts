@@ -4,6 +4,7 @@ import { createHmac } from "crypto";
 import * as Sentry from "@sentry/nextjs";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { broadcastOrderToDrivers } from "@/lib/driver-broadcast";
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,
@@ -276,8 +277,22 @@ export async function POST(request: Request) {
         }
     }
 
+    // --- C) Broadcast a REPARTIDORES (Fase RR bis) ---
+    // El pedido entra al pool de "Disponibles" en este momento exacto (los repartidores
+    // ya pueden tomarlo desde 'En preparación'), pero el aviso dependía de que la tienda
+    // tocara un botón — si no lo tocaba, nadie se enteraba. Ahora el sistema avisa solo.
+    try {
+        await broadcastOrderToDrivers({
+            orderId: orderRefId,
+            title: "📦 Nuevo Pedido Disponible",
+            body: `${existingData.storeName || "Una tienda"} tiene un pedido pagado para entregar. ¡Tomalo!`,
+        });
+    } catch (e) {
+        console.error("[Webhook] broadcast a repartidores falló:", e);
+    }
+
     console.log(`🚀 [Webhook] Orden ${orderRefId} procesada completamente.`);
-    
+
     return NextResponse.json({ status: "success", orderId: orderRefId });
 
   } catch (error: any) {
