@@ -225,6 +225,26 @@ function AdminOrdersPage() {
   const rangeTo = pageIndex * PAGE_SIZE + displayed.length;
   const totalPages = typeof totalCount === 'number' ? Math.max(1, Math.ceil(totalCount / PAGE_SIZE)) : 1;
 
+  // 🧪 SOLO PRUEBAS — SACAR ANTES DE LANZAR (junto con /api/admin/approve-test-payment).
+  // Simula la aprobación del pago de MP para recorrer el circuito completo sin pagar.
+  const [approvingTest, setApprovingTest] = useState<string | null>(null);
+  const handleApproveTestPayment = async (order: any) => {
+    if (!user) return;
+    if (!confirm(`🧪 PAGO DE PRUEBA\n\n¿Marcar como PAGADO el pedido de ${order.customerName || 'cliente'} en ${order.storeName || 'la tienda'} por $${(order.total || 0).toLocaleString()}?\n\nEsto simula que MercadoPago aprobó el pago (no mueve plata real). El pedido pasa a "En preparación" y se notifica a la tienda y al cliente.`)) return;
+    setApprovingTest(order.id);
+    try {
+      const res = await authedFetch('/api/admin/approve-test-payment', user, { orderId: order.id });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error');
+      toast({ title: '🧪 Pago de prueba aprobado', description: `El pedido pasó a "En preparación" ($${(data.paidAmount || 0).toLocaleString()}).` });
+      loadPage(pageStack.length > 0 ? pageStack[pageStack.length - 1] : null);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'No se pudo aprobar', description: e.message });
+    } finally {
+      setApprovingTest(null);
+    }
+  };
+
   const handleCancel = async (orderId: string, orderUserId: string) => {
     if (!user) return;
     if (!confirm('¿Cancelar este pedido? Esta acción notificará al comprador y a la tienda.')) return;
@@ -419,6 +439,18 @@ function AdminOrdersPage() {
                             <ExternalLink className="h-3 w-3" /> Ver
                           </Button>
                         </Link>
+                        {/* 🧪 SOLO PRUEBAS — SACAR ANTES DE LANZAR */}
+                        {order.status === 'Pendiente de Pago' && !isSupport && (
+                          <Button
+                            size="sm" variant="outline"
+                            className="h-7 px-2 text-xs text-success border-success/40 hover:bg-success/10 gap-1"
+                            disabled={approvingTest === order.id}
+                            onClick={() => handleApproveTestPayment(order)}
+                            title="Simula la aprobación del pago de MercadoPago (herramienta de prueba)"
+                          >
+                            {approvingTest === order.id ? <Loader2 className="h-3 w-3 animate-spin" /> : '🧪'} Aprobar pago
+                          </Button>
+                        )}
                         {(order as any).paymentStatus === 'paid' && !(order as any).refunded && !isSupport && (
                           <Button
                             size="sm" variant="ghost"

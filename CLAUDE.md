@@ -2081,6 +2081,14 @@ automático permitido es (a) generar SOLICITUDES para aprobar (cron de liquidaci
 (b) registrar plata que ENTRA (webhook/conciliación marcando pagos aprobados en MP).
 
 ## Pendientes pre-lanzamiento
+- **🧪 SACAR el aprobador de pagos de prueba** (pedido explícito del usuario: se sube
+  temporal para la gran prueba con varias personas y DESPUÉS se elimina): borrar
+  `src/app/api/admin/approve-test-payment/route.ts` + el botón "🧪 Aprobar pago" y su
+  handler en `src/app/admin/orders/page.tsx` (buscar "SOLO PRUEBAS"). La etiqueta
+  `approve_test_payment` del audit-log puede quedar (historial). Los pedidos que generó
+  se encuentran con `where('simulatedPayment','==',true)` — se van con la limpieza del
+  seed. Mientras exista: exige admin 'full' por token, solo procesa "Pendiente de Pago",
+  no escribe `mpPaymentId` (la conciliación lo saltea) y audita cada uso.
 - **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
   Variables, Production+Preview+Development) — hoy Sentry solo captura en local
   (`.env.local`); sin esto en Vercel, producción no manda errores a Sentry. Recordatorio
