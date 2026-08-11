@@ -2054,6 +2054,23 @@ en segundo plano (requiere app nativa), edición de coords de tienda desde el ad
 matcher hardcodeado `'(-28.'` de `cleanAddress()` (3 copias: delivery-orders-view,
 page.tsx del home y tienda pública — solo limpia texto legacy, sin urgencia).
 
+## Herramienta para la gran prueba: `_approve-payment.js` (ago 2026, gitignored)
+Para recorrer el circuito completo en la prueba rol por rol sin pagar de verdad.
+`/api/orders/confirm-payment` está muerto a propósito (410, seguridad) — el pago solo lo
+confirma el webhook de MP. Este script replica EXACTAMENTE lo que el webhook escribe al
+aprobar (mismos campos, misma guarda "solo Pendiente de Pago", mismas notificaciones
+campanita+push a tienda y cliente), desde afuera con Admin SDK — cero cambios de
+código/reglas. Uso: `node _approve-payment.js --list` (pedidos esperando pago) y
+`node _approve-payment.js <orderId>`.
+- **A propósito NO escribe `mpPaymentId`** → la conciliación diaria con MP saltea estas
+  órdenes (rama `unverifiable` de `reconcile-mp.ts:103`) — no genera discrepancias falsas.
+- Marca `simulatedPayment: true` → en la limpieza pre-lanzamiento se encuentran todas con
+  `where('simulatedPayment','==',true)`.
+- Verificado: guarda de estado (rechaza si no está "Pendiente de Pago" o ya pagada) y
+  escritura completa probadas contra la base real (orden del seed cnNodXcB…, Boutique
+  Almendra). El circuito de pago REAL (checkout MP + webhook) se prueba en el bloque MP
+  con un pago chico de verdad — este script cubre el resto del recorrido.
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —
