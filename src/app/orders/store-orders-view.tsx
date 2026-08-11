@@ -348,7 +348,27 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                         <p className="text-xs text-warning pt-1">Vas a confirmar sin {uncheckedIds.size} producto(s) tildado(s) arriba.</p>
                     )}
                 </div>
-                
+
+                {/* Desglose del total (Fase RR bis): los ítems suman solo los productos, pero el
+                    total de arriba incluye envío y tarifa — sin esta línea la cuenta "no cerraba"
+                    a la vista ($4.400 de ítems vs $6.720 de total, caso real de la prueba). */}
+                {(() => {
+                    const delivery = Number(order.deliveryFee) || 0;
+                    const service = Number(order.serviceFee) || 0;
+                    const total = Number(order.total) || 0;
+                    const products = typeof order.subtotal === 'number'
+                        ? order.subtotal
+                        : Math.max(0, total - delivery - service);
+                    if (!delivery && !service) return null;
+                    return (
+                        <p className="text-xs text-muted-foreground">
+                            Productos ${products.toLocaleString('es-AR')} · Envío ${delivery.toLocaleString('es-AR')}
+                            {service > 0 && <> · Tarifa ${service.toLocaleString('es-AR')}</>}
+                            {' '}= ${total.toLocaleString('es-AR')}
+                        </p>
+                    );
+                })()}
+
                 {order.readyForPickup && order.status === 'En preparación' && (
                     <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 p-2 rounded border border-warning/30">
                         <Megaphone className="h-3 w-3 animate-pulse" />
