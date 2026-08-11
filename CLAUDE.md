@@ -2116,6 +2116,26 @@ siempre) — se activa desde /admin/settings cuando el usuario quiera.
   truth verificado con lectura fresca; DonalPizza solo tiene `schedule` legacy, nunca
   tuvo `weeklySchedule` — no es un residuo del test).
 
+## Fase RR quater (ago 2026): PWA instalable (Nivel 1 del plan de app)
+Decisión con el usuario sobre el empaquetado móvil: **3 niveles** — (1) PWA ya, (2) TWA a
+Play Store junto al bloque MP pre-lanzamiento (PWABuilder, $25 única vez, revisión de días
+— arrancar con tiempo), (3) Capacitor recién cuando el GPS en segundo plano lo justifique
+(cada fix pasaría por revisión del store y mataría el ritmo actual de iteración).
+- **Hallazgo:** `src/app/manifest.json` YA existía (Next lo sirve como `/manifest.json` con
+  Content-Type correcto) y los íconos 72→512 ya estaban en `public/icons/` — la app ya era
+  instalable en Android y nadie lo sabía. **OJO: NO crear un manifest en `public/` — choca
+  con la ruta de `src/app/` y el path da 500** (pasó en esta fase, se detectó al verificar).
+- Manifest mejorado: `id`/`scope`/`lang: es-AR`/`categories`, nombre "EncomiendaYA —
+  Delivery en Tinogasta", `background_color #151523` (el --background real del tema oscuro),
+  `purpose: any` en 192/512. Pendiente estético: los íconos tienen fondo transparente, para
+  `purpose: maskable` (ícono adaptativo Android sin borde blanco) habría que regenerarlos
+  con fondo — anotado, no urgente.
+- **iOS**: `apple-touch-icon` + `apple-mobile-web-app-capable/status-bar/title` en el head
+  (Safari no lee el manifest para "Agregar a inicio").
+- Instalación: Android/Chrome → menú ⋮ → "Instalar app" (o el prompt); iPhone/Safari →
+  Compartir → "Agregar a pantalla de inicio". Cada deploy de Vercel actualiza la app
+  instalada solo — no hay versiones que distribuir.
+
 ## Herramienta para la gran prueba: `_approve-payment.js` (ago 2026, gitignored)
 Para recorrer el circuito completo en la prueba rol por rol sin pagar de verdad.
 `/api/orders/confirm-payment` está muerto a propósito (410, seguridad) — el pago solo lo
