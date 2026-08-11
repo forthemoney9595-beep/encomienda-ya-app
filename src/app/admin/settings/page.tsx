@@ -18,6 +18,10 @@ import { Settings, AlertTriangle, Save, Loader2 } from 'lucide-react';
 interface PlatformConfig {
   serviceFee: number;
   deliveryFee?: number;
+  // Envío según distancia (Fase RR ter): 0 en $/km = envío fijo (comportamiento clásico)
+  deliveryFeePerKm?: number;
+  deliveryIncludedKm?: number;
+  maxDeliveryDistanceKm?: number;
   defaultCommissionRate?: number;
   maintenanceMode: boolean;
   settlementDayOfWeek?: number;
@@ -58,6 +62,9 @@ function AdminSettingsPage() {
         const changes = [
           configData?.serviceFee !== localConfig.serviceFee ? `serviceFee: ${configData?.serviceFee ?? '—'}% → ${localConfig.serviceFee}%` : null,
           configData?.deliveryFee !== localConfig.deliveryFee ? `envío: $${configData?.deliveryFee ?? '—'} → $${localConfig.deliveryFee}` : null,
+          configData?.deliveryFeePerKm !== localConfig.deliveryFeePerKm ? `envío $/km: $${configData?.deliveryFeePerKm ?? 0} → $${localConfig.deliveryFeePerKm ?? 0}` : null,
+          configData?.deliveryIncludedKm !== localConfig.deliveryIncludedKm ? `km incluidos: ${configData?.deliveryIncludedKm ?? 5} → ${localConfig.deliveryIncludedKm ?? 5}` : null,
+          configData?.maxDeliveryDistanceKm !== localConfig.maxDeliveryDistanceKm ? `distancia máx: ${configData?.maxDeliveryDistanceKm ?? 50}km → ${localConfig.maxDeliveryDistanceKm ?? 50}km` : null,
           configData?.defaultCommissionRate !== localConfig.defaultCommissionRate ? `comisión default: ${configData?.defaultCommissionRate ?? '—'}% → ${localConfig.defaultCommissionRate}%` : null,
           configData?.settlementDayOfWeek !== localConfig.settlementDayOfWeek ? `día liquidación: ${localConfig.settlementDayOfWeek}` : null,
           configData?.claimWindowHours !== localConfig.claimWindowHours ? `ventana de reclamo: ${configData?.claimWindowHours ?? '—'}h → ${localConfig.claimWindowHours}h` : null,
@@ -104,6 +111,47 @@ function AdminSettingsPage() {
               <span className="absolute left-3 top-2.5 text-muted-foreground font-bold text-xs">$</span>
             </div>
             <p className="text-xs text-muted-foreground">Costo de envío que se suma a cada pedido. Default: $2000.</p>
+          </div>
+
+          {/* Envío según distancia (Fase RR ter) — con $/km en 0 el envío es fijo como siempre */}
+          <div className="space-y-2">
+            <Label htmlFor="feePerKm" className="text-sm font-semibold">Adicional por distancia ($ por km extra)</Label>
+            <div className="relative">
+              <Input id="feePerKm" type="number" min={0} value={localConfig.deliveryFeePerKm ?? 0}
+                onChange={(e) => setLocalConfig({ ...localConfig, deliveryFeePerKm: Number(e.target.value) })}
+                className="pl-8 border-primary/30" />
+              <span className="absolute left-3 top-2.5 text-muted-foreground font-bold text-xs">$</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              En 0 (default) el envío es fijo. Si lo activás, cada km EMPEZADO más allá de los
+              km incluidos suma este monto (distancia tienda→cliente en línea recta — el camino
+              real por calle es algo más largo, calibrar sabiendo eso). Ej: base $2.000 + $500/km
+              con 5 km incluidos → Santa Rosa (~10 km) paga $2.000 + 5×$500 = $4.500.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="includedKm" className="text-sm font-semibold">Km incluidos en el envío base</Label>
+            <Input id="includedKm" type="number" min={0} value={localConfig.deliveryIncludedKm ?? 5}
+              onChange={(e) => setLocalConfig({ ...localConfig, deliveryIncludedKm: Number(e.target.value) })}
+              className="border-primary/30" />
+            <p className="text-xs text-muted-foreground">
+              Hasta esta distancia se cobra solo la base (default: 5 km — cubre todo el casco
+              urbano de Tinogasta). Solo aplica si el adicional por km está activo.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="maxKm" className="text-sm font-semibold">Distancia máxima de entrega (km)</Label>
+            <Input id="maxKm" type="number" min={0} value={localConfig.maxDeliveryDistanceKm ?? 50}
+              onChange={(e) => setLocalConfig({ ...localConfig, maxDeliveryDistanceKm: Number(e.target.value) })}
+              className="border-primary/30" />
+            <p className="text-xs text-muted-foreground">
+              Cerco anti-error: si el pin del cliente queda a más de esto de la tienda, el pedido
+              se rechaza con un aviso para revisar el mapa. Es a propósito GENEROSO (default 50 km
+              — Santa Rosa y los parajes cercanos entran sobrados): frena al GPS que marcó otra
+              provincia, no define la zona de reparto.
+            </p>
           </div>
 
           <div className="space-y-2">

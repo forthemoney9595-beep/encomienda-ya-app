@@ -2081,6 +2081,42 @@ escrito).
   reparto'); el toast "GPS Activo" quedó deduplicado a nivel módulo (con 3 pedidos
   activos hay 3 trackers y salía 3 veces). Sigue el límite de web: con la app/pestaña
   cerrada no hay tracking (ver nota de app nativa en Fase RR).
+
+## Fase RR ter (ago 2026): envío según distancia + cerco anti-disparate
+Salió de la charla sobre Tinogasta y los parajes cercanos (Santa Rosa ~10 km): el usuario
+descartó un cerco ajustado ("hay lugares más alejados") pero pidió el envío más caro según
+distancia. Diseño clave: **por defecto NADA cambia** ($/km arranca en 0 = envío fijo de
+siempre) — se activa desde /admin/settings cuando el usuario quiera.
+- **`src/lib/delivery-pricing.ts`** (puro, compartido server/cliente):
+  `computeDeliveryFee` = base + $porKm × cada km EMPEZADO después de los km incluidos
+  (config: `deliveryFee` base de siempre + `deliveryFeePerKm` default 0 +
+  `deliveryIncludedKm` default 5 + `maxDeliveryDistanceKm` default 50). Distancia = línea
+  recta tienda→cliente (haversine de geo.ts, la misma que ve el repartidor). Sin coords de
+  alguno de los dos → cobra la base, nunca castiga la falta de dato.
+- **Cerco anti-disparate** (`isBeyondDeliveryLimit`): `create` rechaza con 400 si el pin
+  quedó a más de `maxDeliveryDistanceKm` de la TIENDA. A propósito GENEROSO (50 km):
+  frena al GPS que marcó otra provincia, NO define zona de reparto — Santa Rosa y todos
+  los parajes entran sobrados.
+- **`/api/orders/create`**: calcula distancia con las coords ya validadas, aplica cerco y
+  tarifa. `confirm-stock` NO se tocó: ya usaba el `deliveryFee` congelado de la orden
+  (fix de la Fase KK), así que el envío por distancia sobrevive la confirmación. money.ts
+  tampoco: el repartidor cobra `order.deliveryFee`, o sea el monto por distancia le llega
+  solo.
+- **Checkout**: estima el envío EN VIVO con la misma fórmula al mover el pin (muestra
+  "Envío (≈ 8,3 km)" cuando la tarifa por km está activa) y avisa/bloquea si el pin quedó
+  fuera de zona (el server rechaza igual — defensa doble).
+- **/admin/settings**: 3 campos nuevos ($/km extra, km incluidos, distancia máxima), con
+  el ejemplo calculado en el help text; los cambios quedan en el log de auditoría como el
+  resto de la config.
+- **Home**: si la tarifa por km está activa, las tarjetas dicen "desde $X".
+- **Verificado e2e (3/3, dev server + Firestore real):** pin en Córdoba (~600 km) →
+  rechazado por el cerco; tarifa apagada → envío = base exacta (comportamiento clásico
+  intacto); $500/km con 5 incluidos y pin a 10,3 km → $2.100 + 6×$500 = $5.100 correcto
+  en la orden y el total. El test restaura config/horario y borra lo que crea (ground
+  truth verificado con lectura fresca; DonalPizza solo tiene `schedule` legacy, nunca
+  tuvo `weeklySchedule` — no es un residuo del test).
+
+## Herramienta para la gran prueba: `_approve-payment.js` (ago 2026, gitignored)
 Para recorrer el circuito completo en la prueba rol por rol sin pagar de verdad.
 `/api/orders/confirm-payment` está muerto a propósito (410, seguridad) — el pago solo lo
 confirma el webhook de MP. Este script replica EXACTAMENTE lo que el webhook escribe al

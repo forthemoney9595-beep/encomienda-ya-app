@@ -265,8 +265,10 @@ function HomeContent() {
 
   // Fee de envío configurable (Fase N) — antes estaba hardcodeado "$2000" en la tarjeta.
   const configRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'platform') : null), [firestore]);
-  const { data: platformConfig } = useDoc<{ deliveryFee?: number }>(configRef);
+  const { data: platformConfig } = useDoc<{ deliveryFee?: number; deliveryFeePerKm?: number }>(configRef);
   const deliveryFee = platformConfig?.deliveryFee ?? 2000;
+  // Con tarifa por km activa, el envío del listado es "desde $X" (el real depende del pin).
+  const variableDelivery = (platformConfig?.deliveryFeePerKm ?? 0) > 0;
 
   const favoritesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -408,6 +410,7 @@ function HomeContent() {
       isOpen={d.status.isOpen}
       statusLabel={d.status.label}
       deliveryFee={deliveryFee}
+      deliveryFeeFrom={variableDelivery}
       onToggleFavorite={toggleFavorite}
       variant={variant}
       index={i}

@@ -6,6 +6,7 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
 import { normalizeSchedule, getStoreOpenStatus, nowInArgentina } from "@/lib/store-hours";
 import { isValidCoords } from "@/lib/geo";
+import { deliveryDistanceMeters, computeDeliveryFee, isBeyondDeliveryLimit } from "@/lib/delivery-pricing";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 // Valor fallback si config/platform.deliveryFee no está configurado en Firestore
@@ -115,7 +116,6 @@ export async function POST(request: Request) {
     const platformConfig = platformConfigSnap.data() || {};
     // Usar 5% como default si no está configurado en Firestore (coherente con el cliente)
     const serviceFeePercent = platformConfig.serviceFee ?? 5;
-    const shippingCost: number = platformConfig.deliveryFee ?? DEFAULT_DELIVERY_FEE;
 
     // Comisión vigente para ESTA tienda en ESTE momento (la propia, o la global si no tiene
     // una cargada). Se guarda en el pedido para que el saldo no cambie retroactivamente si
@@ -129,6 +129,19 @@ export async function POST(request: Request) {
                 : 10);
 
     const storeCoords = storeData?.coords || storeData?.location || null;
+
+    // 🚧 Cerco anti-disparate + envío según distancia (Fase RR ter, delivery-pricing.ts).
+    // La distancia es tienda→cliente en línea recta; sin coords de alguno de los dos se
+    // cobra la base y no se rechaza nada (nunca castigar la falta de dato).
+    const deliveryDistM = deliveryDistanceMeters(storeCoords, safeCustomerCoords);
+    if (isBeyondDeliveryLimit(deliveryDistM, platformConfig)) {
+      return NextResponse.json(
+        { error: "Tu ubicación quedó muy lejos de la zona de entrega. Revisá el pin en el mapa — puede que el GPS haya marcado otro lugar." },
+        { status: 400 },
+      );
+    }
+    const shippingCost: number = computeDeliveryFee(deliveryDistM, platformConfig, DEFAULT_DELIVERY_FEE);
+
     // Buscamos el ID del dueño para notificarle
     const ownerId = storeData?.ownerId || storeData?.userId;
     const newOrderRef = adminDb.collection("orders").doc();

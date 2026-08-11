@@ -15,8 +15,9 @@ import { useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { capturePosition, type GeoCoords } from '@/lib/geo';
+import { capturePosition, formatDistance, type GeoCoords } from '@/lib/geo';
 import { LocationPicker } from '@/components/location-picker';
+import { deliveryDistanceMeters, computeDeliveryFee, isBeyondDeliveryLimit, type DeliveryPricingConfig } from '@/lib/delivery-pricing';
 
 // Fallback si config/platform.deliveryFee no está cargado (mismo default que el resto
 // de la app, ver DEFAULT_DELIVERY_FEE en /api/orders/create).
@@ -58,6 +59,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [storeName, setStoreName] = useState('Tienda');
   const [storeAddress, setStoreAddress] = useState('Dirección de la tienda');
   const [storeMaintenanceMode, setStoreMaintenanceMode] = useState(false);
+  const [storeCoords, setStoreCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // 🔒 Clave de idempotencia: una por apertura del diálogo, evita pedidos duplicados
   // por doble click (este diálogo es el único checkout desde la Fase PP)
@@ -74,8 +76,19 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   // --- 💰 LOGICA FINANCIERA (NUEVA) ---
   // 1. Obtener Configuración Global (Fee %)
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
-  const { data: globalConfig } = useDoc<{ serviceFee?: number; maintenanceMode?: boolean; deliveryFee?: number }>(configRef);
-  const shippingCost = globalConfig?.deliveryFee ?? DEFAULT_SHIPPING_COST;
+  const { data: globalConfig } = useDoc<{ serviceFee?: number; maintenanceMode?: boolean } & DeliveryPricingConfig>(configRef);
+
+  // Envío según distancia (Fase RR ter): misma fórmula que /api/orders/create
+  // (delivery-pricing.ts). Con la tarifa por km desactivada es el fijo de siempre.
+  // Se recalcula en vivo al mover el pin. El servidor recalcula igual: esto es estimación.
+  const { shippingCost, deliveryDistM, outOfZone } = useMemo(() => {
+    const dist = deliveryDistanceMeters(storeCoords, locationCoords);
+    return {
+      deliveryDistM: dist,
+      outOfZone: isBeyondDeliveryLimit(dist, globalConfig || {}),
+      shippingCost: computeDeliveryFee(dist, globalConfig || {}, DEFAULT_SHIPPING_COST),
+    };
+  }, [storeCoords, locationCoords, globalConfig]);
 
   // 2. Calcular Totales Exactos
   const { serviceFeeAmount, finalTotal } = useMemo(() => {
@@ -100,6 +113,8 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                     setStoreName(data.name || 'Tienda');
                     setStoreAddress(data.address || 'Dirección no disponible');
                     setStoreMaintenanceMode(!!data.maintenanceMode);
+                    // Para estimar el envío por distancia (misma fórmula que el servidor).
+                    setStoreCoords(data.coords || data.location || null);
                 }
             } catch (error) {
                 console.error("Error buscando tienda:", error);
@@ -193,6 +208,16 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             variant: "destructive",
             title: "Falta tu Ubicación",
             description: "Usá '📍 Usar mi ubicación actual' o marcá tu casa en el mapa para que el delivery sepa dónde ir."
+        });
+        return;
+    }
+
+    // 🚧 Cerco anti-disparate (el servidor rechaza igual — esto evita el viaje redondo)
+    if (outOfZone) {
+        toast({
+            variant: "destructive",
+            title: "Ubicación fuera de la zona de entrega",
+            description: "El pin quedó muy lejos de la tienda. Revisalo en el mapa — puede que el GPS haya marcado otro lugar."
         });
         return;
     }
@@ -389,6 +414,14 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 </button>
             )}
 
+            {/* 🚧 Cerco anti-disparate: el pin quedó absurdamente lejos (GPS erróneo) */}
+            {outOfZone && (
+                <p className="text-xs text-destructive flex items-center gap-1.5 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    El pin quedó muy lejos de la tienda ({deliveryDistM ? formatDistance(deliveryDistM) : ''}). Revisalo — puede que el GPS haya marcado otro lugar.
+                </p>
+            )}
+
             {/* INPUT REFERENCIA VISUAL */}
             <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground ml-1">Referencias visuales (Casa, portón, etc)</label>
@@ -423,7 +456,13 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 <span>${cartSubtotal.toLocaleString()}</span>
              </div>
              <div className="flex justify-between text-muted-foreground">
-                <span>Envío</span>
+                <span>
+                    Envío
+                    {/* Con tarifa por km activa, mostrar la distancia que lo explica */}
+                    {(globalConfig?.deliveryFeePerKm ?? 0) > 0 && deliveryDistM != null && (
+                        <span className="text-xs"> (≈ {formatDistance(deliveryDistM)})</span>
+                    )}
+                </span>
                 <span>${shippingCost.toLocaleString()}</span>
              </div>
              {serviceFeeAmount > 0 && (

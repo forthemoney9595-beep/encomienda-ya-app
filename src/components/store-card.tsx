@@ -25,6 +25,8 @@ interface StoreCardProps {
   statusLabel: string;
   /** Sin valor no se muestra la fila de envío (mejor omitirla que inventar un precio). */
   deliveryFee?: number;
+  /** true = tarifa por distancia activa: se muestra "desde $X" (Fase RR ter). */
+  deliveryFeeFrom?: boolean;
   onToggleFavorite: (e: React.MouseEvent, store: StoreCardStore) => void;
   /** Oculta el corazón donde no hay acción de favorito. */
   hideFavorite?: boolean;
@@ -36,7 +38,7 @@ interface StoreCardProps {
 }
 
 export function StoreCard({
-  store, isFavorite, isOpen, statusLabel, deliveryFee, onToggleFavorite,
+  store, isFavorite, isOpen, statusLabel, deliveryFee, deliveryFeeFrom, onToggleFavorite,
   variant = 'grid', index = 0, cleanAddress, hideFavorite,
 }: StoreCardProps) {
   const catStyle = getCategoryStyle(store.category || '');
@@ -128,7 +130,7 @@ export function StoreCard({
             {deliveryFee !== undefined && (
               <span className="flex items-center gap-1">
                 <Bike className="h-3 w-3" />
-                ${deliveryFee.toLocaleString()}
+                {deliveryFeeFrom ? 'desde ' : ''}${deliveryFee.toLocaleString()}
               </span>
             )}
           </div>
