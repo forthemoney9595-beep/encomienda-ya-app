@@ -2099,11 +2099,19 @@ automático permitido es (a) generar SOLICITUDES para aprobar (cron de liquidaci
   guarda): implementar JUNTO con lo de arriba (mismas credenciales, y probarlo requiere un
   pago real chico + su devolución). Respetar el principio de "el dinero nunca sale solo":
   la API solo ejecuta lo que el admin aprobó en el diálogo, caso por caso.
-- Sacar la tabla de cuentas demo visible en `/login` (sirve para pruebas, no para producción)
-- Limpiar datos de prueba (órdenes/notificaciones, reseñas `Cliente de Prueba N` en
-  "DonalPizza" de la Fase Q, **el seed masivo de la Fase W**, y **el seed de QA de la Fase
-  HH**: 15 tiendas + 100 pedidos marcados con `seedBatch: 'QA-GG'`, borrables de una con
-  `node _seed-qa.js --undo`) antes de abrir a usuarios reales
+- ~~Sacar la tabla de cuentas demo visible en `/login`~~ — **hecho en la Fase QQ**
+- ~~Limpiar datos de prueba (seed W + QA-GG + reseñas de prueba)~~ — **HECHO (ago 2026),
+  y más a fondo:** limpieza total con `_clean-for-test.js` (gitignored, tiene `--dry-run`)
+  para empezar la gran prueba de 0, decidida por el usuario en 2 confirmaciones. Quedaron
+  SOLO: las 4 cuentas base (admin/cliente/tienda/repartidor @test.com), DonalPizza con sus
+  productos (rating reseteado a 0) y `config/*`. Se borró TODO lo demás: 20 tiendas, 17
+  usuarios + 2 cuentas de Auth a medias (incluidas 5 con emails reales de primeros
+  testers, confirmado por el usuario — se re-registran en la prueba), y las 14 colecciones
+  operativas completas (orders 102, notifications 110, withdrawals 13, reviews,
+  deliveryReviews, claims, refunds, incidentes, discrepancias, audit_log, broadcasts,
+  reconciliations, platform_monthly). Verificado: todas en 0; stores=1, users=4. Los datos
+  nuevos de la gran prueba se limpian igual antes de lanzar (los pagos simulados se
+  encuentran con `simulatedPayment == true`).
 ## Fase BB (ago 2026): reglas de Firestore restringidas por campo (users/stores)
 Cerraba el hallazgo anotado desde la Fase U: cualquier usuario logueado podía reescribir
 **cualquier** campo de su propio doc en `users/{uid}` (incluido `isApproved`, `role`, `rating`),
