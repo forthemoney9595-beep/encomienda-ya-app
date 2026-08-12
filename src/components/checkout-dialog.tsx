@@ -61,13 +61,18 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const [storeMaintenanceMode, setStoreMaintenanceMode] = useState(false);
   const [storeCoords, setStoreCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  // 🔒 Clave de idempotencia: una por apertura del diálogo, evita pedidos duplicados
-  // por doble click (este diálogo es el único checkout desde la Fase PP)
-  const [idempotencyKey] = useState(() =>
+  // 🔒 Clave de idempotencia: UNA POR APERTURA del diálogo, evita pedidos duplicados
+  // por doble click (este diálogo es el único checkout desde la Fase PP).
+  // 🚨 BUG REAL de la gran prueba: antes se generaba una sola vez por MONTAJE — y este
+  // componente vive montado en el shell (cart.tsx) toda la sesión. El SEGUNDO pedido de
+  // la misma sesión (ej: "Volver a pedir") viajaba con la MISMA clave, el servidor lo
+  // trataba como duplicado del primero y lo descartaba en silencio devolviendo el pedido
+  // viejo. El useEffect de apertura (abajo) la regenera en cada open.
+  const genIdempotencyKey = () =>
     typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const [idempotencyKey, setIdempotencyKey] = useState(genIdempotencyKey);
 
   // Estados de UI
   const [isProcessing, setIsProcessing] = useState(false);
@@ -130,6 +135,8 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   // así el caso común (comprar a la dirección de siempre) no pide nada extra.
   useEffect(() => {
     if (!open) return;
+    // Clave de idempotencia NUEVA en cada apertura (ver comentario en su declaración).
+    setIdempotencyKey(genIdempotencyKey());
     const firstWithCoords = savedAddresses?.find(a => a.coords);
     if (firstWithCoords) {
       selectAddress(firstWithCoords.id);

@@ -657,7 +657,10 @@ export default function OrderTrackingPage() {
         <div className={cn("space-y-8", showRightColumn ? "lg:col-span-2" : "hidden")}>
              <Card>
                 <CardHeader><CardTitle>Mapa de Entrega</CardTitle></CardHeader>
-                <CardContent className="h-96">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent>
+                {/* relative z-0 contiene los z-index internos de Leaflet (panes 400-1000):
+                    sin esto el mapa flotaba POR ENCIMA del Sheet del carrito (captura real
+                    de la gran prueba). Mismo fix que el wrapper del LocationPicker. */}
+                <CardContent className="h-96 relative z-0">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent>
                 <CardFooter className="flex-col items-start gap-2">
                     {/* Señal del repartidor (Fase RR): visible mientras hay tracking activo. */}
                     {(order.status === 'En camino' || order.status === 'En reparto') && (

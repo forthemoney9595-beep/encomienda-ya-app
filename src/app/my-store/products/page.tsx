@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ImageUpload } from '@/components/image-upload';
+import { ImageLightbox } from '@/components/image-lightbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // Fallback cuando la tienda todavía no definió sus propias categorías en
@@ -76,6 +77,8 @@ export default function ProductManagementPage() {
   // Filtro por estado de stock + selección para acciones masivas.
   const [stockFilter, setStockFilter] = useState<'all' | 'available' | 'out' | 'low'>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Visor de imagen completa al tocar la foto de un producto (Fase RR sexies)
+  const [lightbox, setLightbox] = useState<{ src: string; alt?: string } | null>(null);
   const [isBulkWorking, setIsBulkWorking] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -531,10 +534,12 @@ export default function ProductManagementPage() {
                   />
                 </div>
                 {product.imageUrl ? (
-                  <img 
-                    src={product.imageUrl} 
-                    alt={product.name || 'Producto'} 
-                    className={`w-full h-full object-cover transition-transform group-hover:scale-105 ${!product.available ? 'grayscale' : ''}`}
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name || 'Producto'}
+                    className={`w-full h-full object-cover transition-transform group-hover:scale-105 cursor-zoom-in ${!product.available ? 'grayscale' : ''}`}
+                    onClick={() => setLightbox({ src: product.imageUrl, alt: product.name })}
+                    title="Ver imagen completa"
                     onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400?text=Error+Imagen'; }}
                   />
                 ) : (
@@ -764,6 +769,9 @@ export default function ProductManagementPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Visor de imagen completa (tocar la foto de un producto) */}
+      <ImageLightbox src={lightbox?.src ?? null} alt={lightbox?.alt} onClose={() => setLightbox(null)} />
     </div>
   );
 }

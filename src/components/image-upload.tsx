@@ -24,6 +24,36 @@ interface ImageUploadProps {
   storeRawPath?: boolean;
 }
 
+// Comprime/achica la imagen EN EL NAVEGADOR antes de subir (Fase RR sexies). Antes había
+// un límite duro de 2MB que rechazaba cualquier foto de celular moderno (3-8MB) — "quise
+// poner una imagen más grande y no funciona", falla real de la gran prueba. Ahora
+// cualquier foto entra: se reescala al lado máximo indicado y se re-encodea a JPEG.
+// Bonus: el re-encode descarta los metadatos EXIF (incluida la ubicación GPS de la foto).
+async function compressImage(file: File, maxDim: number, quality: number): Promise<{ blob: Blob; renamed: boolean }> {
+  // GIFs (animaciones) y formatos que el navegador no decodifica: subir tal cual.
+  if (file.type === 'image/gif') return { blob: file, renamed: false };
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return { blob: file, renamed: false };
+  }
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  // Ya es chica y liviana: no vale la pena re-encodearla.
+  if (scale === 1 && file.size < 900 * 1024) return { blob: file, renamed: false };
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return { blob: file, renamed: false };
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', quality));
+  // Si por algún motivo el resultado salió más pesado, quedarse con el original.
+  if (!blob || blob.size >= file.size) return { blob: file, renamed: false };
+  return { blob, renamed: true };
+}
+
 export function ImageUpload({
   currentImageUrl,
   onImageUploaded,
@@ -45,12 +75,12 @@ export function ImageUpload({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validar tamaño (ej. max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
+    // Tope de cordura (las fotos se comprimen solas abajo; esto solo frena archivos absurdos)
+    if (file.size > 25 * 1024 * 1024) {
       toast({
         variant: "destructive",
-        title: "Archivo muy grande",
-        description: "La imagen debe pesar menos de 2MB.",
+        title: "Archivo demasiado grande",
+        description: "La imagen no puede superar los 25MB.",
       });
       return;
     }
@@ -66,20 +96,28 @@ export function ImageUpload({
     }
 
     setIsUploading(true);
-    
+
     // Crear preview local inmediato
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
 
     try {
+      // Compresión en el navegador (ver compressImage arriba): banners/productos a
+      // 1600px de lado máximo; documentos sensibles (licencias/DNI, storeRawPath) a
+      // 2200px y más calidad para que sigan siendo legibles al hacer zoom.
+      const { blob, renamed } = storeRawPath
+        ? await compressImage(file, 2200, 0.92)
+        : await compressImage(file, 1600, 0.85);
+
       // Referencia en Firebase Storage: carpeta/dueño/timestamp_nombre.jpg -- el id del
       // dueño en el path es lo que permite a storage.rules restringir quién puede leer/
       // sobreescribir cada archivo.
-      const path = `${folder}/${ownerId}/${Date.now()}_${file.name}`;
+      const safeName = renamed ? file.name.replace(/\.[^.]+$/, '') + '.jpg' : file.name;
+      const path = `${folder}/${ownerId}/${Date.now()}_${safeName}`;
       const storageRef = ref(storage, path);
 
       // Subir
-      const snapshot = await uploadBytes(storageRef, file);
+      const snapshot = await uploadBytes(storageRef, blob, renamed ? { contentType: 'image/jpeg' } : undefined);
 
       if (storeRawPath) {
         // Sensible: no generamos una URL pública permanente, solo devolvemos el path.

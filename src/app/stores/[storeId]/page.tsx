@@ -24,6 +24,7 @@ import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLA
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { StarRating } from '@/components/star-rating';
+import { ImageLightbox } from '@/components/image-lightbox';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -859,6 +860,9 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
 
 function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, onToggleFavorite }: { product: Product | null, onClose: () => void, onAdd: (p: Product) => void, isDisabled?: boolean, isFavorite?: boolean, onToggleFavorite?: () => void }) {
     const outOfStock = !!product && product.stock != null && product.stock <= 0;
+    // Visor de imagen completa (Fase RR sexies): la cabecera recorta con object-cover;
+    // tocar la foto la muestra ENTERA sin recortes.
+    const [showFullImage, setShowFullImage] = useState(false);
     return (
         <Dialog open={!!product} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-w-md">
@@ -866,7 +870,13 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                     <>
                         <div className="relative -mx-6 -mt-6 h-56 w-[calc(100%+3rem)] bg-muted flex items-center justify-center overflow-hidden rounded-t-lg">
                             {product.imageUrl ? (
-                                <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                                <img
+                                    src={product.imageUrl}
+                                    alt={product.name}
+                                    className="h-full w-full object-cover cursor-zoom-in"
+                                    title="Ver imagen completa"
+                                    onClick={() => setShowFullImage(true)}
+                                />
                             ) : (
                                 <Package className="h-16 w-16 text-muted-foreground/50" />
                             )}
@@ -908,6 +918,11 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                         ) : (
                             <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} maxQuantity={product.stock ?? undefined} />
                         )}
+                        <ImageLightbox
+                            src={showFullImage ? product.imageUrl || null : null}
+                            alt={product.name}
+                            onClose={() => setShowFullImage(false)}
+                        />
                     </>
                 )}
             </DialogContent>
