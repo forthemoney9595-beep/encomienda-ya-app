@@ -6,7 +6,8 @@ import {
     User, 
     signInWithCustomToken 
 } from 'firebase/auth';
-import { doc, onSnapshot, updateDoc, arrayUnion, setDoc, serverTimestamp } from 'firebase/firestore'; // ✅ Agregamos updateDoc y arrayUnion
+import { doc, onSnapshot, updateDoc, arrayUnion, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; // ✅ Agregamos updateDoc y arrayUnion
+import { isSignupInProgress } from '@/lib/signup-flag';
 import { getToken } from 'firebase/messaging'; // ✅ Importamos getToken
 // ✅ Importamos messaging también
 import { auth, db, messaging } from '@/lib/firebase';
@@ -136,6 +137,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // crea de verdad como comprador (mismo rol por defecto que el signup normal
             // de /signup/buyer) -- este onSnapshot se va a disparar de nuevo solo, con
             // docSnap.exists() en true, una vez que el setDoc se complete.
+            // 🚨 ANTI-CARRERA (Fase RR quinquies): durante un SIGNUP este fallback
+            // competía con el batch del registro — si ganaba, el batch pasaba de create
+            // a update con campos prohibidos y las reglas lo rechazaban (el usuario veía
+            // "ese teléfono ya tiene cuenta" y quedaba un doc huérfano por intento).
+            // El signup crea el perfil él mismo: acá no se escribe nada mientras corre.
+            if (isSignupInProgress()) return;
+
             const fallbackProfile: UserProfile = {
                 id: currentUser.uid,
                 role: 'buyer',
@@ -146,16 +154,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 addresses: [],
             };
             setUserProfile(fallbackProfile);
-            setDoc(profileRef, {
-                uid: currentUser.uid,
-                role: 'buyer',
-                name: currentUser.displayName || 'Usuario',
-                email: currentUser.email || '',
-                displayName: currentUser.displayName || 'Usuario',
-                profileImageUrl: currentUser.photoURL || '',
-                addresses: [],
-                createdAt: serverTimestamp(),
-            }).catch((err) => console.error('Error creando perfil para login social:', err));
+            // Segunda defensa: esperar un momento y RE-CHEQUEAR antes de escribir — si
+            // otro flujo está creando el perfil en este mismo instante (una pestaña
+            // duplicada, un flujo futuro), el getDoc fresco lo ve y no pisamos nada.
+            setTimeout(async () => {
+                try {
+                    if (isSignupInProgress()) return;
+                    const fresh = await getDoc(profileRef);
+                    if (fresh.exists()) return;
+                    await setDoc(profileRef, {
+                        uid: currentUser.uid,
+                        role: 'buyer',
+                        name: currentUser.displayName || 'Usuario',
+                        email: currentUser.email || '',
+                        displayName: currentUser.displayName || 'Usuario',
+                        profileImageUrl: currentUser.photoURL || '',
+                        addresses: [],
+                        createdAt: serverTimestamp(),
+                    });
+                } catch (err) {
+                    console.error('Error creando perfil para login social:', err);
+                }
+            }, 2500);
           }
           setLoading(false);
         }, (error) => {

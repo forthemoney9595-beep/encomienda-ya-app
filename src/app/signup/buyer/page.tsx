@@ -16,6 +16,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVe
 import { doc, writeBatch } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { isTaken, uniqueRef, uniquePayload } from '@/lib/unique-ids';
+import { setSignupInProgress } from '@/lib/signup-flag';
 import type { Address } from '@/lib/placeholder-data';
 
 const formSchema = z.object({
@@ -50,7 +51,10 @@ export default function SignupBuyerPage() {
         return;
     }
     setIsSubmitting(true);
-    
+    // Anti-carrera: el fallback de auth-context no debe crear el perfil mientras este
+    // batch lo está creando (ver src/lib/signup-flag.ts — bug real de la gran prueba).
+    setSignupInProgress(true);
+
     let createdUser = null as import('firebase/auth').User | null;
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
@@ -120,6 +124,7 @@ export default function SignupBuyerPage() {
             });
         }
     } finally {
+        setSignupInProgress(false);
         setIsSubmitting(false);
     }
   }

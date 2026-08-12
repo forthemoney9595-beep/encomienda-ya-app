@@ -17,6 +17,7 @@ import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/
 import { doc, collection, writeBatch } from 'firebase/firestore';
 import { buildNewStoreData } from '@/lib/user-service';
 import { isTaken, uniqueRef, uniquePayload } from '@/lib/unique-ids';
+import { setSignupInProgress } from '@/lib/signup-flag';
 import { STORE_CATEGORIES } from '@/lib/store-categories';
 import { Loader2 } from 'lucide-react';
 
@@ -62,7 +63,9 @@ export default function SignupStorePage() {
       return;
     }
     setIsSubmitting(true);
-    
+    // Anti-carrera con el fallback de auth-context (ver src/lib/signup-flag.ts).
+    setSignupInProgress(true);
+
     // CUIT normalizado (solo dígitos) para el registro anti multi-cuenta.
     const cuitDigits = values.cuit.replace(/\D/g, '');
 
@@ -152,6 +155,7 @@ export default function SignupStorePage() {
                     : "No se pudo registrar la tienda. Por favor, inténtalo de nuevo.",
         });
     } finally {
+        setSignupInProgress(false);
         setIsSubmitting(false);
     }
   }

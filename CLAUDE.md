@@ -2136,6 +2136,32 @@ Play Store junto al bloque MP pre-lanzamiento (PWABuilder, $25 única vez, revis
   Compartir → "Agregar a pantalla de inicio". Cada deploy de Vercel actualiza la app
   instalada solo — no hay versiones que distribuir.
 
+## Fase RR quinquies (ago 2026): carrera del signup — 1ª falla real de la gran prueba
+Reportada por el usuario en la bóveda de Obsidian (captura: "Ese teléfono ya tiene una
+cuenta registrada" registrando fmmk40@gmail.com). Diagnóstico contra la base: el teléfono
+NO estaba reservado (`unique_ids` vacío) pero había **11 docs huérfanos** en `users`
+(4-6 por persona, todos sin phoneNumber = la forma exacta del perfil mínimo del fallback).
+- **Causa raíz — CARRERA**: al `createUserWithEmailAndPassword`, el fallback de
+  auth-context (Fase X: crea perfil mínimo si falta, pensado para login con Google) a
+  veces GANABA y escribía `users/{uid}` ANTES que el batch del signup → el batch pasaba
+  de create a **update con campos prohibidos** (role/email/uid, regla BB) →
+  permission-denied → el catch lo mapeaba a "teléfono ya registrado" (mensaje engañoso) →
+  el rollback borraba Auth pero el doc del fallback quedaba huérfano. Cada reintento
+  sumaba un huérfano.
+- **Fix**: nuevo `src/lib/signup-flag.ts` (bandera módulo-singleton); los 3 signups la
+  levantan en onSubmit y la bajan en finally; el fallback de auth-context **no escribe
+  nada mientras esté levantada** (el snapshot se re-dispara solo al terminar el batch).
+  Segunda defensa: el fallback ahora espera 2,5 s y RE-CHEQUEA con getDoc antes de
+  escribir (cubre pestañas duplicadas/flujos futuros sin bandera).
+- Huérfanos borrados (11, verificando que su Auth no existiera antes de borrar cada uno).
+- **Verificado e2e 7/7 por la UI real** (Playwright + Firestore real): registro completo
+  (perfil con teléfono = lo escribió el batch, reserva en unique_ids, 1 solo doc),
+  y duplicado real de teléfono rechazado con mensaje claro, sin huérfano y con rollback
+  de Auth. Falla marcada #corregido en la bóveda.
+- **Lección**: el mapeo `permission-denied → "dato duplicado"` de los signups esconde
+  cualquier otra denegación de reglas — si vuelve a aparecer ese mensaje con unique_ids
+  vacío, sospechar de las reglas/carreras, no del dato.
+
 ## Herramienta para la gran prueba: `_approve-payment.js` (ago 2026, gitignored)
 Para recorrer el circuito completo en la prueba rol por rol sin pagar de verdad.
 `/api/orders/confirm-payment` está muerto a propósito (410, seguridad) — el pago solo lo

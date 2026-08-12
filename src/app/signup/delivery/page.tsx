@@ -28,6 +28,7 @@ import { createUserWithEmailAndPassword, sendEmailVerification, type User } from
 import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { ImageUpload } from '@/components/image-upload';
 import { isTaken, uniqueRef, uniquePayload } from '@/lib/unique-ids';
+import { setSignupInProgress } from '@/lib/signup-flag';
 
 const formSchema = z.object({
   name: z.string().min(5, "Ingresá tu nombre y apellido completos."),
@@ -99,6 +100,8 @@ export default function SignupDeliveryPage() {
         return;
     }
     setIsSubmitting(true);
+    // Anti-carrera con el fallback de auth-context (ver src/lib/signup-flag.ts).
+    setSignupInProgress(true);
 
     let newUser: User | null = null;
     try {
@@ -169,6 +172,7 @@ export default function SignupDeliveryPage() {
                     : "No se pudo crear la cuenta. Por favor, inténtalo de nuevo.",
         });
     } finally {
+        setSignupInProgress(false);
         setIsSubmitting(false);
     }
   }
