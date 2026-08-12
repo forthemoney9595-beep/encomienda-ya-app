@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Camera, Loader2, UploadCloud } from 'lucide-react';
@@ -66,6 +66,14 @@ export function ImageUpload({
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(currentImageUrl);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Sincronizar el preview cuando la imagen actual llega DESPUÉS del primer render
+  // (típico: el perfil carga de Firestore un instante más tarde). Sin esto, el avatar
+  // del perfil mostraba el placeholder aunque el usuario SÍ tuviera foto guardada.
+  useEffect(() => {
+    if (!isUploading) setPreviewUrl(currentImageUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentImageUrl]);
 
   const handleFileClick = () => {
     fileInputRef.current?.click();

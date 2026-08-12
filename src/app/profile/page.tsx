@@ -124,6 +124,22 @@ export default function ProfilePage() {
         if (!authLoading && !user) router.push('/login');
     }, [authLoading, user, router]);
 
+    // Foto de perfil: se GUARDA SOLA al subirla (Fase RR sexies). Antes la subida solo
+    // actualizaba el estado local y el toast decía "actualizada" — pero sin tocar
+    // "Guardar Cambios" el perfil quedaba con la foto vieja (falla real de la prueba:
+    // "cambio la foto y me sigue figurando la más antigua").
+    const handlePhotoUploaded = async (url: string) => {
+        setProfileImageUrl(url);
+        if (!userDocRef || !user) return;
+        try {
+            await updateDoc(userDocRef, { photoURL: url, profileImageUrl: url });
+            await updateProfile(user, { photoURL: url });
+        } catch (e) {
+            console.error('Error guardando la foto de perfil:', e);
+            toast({ variant: 'destructive', title: 'La foto se subió pero no se pudo guardar', description: 'Tocá "Guardar Cambios" para reintentar.' });
+        }
+    };
+
     // --- GUARDADO GENERAL ---
     const handleSaveProfile = async () => {
         if (!userDocRef || !user) return;
@@ -246,7 +262,7 @@ export default function ProfilePage() {
                         <div className="mx-auto mb-2">
                             <ImageUpload
                                 currentImageUrl={profileImageUrl}
-                                onImageUploaded={setProfileImageUrl}
+                                onImageUploaded={handlePhotoUploaded}
                                 folder="profiles"
                                 ownerId={user!.uid}
                                 variant="avatar"
