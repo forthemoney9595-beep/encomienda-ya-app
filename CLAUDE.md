@@ -2203,6 +2203,18 @@ puntos en la bóveda. Diagnóstico contra la base antes de tocar nada:
   bóveda (Ruta al lanzamiento) como mejora**; reorganización del inicio con favoritos →
   anotada para después de la prueba.
 
+## Herramienta para la gran prueba: `_seed-stores.js` (ago 2026, gitignored)
+4 tiendas de prueba CON dueño logueable (necesario: confirmar stock y marcar listo solo
+puede hacerlo la tienda — el botón 🧪 del admin solo aprueba el PAGO): Rotisería La Nonna
+(rotiseria@test.com), Almacén Don Pepe (almacen@), Farmacia Central (farmacia@) y
+Heladería Glaciar (heladeria@), password `password`. 27 productos en categorías con
+stock finito, descuentos, destacados e imágenes placehold.co; siempre abiertas (sin
+horario, a propósito — el caso "cerrada" se prueba con DonalPizza). Todo con
+`seedBatch: 'PRUEBA-TIENDAS'`; **limpieza: `node _seed-stores.js --undo`** (borra Auth +
+users + stores con subcolecciones; los pedidos que les hagan se van con la limpieza
+general). Verificado renderizando en el home (6 tiendas, badges) y el menú de La Nonna
+a 430px.
+
 ## Herramienta para la gran prueba: `_approve-payment.js` (ago 2026, gitignored)
 Para recorrer el circuito completo en la prueba rol por rol sin pagar de verdad.
 `/api/orders/confirm-payment` está muerto a propósito (410, seguridad) — el pago solo lo
