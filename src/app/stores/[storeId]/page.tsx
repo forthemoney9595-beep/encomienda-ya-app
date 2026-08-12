@@ -570,9 +570,18 @@ export default function StorePublicPage() {
         </div>
       ) : products.length > 0 ? (
         groupedProducts.map(([category, items]) => (
-            <div key={category} id={categorySlug(category)} data-category-section={category} className="mb-10 scroll-mt-[8.5rem]">
-                <h2 className="font-headline text-xl font-bold mb-2">{formatCategoryLabel(category)}</h2>
-                <div>
+            // Separación notoria entre categorías (Fase RR sexies, pedido de la prueba):
+            // barra de acento + contador + línea divisoria, y las filas dentro de un
+            // contenedor propio — antes era solo un h2 suelto y el menú se leía como una
+            // lista continua sin cortes.
+            <div key={category} id={categorySlug(category)} data-category-section={category} className="mb-12 scroll-mt-[8.5rem]">
+                <div className="flex items-center gap-3 mb-3">
+                    <span aria-hidden className="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary to-primary/30" />
+                    <h2 className="font-headline text-xl font-bold">{formatCategoryLabel(category)}</h2>
+                    <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">{items.length}</span>
+                    <div className="flex-1 border-t border-border/60" />
+                </div>
+                <div className="rounded-2xl border bg-card/60 px-4">
                     {items.map(product => (
                         <ProductRow key={product.id} product={product} onAdd={handleAddToCart} onOpenDetail={setDetailProduct} isDisabled={!storeStatus.isOpen} />
                     ))}
@@ -840,8 +849,8 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
                     <p className="text-xs font-medium text-destructive mt-1">Quedan {product.stock}</p>
                 ) : null}
             </button>
-            <div className="relative h-20 w-20 shrink-0">
-                <button type="button" onClick={() => onOpenDetail(product)} className="h-20 w-20 rounded-xl bg-muted overflow-hidden flex items-center justify-center">
+            <div className="relative h-24 w-24 shrink-0">
+                <button type="button" onClick={() => onOpenDetail(product)} className="h-24 w-24 rounded-xl bg-muted border overflow-hidden flex items-center justify-center">
                     {product.imageUrl ? (
                         <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
@@ -868,12 +877,15 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
             <DialogContent className="max-w-md">
                 {product && (
                     <>
-                        <div className="relative -mx-6 -mt-6 h-56 w-[calc(100%+3rem)] bg-muted flex items-center justify-center overflow-hidden rounded-t-lg">
+                        {/* object-CONTAIN a propósito (pedido de la prueba: "que las imágenes
+                            se vean completas"): acá se ve la foto ENTERA sin recortes; el
+                            click la agranda a pantalla casi completa (ImageLightbox). */}
+                        <div className="relative -mx-6 -mt-6 h-64 w-[calc(100%+3rem)] bg-muted/60 flex items-center justify-center overflow-hidden rounded-t-lg">
                             {product.imageUrl ? (
                                 <img
                                     src={product.imageUrl}
                                     alt={product.name}
-                                    className="h-full w-full object-cover cursor-zoom-in"
+                                    className="h-full w-full object-contain cursor-zoom-in"
                                     title="Ver imagen completa"
                                     onClick={() => setShowFullImage(true)}
                                 />
