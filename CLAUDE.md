@@ -2196,6 +2196,15 @@ puntos en la bóveda. Diagnóstico contra la base antes de tocar nada:
   borde; y el ProductDetailDialog pasó a **object-contain** (h-64) — la foto se ve
   ENTERA en el detalle, el lightbox la agranda. Verificado a 430px con la tienda real
   "Levis" (scrollWidth 430 exacto).
+- **Foto de perfil que "no cambiaba" (3ª pasada de la tanda):** doble causa — (1) la
+  subida solo actualizaba el estado local y el toast decía "actualizada", pero sin tocar
+  "Guardar Cambios" el doc quedaba con la foto vieja (todos caían en la trampa); (2) el
+  preview del ImageUpload capturaba `currentImageUrl` una sola vez en el useState inicial
+  (antes de que cargara el perfil) → siempre placeholder. Fix: `handlePhotoUploaded` en
+  /profile persiste la foto AL SUBIRLA (updateDoc photoURL/profileImageUrl + updateProfile
+  de Auth), y ImageUpload sincroniza el preview con un useEffect (salvo durante la subida).
+  Verificado e2e: subir foto por la UI → Firestore y Auth actualizados SIN tocar Guardar
+  (3/3); la foto original de cliente@test.com se restauró después del test.
 - **Consultas respondidas en la bóveda**: badge "Hasta -X%" = el MAYOR descuento entre
   productos comprables (por diseño); IDs de órdenes = autogenerados por Firestore, únicos
   siempre; **calificación de productos: HOY solo vive en el pedido (itemRatings), no se
