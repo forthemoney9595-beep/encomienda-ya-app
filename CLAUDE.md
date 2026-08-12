@@ -2162,6 +2162,41 @@ NO estaba reservado (`unique_ids` vacío) pero había **11 docs huérfanos** en 
   cualquier otra denegación de reglas — si vuelve a aparecer ese mensaje con unique_ids
   vacío, sospechar de las reglas/carreras, no del dato.
 
+## Fase RR sexies (ago 2026): tanda 1 de fallas de la gran prueba (bóveda de Obsidian)
+Los testers reales (juanito/fmmk40, Dario/paezdario91 con su tienda "Levis") anotaron 7
+puntos en la bóveda. Diagnóstico contra la base antes de tocar nada:
+- **🚨 "Volver a pedir" nunca creaba el pedido** — el bug más grave de la prueba: la
+  `idempotencyKey` del CheckoutDialog se generaba con `useState(() => ...)` **una vez por
+  MONTAJE**, y el diálogo vive montado en el shell (cart.tsx) toda la sesión. El segundo
+  pedido de la misma sesión viajaba con la MISMA clave → `/api/orders/create` lo trataba
+  como duplicado y devolvía el pedido viejo EN SILENCIO (pantalla de éxito incluida).
+  Confirmado con la base: juanito con 1 sola orden habiendo pedido 2 veces. Fix: la clave
+  se regenera en cada apertura (useEffect(open)). **Verificado e2e por la UI real: 2
+  pedidos en la misma sesión → 2 órdenes distintas con claves distintas.** La protección
+  de doble click dentro de una misma apertura sigue igual.
+- **Mapa sobre el carrito**: los panes de Leaflet (z-index 400-1000) flotaban sobre el
+  Sheet (z-50). `relative z-0` en el CardContent del mapa del pedido — mismo fix que ya
+  tenía el wrapper del LocationPicker. Regla: TODO contenedor de mapa Leaflet necesita su
+  stacking context.
+- **"Imagen más grande no funciona"** (banner de tienda): límite duro de 2MB rechazaba
+  cualquier foto de celular. `image-upload.tsx` ahora **comprime en el navegador**
+  (canvas → JPEG; 1600px lado máx para banners/productos, 2200px/0.92 para documentos
+  sensibles con storeRawPath), tope de cordura 25MB, y el re-encode descarta el EXIF
+  (incluida la ubicación GPS de la foto — bonus de privacidad). Si el re-encode sale más
+  pesado que el original, se sube el original.
+- **Visor de imagen completa**: nuevo `src/components/image-lightbox.tsx` (Dialog con
+  object-contain 80vh). Integrado en Gestionar Productos (click en la foto) y en el
+  ProductDetailDialog público (click en la cabecera). Las tarjetas siguen con object-cover.
+- **Datos**: borrada una segunda tienda "Levis" VACÍA creada desde el admin (aparecía
+  duplicada en el home) y los 2 pedidos del e2e. Los 11 docs huérfanos de la carrera del
+  signup ya se habían borrado en RR quinquies.
+- **Consultas respondidas en la bóveda**: badge "Hasta -X%" = el MAYOR descuento entre
+  productos comprables (por diseño); IDs de órdenes = autogenerados por Firestore, únicos
+  siempre; **calificación de productos: HOY solo vive en el pedido (itemRatings), no se
+  agrega al producto ni se muestra en la tienda pública — cabo suelto anotado en la
+  bóveda (Ruta al lanzamiento) como mejora**; reorganización del inicio con favoritos →
+  anotada para después de la prueba.
+
 ## Herramienta para la gran prueba: `_approve-payment.js` (ago 2026, gitignored)
 Para recorrer el circuito completo en la prueba rol por rol sin pagar de verdad.
 `/api/orders/confirm-payment` está muerto a propósito (410, seguridad) — el pago solo lo
