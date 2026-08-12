@@ -2190,6 +2190,12 @@ puntos en la bóveda. Diagnóstico contra la base antes de tocar nada:
 - **Datos**: borrada una segunda tienda "Levis" VACÍA creada desde el admin (aparecía
   duplicada en el home) y los 2 pedidos del e2e. Los 11 docs huérfanos de la carrera del
   signup ya se habían borrado en RR quinquies.
+- **Tienda pública, menú rediseñado (2ª pasada de la tanda, pedido explícito):** cada
+  categoría con barra de acento violeta + contador + divisoria y sus filas dentro de un
+  contenedor con borde (`rounded-2xl border bg-card/60`); miniaturas de fila h-24 con
+  borde; y el ProductDetailDialog pasó a **object-contain** (h-64) — la foto se ve
+  ENTERA en el detalle, el lightbox la agranda. Verificado a 430px con la tienda real
+  "Levis" (scrollWidth 430 exacto).
 - **Consultas respondidas en la bóveda**: badge "Hasta -X%" = el MAYOR descuento entre
   productos comprables (por diseño); IDs de órdenes = autogenerados por Firestore, únicos
   siempre; **calificación de productos: HOY solo vive en el pedido (itemRatings), no se
