@@ -32,6 +32,28 @@ export function Notifications() {
     }
   }, [open]);
 
+  // 1b. Refuerzo (caso real de la prueba del APK, 15/8): si el permiso se activó desde
+  // Ajustes de Android A MITAD de sesión, el registro automático del login ya pasó y el
+  // token de ESTE dispositivo queda sin guardar hasta el próximo arranque en frío — o
+  // sea, sin push aunque todo diga que está activo. Al abrir la campanita con permiso
+  // concedido, se asegura el token en silencio (solo escribe si falta).
+  useEffect(() => {
+    if (!open || !user || !firestore) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    (async () => {
+        try {
+            const { token } = await requestNotificationPermission(); // con permiso ya concedido no muestra ningún diálogo
+            if (token && !((userProfile as any)?.fcmTokens || []).includes(token)) {
+                await updateDoc(doc(firestore, 'users', user.uid), {
+                    fcmToken: token,
+                    fcmTokens: arrayUnion(token),
+                    notificationsEnabled: true
+                });
+            }
+        } catch { /* refuerzo silencioso — el camino principal sigue siendo el del login */ }
+    })();
+  }, [open, user, firestore, userProfile]);
+
   // 2. LISTENER EN TIEMPO REAL MANUAL
   useEffect(() => {
     if (!firestore || !user?.uid) return;
