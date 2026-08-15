@@ -22,6 +22,7 @@ export function Notifications() {
   const [open, setOpen] = useState(false);
   const [localNotifications, setLocalNotifications] = useState<any[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   // 1. Estado de Permisos — se re-lee también cada vez que se ABRE la campanita: si el
   // permiso se concedió por otro camino (el pedido automático del login, o Ajustes de
@@ -42,15 +43,25 @@ export function Notifications() {
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     (async () => {
         try {
-            const { token } = await requestNotificationPermission(); // con permiso ya concedido no muestra ningún diálogo
-            if (token && !((userProfile as any)?.fcmTokens || []).includes(token)) {
-                await updateDoc(doc(firestore, 'users', user.uid), {
-                    fcmToken: token,
-                    fcmTokens: arrayUnion(token),
-                    notificationsEnabled: true
-                });
+            const { token, error } = await requestNotificationPermission(); // con permiso ya concedido no muestra ningún diálogo
+            if (token) {
+                setRegistrationError(null);
+                if (!((userProfile as any)?.fcmTokens || []).includes(token)) {
+                    await updateDoc(doc(firestore, 'users', user.uid), {
+                        fcmToken: token,
+                        fcmTokens: arrayUnion(token),
+                        notificationsEnabled: true
+                    });
+                }
+            } else {
+                // Permiso concedido pero el registro falla: SIN esto era invisible (el
+                // celular de la prueba del 15/8 quedaba "en verde" pero sin token — y
+                // por lo tanto sin ningún push — sin que nada lo dijera).
+                setRegistrationError(error || 'motivo desconocido');
             }
-        } catch { /* refuerzo silencioso — el camino principal sigue siendo el del login */ }
+        } catch (e: any) {
+            setRegistrationError(String(e?.message || e));
+        }
     })();
   }, [open, user, firestore, userProfile]);
 
@@ -252,6 +263,11 @@ export function Notifications() {
                 >
                     <BellRing className="mr-2 h-3 w-3" /> Activar Avisos Push
                 </Button>
+            )}
+            {permissionStatus === 'granted' && registrationError && (
+                <div className="w-full mt-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px] leading-snug text-warning">
+                    ⚠️ Permiso OK, pero el registro del dispositivo falla: {registrationError}
+                </div>
             )}
             {permissionStatus === 'denied' && (
                 // Estado que antes era INVISIBLE y se confundía con "aceptado" (prueba del
