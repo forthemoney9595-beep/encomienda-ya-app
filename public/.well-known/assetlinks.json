@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.encomiendaya.app",
+        "sha256_cert_fingerprints": ["07:B4:59:CB:69:B1:F3:9E:C8:05:C8:F5:F9:CB:06:88:86:1C:C3:08:B1:62:B8:57:5A:4A:8D:CF:51:29:85:D1"]
+      }
+    }]
