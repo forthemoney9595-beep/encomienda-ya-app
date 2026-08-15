@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarFooter, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarFooter, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { MainNav } from '@/components/main-nav';
 import { BottomNav } from '@/components/bottom-nav';
 import Logo from '@/components/logo';
@@ -161,6 +161,12 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const [searchOpen, setSearchOpen] = useState(false);
     useGlobalSearchShortcut(setSearchOpen);
+
+    // En celular el sidebar es un Sheet que NADIE cerraba al navegar: al cerrar sesión
+    // desde el menú quedaba abierto sobre /login, negro y sin secciones. Cerrarlo en cada
+    // cambio de ruta cubre ese caso y también el de tocar cualquier link del menú.
+    const { setOpenMobile } = useSidebar();
+    useEffect(() => { setOpenMobile(false); }, [pathname, setOpenMobile]);
 
     const isLoginPage = pathname.startsWith('/login') || pathname.startsWith('/signup');
     const isLandingPage = pathname === '/';

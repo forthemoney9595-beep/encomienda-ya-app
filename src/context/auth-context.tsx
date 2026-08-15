@@ -68,14 +68,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const registerPushNotifications = async (uid: string) => {
     try {
         // 1. Verificar si el navegador soporta notificaciones y si messaging está inicializado
-        if (!('serviceWorker' in navigator) || !messaging) {
+        if (!('serviceWorker' in navigator) || !('Notification' in window) || !messaging) {
             return;
         }
 
-        // 2. Pedir permiso al usuario
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-            return;
+        // 2. Permiso. OJO: esto corre en CADA apertura de la app — pedir el permiso acá
+        // sin mirar el estado hacía que, si el usuario no aceptaba, el diálogo volviera a
+        // saltar en cada entrada (y en la app Android empaquetada podía aparecer DOBLE:
+        // el diálogo del sistema + el del sitio). Ahora: si ya está concedido, seguimos en
+        // silencio (refrescar el token sí corresponde acá); si está denegado, nada; y si
+        // está sin decidir, se pregunta UNA sola vez por dispositivo — después el camino
+        // es el botón "Activar Avisos Push" de la campanita.
+        if (Notification.permission === 'denied') return;
+        if (Notification.permission === 'default') {
+            const PROMPT_FLAG = 'eya-push-prompted';
+            if (localStorage.getItem(PROMPT_FLAG)) return;
+            localStorage.setItem(PROMPT_FLAG, '1');
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') return;
         }
 
         // 3. Obtener el Token (Identificador del celular/PC)
