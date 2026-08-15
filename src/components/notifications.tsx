@@ -253,6 +253,21 @@ export function Notifications() {
                     <BellRing className="mr-2 h-3 w-3" /> Activar Avisos Push
                 </Button>
             )}
+            {permissionStatus === 'denied' && (
+                // Estado que antes era INVISIBLE y se confundía con "aceptado" (prueba del
+                // APK, 15/8): con el permiso denegado no se mostraba nada. Ahora se ve y
+                // explica cómo destrabarlo (el permiso del SITIO se maneja en Chrome).
+                <button
+                    onClick={() => toast({
+                        title: "Cómo desbloquear los avisos",
+                        description: "En el celular: abrí Chrome → entrá a encomienda-ya-app.vercel.app → tocá el candado 🔒 junto a la dirección → Permisos → Notificaciones → Permitir. Después cerrá y reabrí la app. En PC: mismo candado junto a la dirección.",
+                        duration: 15000,
+                    })}
+                    className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-xs text-warning hover:bg-warning/20 transition-colors"
+                >
+                    🔕 Avisos bloqueados en este dispositivo — tocá para ver cómo activarlos
+                </button>
+            )}
         </div>
 
         <ScrollArea className="h-[300px]">
