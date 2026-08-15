@@ -100,6 +100,15 @@ export function Notifications() {
                   title: "Notificaciones bloqueadas",
                   description: "Activalas desde Ajustes de Android → Apps → EncomiendaYA → Notificaciones.",
               });
+          } else if (error && error.includes('permission-blocked')) {
+              // Caso real visto en la prueba del APK (15/8): Android 13 bloquea el permiso
+              // del SISTEMA para siempre tras un par de rechazos, aunque el del sitio se
+              // acepte — el diálogo ya no vuelve a salir, hay que ir a Ajustes.
+              toast({
+                  variant: "destructive",
+                  title: "Bloqueadas por Android",
+                  description: "Android bloqueó las notificaciones de la app. Activalas en Ajustes → Aplicaciones → EncomiendaYA → Notificaciones, y tocá este botón de nuevo.",
+              });
           } else {
               // Cualquier otra combinación (permiso a medias, token que no llegó, etc.):
               // mostrar el motivo real si lo hay.
