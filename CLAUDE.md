@@ -2393,10 +2393,11 @@ automático permitido es (a) generar SOLICITUDES para aprobar (cron de liquidaci
   se encuentran con `where('simulatedPayment','==',true)` — se van con la limpieza del
   seed. Mientras exista: exige admin 'full' por token, solo procesa "Pendiente de Pago",
   no escribe `mpPaymentId` (la conciliación lo saltea) y audita cada uso.
-- **Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel** (Settings → Environment
-  Variables, Production+Preview+Development) — hoy Sentry solo captura en local
-  (`.env.local`); sin esto en Vercel, producción no manda errores a Sentry. Recordatorio
-  explícito pedido por el usuario: avisarle antes del lanzamiento si todavía no se hizo.
+- ~~Agregar `NEXT_PUBLIC_SENTRY_DSN` a las env vars de Vercel~~ — **HECHO (ago 2026)**:
+  el usuario la cargó en el dashboard (los 3 environments), redeploy disparado con commit
+  vacío y verificado que el DSN quedó en el bundle de producción. Sentry captura errores
+  de producción desde entonces. Primer objetivo: el "Algo salió mal" intermitente del
+  arranque en frío del APK (bóveda, #pendiente) — sospechoso: la doble capa de Firebase.
 - Revisar/resolver la firma del webhook de MP (ver caveat) y volver a exigirla
 - Regenerar el `MP_WEBHOOK_SECRET` (quedó expuesto durante pruebas)
 - **Devolución por API de MP** (`POST /v1/payments/{id}/refunds`, el `mpPaymentId` ya se
