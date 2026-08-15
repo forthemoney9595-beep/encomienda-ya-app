@@ -2212,6 +2212,34 @@ puntos en la bóveda. Diagnóstico contra la base antes de tocar nada:
   bóveda (Ruta al lanzamiento) como mejora**; reorganización del inicio con favoritos →
   anotada para después de la prueba.
 
+## Fase SS (ago 2026): auditoría archivo por archivo + Tanda A (8 críticos)
+Pedido del usuario durante la gran prueba: "análisis archivo por archivo para encontrar
+bugs, mejoras o rutas perdidas". 3 agentes en paralelo (páginas/navegación, API, libs/
+componentes) sobre ~150 archivos; **informe completo en la bóveda** ("Auditoría archivo
+por archivo") con hallazgos verificados personalmente antes de reportar. Buenas noticias:
+0 links rotos, 27/30 rutas API con las 3 capas de seguridad. Tandas: A (críticos, hecha),
+B (medios UX/robustez, pendiente), C (código muerto, para el desmontaje pre-lanzamiento),
+y "unificar las 2 capas de Firebase paralelas" (lib/firebase vs src/firebase, 25+8
+archivos, comportamientos OPUESTOS ante errores) como proyecto post-lanzamiento.
+**Tanda A ejecutada y verificada 11/11 en vivo:**
+- `/admin/settings` con gate de carga (el form mostraba defaults hardcodeados y un
+  Guardar temprano los escribía sobre la config real).
+- Tienda NO aprobada: rechazada en `/api/orders/create` + página pública bloqueada salvo
+  dueño/admin (antes operable completa por URL directa).
+- `auth-context`: fuga corregida — el cleanup del onSnapshot del perfil se le entregaba a
+  `onAuthStateChanged`, que IGNORA el retorno; ahora se desuscribe fuera. + el early
+  return del signup-flag baja `loading` antes de salir.
+- Ding del chat en loop: `incrementUnread`/value memoizados (identidad estable) y
+  pathname por ref en chat-listener (cada navegación re-suscribía TODOS los listeners).
+- Cron **fail-closed** (sin CRON_SECRET → 401; antes la guarda se salteaba entera).
+- `/my-store/wallet`: redirect movido a useEffect (corría durante el render).
+- `admin/stores/error.tsx`: sin stack en pantalla; genérico + digest + Sentry.
+- **Transacciones en las 4 escrituras de plata read-then-write**: approve/reject
+  withdrawal (transición decidida adentro), refund-order (re-chequeo `refunded` + los 3
+  docs en UNA tx) y cancel (estado + payment_mismatch juntos). Patrón sentinel
+  `__ALREADY_*__` → 400 claro.
+- `/admin/dashboard` sin guard: evaluado y dejado — stub de redirección, solo spinner.
+
 ## Herramienta para la gran prueba: `_seed-stores.js` (ago 2026, gitignored)
 4 tiendas de prueba CON dueño logueable (necesario: confirmar stock y marcar listo solo
 puede hacerlo la tienda — el botón 🧪 del admin solo aprueba el PAGO): Rotisería La Nonna
