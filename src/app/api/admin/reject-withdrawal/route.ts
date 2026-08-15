@@ -49,12 +49,27 @@ export async function POST(request: Request) {
 
     const rejectionReason = String(reason || '').trim().slice(0, 300);
 
-    await ref.update({
-      status: 'rejected',
-      rejectionReason,
-      rejectedBy: callerUid,
-      processedAt: Timestamp.now(),
-    });
+    // 🔒 Transacción (Tanda A): la transición pending→rejected se decide adentro — un
+    // rechazo simultáneo con una aprobación (o doble rechazo) ya no puede pasar dos veces.
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const fresh = await tx.get(ref);
+        if (!fresh.exists || fresh.data()!.status !== 'pending') {
+          throw new Error('__ALREADY_PROCESSED__');
+        }
+        tx.update(ref, {
+          status: 'rejected',
+          rejectionReason,
+          rejectedBy: callerUid,
+          processedAt: Timestamp.now(),
+        });
+      });
+    } catch (e: any) {
+      if (e?.message === '__ALREADY_PROCESSED__') {
+        return NextResponse.json({ error: "Esta solicitud ya fue procesada por otra acción — refrescá la lista." }, { status: 400 });
+      }
+      throw e;
+    }
 
     await logAdminActionServer(
       callerUid, 'reject_withdrawal', withdrawalId,

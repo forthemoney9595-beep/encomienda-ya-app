@@ -65,28 +65,44 @@ export async function POST(request: Request) {
         // un humano se acordara. Ahora queda anotado como discrepancia pendiente, que es la
         // misma bandeja que el admin ya revisa (/admin/payment-issues).
         const wasPaid = order.paymentStatus === 'paid' && !order.refunded;
-        if (wasPaid) {
-            await adminDb.collection('payment_mismatches').add({
-                orderId,
-                paymentId: order.mpPaymentId || null,
-                reason: 'cancelled_after_payment',
-                paidAmount: Number(order.paidAmount ?? order.total) || 0,
-                orderTotal: Number(order.total) || 0,
-                orderStatus: order.status,
-                cancelledBy: isAdmin ? 'admin' : 'buyer',
-                createdAt: Timestamp.now(),
-                resolved: false,
-            });
-        }
 
-        await orderRef.update({
-            status: 'Cancelado',
-            cancelledAt: Timestamp.now(),
-            cancelledBy: isAdmin ? 'admin' : 'buyer',
-            updatedAt: Timestamp.now(),
-            // Marca visible desde el propio pedido: hay plata para devolver.
-            ...(wasPaid ? { hasPaymentIssue: true, paymentIssueReason: 'cancelled_after_payment' } : {}),
-        });
+        // 🔒 Transacción (Tanda A de la auditoría): el cambio a 'Cancelado' y el registro
+        // de la discrepancia se deciden ADENTRO, con re-chequeo del estado — dos
+        // cancelaciones simultáneas ya no pueden anotar DOS discrepancias del mismo pedido.
+        try {
+            await adminDb.runTransaction(async (tx) => {
+                const fresh = await tx.get(orderRef);
+                if (!fresh.exists || fresh.data()!.status === 'Cancelado') {
+                    throw new Error('__ALREADY_CANCELLED__');
+                }
+                if (wasPaid) {
+                    tx.set(adminDb.collection('payment_mismatches').doc(), {
+                        orderId,
+                        paymentId: order.mpPaymentId || null,
+                        reason: 'cancelled_after_payment',
+                        paidAmount: Number(order.paidAmount ?? order.total) || 0,
+                        orderTotal: Number(order.total) || 0,
+                        orderStatus: order.status,
+                        cancelledBy: isAdmin ? 'admin' : 'buyer',
+                        createdAt: Timestamp.now(),
+                        resolved: false,
+                    });
+                }
+                tx.update(orderRef, {
+                    status: 'Cancelado',
+                    cancelledAt: Timestamp.now(),
+                    cancelledBy: isAdmin ? 'admin' : 'buyer',
+                    updatedAt: Timestamp.now(),
+                    // Marca visible desde el propio pedido: hay plata para devolver.
+                    ...(wasPaid ? { hasPaymentIssue: true, paymentIssueReason: 'cancelled_after_payment' } : {}),
+                });
+            });
+        } catch (e: any) {
+            if (e?.message === '__ALREADY_CANCELLED__') {
+                return NextResponse.json({ error: 'El pedido ya está cancelado.' }, { status: 400 });
+            }
+            throw e;
+        }
 
         // 🚨 Devolver las unidades que `create` había reservado. Antes no se devolvían nunca:
         // el pedido moría cancelado y el stock quedaba descontado para siempre, así que el

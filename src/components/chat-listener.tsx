@@ -17,6 +17,13 @@ export function ChatListener(): null {
   const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // El pathname se lee por REF (Tanda A de la auditoría): estaba en las deps del efecto
+  // principal, así que CADA navegación tiraba abajo y volvía a levantar TODOS los
+  // listeners de chat (con su costo en lecturas). Solo se usa para decidir si mostrar
+  // el globito — no amerita re-suscribir nada.
+  const pathnameRef = useRef(pathname);
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
+
   // Inicializar el objeto de audio una sola vez
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -102,7 +109,7 @@ export function ChatListener(): null {
                 const isNotMine = msgData.senderId !== user.uid;
                 
                 // 3. ¿No estoy viendo ya ese chat? (Si estoy en la página del pedido, no necesito alerta)
-                const isNotOnChatPage = !pathname?.includes(`/orders/${orderId}`);
+                const isNotOnChatPage = !pathnameRef.current?.includes(`/orders/${orderId}`);
 
                 if (isRecent && isNotMine) {
                   playSound(); // 🔊 Ding!
@@ -125,7 +132,10 @@ export function ChatListener(): null {
       chatUnsubs.forEach(unsub => unsub());
       chatUnsubs.clear();
     };
-  }, [user, firestore, userProfile, pathname, incrementUnread]);
+    // pathname fuera de las deps a propósito (se lee por ref, ver arriba);
+    // incrementUnread ahora es estable (useCallback en el provider) — el loop del ding
+    // repetido venía de que cambiaba de identidad en cada render.
+  }, [user, firestore, userProfile, incrementUnread]);
 
   // Este componente es invisible, solo lógica
   return null; 

@@ -111,8 +111,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     initAuth();
 
+    // 🚨 FUGA CORREGIDA (Tanda A de la auditoría): el `return () => unsubscribeProfile()`
+    // de adentro del callback se le entregaba a onAuthStateChanged, que IGNORA el valor de
+    // retorno — el listener del perfil nunca se desuscribía: se apilaba uno nuevo en cada
+    // cambio de sesión y seguían vivos tras el logout (tirando permission-denied). Ahora
+    // la desuscripción vive afuera y se ejecuta en cada cambio de usuario y al desmontar.
+    let unsubscribeProfile: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+
+      // Soltar el listener del usuario anterior (si había).
+      if (unsubscribeProfile) { unsubscribeProfile(); unsubscribeProfile = null; }
 
       if (currentUser) {
         // Si el email aún no fue verificado, intentamos recargar el estado
@@ -124,8 +134,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         registerPushNotifications(currentUser.uid);
 
         const profileRef = doc(db, 'users', currentUser.uid);
-        
-        const unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
+
+        unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
           if (docSnap.exists()) {
             setUserProfile({ ...docSnap.data() as UserProfile, id: docSnap.id });
           } else {
@@ -142,7 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // a update con campos prohibidos y las reglas lo rechazaban (el usuario veía
             // "ese teléfono ya tiene cuenta" y quedaba un doc huérfano por intento).
             // El signup crea el perfil él mismo: acá no se escribe nada mientras corre.
-            if (isSignupInProgress()) return;
+            // (Tanda A: bajar `loading` ANTES de salir — el return se salteaba el
+            // setLoading(false) del final y el spinner podía quedar colgado.)
+            if (isSignupInProgress()) { setLoading(false); return; }
 
             const fallbackProfile: UserProfile = {
                 id: currentUser.uid,
@@ -182,15 +194,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
            console.error("Error fetching profile:", error);
            setLoading(false);
         });
-        
-        return () => unsubscribeProfile();
       } else {
         setUserProfile(null);
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribeProfile) unsubscribeProfile();
+      unsubscribe();
+    };
   }, []);
 
   const isAdmin = userProfile?.role === 'admin';

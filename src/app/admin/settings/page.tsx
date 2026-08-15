@@ -34,10 +34,15 @@ function AdminSettingsPage() {
   const { user: adminUser } = useAuth();
 
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
-  const { data: configData } = useDoc<PlatformConfig>(configRef);
+  const { data: configData, isLoading: configLoading } = useDoc<PlatformConfig>(configRef);
 
   const [localConfig, setLocalConfig] = useState<PlatformConfig>({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, maintenanceMode: false, settlementDayOfWeek: 5, claimWindowHours: 24 });
   const [isSaving, setIsSaving] = useState(false);
+  // 🚨 Tanda A de la auditoría: hasta que la config REAL no llegue de Firestore, el form
+  // muestra defaults hardcodeados — un "Guardar" en ese instante los escribía POR ENCIMA
+  // de la configuración real de la plataforma (fees, comisiones, día de liquidación).
+  // Este flag bloquea el render del form y el guardado hasta tener el dato real.
+  const configReady = !configLoading && configData !== undefined;
 
   useEffect(() => {
     if (configData) setLocalConfig({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, settlementDayOfWeek: 5, maintenanceMode: false, claimWindowHours: 24, ...configData });
@@ -45,6 +50,10 @@ function AdminSettingsPage() {
 
   const handleSave = async () => {
     if (!firestore) return;
+    if (!configReady) {
+      toast({ variant: 'destructive', title: 'Esperá un segundo', description: 'La configuración actual todavía está cargando.' });
+      return;
+    }
 
     // El modo mantenimiento corta los pedidos en TODA la plataforma -- pedía menos
     // confirmación que cancelar un solo pedido. Solo se pregunta al ACTIVARLO.
@@ -80,6 +89,16 @@ function AdminSettingsPage() {
       setIsSaving(false);
     }
   };
+
+  // Ver comentario de configReady: nunca mostrar el form con defaults inventados.
+  if (!configReady) {
+    return (
+      <div className="container mx-auto pb-20 space-y-6 max-w-2xl">
+        <PageHeader title="Configuración" description="Parámetros globales de la plataforma." />
+        <div className="h-96 w-full rounded-xl bg-muted/40 animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto pb-20 space-y-6 max-w-2xl">

@@ -73,39 +73,60 @@ export async function POST(request: Request) {
       }
     }
 
-    // Registrar el reembolso
-    const refundRef = await adminDb.collection('refunds').add({
-      orderId,
-      buyerId: order.userId,
-      storeId: order.storeId || null,
-      amount: numAmount,
-      reason: reason || '',
-      operationRef: opRef,
-      adminUid: callerUid,
-      ...(claimRef ? { claimId: claimRef.id } : {}),
-      createdAt: Timestamp.now(),
-    });
-
-    if (claimRef) {
-      await claimRef.update({
-        resolved: true,
-        resolution: 'refunded',
-        resolutionNote: `Reembolso de $${numAmount.toLocaleString('es-AR')} · op ${opRef}`,
-        refundId: refundRef.id,
-        resolvedAt: Timestamp.now(),
-        resolvedBy: callerUid,
+    // Registrar el reembolso + resolver el reclamo + marcar el pedido — TODO en UNA
+    // transacción (Tanda A de la auditoría): antes era read-then-write suelto y dos
+    // requests simultáneas podían registrar DOS reembolsos del mismo pedido. El re-chequeo
+    // de `refunded` adentro de la transacción hace imposible el doble registro.
+    const refundRef = adminDb.collection('refunds').doc();
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const freshOrder = await tx.get(orderRef);
+        if (!freshOrder.exists || freshOrder.data()!.refunded) {
+          throw new Error('__ALREADY_REFUNDED__');
+        }
+        if (claimRef) {
+          const freshClaim = await tx.get(claimRef);
+          if (!freshClaim.exists || freshClaim.data()!.resolved === true) {
+            throw new Error('__CLAIM_RESOLVED__');
+          }
+          tx.update(claimRef, {
+            resolved: true,
+            resolution: 'refunded',
+            resolutionNote: `Reembolso de $${numAmount.toLocaleString('es-AR')} · op ${opRef}`,
+            refundId: refundRef.id,
+            resolvedAt: Timestamp.now(),
+            resolvedBy: callerUid,
+          });
+        }
+        tx.set(refundRef, {
+          orderId,
+          buyerId: order.userId,
+          storeId: order.storeId || null,
+          amount: numAmount,
+          reason: reason || '',
+          operationRef: opRef,
+          adminUid: callerUid,
+          ...(claimRef ? { claimId: claimRef.id } : {}),
+          createdAt: Timestamp.now(),
+        });
+        tx.update(orderRef, {
+          refunded: true,
+          refundAmount: numAmount,
+          refundReason: reason || '',
+          refundOperationRef: opRef,
+          refundedBy: callerUid,
+          refundedAt: Timestamp.now(),
+        });
       });
+    } catch (e: any) {
+      if (e?.message === '__ALREADY_REFUNDED__') {
+        return NextResponse.json({ error: "Este pedido ya tiene un reembolso registrado." }, { status: 400 });
+      }
+      if (e?.message === '__CLAIM_RESOLVED__') {
+        return NextResponse.json({ error: "Este reclamo ya fue resuelto." }, { status: 400 });
+      }
+      throw e;
     }
-
-    // Marcar el pedido
-    await orderRef.update({
-      refunded: true,
-      refundAmount: numAmount,
-      refundReason: reason || '',
-      refundOperationRef: opRef,
-      refundedBy: callerUid,
-      refundedAt: Timestamp.now(),
-    });
 
     // Notificar al comprador (campanita)
     if (order.userId) {

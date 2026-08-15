@@ -97,6 +97,13 @@ export async function POST(request: Request) {
     }
     const storeData = storeDoc.data();
 
+    // 🔒 Tienda NO aprobada = NO recibe pedidos (Tanda A de la auditoría): la aprobación
+    // del admin solo la escondía del inicio, pero por URL directa la tienda pendiente o
+    // rechazada renderizaba con carrito y esta ruta le creaba pedidos igual.
+    if (storeData?.isApproved !== true) {
+        return NextResponse.json({ error: "Esta tienda todavía no está habilitada para recibir pedidos." }, { status: 400 });
+    }
+
     // Defensa en profundidad: hasta ahora nada del lado servidor bloqueaba pedidos a una
     // tienda pausada/cerrada (solo era un filtro visual del cliente).
     if (storeData?.manuallyPaused) {

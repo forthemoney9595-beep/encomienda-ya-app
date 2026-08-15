@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -54,10 +54,14 @@ export default function StoreWalletPage() {
   const [cbu, setCbu] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. Validar Rol
-  if (!authLoading && userProfile?.role !== 'store') {
-      router.push('/');
-  }
+  // 1. Validar Rol — en un useEffect (Tanda A de la auditoría): antes el router.push
+  // corría DURANTE el render (efecto secundario en render, warning de React y
+  // comportamiento errático en re-renders).
+  useEffect(() => {
+      if (!authLoading && userProfile && userProfile.role !== 'store') {
+          router.push('/');
+      }
+  }, [authLoading, userProfile, router]);
 
   // 2. BUSCAR LA TIENDA DE ESTE USUARIO (CORRECCIÓN)
   // En lugar de buscar por ID directo, buscamos donde ownerId sea igual al usuario actual

@@ -88,14 +88,31 @@ export async function POST(request: Request) {
     // Trazabilidad del pago: quién lo aprobó, cuándo, con qué comprobante y cuál era el
     // saldo real en ese momento. Antes solo quedaba `status` y la fecha, así que no había
     // forma de saber qué admin autorizó una transferencia ni de rastrearla en el banco.
-    await withdrawalRef.update({
-      status: 'approved',
-      processedAt: Timestamp.now(),
-      approvedBy: callerUid,
-      operationRef: opRef,
-      ...(note ? { adminNote: String(note).trim().slice(0, 300) } : {}),
-      balanceAtApproval: Math.round(approvableBalance),
-    });
+    //
+    // 🔒 Transacción (Tanda A de la auditoría): la transición pending→approved se decide
+    // ADENTRO — dos aprobaciones simultáneas del mismo retiro ya no pueden pasar las dos
+    // (la validación de arriba era read-then-write y ambas leían "pending").
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const fresh = await tx.get(withdrawalRef);
+        if (!fresh.exists || fresh.data()!.status !== 'pending') {
+          throw new Error('__ALREADY_PROCESSED__');
+        }
+        tx.update(withdrawalRef, {
+          status: 'approved',
+          processedAt: Timestamp.now(),
+          approvedBy: callerUid,
+          operationRef: opRef,
+          ...(note ? { adminNote: String(note).trim().slice(0, 300) } : {}),
+          balanceAtApproval: Math.round(approvableBalance),
+        });
+      });
+    } catch (e: any) {
+      if (e?.message === '__ALREADY_PROCESSED__') {
+        return NextResponse.json({ error: "Esta solicitud ya fue procesada por otra acción — refrescá la lista." }, { status: 400 });
+      }
+      throw e;
+    }
 
     // Auditoría en la MISMA request que mueve la plata. Antes la escribía el cliente después
     // de recibir el OK: si el navegador se cerraba o fallaba justo ahí, el pago quedaba

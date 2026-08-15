@@ -9,9 +9,11 @@ import { updateMonthlyStats } from "@/lib/platform-stats";
 export const maxDuration = 60; // consulta la API de MP pago por pago
 
 export async function GET(request: Request) {
+  // 🔒 FAIL-CLOSED (Tanda A): sin CRON_SECRET configurado, nadie pasa — antes la guarda
+  // entera se salteaba si faltaba la env var.
   const secret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
-  if (secret && authHeader !== `Bearer ${secret}`) {
+  if (!secret || authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

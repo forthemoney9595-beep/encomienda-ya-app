@@ -12,9 +12,12 @@ import { nowInArgentina } from "@/lib/store-hours";
 // genera automáticamente las solicitudes de retiro para tiendas y repartidores que
 // ya hayan ingresado su CBU alguna vez.
 export async function GET(request: Request) {
+  // 🔒 FAIL-CLOSED (Tanda A de la auditoría): antes era `if (secret && ...)` — si la
+  // env var CRON_SECRET faltaba, la guarda entera se salteaba y la ruta quedaba PÚBLICA
+  // (y esta crea solicitudes de retiro). Sin secret configurado, nadie pasa.
   const secret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
-  if (secret && authHeader !== `Bearer ${secret}`) {
+  if (!secret || authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

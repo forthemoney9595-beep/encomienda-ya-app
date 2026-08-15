@@ -39,6 +39,9 @@ interface StoreData {
   rating?: number;
   ratingCount?: number;
   manuallyPaused?: boolean;
+  // Gate de aprobación (Tanda A): sin true, la tienda solo la ven dueño y admin.
+  isApproved?: boolean;
+  ownerId?: string;
 }
 
 interface Review {
@@ -87,7 +90,7 @@ export default function StorePublicPage() {
   const storeId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   
   const firestore = useFirestore();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { addToCart, storeId: cartStoreId, totalItems, totalPrice, setCartSheetOpen } = useCart();
   const { toast } = useToast();
   const router = useRouter();
@@ -287,6 +290,22 @@ export default function StorePublicPage() {
 
   if (storeLoading || productsLoading || legacyProductsLoading) return <LoadingSkeleton />;
   if (!store) return <StoreNotFound router={router} />;
+
+  // 🔒 Tienda NO aprobada (Tanda A de la auditoría): la aprobación del admin solo la
+  // escondía del inicio — por URL directa renderizaba completa CON carrito. Solo pueden
+  // verla su dueño (para prepararla mientras espera) y el admin (para revisarla);
+  // /api/orders/create la rechaza igual server-side (defensa doble).
+  const isPrivilegedViewer = userProfile?.role === 'admin' || (!!user && store.ownerId === user.uid);
+  if (store.isApproved !== true && !isPrivilegedViewer) {
+    return (
+      <div className="container mx-auto py-24 text-center space-y-4">
+        <StoreIcon className="h-14 w-14 mx-auto text-muted-foreground/50" />
+        <h2 className="text-xl font-bold">Esta tienda todavía no está disponible</h2>
+        <p className="text-sm text-muted-foreground">Está pendiente de habilitación. Volvé a intentar más tarde.</p>
+        <Button variant="outline" onClick={() => router.push('/')}>Volver al inicio</Button>
+      </div>
+    );
+  }
 
   const search = searchTerm.trim().toLowerCase();
   const visibleProducts = search
