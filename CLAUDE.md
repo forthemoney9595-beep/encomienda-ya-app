@@ -2147,6 +2147,47 @@ Play Store junto al bloque MP pre-lanzamiento (PWABuilder, $25 única vez, revis
   Vercel actualizan la app sola; el APK solo se regenera para cambiar ícono/nombre/
   colores o subir versión a Play (`signingMode:'mine'` con ESTE keystore).
 
+## Fase RR septies (ago 2026): push en el APK — saga completa verificada en celular real
+Primera prueba del APK en el celular del usuario (Xiaomi/MIUI). Terminó con un push
+real entregado con la app cerrada, pero el camino destapó 6 fixes y un manual de
+diagnóstico (está en la bóveda, "Fallas encontradas", caso cerrado 15/8):
+- **Tres permisos apilados** en la app empaquetada: la app (Android 13+ lo resetea al
+  reinstalar), Chrome, y el SITIO adentro de Chrome. El doble diálogo al activar = capa
+  sitio + capa sistema; aceptados ambos una vez, no vuelven. El permiso es POR
+  DISPOSITIVO (vale para todas las cuentas); el token se guarda POR CUENTA.
+- **La campanita muestra ahora TODOS los estados** (`notifications.tsx`): botón azul
+  (default, con tokens `info` — antes bg-blue-50 de tema claro se veía deshabilitado),
+  aviso ámbar "bloqueados" clickeable con instrucciones (antes 'denied' no mostraba
+  NADA y parecía aceptado — el bug de UX que confundió todo el diagnóstico), línea
+  ámbar "Permiso OK pero el registro falla: [motivo real]" (antes getToken fallaba en
+  silencio en los DOS caminos), nada = activo. Regla: ningún camino de notificaciones
+  puede morir mudo.
+- **`requestNotificationPermission` devuelve `{token, error}`** (no null a secas) —
+  el motivo real en pantalla fue lo que permitió diagnosticar cada capa por captura.
+- **auth-context ya no pide permiso en cada apertura**: concedido = registra en
+  silencio; denegado = nada; default = UNA vez por dispositivo (localStorage
+  `eya-push-prompted`); después queda el botón de la campanita. El botón además guarda
+  fcmToken + fcmTokens (arrayUnion) como el resto.
+- **Refuerzo al abrir la campanita**: si el permiso está concedido y el token de ese
+  dispositivo falta, se registra ahí (cubre "activé el permiso en Ajustes a mitad de
+  sesión", que dejaba el dispositivo sin push hasta el próximo arranque en frío).
+- **`permission-blocked`** = Android bloqueó el permiso del sistema tras un par de
+  rechazos (no vuelve a preguntar; hay que ir a Ajustes) — mensaje en criollo.
+- **"Registration failed - push service error"** = el push service de Google colgado
+  en el dispositivo → lo resolvió REINICIAR el celular (documentado con alternativas).
+- Fixes de shell en el camino: login/signup/forgot-password a pantalla completa sin
+  hamburguesa (abría un sheet negro vacío), y el sheet móvil se cierra en cada cambio
+  de ruta (quedaba abierto tras logout).
+- **Sentry activo en producción** (DSN cargado en Vercel por el usuario, redeploy
+  verificado buscando el DSN en el bundle desplegado). Primer objetivo: "Algo salió
+  mal" intermitente en el arranque en frío del APK (bóveda #pendiente; sospechoso:
+  doble capa de Firebase de la auditoría SS).
+- **Anotado, no hecho**: limpiar tokens FCM vencidos al enviar (las cuentas acumulan
+  tokens muertos — repartidor@ junta 11; FCM los ignora, es higiene no urgencia).
+- **Herramientas de la sesión** (scratchpad): check-fcm.js (tokens por usuario),
+  send-test-push.js / send-ab-push.js (pushes reales etiquetados por token — el A/B
+  identificó que los tokens "vivos" eran de la PC, la pista clave).
+
 ## Fase RR quinquies (ago 2026): carrera del signup — 1ª falla real de la gran prueba
 Reportada por el usuario en la bóveda de Obsidian (captura: "Ese teléfono ya tiene una
 cuenta registrada" registrando fmmk40@gmail.com). Diagnóstico contra la base: el teléfono
