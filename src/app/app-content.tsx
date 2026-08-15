@@ -168,15 +168,22 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
     const { setOpenMobile } = useSidebar();
     useEffect(() => { setOpenMobile(false); }, [pathname, setOpenMobile]);
 
-    const isLoginPage = pathname.startsWith('/login') || pathname.startsWith('/signup');
+    const isLoginPage = pathname.startsWith('/login') || pathname.startsWith('/signup') || pathname.startsWith('/forgot-password');
     const isLandingPage = pathname === '/';
+
+    // Login/registro/recuperar: pantalla completa SIN el shell de la app. El botón de
+    // menú (hamburguesa) no tiene sentido ahí — un invitado no tiene menú, y tocarlo
+    // abría un panel vacío negro (falla reportada en la prueba del APK, 15/8).
+    if (isLoginPage) {
+        return <main className="flex-1">{children}</main>;
+    }
 
     // Si el usuario no está logueado Y está en la raíz, muestra SOLO el contenido.
     if (!user && !loading && isLandingPage) {
         return <main className="flex-1">{children}</main>;
     }
-    
-    // Si estás en cualquier otra página (incluyendo /login, /signup) o estás logueado, muestra el layout completo
+
+    // En cualquier otra página, o logueado, muestra el layout completo
     return (
         <div className="flex min-h-screen min-w-0">
             <Sidebar side="left" className="w-64" collapsible="icon">

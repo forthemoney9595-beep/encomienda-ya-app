@@ -196,9 +196,12 @@ export function Notifications() {
             </div>
 
             {permissionStatus === 'default' && (
-                <Button 
-                    variant="outline" size="sm" 
-                    className="w-full bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 mt-2 h-8 text-xs"
+                // OJO: nada de bg-blue-50/text-blue-700 — son colores de tema claro y en el
+                // tema oscuro el botón se veía gris lavado, como deshabilitado (captura de
+                // la prueba del APK, 15/8). Tokens semánticos del tema, como el resto.
+                <Button
+                    variant="outline" size="sm"
+                    className="w-full mt-2 h-8 text-xs border-info/40 bg-info/10 text-info hover:bg-info/20 hover:text-info"
                     onClick={handleEnableNotifications}
                 >
                     <BellRing className="mr-2 h-3 w-3" /> Activar Avisos Push
