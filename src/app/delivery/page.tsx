@@ -9,7 +9,6 @@ import { collection, query, where } from 'firebase/firestore';
 import { driverNetForOrder } from '@/lib/money';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
 import {

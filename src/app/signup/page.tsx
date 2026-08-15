@@ -1,6 +1,6 @@
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { User, Store, Bike, ShieldCheck } from "lucide-react";
+import { User, Store, Bike } from "lucide-react";
 import PageHeader from "@/components/page-header";
 
 export default function SignupPage() {

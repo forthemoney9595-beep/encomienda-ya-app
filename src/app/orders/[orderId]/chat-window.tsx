@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Send, Loader2, User, Store, Bike, Bell } from 'lucide-react';
+import { MessageSquare, Send, Loader2, User, Store, Bike } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, orderBy, limit, addDoc, serverTimestamp, CollectionReference, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, limit, addDoc, serverTimestamp, CollectionReference, Timestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { type Order, OrderService } from '@/lib/order-service';
 import { format } from 'date-fns';

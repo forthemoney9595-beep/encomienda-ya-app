@@ -5,10 +5,9 @@ import * as Sentry from '@sentry/nextjs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, CheckCircle2, MapPin, ShoppingBag, LocateFixed, Crosshair, AlertTriangle } from 'lucide-react';
+import { Loader2, CheckCircle2, MapPin, ShoppingBag, Crosshair, AlertTriangle } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
-import { OrderService } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 // ✅ IMPORTANTE: Agregamos useDoc y useMemoFirebase para leer la config
 import { useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase';

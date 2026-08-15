@@ -1,23 +1,20 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { useAuth } from '@/context/auth-context';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Button } from '@/components/ui/button';
 import { Heart, ShoppingBag, Store as StoreIcon, MapPin, Clock, Star } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { formatCategoryLabel } from '@/lib/category-style';
 import { useToast } from '@/hooks/use-toast';
-import { Rating } from '@/components/ui/rating';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Skeleton } from '@/components/ui/skeleton';
-import { collection, doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, deleteDoc } from 'firebase/firestore';
 
 // Interfaz compatible con los datos de Firestore
 interface Store {

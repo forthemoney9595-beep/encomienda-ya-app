@@ -7,7 +7,7 @@ import { useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { useCountFromServer } from '@/lib/firebase-aggregate';
 import {
   collection, query, where, orderBy, limit, startAfter, getDocs, documentId,
-  doc, updateDoc, deleteDoc, setDoc, serverTimestamp, deleteField, writeBatch, type QueryDocumentSnapshot,
+  doc, serverTimestamp, deleteField, writeBatch, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
 import PageHeader from '@/components/page-header';

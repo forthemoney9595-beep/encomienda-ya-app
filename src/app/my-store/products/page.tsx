@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Loader2, Star, ExternalLink, Eye, EyeOff, Search, Bug, AlertTriangle, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Image as ImageIcon, Loader2, Star, ExternalLink, Eye, EyeOff, Search, Bug, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';

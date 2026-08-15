@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useState, useCallback, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +18,6 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
 import { authedFetch, authedGet } from '@/lib/authed-fetch';
-import { logAdminAction } from '@/lib/admin-audit';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {

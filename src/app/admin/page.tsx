@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, TrendingUp, Store as StoreIcon, Bike, Activity, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw, Clock, CreditCard, ChefHat, Truck, ChevronRight, MessageSquareWarning } from 'lucide-react';
+import { Users, DollarSign, PackageCheck, Store as StoreIcon, Bike, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw, Clock, CreditCard, ChefHat, Truck, ChevronRight, MessageSquareWarning } from 'lucide-react';
 import { CLAIM_TYPES, type ClaimType } from '@/lib/claim-types';
 import { setAccountApproval } from '@/lib/approval-service';
 import { downloadCsv } from '@/lib/csv-export';
@@ -15,7 +15,7 @@ import { storeBaseAmount, commissionForOrder, refundRatio, isPlatformCollected, 
 import { useAggregate, useCountFromServer } from '@/lib/firebase-aggregate';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
-import { collection, query, where, doc, updateDoc, orderBy, limit, sum, count, CollectionReference, Timestamp } from 'firebase/firestore';
+import { collection, query, where, doc, orderBy, limit, sum, count, CollectionReference, Timestamp } from 'firebase/firestore';
 import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Legend, Cell } from 'recharts';
 import { subDays, format, startOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -28,7 +28,6 @@ import AdminAuthGuard from './admin-auth-guard';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
-import { logAdminAction } from '@/lib/admin-audit';
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 

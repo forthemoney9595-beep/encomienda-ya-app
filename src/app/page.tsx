@@ -2,22 +2,18 @@
 
 import { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import PageHeader from '@/components/page-header';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebase/firestore';
 import { normalizeSchedule, getStoreOpenStatus } from '@/lib/store-hours';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Star, ShoppingBag, Search, Filter, Heart, MapPin, Clock, Store as StoreIcon, Zap, ShieldCheck, Smartphone, ArrowRight, type LucideIcon } from 'lucide-react';
+import { ShoppingBag, Search, Filter, Heart, Zap, ShieldCheck, Smartphone, ArrowRight, type LucideIcon } from 'lucide-react';
 import { StoreCard, type StoreCardStore } from '@/components/store-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Rating } from '@/components/ui/rating';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';

@@ -3,12 +3,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminAuthGuard from '../../admin-auth-guard';
-import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
@@ -22,7 +20,7 @@ import { AccountStatement, type StatementMovement } from '@/components/account-s
 import { setAccountApproval } from '@/lib/approval-service';
 import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
 import { cn } from '@/lib/utils';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
     Store, MapPin, Star, ShoppingBag, TrendingUp, XCircle,

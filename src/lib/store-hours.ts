@@ -9,7 +9,6 @@ export type DaySchedule = { closed: boolean; ranges: TimeRange[] };
 export type WeeklySchedule = DaySchedule[];
 
 export const DAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-export const DAY_LABELS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 // Orden de visualización (lunes primero, como espera la gente).
 export const DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 

@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PlusCircle, Tag, Trash2, Edit, Loader2 } from 'lucide-react';
+import { PlusCircle, Tag, Trash2, Edit } from 'lucide-react';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';

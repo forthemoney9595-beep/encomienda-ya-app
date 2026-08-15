@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from 'react';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { Store, Loader2, Plus, Search, MapPin, AlertTriangle, Check, Trash2, Edit, Eye, Star, Pause, Download } from 'lucide-react';
+import { Store, Loader2, Plus, Search, MapPin, Trash2, Edit, Eye, Star, Pause, Download } from 'lucide-react';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';

@@ -110,31 +110,5 @@ export interface Address {
     postalCode?: string;
 }
 
-// Datos de ejemplo
-export const stores: Store[] = [
-  {
-    id: '1',
-    name: 'Burger King',
-    address: 'Av. Principal 123',
-    category: 'Comida Rápida',
-    imageUrl: 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=800&q=80',
-    rating: 4.5,
-    deliveryTime: '30-45 min',
-    minOrder: 15,
-    products: [
-      { 
-          id: 'p1', 
-          name: 'Whopper', 
-          description: 'La clásica hamburguesa a la parrilla.', 
-          price: 8.50, 
-          category: 'Hamburguesas',
-          rating: 4.8,
-          reviewCount: 120
-      }
-    ],
-    isApproved: true,
-    status: 'Aprobado',
-    maintenanceMode: false,
-    commissionRate: 0 // Default
-  }
-];
+// Tanda C: se eliminó el mock "Burger King" (export `stores`) — 0 importadores; era
+// solo datos de ejemplo del scaffolding original.

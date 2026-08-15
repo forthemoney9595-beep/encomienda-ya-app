@@ -3,7 +3,6 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { CartProvider } from '@/context/cart-context';
 import { AuthProvider } from '@/context/auth-context';
-import { NotificationProvider } from '@/context/notification-context';
 // ✅ CORRECCIÓN FINAL: Importación de ChatListener desde '@/components/'
 import { ChatListener } from '@/components/chat-listener'; 
 import { AppContent } from './app-content';
@@ -74,12 +73,13 @@ export default function RootLayout({
         <FirebaseClientProvider>
           <AuthProvider>
             <CartProvider>
-              <NotificationProvider>
-                <ChatListener />
-                <AppContent>
-                  {children}
-                </AppContent>
-              </NotificationProvider>
+              {/* Tanda C: se eliminó NotificationProvider — su contador no lo leía
+                  NADIE (el badge real de la campanita sale de Firestore) y su única
+                  función era causar el loop del ding (Tanda A). */}
+              <ChatListener />
+              <AppContent>
+                {children}
+              </AppContent>
             </CartProvider>
           </AuthProvider>
         </FirebaseClientProvider>

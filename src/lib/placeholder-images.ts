@@ -7,8 +7,6 @@ export type ImagePlaceholder = {
   imageHint: string;
 };
 
-export const PlaceHolderImages: ImagePlaceholder[] = data.placeholderImages;
-
 /**
  * Generates a consistent placeholder image URL based on a seed.
  * @param seed A unique string (e.g., user ID, product name) to generate a consistent image.

@@ -15,7 +15,7 @@ import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { type Period, PERIOD_LABELS, getPeriodBounds } from '@/lib/analytics-period';
 import { PctBadge } from '@/components/pct-badge';

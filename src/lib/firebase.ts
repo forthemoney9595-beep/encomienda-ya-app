@@ -35,9 +35,9 @@ if (typeof window !== 'undefined') {
 export { app, auth, db, storage, messaging };
 
 // --- HOOKS ---
+// Tanda C: useStorage y getFirebase eliminados (0 importadores en toda la app).
 export const useAuth = () => auth;
 export const useFirestore = () => db;
-export const useStorage = () => storage;
 
 // --- SOLICITAR PERMISO DE NOTIFICACIONES ---
 export const requestNotificationPermission = async () => {
@@ -101,4 +101,3 @@ export function useDoc<T = any>(docRef: DocumentReference | null) {
 }
 
 export function useMemoFirebase<T>(factory: () => T, deps: any[]): T { return useMemo(factory, deps); }
-export function getFirebase() { return { firestore: db, auth, storage, app, messaging }; }

@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/firebase';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
-import { useNotifications } from '@/context/notification-context';
 import { usePathname } from 'next/navigation';
 
 // Sonido de notificación suave (puedes cambiar la URL por una tuya si prefieres)
@@ -13,14 +12,13 @@ const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869
 export function ChatListener(): null {
   const { user, userProfile } = useAuth();
   const firestore = useFirestore();
-  const { incrementUnread } = useNotifications();
   const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // El pathname se lee por REF (Tanda A de la auditoría): estaba en las deps del efecto
   // principal, así que CADA navegación tiraba abajo y volvía a levantar TODOS los
-  // listeners de chat (con su costo en lecturas). Solo se usa para decidir si mostrar
-  // el globito — no amerita re-suscribir nada.
+  // listeners de chat (con su costo en lecturas). Solo se usa para no sonar si ya estás
+  // mirando ese chat — no amerita re-suscribir nada.
   const pathnameRef = useRef(pathname);
   useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
 
@@ -108,14 +106,14 @@ export function ChatListener(): null {
                 // 2. ¿No es mío? (No quiero notificarme a mí mismo)
                 const isNotMine = msgData.senderId !== user.uid;
                 
-                // 3. ¿No estoy viendo ya ese chat? (Si estoy en la página del pedido, no necesito alerta)
+                // 3. ¿No estoy viendo ya ese chat? (en la página del pedido, la propia
+                // ventana de chat ya muestra el mensaje — el ding sería redundante)
+                // Tanda C: se eliminó incrementUnread — alimentaba un contador que
+                // ninguna pantalla leía (el badge real de la campanita sale de Firestore).
                 const isNotOnChatPage = !pathnameRef.current?.includes(`/orders/${orderId}`);
 
-                if (isRecent && isNotMine) {
+                if (isRecent && isNotMine && isNotOnChatPage) {
                   playSound(); // 🔊 Ding!
-                  if (isNotOnChatPage) {
-                    incrementUnread(); // 🔴 +1 al globo
-                  }
                 }
               }
             });
@@ -132,10 +130,8 @@ export function ChatListener(): null {
       chatUnsubs.forEach(unsub => unsub());
       chatUnsubs.clear();
     };
-    // pathname fuera de las deps a propósito (se lee por ref, ver arriba);
-    // incrementUnread ahora es estable (useCallback en el provider) — el loop del ding
-    // repetido venía de que cambiaba de identidad en cada render.
-  }, [user, firestore, userProfile, incrementUnread]);
+    // pathname fuera de las deps a propósito (se lee por ref, ver arriba).
+  }, [user, firestore, userProfile]);
 
   // Este componente es invisible, solo lógica
   return null; 

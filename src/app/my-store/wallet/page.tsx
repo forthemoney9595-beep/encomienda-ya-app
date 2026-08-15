@@ -16,7 +16,6 @@ import { authedFetch } from '@/lib/authed-fetch';
 import type { Order } from '@/lib/order-service';
 import { storeNetForOrder } from '@/lib/money';
 import { cn } from '@/lib/utils';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Wallet, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns'; 

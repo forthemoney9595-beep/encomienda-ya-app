@@ -148,11 +148,7 @@ export const useFirestore = (): Firestore => {
   return firestore;
 };
 
-/** Hook to access Firebase App instance. */
-export const useFirebaseApp = (): FirebaseApp => {
-  const { firebaseApp } = useFirebase();
-  return firebaseApp;
-};
+// Tanda C: useFirebaseApp y useUser eliminados (0 importadores en toda la app).
 
 type MemoFirebase <T> = T & {__memo?: boolean};
 
@@ -165,12 +161,3 @@ export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | 
   return memoized;
 }
 
-/**
- * Hook specifically for accessing the authenticated user's state.
- * This provides the User object, loading status, and any auth errors.
- * @returns {UserHookResult} Object with user, isUserLoading, userError.
- */
-export const useUser = (): UserHookResult => { // Renamed from useAuthUser
-  const { user, isUserLoading, userError } = useFirebase(); // Leverages the main hook
-  return { user, isUserLoading, userError };
-};

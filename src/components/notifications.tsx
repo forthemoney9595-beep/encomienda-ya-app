@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase, requestNotificationPermission } from '@/lib/firebase';
+import { useFirestore, requestNotificationPermission } from '@/lib/firebase';
 import { collection, query, where, limit, doc, updateDoc, writeBatch, orderBy, onSnapshot } from 'firebase/firestore'; 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';

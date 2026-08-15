@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarFooter, SidebarTrigger } from '@/components/ui/sidebar';
 import { MainNav } from '@/components/main-nav';

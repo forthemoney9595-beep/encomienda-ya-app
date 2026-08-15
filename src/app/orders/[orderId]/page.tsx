@@ -18,7 +18,7 @@ import { doc, updateDoc, addDoc, collection, serverTimestamp, query, where, getC
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { CircularProgress } from '@/components/ui/circular-progress';
-import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store, ExternalLink } from 'lucide-react';
+import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent } from '@/components/ui/alert-dialog';

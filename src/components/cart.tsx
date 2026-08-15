@@ -3,13 +3,11 @@
 import { useState } from "react";
 import { ShoppingCart, Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import { Button } from "./ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from "./ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "./ui/sheet";
 import { useCart } from "@/context/cart-context";
 import { Badge } from "./ui/badge";
 import Image from "next/image";
-import { Separator } from "./ui/separator";
 import { ScrollArea } from "./ui/scroll-area";
-import Link from "next/link";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
 // ✅ Importamos el nuevo diálogo de pago
 import { CheckoutDialog } from "@/components/checkout-dialog";
