@@ -66,23 +66,33 @@ export function Notifications() {
   
   const unreadCount = localNotifications.filter((n: any) => !n.read).length;
 
+  // REGLA (prueba del APK, 15/8): tocar el botón SIEMPRE termina en un aviso visible —
+  // ningún camino puede morir en silencio, incluido el catch. En la app empaquetada el
+  // permiso puede quedar en estados raros y sin el motivo a la vista no se puede
+  // diagnosticar nada.
   const handleEnableNotifications = async () => {
       try {
-          const token = await requestNotificationPermission();
-          // Reflejar SIEMPRE el estado real del permiso, haya token o no — antes, si la
-          // obtención del token fallaba, el botón quedaba como si nada hubiera pasado y
-          // parecía que "no se guardaba".
+          const { token, error } = await requestNotificationPermission();
           const perm = typeof Notification !== 'undefined' ? Notification.permission : 'default';
           setPermissionStatus(perm);
 
           if (token && user && firestore) {
               // Mismos DOS campos que escribe auth-context (fcmToken + fcmTokens): este
               // camino escribía solo fcmToken y pisaba el soporte multi-dispositivo.
-              await updateDoc(doc(firestore, 'users', user.uid), {
-                  fcmToken: token,
-                  fcmTokens: arrayUnion(token),
-                  notificationsEnabled: true
-              });
+              try {
+                  await updateDoc(doc(firestore, 'users', user.uid), {
+                      fcmToken: token,
+                      fcmTokens: arrayUnion(token),
+                      notificationsEnabled: true
+                  });
+              } catch (saveErr: any) {
+                  toast({
+                      variant: "destructive",
+                      title: "El permiso quedó activo pero no se pudo guardar",
+                      description: String(saveErr?.message || saveErr).slice(0, 140),
+                  });
+                  return;
+              }
               toast({ title: "¡Avisos activados!", description: "Este dispositivo va a recibir notificaciones." });
           } else if (perm === 'denied') {
               toast({
@@ -90,17 +100,22 @@ export function Notifications() {
                   title: "Notificaciones bloqueadas",
                   description: "Activalas desde Ajustes de Android → Apps → EncomiendaYA → Notificaciones.",
               });
-          } else if (perm === 'granted' && !token) {
-              // Permiso OK pero el registro del token falló (pasa si el service worker
-              // todavía no terminó de instalarse) — avisar en vez de fallar en silencio.
+          } else {
+              // Cualquier otra combinación (permiso a medias, token que no llegó, etc.):
+              // mostrar el motivo real si lo hay.
               toast({
                   variant: "destructive",
                   title: "No se pudo completar la activación",
-                  description: "Probá de nuevo en unos segundos.",
+                  description: error || "Puede que el diálogo se haya cerrado sin elegir. Probá de nuevo.",
               });
           }
-      } catch (error) {
+      } catch (error: any) {
           console.error("Error activando notificaciones:", error);
+          toast({
+              variant: "destructive",
+              title: "Error al activar los avisos",
+              description: String(error?.message || error).slice(0, 140),
+          });
       }
   };
 

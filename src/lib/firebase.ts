@@ -40,25 +40,27 @@ export const useAuth = () => auth;
 export const useFirestore = () => db;
 
 // --- SOLICITAR PERMISO DE NOTIFICACIONES ---
-export const requestNotificationPermission = async () => {
+// Devuelve también el motivo del fallo: devolver null "a secas" hacía que la campanita
+// no pudiera explicar NADA cuando algo fallaba (prueba del APK, 15/8).
+export const requestNotificationPermission = async (): Promise<{ token: string | null; error: string | null }> => {
   if (!messaging) {
-    return null;
+    return { token: null, error: 'El sistema de avisos no está disponible en este navegador.' };
   }
 
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      return null;
+      return { token: null, error: null }; // sin permiso — no es un fallo técnico
     }
 
     const token = await getToken(messaging, {
       vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
     });
 
-    return token || null;
-  } catch (error) {
+    return { token: token || null, error: token ? null : 'No se recibió el identificador del dispositivo.' };
+  } catch (error: any) {
     console.error('Error al obtener token de notificaciones:', error);
-    return null;
+    return { token: null, error: error?.message || String(error) };
   }
 };
 
