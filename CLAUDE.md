@@ -2272,6 +2272,28 @@ verificar el alta con Google (sin tocar desde la Fase X).
   dominio falso — decidir canal con el usuario), guard de /my-store/categories por
   ownerId (edge sin caso real), rutas stores/food|clothing|other (se borran en Tanda C).
 
+## Fase SS ter (ago 2026): Tanda C — limpieza de código muerto (519 líneas)
+Cierre del informe de auditoría (A+B+C completas). Todo verificado con grep (0
+importadores) ANTES de borrar; ~55 imports sin uso verificados con contador de
+ocurrencias (1 = solo el import) antes y después:
+- **Borrados**: rutas huérfanas `stores/{food,clothing,other}` (una usaba el legacy
+  `status=='Aprobado'`), `lib/seeder.ts`, `firebase/non-blocking-{login,updates}.tsx`
+  (+ re-exports de index.ts), y **`context/notification-context.tsx` ENTERO** — su
+  contador no lo leía nadie (el badge real sale de Firestore) y solo causaba el loop del
+  ding; chat-listener simplificado (el ding ya no suena si estás mirando ese chat).
+- `user-service.ts` reducido a `buildNewStoreData` (6 de 7 exports estaban muertos — el
+  CRUD real del perfil vive inline en /profile desde hace fases).
+- Exports muertos: getFirebase/useStorage, PlaceHolderImages, mock "Burger King",
+  DAY_LABELS_SHORT, useFirebaseApp/useUser.
+- **OJO al script de imports**: los reemplazos masivos con PowerShell rompen el encoding
+  (pasó en la Tanda B con create/route.ts, se restauró de git) — usar Node con utf8 o la
+  herramienta Edit. El script de imports quedó en el scratchpad de la sesión.
+- Smoke 5/5 (landing, home, campanita, tienda, favoritos). **Confirmado en runtime el
+  problema de la DOBLE capa de Firebase**: /favorites (una de las 2 páginas que usan
+  `@/firebase`) tira "INTERNAL ASSERTION FAILED" + permission-denied de las dos
+  instancias del SDK conviviendo — PRE-existente, documentado, refuerza la unificación
+  post-lanzamiento.
+
 ## Herramienta para la gran prueba: `_seed-stores.js` (ago 2026, gitignored)
 4 tiendas de prueba CON dueño logueable (necesario: confirmar stock y marcar listo solo
 puede hacerlo la tienda — el botón 🧪 del admin solo aprueba el PAGO): Rotisería La Nonna
