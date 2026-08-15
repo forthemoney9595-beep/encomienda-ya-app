@@ -1,5 +1,6 @@
 import { adminDb, adminMessaging } from "./firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
+import { pruneDeadFcmTokens } from "./notify-server";
 
 // Broadcast a repartidores (campanita + push FCM), en UN solo lugar (Fase RR bis).
 //
@@ -63,12 +64,20 @@ export async function broadcastOrderToDrivers(opts: {
   let pushed = 0;
   try {
     const tokens: string[] = [];
+    // token → [uids dueños]: un mismo token puede vivir en varias cuentas (mismo
+    // navegador logueado en varias) y si está muerto hay que limpiarlo de todas.
+    const owners = new Map<string, string[]>();
+    const collect = (t: unknown, uid: string) => {
+      if (!t || typeof t !== "string") return;
+      tokens.push(t);
+      owners.set(t, [...(owners.get(t) || []), uid]);
+    };
     for (const d of onlineDrivers) {
       const u = d.data();
-      if (u.fcmToken && typeof u.fcmToken === "string") tokens.push(u.fcmToken);
-      if (Array.isArray(u.fcmTokens)) tokens.push(...u.fcmTokens);
+      collect(u.fcmToken, d.id);
+      if (Array.isArray(u.fcmTokens)) u.fcmTokens.forEach((t: unknown) => collect(t, d.id));
     }
-    const uniq = [...new Set(tokens)].filter(Boolean);
+    const uniq = [...new Set(tokens)];
     if (uniq.length > 0) {
       const res = await adminMessaging.sendEachForMulticast({
         tokens: uniq,
@@ -77,6 +86,8 @@ export async function broadcastOrderToDrivers(opts: {
         data: { url: "/orders", orderId },
       });
       pushed = res.successCount;
+      // Tokens que FCM reportó muertos → se sacan de las cuentas (Fase RR septies).
+      await pruneDeadFcmTokens(uniq, res.responses, owners);
     }
   } catch (e) {
     console.error("[driver-broadcast] push falló:", e);

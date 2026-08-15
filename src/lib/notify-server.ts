@@ -1,6 +1,49 @@
 import { adminDb, adminMessaging } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import * as Sentry from '@sentry/nextjs';
+
+// Códigos de FCM que significan "este token está muerto, no va a volver" (dispositivo
+// que desinstaló, suscripción vencida, basura). Los transitorios (quota, unavailable)
+// NO van acá — esos tokens siguen siendo válidos.
+const DEAD_TOKEN_CODES = new Set([
+  'messaging/registration-token-not-registered',
+  'messaging/invalid-registration-token',
+  'messaging/invalid-argument',
+]);
+
+/**
+ * Saca de `users/{uid}` los tokens que FCM reportó como muertos en un envío real.
+ * Sin esto las cuentas acumulan tokens vencidos para siempre (en la gran prueba,
+ * repartidor@test.com juntó 11 — cada push intentaba contra todos). Un mismo token
+ * puede vivir en varias cuentas (mismo navegador logueado en varias), por eso el
+ * mapa lleva token → [uids]. Nunca lanza: limpiar es mantenimiento, no puede abortar
+ * el envío que ya salió.
+ */
+export async function pruneDeadFcmTokens(
+  tokens: string[],
+  responses: { success: boolean; error?: { code?: string } }[],
+  tokenOwners: Map<string, string[]>,
+): Promise<void> {
+  try {
+    const byUid = new Map<string, string[]>();
+    responses.forEach((r, i) => {
+      if (r.success) return;
+      if (!DEAD_TOKEN_CODES.has(r.error?.code || '')) return;
+      for (const uid of tokenOwners.get(tokens[i]) || []) {
+        byUid.set(uid, [...(byUid.get(uid) || []), tokens[i]]);
+      }
+    });
+    for (const [uid, dead] of byUid.entries()) {
+      const ref = adminDb.collection('users').doc(uid);
+      const u = (await ref.get()).data();
+      const update: Record<string, unknown> = { fcmTokens: FieldValue.arrayRemove(...dead) };
+      if (u?.fcmToken && dead.includes(u.fcmToken)) update.fcmToken = FieldValue.delete();
+      await ref.update(update);
+    }
+  } catch (e) {
+    console.error('[notify-server] limpieza de tokens muertos falló:', e);
+  }
+}
 
 /**
  * Notifica a un usuario desde el servidor: campanita (Firestore) + push (FCM).
@@ -54,14 +97,15 @@ export async function notifyUser(opts: {
     if (uniq.length === 0) return;
 
     const target = orderId ? `/orders/${orderId}` : (link || '/');
-    await adminMessaging.sendEachForMulticast({
+    const res = await adminMessaging.sendEachForMulticast({
       tokens: uniq,
       notification: { title, body },
       webpush: { fcmOptions: { link: target } },
       // `data.url` además del fcmOptions.link (Fase PP): el service worker en segundo
       // plano lee data.url — sin esto, todos los push de notifyUser abrían la home.
       data: { url: target },
-    }).catch(() => { /* tokens vencidos: no es un error que valga la pena reportar */ });
+    });
+    await pruneDeadFcmTokens(uniq, res.responses, new Map(uniq.map(t => [t, [userId]])));
   } catch (e) {
     console.error('[notify-server] No se pudo mandar el push:', e);
   }
