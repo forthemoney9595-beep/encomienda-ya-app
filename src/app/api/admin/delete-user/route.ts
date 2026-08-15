@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
@@ -46,7 +47,13 @@ export async function POST(request: Request) {
           owed = b.availableBalance + b.withdrawnPending;
         }
       }
-    } catch { /* si el cálculo falla, no bloquear el borrado por eso */ }
+    } catch (balanceErr) {
+      // Tanda B: si el cálculo de saldo falla, la guarda de "tiene plata sin cobrar" se
+      // desactiva en silencio y se puede borrar una cuenta con deuda — que al menos quede
+      // reportado para revisarlo.
+      console.error('⚠️ No se pudo calcular el saldo antes de borrar:', balanceErr);
+      Sentry.captureException(balanceErr, { tags: { route: 'admin/delete-user', stage: 'balance-check' } });
+    }
 
     if (owed > 1 && !force) {
       return NextResponse.json({

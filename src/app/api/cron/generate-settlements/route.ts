@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { notifyUser } from "@/lib/notify-server";
 import { Timestamp } from "firebase-admin/firestore";
@@ -154,7 +155,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ status: "ok", date: now.toISOString(), settlementDay: settlementDayOfWeek, results });
 
   } catch (error: any) {
+    // Tanda B: un cron que falla en silencio = liquidaciones que no se generan y nadie
+    // se entera hasta que alguien reclama su plata.
     console.error("❌ [Cron] Error en generate-settlements:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    Sentry.captureException(error, { tags: { route: "cron/generate-settlements" } });
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

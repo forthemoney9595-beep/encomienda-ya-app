@@ -363,9 +363,18 @@ function AdminSearch({ open, onOpenChange, isFullAdmin }: GlobalSearchProps & { 
           <CommandItem value="discrepancias pago mercadopago" onSelect={() => go(() => router.push('/admin/payment-issues'))}>
             <AlertTriangle className="mr-2 h-4 w-4" /> Discrepancias de Pago
           </CommandItem>
+          {/* Tanda B: Reclamos y Comunicaciones faltaban del ⌘K (sí estaban en el menú). */}
+          <CommandItem value="reclamos clientes" onSelect={() => go(() => router.push('/admin/claims'))}>
+            <MessageSquare className="mr-2 h-4 w-4" /> Reclamos de Clientes
+          </CommandItem>
           <CommandItem value="incidentes repartidor" onSelect={() => go(() => router.push('/admin/incidents'))}>
             <Shield className="mr-2 h-4 w-4" /> Incidentes de Repartidor
           </CommandItem>
+          {isFullAdmin && (
+            <CommandItem value="comunicaciones broadcast avisos" onSelect={() => go(() => router.push('/admin/communications'))}>
+              <MessageSquare className="mr-2 h-4 w-4" /> Comunicaciones
+            </CommandItem>
+          )}
           <CommandItem value="resenas moderacion" onSelect={() => go(() => router.push('/admin/reviews'))}>
             <MessageSquare className="mr-2 h-4 w-4" /> Moderación Reseñas
           </CommandItem>

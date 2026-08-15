@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { adminDb, adminMessaging } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
@@ -180,6 +181,7 @@ export async function POST(request: Request) {
 
     } catch (error: any) {
         console.error('❌ Error cancelando orden:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        Sentry.captureException(error, { tags: { route: 'orders/cancel' } });
+        return NextResponse.json({ error: 'Error interno' }, { status: 500 });
     }
 }

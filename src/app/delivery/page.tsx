@@ -111,7 +111,9 @@ export default function DeliveryDashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Disponibles ahora" value={stats.availableCount} icon={PackageCheck} tone="info" href="/orders" />
         <StatCard label="En curso" value={stats.activeCount} icon={ShoppingBag} tone="warning" href="/orders?tab=active" />
-        <StatCard label="Entregados hoy" value={stats.deliveredTodayCount} icon={Truck} tone="muted" href="/orders?tab=active" />
+        {/* Tanda B: enlazaba a /orders?tab=active — no existe pestaña de entregados en el
+            panel; el historial de entregas vive en las analíticas. */}
+        <StatCard label="Entregados hoy" value={stats.deliveredTodayCount} icon={Truck} tone="muted" href="/delivery/analytics" />
         <StatCard label="Ganancias de hoy" value={`$${stats.earningsToday.toLocaleString()}`} icon={Wallet} tone="success" href="/delivery/earnings" />
       </div>
 

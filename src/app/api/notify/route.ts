@@ -19,11 +19,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
-        const { userId, title, body, link } = await request.json();
+        const parsed = await request.json().catch(() => ({}));
+        const { userId, link } = parsed;
 
-        if (!userId || !title || !body) {
+        if (!userId || !parsed.title || !parsed.body) {
             return NextResponse.json({ error: "Faltan datos requeridos (userId, title, body)" }, { status: 400 });
         }
+
+        // Tanda B: topes de longitud (mismo criterio que notify-broadcast, que ya los
+        // tenía) — sin esto, cualquier usuario logueado podía mandar push con textos de
+        // tamaño arbitrario a cualquier uid.
+        const title = String(parsed.title).slice(0, 120);
+        const body = String(parsed.body).slice(0, 300);
 
         // 1. Buscar el usuario en la base de datos
         const userDoc = await adminDb.collection('users').doc(userId).get();

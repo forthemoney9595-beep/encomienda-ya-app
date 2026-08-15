@@ -34,7 +34,8 @@ export async function POST(request: Request) {
     if (!callerUid) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
-    if (!(await verifyStoreOwnership(callerUid, orderData.storeId))) {
+    // Tanda B: sin storeId en la orden, verifyStoreOwnership haría doc(undefined) → 500.
+    if (!orderData.storeId || !(await verifyStoreOwnership(callerUid, orderData.storeId))) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 

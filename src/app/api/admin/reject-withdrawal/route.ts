@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("❌ Error rechazando retiro:", error);
-    return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
+    Sentry.captureException(error, { tags: { route: "admin/reject-withdrawal" } });
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

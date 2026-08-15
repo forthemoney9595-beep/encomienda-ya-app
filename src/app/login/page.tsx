@@ -5,10 +5,11 @@
 // cualquier visitante) y además su fetch fallaba con permission-denied en la consola de
 // todos los usuarios anónimos. Para probar roles se ingresan las credenciales a mano.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,14 @@ import { Mail, Lock, Loader2, LogIn } from 'lucide-react';
 // ✅ Usamos nuestra instancia 'app' configurada para evitar errores de inicialización
 import { app } from '@/lib/firebase';
 
+// A dónde "vive" cada rol — el login siempre empujaba a `/`, que para tienda,
+// repartidor y admin es el marketplace de compradores, no su panel (Tanda B).
+const roleHome = (role?: string) =>
+  role === 'admin' ? '/admin'
+  : role === 'store' ? '/my-store'
+  : role === 'delivery' ? '/delivery'
+  : '/';
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,6 +34,17 @@ export default function LoginPage() {
 
   const router = useRouter();
   const { toast } = useToast();
+  const { user, userProfile, loading } = useAuth();
+
+  // Redirección única para TODOS los caminos (Tanda B): si ya estás logueado, /login te
+  // manda directo a tu panel (antes mostraba el formulario igual); y tras un login
+  // (email o Google), apenas llega el perfil te lleva según tu ROL. Esto también cubre
+  // el primer login con Google de una cuenta nueva (el perfil lo crea auth-context).
+  useEffect(() => {
+    if (!loading && user && userProfile) {
+      router.replace(roleHome(userProfile.role));
+    }
+  }, [loading, user, userProfile, router]);
 
   // ✅ Login con Email/Password
   const handleLogin = async (e: React.FormEvent) => {
@@ -34,7 +54,7 @@ export default function LoginPage() {
       const auth = getAuth(app);
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: '¡Sesión Iniciada!', description: 'Serás redirigido en breve.' });
-      router.push('/');
+      // La redirección la hace el useEffect de arriba, según el ROL del perfil.
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -53,7 +73,8 @@ export default function LoginPage() {
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
-        router.push('/');
+        // La redirección la hace el useEffect de arriba, según el ROL del perfil
+        // (para una cuenta Google NUEVA, auth-context crea el perfil de comprador solo).
         toast({ title: "¡Bienvenido!", description: "Sesión iniciada con Google." });
     } catch (error: any) {
         console.error("Error Google:", error);

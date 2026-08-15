@@ -253,7 +253,9 @@ export default function ProfilePage() {
 
     return (
         <div className="container mx-auto pb-20 max-w-5xl">
-            <PageHeader title="Mi Perfil" description={`Gestiona tu cuenta de ${userProfile.role === 'buyer' ? 'cliente' : userProfile.role}.`} />
+            <PageHeader title="Mi Perfil" description={`Gestiona tu cuenta de ${
+                ({ buyer: 'cliente', store: 'tienda', delivery: 'repartidor', admin: 'administrador' } as Record<string, string>)[userProfile.role] || 'usuario'
+            }.`} />
 
             <div className="grid gap-8 lg:grid-cols-12">
                 {/* COLUMNA IZQUIERDA: FOTO Y DATOS BÁSICOS */}

@@ -182,7 +182,9 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+    // Tanda B: era `[state]` (bug conocido del upstream de shadcn) — se
+    // suscribía/desuscribía en CADA cambio de estado en vez de una sola vez por montaje.
+  }, [])
 
   return {
     ...state,

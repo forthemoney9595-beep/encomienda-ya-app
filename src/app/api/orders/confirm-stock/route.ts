@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -180,6 +181,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, total: newTotal, removedCount: removedItems.length });
   } catch (error: any) {
     console.error("❌ Error confirmando stock:", error);
-    return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
+    Sentry.captureException(error, { tags: { route: "orders/confirm-stock" } });
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

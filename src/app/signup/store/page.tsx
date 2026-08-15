@@ -310,6 +310,12 @@ export default function SignupStorePage() {
                   Iniciar Sesión
                 </Link>
               </div>
+              {/* Tanda B: solo el alta de comprador mostraba el consentimiento legal. */}
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                Al registrarte aceptás nuestros{' '}
+                <Link href="/terms" className="underline">Términos</Link> y{' '}
+                <Link href="/privacy" className="underline">Política de Privacidad</Link>.
+              </p>
             </CardFooter>
           </form>
         </Form>

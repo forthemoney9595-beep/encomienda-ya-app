@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 import { runReconciliation } from "@/lib/reconcile-mp";
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated });
   } catch (error: any) {
     console.error("❌ Error en conciliación manual:", error);
-    return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
+    Sentry.captureException(error, { tags: { route: "admin/reconcile-mp" } });
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

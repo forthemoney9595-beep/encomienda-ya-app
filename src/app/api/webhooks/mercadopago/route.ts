@@ -86,13 +86,16 @@ export async function POST(request: Request) {
     const paymentData = await payment.get({ id: paymentId });
 
     // 2. Extraer Metadata (se necesita también en las ramas de anomalía de abajo)
-    const { metadata } = paymentData;
+    // 🔒 Tanda B: `metadata` puede venir AUSENTE en un pago que no creamos nosotros —
+    // antes `metadata.buyer_id` tiraba TypeError → 500 → MP reintenta el webhook
+    // indefinidamente. Sin metadata u order_id: 200 con "ignorado" para que MP lo suelte.
+    const metadata = paymentData.metadata || {};
     const buyerId = metadata.buyer_id;
     const storeId = metadata.store_id;
     const storeOwnerId = metadata.store_owner_id;
     const orderRefId = metadata.order_id;
 
-    if (!orderRefId) return NextResponse.json({ error: "No order ID" }, { status: 400 });
+    if (!orderRefId) return NextResponse.json({ status: "ignored_no_order_metadata" });
 
     const ordersCollection = adminDb.collection("orders");
     const notificationsCollection = adminDb.collection("notifications");

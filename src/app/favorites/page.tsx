@@ -11,6 +11,7 @@ import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Button } from '@/components/ui/button';
 import { Heart, ShoppingBag, Store as StoreIcon, MapPin, Clock, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCategoryLabel } from '@/lib/category-style';
 import { useToast } from '@/hooks/use-toast';
 import { Rating } from '@/components/ui/rating';
 import { useRouter } from 'next/navigation';
@@ -194,8 +195,11 @@ export default function FavoritesPage() {
                                             <Clock className="h-3 w-3" />
                                             {store.deliveryTime || '30-45 min'}
                                         </div>
+                                        {/* Tanda B: acá decía "Envío: $" con el campo minOrder
+                                            (pedido mínimo) y fallback "$5.00" — dato equivocado
+                                            y moneda vieja. El fee real ya se ve en el inicio. */}
                                         <div>
-                                            Envío: ${store.minOrder || '5.00'}
+                                            {formatCategoryLabel(store.category || '') || 'Tienda'}
                                         </div>
                                     </div>
                                 </CardContent>

@@ -65,40 +65,50 @@ export async function POST(request: Request) {
 
     const reviewRef = adminDb.collection("deliveryReviews").doc();
     const commentText = (comment || "").toString().slice(0, 1000);
-
-    await reviewRef.set({
-      driverId,
-      orderId,
-      userId,
-      userName: orderData.customerName || "Cliente",
-      rating: ratingNum,
-      comment: commentText,
-      createdAt: Timestamp.now(),
-    });
-
-    // También queda en la orden (mismo lugar de siempre) para no romper las vistas que
-    // ya leen order.deliveryRating/deliveryReview (dashboard admin, ficha del repartidor).
-    await orderRef.update({
-      deliveryReviewed: true,
-      deliveryRating: ratingNum,
-      deliveryReview: commentText,
-    });
-
-    // 2. Actualizar el promedio del repartidor (users/{driverId}.rating), mismo patrón
-    // que stores/{id}.rating, con una transacción para que sume bien aunque lleguen
-    // reseñas al mismo tiempo.
     const driverRef = adminDb.collection("users").doc(driverId);
-    await adminDb.runTransaction(async (tx) => {
-      const driverSnap = await tx.get(driverRef);
-      const driverData = driverSnap.data() || {};
-      const ratingSum = (driverData.ratingSum || 0) + ratingNum;
-      const ratingCount = (driverData.ratingCount || 0) + 1;
-      tx.update(driverRef, {
-        ratingSum,
-        ratingCount,
-        rating: ratingSum / ratingCount,
+
+    // 🔒 Tanda B de la auditoría: TODO en UNA transacción con el "una sola vez"
+    // (`deliveryReviewed`) re-chequeado ADENTRO — mismo fix que /api/reviews/create:
+    // dos requests simultáneas ya no pueden crear dos reseñas ni sumar el rating doble.
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const freshOrder = await tx.get(orderRef);
+        if (!freshOrder.exists || freshOrder.data()!.deliveryReviewed) {
+          throw new Error('__ALREADY_REVIEWED__');
+        }
+        const driverSnap = await tx.get(driverRef);
+        const driverData = driverSnap.data() || {};
+        const ratingSum = (driverData.ratingSum || 0) + ratingNum;
+        const ratingCount = (driverData.ratingCount || 0) + 1;
+
+        tx.set(reviewRef, {
+          driverId,
+          orderId,
+          userId,
+          userName: orderData.customerName || "Cliente",
+          rating: ratingNum,
+          comment: commentText,
+          createdAt: Timestamp.now(),
+        });
+        // También queda en la orden (mismo lugar de siempre) para no romper las vistas
+        // que ya leen order.deliveryRating/deliveryReview (dashboard, ficha del admin).
+        tx.update(orderRef, {
+          deliveryReviewed: true,
+          deliveryRating: ratingNum,
+          deliveryReview: commentText,
+        });
+        tx.update(driverRef, {
+          ratingSum,
+          ratingCount,
+          rating: ratingSum / ratingCount,
+        });
       });
-    });
+    } catch (e: any) {
+      if (e?.message === '__ALREADY_REVIEWED__') {
+        return NextResponse.json({ error: "Ya calificaste a este repartidor por este pedido." }, { status: 400 });
+      }
+      throw e;
+    }
 
     // 3. Notificar al repartidor — via notifyUser (Fase PP): la campanita vieja no
     // llevaba `link` y tocarla no navegaba a ningún lado.

@@ -16,7 +16,8 @@ export async function POST(request: Request) {
   const callerUid = await verifyAuthToken(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const { claimId } = await request.json();
+  // Tanda B: body malformado tiraba una excepción sin manejar (500 crudo del framework).
+  const { claimId } = await request.json().catch(() => ({}));
   if (!claimId) return NextResponse.json({ error: "Falta claimId" }, { status: 400 });
 
   const claimSnap = await adminDb.collection("claims").doc(claimId).get();

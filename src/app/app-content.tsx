@@ -79,15 +79,16 @@ function UserMenu() {
                 <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 
-                {/* ✅ CORRECCIÓN: Ocultar "Perfil" si es una tienda */}
-                {userProfile?.role !== 'store' && (
-                    <DropdownMenuItem asChild>
-                        <Link href="/profile" className="cursor-pointer w-full flex items-center">
-                            <User className="mr-2 h-4 w-4" />
-                            <span>Perfil</span>
-                        </Link>
-                    </DropdownMenuItem>
-                )}
+                {/* Perfil para TODOS los roles (Tanda B): la tienda también tiene perfil
+                    personal (foto propia, teléfono) — /profile incluso tiene una pestaña
+                    "Mi Tienda" pensada para ese rol, pero este menú se lo ocultaba y el
+                    único camino era el buscador ⌘K. */}
+                <DropdownMenuItem asChild>
+                    <Link href="/profile" className="cursor-pointer w-full flex items-center">
+                        <User className="mr-2 h-4 w-4" />
+                        <span>Perfil</span>
+                    </Link>
+                </DropdownMenuItem>
 
                 {/* ✅ Opción de Editar Tienda (Solo para tiendas) */}
                 {userProfile?.role === 'store' && (

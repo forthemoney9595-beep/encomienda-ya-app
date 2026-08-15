@@ -23,7 +23,8 @@ export async function POST(request: Request) {
   const callerUid = await verifyAuthToken(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const { uid } = await request.json();
+  // Tanda B: body malformado tiraba una excepción sin manejar (500 crudo del framework).
+  const { uid } = await request.json().catch(() => ({}));
   if (!uid) return NextResponse.json({ error: "Falta uid" }, { status: 400 });
 
   if (callerUid !== uid) {

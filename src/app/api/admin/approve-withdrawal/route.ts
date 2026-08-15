@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -135,7 +136,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, amountApproved: requestedAmount });
   } catch (error: any) {
+    // Tanda B: es un flujo de PLATA — un fallo acá no puede morir en un console.error
+    // que nadie mira (+ sin filtrar detalles internos en la respuesta).
     console.error("❌ Error aprobando retiro:", error);
-    return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
+    Sentry.captureException(error, { tags: { route: "admin/approve-withdrawal" } });
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

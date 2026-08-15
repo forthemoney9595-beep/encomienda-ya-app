@@ -105,6 +105,7 @@ export function useCountFromServer(
 ) {
   const [count, setCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   const run = useCallback(async () => {
     if (!queryRef) {
@@ -115,10 +116,14 @@ export function useCountFromServer(
     try {
       const snap = await getCountFromServer(queryRef);
       setCount(snap.data().count);
+      setError(null);
     } catch (err: any) {
       // Mismo criterio que useAggregate: un count que falla mostraba 0 en silencio.
+      // Tanda B: además del reporte a Sentry, el error se EXPONE (useAggregate ya lo
+      // hacía; este hook no, y el consumidor no podía distinguir "0" de "falló").
       console.error('[useCountFromServer] La consulta falló:', err);
       Sentry.captureException(err, { tags: { area: 'firebase-aggregate', code: err?.code ?? 'unknown' } });
+      setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setIsLoading(false);
     }
@@ -130,5 +135,5 @@ export function useCountFromServer(
 
   useFocusRefresh(run, !!opts.refreshOnFocus);
 
-  return { count, isLoading, refresh: run };
+  return { count, isLoading, error, refresh: run };
 }

@@ -58,7 +58,10 @@ export function useCollection<T = any>(
   type StateDataType = ResultItemType[] | null;
 
   const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // Tanda B de la auditoría: si hay query, ARRANCA cargando — con `false` el primer
+  // paint mostraba "lista vacía" un instante antes de llegar los datos. El mismo fix ya
+  // estaba hecho en use-doc.tsx ("CORRECCIÓN CRÍTICA") y no se había replicado acá.
+  const [isLoading, setIsLoading] = useState<boolean>(!!memoizedTargetRefOrQuery);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {

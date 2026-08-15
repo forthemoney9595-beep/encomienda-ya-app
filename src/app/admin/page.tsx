@@ -1149,17 +1149,17 @@ function AdminDashboard() {
                     <TableBody>
                     {(recentOrders && recentOrders.length > 0) ? (
                         recentOrders.map((order) => (
+                        // Tanda B: la fila tenía onClick + un <Link> anidado al MISMO
+                        // destino — doble navegación en un click. Queda solo el onClick.
                         <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
-                            <TableCell className="font-medium">
-                                <Link href={`/orders/${order.id}`} className="hover:underline">#{order.id.substring(0, 7)}</Link>
-                            </TableCell>
+                            <TableCell className="font-medium hover:underline">#{order.id.substring(0, 7)}</TableCell>
                              <TableCell>{order.customerName}</TableCell>
                              <TableCell>{order.storeName}</TableCell>
                              <TableCell>{order.deliveryPersonName || 'N/A'}</TableCell>
                             <TableCell>
                                <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
                             </TableCell>
-                            <TableCell className="text-right font-bold">${(order.total || 0).toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-bold">${Math.round(order.total || 0).toLocaleString('es-AR')}</TableCell>
                         </TableRow>
                         ))
                     ) : (

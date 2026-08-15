@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -100,15 +101,23 @@ export async function POST(request: Request) {
     });
 
     // Guardar el CBU para que la liquidación automática lo use (antes lo escribía el cliente).
+    // Tanda B: el fallo acá NO aborta la solicitud (ya creada), pero tampoco puede morir
+    // en silencio — sin payoutCbu guardado, el cron de liquidación SALTEA a esta cuenta
+    // para siempre y nadie se entera de por qué nunca le llega la liquidación automática.
+    const reportCbuFail = (err: unknown) => {
+      console.error('⚠️ No se pudo guardar payoutCbu:', err);
+      Sentry.captureException(err, { tags: { route: 'withdrawals/request', stage: 'save-cbu' } });
+    };
     if (role === 'store' && storeId) {
-      await adminDb.collection('stores').doc(storeId).update({ payoutCbu: cbu }).catch(() => {});
+      await adminDb.collection('stores').doc(storeId).update({ payoutCbu: cbu }).catch(reportCbuFail);
     } else if (role === 'delivery') {
-      await adminDb.collection('users').doc(uid).update({ payoutCbu: cbu }).catch(() => {});
+      await adminDb.collection('users').doc(uid).update({ payoutCbu: cbu }).catch(reportCbuFail);
     }
 
     return NextResponse.json({ success: true, withdrawalId: ref.id, amount: Math.round(amount) });
   } catch (error: any) {
     console.error("❌ Error creando solicitud de retiro:", error);
-    return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
+    Sentry.captureException(error, { tags: { route: "withdrawals/request" } });
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

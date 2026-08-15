@@ -5,7 +5,7 @@ import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Eye, Car, FileText, Phone, Mail } from 'lucide-react';
+import { Eye, Car, FileText, Phone, Mail, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
@@ -130,6 +130,14 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                     <TableCell className="text-right flex justify-end gap-2 items-center">
                       <Button variant="ghost" size="icon" onClick={() => setSelectedDriver(driver)} title="Ver Ficha Técnica">
                           <Eye className="h-4 w-4 text-info" />
+                      </Button>
+                      {/* Tanda B: la lista nunca enlazaba a la ficha COMPLETA del
+                          repartidor (métricas, CBU, estado de cuenta) — solo se llegaba
+                          por el ⌘K o desde Finanzas. */}
+                      <Button asChild variant="ghost" size="icon" title="Ficha completa (métricas, billetera, estado de cuenta)">
+                          <Link href={`/admin/delivery/${driver.id}`}>
+                              <ExternalLink className="h-4 w-4 text-primary" />
+                          </Link>
                       </Button>
 
                       <PersonnelActions 

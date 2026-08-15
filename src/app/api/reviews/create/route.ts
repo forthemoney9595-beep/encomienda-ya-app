@@ -55,35 +55,49 @@ export async function POST(request: Request) {
     }
 
     const storeId = orderData.storeId;
+    if (!storeId) {
+      return NextResponse.json({ error: "El pedido no tiene tienda asociada." }, { status: 400 });
+    }
     const reviewRef = adminDb.collection("reviews").doc();
-
-    await reviewRef.set({
-      storeId,
-      orderId,
-      userId,
-      userName: orderData.customerName || "Cliente",
-      rating: ratingNum,
-      comment: (comment || "").toString().slice(0, 1000),
-      createdAt: Timestamp.now(),
-    });
-
-    await orderRef.update({ storeReviewed: true });
-
-    // 2. Actualizar el promedio de la tienda (mismo store.rating que ya se lee en
-    // Inicio y en el detalle de tienda) con una transacción para que sume bien aunque
-    // lleguen reseñas al mismo tiempo.
     const storeRef = adminDb.collection("stores").doc(storeId);
-    await adminDb.runTransaction(async (tx) => {
-      const storeSnap = await tx.get(storeRef);
-      const storeData = storeSnap.data() || {};
-      const ratingSum = (storeData.ratingSum || 0) + ratingNum;
-      const ratingCount = (storeData.ratingCount || 0) + 1;
-      tx.update(storeRef, {
-        ratingSum,
-        ratingCount,
-        rating: ratingSum / ratingCount,
+
+    // 🔒 Tanda B de la auditoría: TODO en UNA transacción, con el "una sola vez"
+    // (`storeReviewed`) re-chequeado ADENTRO. Antes el chequeo era read-then-write suelto
+    // y la transacción solo protegía la suma: dos requests simultáneas del mismo pedido
+    // creaban dos reseñas y sumaban el rating dos veces.
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const freshOrder = await tx.get(orderRef);
+        if (!freshOrder.exists || freshOrder.data()!.storeReviewed) {
+          throw new Error('__ALREADY_REVIEWED__');
+        }
+        const storeSnap = await tx.get(storeRef);
+        const storeData = storeSnap.data() || {};
+        const ratingSum = (storeData.ratingSum || 0) + ratingNum;
+        const ratingCount = (storeData.ratingCount || 0) + 1;
+
+        tx.set(reviewRef, {
+          storeId,
+          orderId,
+          userId,
+          userName: orderData.customerName || "Cliente",
+          rating: ratingNum,
+          comment: (comment || "").toString().slice(0, 1000),
+          createdAt: Timestamp.now(),
+        });
+        tx.update(orderRef, { storeReviewed: true });
+        tx.update(storeRef, {
+          ratingSum,
+          ratingCount,
+          rating: ratingSum / ratingCount,
+        });
       });
-    });
+    } catch (e: any) {
+      if (e?.message === '__ALREADY_REVIEWED__') {
+        return NextResponse.json({ error: "Ya calificaste este pedido." }, { status: 400 });
+      }
+      throw e;
+    }
 
     // 3. Notificar al dueño — via notifyUser (Fase PP): la campanita vieja no llevaba
     // `link` y tocarla no navegaba (el push sí iba bien: incoherencia dentro del evento).

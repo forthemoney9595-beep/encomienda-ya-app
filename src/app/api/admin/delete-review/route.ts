@@ -31,11 +31,25 @@ export async function POST(request: Request) {
     const { storeId, rating } = review;
 
     await adminDb.runTransaction(async (tx) => {
-      const storeRef = adminDb.collection('stores').doc(storeId);
-      const storeSnap = await tx.get(storeRef);
-      const storeData = storeSnap.data();
+      // Tanda B: storeId puede faltar en una reseña defectuosa, y la ORDEN pudo haberse
+      // borrado — antes ambos casos hacían fallar la transacción entera con 500 y la
+      // reseña quedaba imposible de moderar. TODAS las lecturas van antes de cualquier
+      // escritura (regla de las transacciones de Firestore).
+      let storeRef: FirebaseFirestore.DocumentReference | null = null;
+      let storeData: FirebaseFirestore.DocumentData | null = null;
+      if (storeId) {
+        storeRef = adminDb.collection('stores').doc(storeId);
+        storeData = (await tx.get(storeRef)).data() ?? null;
+      }
 
-      if (storeData) {
+      let orderRefToClear: FirebaseFirestore.DocumentReference | null = null;
+      if (review.orderId) {
+        const orderRef = adminDb.collection('orders').doc(review.orderId);
+        if ((await tx.get(orderRef)).exists) orderRefToClear = orderRef;
+      }
+
+      // --- Escrituras ---
+      if (storeRef && storeData) {
         const currentSum = storeData.ratingSum || 0;
         const currentCount = storeData.ratingCount || 1;
         const newCount = Math.max(0, currentCount - 1);
@@ -51,10 +65,9 @@ export async function POST(request: Request) {
 
       tx.delete(adminDb.collection('reviews').doc(reviewId));
 
-      // Si la orden tiene storeReviewed, limpiarlo para que el comprador pueda calificar de nuevo
-      if (review.orderId) {
-        const orderRef = adminDb.collection('orders').doc(review.orderId);
-        tx.update(orderRef, { storeReviewed: FieldValue.delete() });
+      // Limpiar storeReviewed para que el comprador pueda calificar de nuevo.
+      if (orderRefToClear) {
+        tx.update(orderRefToClear, { storeReviewed: FieldValue.delete() });
       }
     });
 

@@ -120,6 +120,11 @@ export const OrderService = {
                 userId,
                 title,
                 message,
+                // Tanda B: el servidor (notify-server.ts) escribe `body` y este camino
+                // escribía solo `message` — dos esquemas para el mismo documento, y la
+                // campanita adivinaba con `notif.body || notif.message`. Se escriben los
+                // dos hasta unificar los lectores.
+                body: message,
                 type,
                 // Nunca `orderId: undefined` suelto: el SDK de Firestore lanza con valores
                 // undefined y la notificación entera se perdería en silencio (bug latente

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import * as Sentry from '@sentry/nextjs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,15 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   // Estados de Formulario
   const [address, setAddress] = useState(''); // Ahora es solo REFERENCIA
   const [phone, setPhone] = useState(userProfile?.phoneNumber || '');
+
+  // Tanda B: el teléfono se capturaba UNA vez en el useState inicial — si el perfil
+  // llegaba después del primer render (lo normal), quedaba vacío para siempre. Mismo
+  // patrón de sincronización que la foto de perfil (no pisa lo que el usuario tipeó).
+  useEffect(() => {
+    if (userProfile?.phoneNumber) {
+      setPhone(prev => prev || userProfile.phoneNumber || '');
+    }
+  }, [userProfile?.phoneNumber]);
   
   // ✅ Estado para guardar coordenadas GPS
   const [locationCoords, setLocationCoords] = useState<GeoCoords | null>(null);
@@ -46,6 +55,8 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   // Pin manual sin GPS (Fase RR): si el permiso está denegado o el GPS falla, el mapa
   // con pin ajustable es un camino alternativo VÁLIDO — antes "sin GPS no hay pedido".
   const [showManualMap, setShowManualMap] = useState(false);
+  const successTimeoutRef = useRef<number | null>(null);
+  useEffect(() => () => { if (successTimeoutRef.current) window.clearTimeout(successTimeoutRef.current); }, []);
 
   // Direcciones guardadas en el perfil (con su GPS ya cargado desde /profile) -- así,
   // igual que Rappi/PedidosYa, no hace falta volver a pedir GPS en cada compra: se
@@ -275,8 +286,10 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
 
         setIsSuccess(true);
         clearCart();
-        
-        setTimeout(() => {
+
+        // Tanda B: timeout con referencia para limpiarlo si el componente se desmonta
+        // antes de los 2,5 s (setState tras unmount + navegación fantasma).
+        successTimeoutRef.current = window.setTimeout(() => {
             onOpenChange(false);
             setIsSuccess(false);
             // Limpiamos estados locales

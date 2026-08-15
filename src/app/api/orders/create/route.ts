@@ -30,6 +30,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
 
+    // 🔒 Tanda B de la auditoría: `items` tiene que ser un array real con ítems válidos
+    // (un body manipulado con `items: {}` pasaba el `!items` y tiraba 500 dentro de la
+    // transacción), y `shippingInfo` se sanitiza a los 2 campos que el cliente manda —
+    // era el último objeto del body que se escribía crudo a Firestore.
+    if (!Array.isArray(items) || items.length === 0 || items.length > 50 ||
+        items.some((i: any) => !i || typeof i.id !== 'string' || !Number.isFinite(Number(i.quantity)) || Number(i.quantity) < 1)) {
+      return NextResponse.json({ error: "Carrito inválido." }, { status: 400 });
+    }
+    const safeShippingInfo = {
+      name: String(shippingInfo?.name ?? '').slice(0, 120),
+      address: String(shippingInfo?.address ?? '').slice(0, 300),
+    };
+
     // 🔒 SOLO PAGO DIGITAL (decisión de producto, ago 2026).
     // La app nunca ofreció efectivo en el checkout (CheckoutDialog ni siquiera manda este
     // campo, así que cae en el default 'mercadopago'), pero la ruta aceptaba CUALQUIER
@@ -237,9 +250,9 @@ export async function POST(request: Request) {
         const orderData = {
             id: newOrderRef.id,
             userId,
-            customerName: shippingInfo.name,
+            customerName: safeShippingInfo.name,
             items: verifiedItems,
-            shippingInfo,
+            shippingInfo: safeShippingInfo,
             storeId,
             storeName: storeData?.name || "Tienda",
             storeAddress: storeData?.address || "",
@@ -283,7 +296,7 @@ export async function POST(request: Request) {
     // 5. ✅ NOTIFICAR A LA TIENDA (Campana + Push)
     if (ownerId) {
         const notifTitle = "🔔 Nueva Solicitud";
-        const notifBody = `Tienes un pedido nuevo de ${shippingInfo.name} ($${finalTotal}). Revisa el stock.`;
+        const notifBody = `Tienes un pedido nuevo de ${safeShippingInfo.name} ($${finalTotal}). Revisa el stock.`;
 
         // A. Escribir en Firestore (Para la Campanita dentro de la App)
         await adminDb.collection("notifications").add({

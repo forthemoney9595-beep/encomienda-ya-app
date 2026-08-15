@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
@@ -84,6 +84,12 @@ export default function DeliveryOrdersView() {
 
   // 1. PESTAÑA ACTIVA
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'available');
+  // Tanda B: el ?tab= solo se respetaba en el PRIMER montaje — navegar a
+  // /orders?tab=active desde otra página con el componente ya montado no cambiaba nada.
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'available' || tab === 'active') setActiveTab(tab);
+  }, [searchParams]);
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
 
   // Soltar pedido (antes de retirar) / Reportar problema (después de retirar) -- un
