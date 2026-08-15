@@ -2240,6 +2240,38 @@ archivos, comportamientos OPUESTOS ante errores) como proyecto post-lanzamiento.
   `__ALREADY_*__` → 400 claro.
 - `/admin/dashboard` sin guard: evaluado y dejado — stub de redirección, solo spinner.
 
+## Fase SS bis (ago 2026): Tanda B de la auditoría + login con Google verificado
+Los ~16 medios de UX/robustez del informe, más el pedido explícito del usuario de
+verificar el alta con Google (sin tocar desde la Fase X).
+- **API**: `items` validado como array (items:{} → 400, antes 500 en la transacción);
+  `shippingInfo` sanitizado; webhook MP tolera `metadata` ausente (antes 500 → MP
+  reintenta infinito; sin order_id → 200 "ignorado"); guarda de storeId en
+  notify-drivers; delete-review sobrevive datos rotos (lecturas antes de escrituras);
+  **reviews y delivery-reviews con el "una sola vez" DENTRO de la transacción** (doble
+  request ya no duplica reseña ni rating); json() con catch en photo-url/signed-url;
+  **Sentry en los 9 catches de plata** + 500 sin error.message interno; payoutCbu que
+  falla ya no muere en silencio (el cron salteaba esa cuenta para siempre); topes de
+  longitud en /api/notify.
+- **Cliente**: **login con redirección única POR ROL** (email + Google + visitar /login
+  logueado → tienda a /my-store, delivery a /delivery, admin a /admin — antes siempre
+  `/`); Perfil visible en el menú para tiendas; rol en criollo en /profile; Términos/
+  Privacidad en las 3 altas; "Entregados hoy" → /delivery/analytics; ?tab= sincronizado;
+  favoritos sin el "Envío: $5.00" falso; link a ficha completa del repartidor; ⌘K admin
+  con Reclamos y Comunicaciones; doble navegación del dashboard corregida; teléfono del
+  checkout sincronizado + timeout con cleanup.
+- **Libs**: use-collection de `@/firebase` arranca isLoading=true con query (flash de
+  "vacío" del primer paint — el fix ya existía en use-doc y no estaba replicado);
+  useCountFromServer expone `error`; order-service escribe `body` además de `message`
+  (esquema unificado con notify-server); use-toast deps `[state]`→`[]`; el diálogo de
+  comisión aclara que 0 = default de la plataforma.
+- **Google VERIFICADO e2e** (simulado: cuenta de Auth sin doc de perfil = primer login
+  con Google): el fallback de auth-context crea el perfil de comprador solo (~2,5 s),
+  la cuenta opera completa (no queda "a medias") y aterriza en el home de comprador. 7/7
+  con un retry por el rate-limit de Auth (lección HH).
+- **Anotado sin resolver**: mail de soporte real (hoy `soporte@encomiendaya.test`,
+  dominio falso — decidir canal con el usuario), guard de /my-store/categories por
+  ownerId (edge sin caso real), rutas stores/food|clothing|other (se borran en Tanda C).
+
 ## Herramienta para la gran prueba: `_seed-stores.js` (ago 2026, gitignored)
 4 tiendas de prueba CON dueño logueable (necesario: confirmar stock y marcar listo solo
 puede hacerlo la tienda — el botón 🧪 del admin solo aprueba el PAGO): Rotisería La Nonna
