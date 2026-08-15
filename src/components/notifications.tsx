@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, requestNotificationPermission } from '@/lib/firebase';
-import { collection, query, where, limit, doc, updateDoc, writeBatch, orderBy, onSnapshot } from 'firebase/firestore'; 
+import { collection, query, where, limit, doc, updateDoc, writeBatch, orderBy, onSnapshot, arrayUnion } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2, BellRing, DollarSign, Wallet } from 'lucide-react';
@@ -23,12 +23,14 @@ export function Notifications() {
   const [localNotifications, setLocalNotifications] = useState<any[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
 
-  // 1. Estado de Permisos
+  // 1. Estado de Permisos — se re-lee también cada vez que se ABRE la campanita: si el
+  // permiso se concedió por otro camino (el pedido automático del login, o Ajustes de
+  // Android), el botón "Activar Avisos Push" seguía mostrándose con el estado viejo.
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
         setPermissionStatus(Notification.permission);
     }
-  }, []);
+  }, [open]);
 
   // 2. LISTENER EN TIEMPO REAL MANUAL
   useEffect(() => {
@@ -67,13 +69,35 @@ export function Notifications() {
   const handleEnableNotifications = async () => {
       try {
           const token = await requestNotificationPermission();
+          // Reflejar SIEMPRE el estado real del permiso, haya token o no — antes, si la
+          // obtención del token fallaba, el botón quedaba como si nada hubiera pasado y
+          // parecía que "no se guardaba".
+          const perm = typeof Notification !== 'undefined' ? Notification.permission : 'default';
+          setPermissionStatus(perm);
+
           if (token && user && firestore) {
-              await updateDoc(doc(firestore, 'users', user.uid), { 
+              // Mismos DOS campos que escribe auth-context (fcmToken + fcmTokens): este
+              // camino escribía solo fcmToken y pisaba el soporte multi-dispositivo.
+              await updateDoc(doc(firestore, 'users', user.uid), {
                   fcmToken: token,
+                  fcmTokens: arrayUnion(token),
                   notificationsEnabled: true
               });
-              setPermissionStatus('granted');
-              toast({ title: "¡Notificaciones Activadas!", className: "bg-green-50 text-green-900" });
+              toast({ title: "¡Avisos activados!", description: "Este dispositivo va a recibir notificaciones." });
+          } else if (perm === 'denied') {
+              toast({
+                  variant: "destructive",
+                  title: "Notificaciones bloqueadas",
+                  description: "Activalas desde Ajustes de Android → Apps → EncomiendaYA → Notificaciones.",
+              });
+          } else if (perm === 'granted' && !token) {
+              // Permiso OK pero el registro del token falló (pasa si el service worker
+              // todavía no terminó de instalarse) — avisar en vez de fallar en silencio.
+              toast({
+                  variant: "destructive",
+                  title: "No se pudo completar la activación",
+                  description: "Probá de nuevo en unos segundos.",
+              });
           }
       } catch (error) {
           console.error("Error activando notificaciones:", error);
