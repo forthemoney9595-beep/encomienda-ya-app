@@ -2294,6 +2294,47 @@ ocurrencias (1 = solo el import) antes y después:
   instancias del SDK conviviendo — PRE-existente, documentado, refuerza la unificación
   post-lanzamiento.
 
+## Fase TT (ago 2026): auditoría de seguridad total — 4 exposiciones + headers HTTP
+Pedido del usuario: "controlar toda la seguridad activa y las capas de protección". 2
+agentes (reglas Firestore/Storage + infra/secretos) + re-corrida de TODOS los scripts de
+ataque contra producción con SDK de cliente. **Informe en la bóveda** ("Auditoría de
+seguridad"). Lo que ya estaba firme (verificado): 10/10 ataques de plata bloqueados, el
+agujero de roles de la Fase LL cerrado, reclamos 31/31, secretos fuera de git. **4
+exposiciones encontradas y cerradas, cada una verificada en vivo:**
+- **🚨 CRÍTICO — `payoutCbu` (CBU) y `cuit` de tiendas legibles SIN login.** `stores/{id}`
+  tiene `read: if true` (catálogo público) → cualquier anónimo leía el CBU bancario. Se
+  movieron al user doc del dueño (privado, como el CBU de repartidores ya estaba). Toca
+  `withdrawals/request` (escribe users/{uid}), `cron/generate-settlements` (lee del
+  dueño), `admin/stores/[storeId]` (useDoc del dueño), `signup/store` (cuit al user doc),
+  CSV de tiendas (sin CBU). Reglas: `cuit`/`payoutCbu` fuera del store, `cuit` agregado al
+  users create. **Backfill `_backfill-store-pii.js`** (gitignored, dry-run) migró Levis +
+  DonalPizza; dato real preservado. OJO: había un `cuit` de prueba que YO dejé en
+  DonalPizza en un script de verificación (la restauración no cubría ese campo) — se borró
+  antes del backfill; lección: los scripts de ataque que escriben campos deben restaurar
+  TODOS los que tocan.
+- **🚨 CRÍTICO — la rama de "pedidos libres" de `orders` (firestore.rules) no exigía
+  `isApprovedDriver()`**: cualquier logueado (un comprador) listaba pedidos sin repartidor
+  y leía nombre/dirección/GPS exacto/teléfono del cliente de OTRO. Agregado
+  `isApprovedDriver()`. Regresión: el repartidor legítimo sigue viendo el pool.
+- **🚨 ALTO (autoinfligido en la Tanda B, LIVE durante la prueba) — notificaciones de
+  campanita del cliente denegadas en silencio.** La Tanda B hizo que `order-service.ts`
+  escribiera `body`, ausente del `hasOnly` de la regla `notifications` → todo create del
+  cliente fallaba (asignar repartidor, retiro, entrega, chat, aprobación). Agregado
+  `body`/`link` al hasOnly. **Lección: al agregar un campo a un doc que el cliente escribe,
+  revisar SIEMPRE el hasOnly de su regla.**
+- **MEDIO — admin 'support' podía reescribir `commissionRate`/`commissionAmount` de un
+  pedido** (fuera de la lista bloqueada de la rama admin de orders update) y alterar el
+  saldo. Agregados al bloqueo.
+- **Headers de seguridad HTTP (no había NINGUNO)** en `next.config.js`: X-Frame-Options,
+  X-Content-Type-Options, Referrer-Policy, HSTS, Permissions-Policy (**`geolocation=(self)`
+  obligatorio** — checkout/tracking) y CSP `frame-ancestors 'self'`. A propósito SIN CSP
+  estricta de script/style (rompería Leaflet/Google Sign-in/fuentes) — pasada dedicada
+  post-lanzamiento.
+- **Anotado, no tocado**: npm audit 15 vulns (0 críticas, todas tras saltos MAYOR, igual
+  que Fase BB); firma webhook MP (ya en Ruta al lanzamiento); Sentry sin scrubbing PII
+  explícito; reservar DNI/tel ajenos (molestia, no robo); endurecer campos de support en
+  users update + forma de mensajes de chat. Reglas desplegadas (2 tandas, dry-run limpio).
+
 ## Herramienta para la gran prueba: `_seed-stores.js` (ago 2026, gitignored)
 4 tiendas de prueba CON dueño logueable (necesario: confirmar stock y marcar listo solo
 puede hacerlo la tienda — el botón 🧪 del admin solo aprueba el PAGO): Rotisería La Nonna
