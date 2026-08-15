@@ -75,7 +75,8 @@ function AdminStoresPage() {
       'Reseñas': s.ratingCount ?? 0,
       'Estado': s.isApproved ? 'Aprobada' : 'Pendiente/Rechazada',
       'Pausada': s.manuallyPaused ? 'Sí' : 'No',
-      'CBU': s.payoutCbu || '',
+      // El CBU ya no está en el doc público de la tienda (seguridad, ago 2026): vive en
+      // el user doc del dueño y se ve en la ficha individual de cada tienda.
     })), `tiendas_${new Date().toISOString().slice(0, 10)}.csv`);
   };
 

@@ -96,11 +96,13 @@ export default function SignupStorePage() {
             }
         }
 
+        // 🔒 El CUIT ya NO va en el doc de la tienda (seguridad, ago 2026: stores/{id} es
+        // de lectura pública — no puede tener identificadores fiscales). Va en el user doc
+        // del dueño (privado), junto al DNI. La unicidad la sigue garantizando unique_ids.
         const storeData = {
             name: values.storeName,
             category: values.category,
             address: values.address,
-            cuit: values.cuit, // Para poder facturar el día que haga falta
             maintenanceMode: false,
             isApproved: false,      // Requiere aprobación del admin
             ownerName: values.ownerName,
@@ -119,6 +121,7 @@ export default function SignupStorePage() {
             email: values.email,
             phoneNumber: values.phoneNumber,
             dni: values.dni,
+            cuit: cuitDigits, // en el doc privado del dueño (facturación futura)
             role: 'store' as const,
             storeId: storeRef.id,
             isApproved: false

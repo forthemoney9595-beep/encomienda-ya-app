@@ -108,11 +108,12 @@ export async function POST(request: Request) {
       console.error('⚠️ No se pudo guardar payoutCbu:', err);
       Sentry.captureException(err, { tags: { route: 'withdrawals/request', stage: 'save-cbu' } });
     };
-    if (role === 'store' && storeId) {
-      await adminDb.collection('stores').doc(storeId).update({ payoutCbu: cbu }).catch(reportCbuFail);
-    } else if (role === 'delivery') {
-      await adminDb.collection('users').doc(uid).update({ payoutCbu: cbu }).catch(reportCbuFail);
-    }
+    // 🔒 Seguridad (auditoría ago 2026): el CBU se guarda SIEMPRE en el doc del usuario
+    // (users/{uid}), que es privado (read = admin o dueño). Antes el CBU de la TIENDA se
+    // escribía en stores/{id}, que tiene `read: if true` — o sea el CBU bancario quedaba
+    // legible por CUALQUIERA sin login. Para el rol tienda, `uid` ES el dueño que pide el
+    // retiro, así que su CBU vive en su propio user doc igual que el de los repartidores.
+    await adminDb.collection('users').doc(uid).update({ payoutCbu: cbu }).catch(reportCbuFail);
 
     return NextResponse.json({ success: true, withdrawalId: ref.id, amount: Math.round(amount) });
   } catch (error: any) {

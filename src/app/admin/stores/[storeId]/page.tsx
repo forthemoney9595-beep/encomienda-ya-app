@@ -53,6 +53,14 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     const storeRef = useMemoFirebase(() => firestore ? doc(firestore, 'stores', storeId) : null, [firestore, storeId]);
     const { data: store, isLoading: storeLoading } = useDoc<any>(storeRef);
 
+    // 🔒 El CBU de la tienda vive en el user doc del DUEÑO (seguridad, ago 2026: stores/{id}
+    // es de lectura pública, no puede tener datos bancarios). Se lee/escribe ahí.
+    const ownerRef = useMemoFirebase(
+        () => firestore && store?.ownerId ? doc(firestore, 'users', store.ownerId) : null,
+        [firestore, store?.ownerId],
+    );
+    const { data: ownerDoc } = useDoc<any>(ownerRef);
+
     // Comisión por defecto de config (Fase PP, N6): esta página usaba el 10 hardcodeado
     // de money.ts como respaldo, mientras payout-service/wallet/platform-earnings leen la
     // configurable — si el admin la cambiaba en Ajustes, esta ficha divergía del saldo
@@ -68,9 +76,10 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
             .catch(() => {});
     }, [firestore]);
 
-    // Pre-cargar CBU cuando lleguen los datos de la tienda
-    if (store && !cbuLoaded) {
-        setCbuInput(store.payoutCbu || '');
+    // Pre-cargar CBU cuando lleguen los datos del dueño (con fallback al viejo campo del
+    // store por si queda algún doc sin migrar).
+    if (store && ownerDoc !== undefined && !cbuLoaded) {
+        setCbuInput(ownerDoc?.payoutCbu || store.payoutCbu || '');
         setCbuLoaded(true);
     }
 
@@ -209,10 +218,11 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
 
     // Acciones
     const handleSaveCbu = async () => {
-        if (!firestore || !storeRef) return;
+        if (!firestore || !ownerRef) return;
         setSavingCbu(true);
         try {
-            await updateDoc(storeRef, { payoutCbu: cbuInput.trim() });
+            // Escribe en el user doc del dueño (no en el store, que es público).
+            await updateDoc(ownerRef, { payoutCbu: cbuInput.trim() });
             // El CBU define a qué cuenta se transfiere la plata en la liquidación -- cambiarlo
             // tiene que quedar registrado sí o sí (antes no quedaba en ningún lado).
             if (adminUser) logAdminAction(firestore, adminUser.uid, 'edit_cbu', storeId, `tienda — CBU ...${cbuInput.trim().slice(-4)}`);
@@ -410,13 +420,13 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                             <Wallet className="h-4 w-4 text-primary" /> CBU para liquidaciones
                         </CardTitle>
                         <CardDescription>
-                            {store.payoutCbu
+                            {(ownerDoc?.payoutCbu || store.payoutCbu)
                                 ? 'CBU/alias guardado — la liquidación automática lo usará.'
                                 : 'Sin CBU guardado — la liquidación automática omitirá esta tienda.'}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                        {!store.payoutCbu && (
+                        {!(ownerDoc?.payoutCbu || store.payoutCbu) && (
                             <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg p-2.5">
                                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                                 Esta tienda no recibirá liquidaciones automáticas hasta que se configure un CBU.
@@ -429,7 +439,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                                 placeholder="CBU, CVU o alias de MercadoPago"
                                 disabled={isSupport}
                             />
-                            <Button onClick={handleSaveCbu} disabled={isSupport || savingCbu || cbuInput.trim() === (store.payoutCbu || '')} className="gap-1.5 shrink-0">
+                            <Button onClick={handleSaveCbu} disabled={isSupport || savingCbu || cbuInput.trim() === (ownerDoc?.payoutCbu || store.payoutCbu || '')} className="gap-1.5 shrink-0">
                                 {savingCbu ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                 Guardar
                             </Button>

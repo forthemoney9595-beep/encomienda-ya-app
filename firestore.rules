@@ -86,7 +86,7 @@ service cloud.firestore {
         (!('isApproved' in request.resource.data) || request.resource.data.isApproved == false) &&
         request.resource.data.keys().hasOnly([
           'uid', 'name', 'email', 'phoneNumber', 'role', 'addresses', 'storeId', 'isApproved',
-          'dni', 'cuil', 'birthDate', 'vehicle', 'status', 'displayName', 'profileImageUrl', 'createdAt'
+          'dni', 'cuit', 'cuil', 'birthDate', 'vehicle', 'status', 'displayName', 'profileImageUrl', 'createdAt'
         ]);
 
       // ADMIN sobre el doc de cualquier usuario: aprobar/rechazar, cambiar rol, sincronizar
@@ -130,8 +130,10 @@ service cloud.firestore {
         isSignedIn() && isOwner(request.resource.data.ownerId) &&
         (!('isApproved' in request.resource.data) || request.resource.data.isApproved == false) &&
         request.resource.data.get('status', 'Pendiente') == 'Pendiente' &&
+        // 🔒 'cuit' quitado (seguridad ago 2026): stores/{id} es de lectura pública, los
+        // identificadores fiscales van en el user doc del dueño (privado).
         request.resource.data.keys().hasOnly([
-          'name', 'category', 'address', 'cuit', 'maintenanceMode', 'isApproved', 'rating',
+          'name', 'category', 'address', 'maintenanceMode', 'isApproved', 'rating',
           'deliveryTime', 'minOrder', 'ownerId', 'ownerName', 'createdAt', 'productCategories',
           'imageUrl', 'imageHint', 'products', 'horario', 'status'
         ])
@@ -147,7 +149,10 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'description', 'category', 'address', 'imageUrl', 'deliveryTime',
           'weeklySchedule', 'schedule', 'coords', 'updatedAt', 'manuallyPaused',
-          'productCategories', 'maxDiscountPercent', 'payoutCbu'
+          'productCategories', 'maxDiscountPercent'
+          // 🔒 'payoutCbu' quitado (seguridad ago 2026): el CBU vive en el user doc del
+          // dueño (privado), no en el store público. Se escribe por /api/withdrawals/request
+          // y por la ficha admin, ambos sobre users/{ownerId}.
         ])
       );
 
@@ -179,10 +184,16 @@ service cloud.firestore {
         isStoreOwner(resource.data.storeId) ||                // Tienda
         resource.data.deliveryPersonId == request.auth.uid || // Repartidor
         isAdmin() ||                                          // Admin
-        // Repartidores buscando pedidos libres -- tiene que coincidir exacto con la
-        // lista de estados que pide availableQuery en delivery-orders-view.tsx, si no
+        // Repartidores APROBADOS buscando pedidos libres -- tiene que coincidir exacto con
+        // la lista de estados que pide availableQuery en delivery-orders-view.tsx, si no
         // Firestore rechaza la consulta completa (no la filtra).
-        (resource.data.status in ['En preparación', 'Listo para recoger'] && resource.data.deliveryPersonId == null)
+        // 🚨 `isApprovedDriver()` agregado (auditoría de seguridad ago 2026): sin él,
+        // CUALQUIER usuario logueado (un comprador) podía listar los pedidos sin
+        // repartidor y leer nombre, dirección, GPS EXACTO y teléfono del cliente de otro
+        // pedido. Ahora solo un repartidor aprobado ve el pool (que es quien lo necesita).
+        (isApprovedDriver() &&
+          resource.data.status in ['En preparación', 'Listo para recoger'] &&
+          resource.data.deliveryPersonId == null)
       );
 
       // ✏️ UPDATE: Solo acciones permitidas — cada rol restringido a los campos y valores
@@ -196,10 +207,16 @@ service cloud.firestore {
         // equivalía a editar el saldo de cualquiera sin dejar rastro. Todo lo que toca
         // plata pasa por las API con Admin SDK (cancel / refund-order / confirm-stock),
         // que además dejan auditoría.
+        // 🚨 commissionRate/commissionAmount agregados a la lista bloqueada (auditoría de
+        // seguridad ago 2026): estaban afuera, así que un admin 'support' podía reescribir
+        // la comisión CONGELADA de un pedido desde la consola y alterar el saldo de la
+        // tienda (payout-service la deriva de esos campos). Ningún flujo legítimo del
+        // cliente escribe estos campos en un pedido — van por las API con Admin SDK.
         (isAdmin() &&
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'total', 'subtotal', 'serviceFee', 'deliveryFee', 'items',
-            'paymentStatus', 'refunded', 'refundAmount', 'paidAmount'
+            'paymentStatus', 'refunded', 'refundAmount', 'paidAmount',
+            'commissionRate', 'commissionAmount'
           ])) ||
 
         // TIENDA: solo rechazar el pedido o marcarlo listo para retirar, y avisar al
@@ -374,12 +391,16 @@ service cloud.firestore {
     // read/update/delete: solo el destinatario puede ver/marcar sus propias notificaciones
     match /notifications/{notifId} {
       allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // 🚨 'body' agregado (auditoría de seguridad ago 2026): la Tanda B hizo que
+      // order-service.ts escribiera `body` además de `message` (esquema unificado con
+      // notify-server), pero este hasOnly no lo incluía → TODA notificación de campanita
+      // del lado cliente quedaba denegada en silencio (asignación de repartidor, retiro,
+      // entrega, chat, aprobación de cuenta). El error se tragaba en order-service.ts.
       allow create: if isSignedIn() &&
-        request.resource.data.keys().hasAll(['userId', 'title', 'message', 'type', 'read', 'createdAt']) &&
-        request.resource.data.keys().hasOnly(['userId', 'title', 'message', 'type', 'orderId', 'read', 'createdAt', 'icon']) &&
+        request.resource.data.keys().hasAll(['userId', 'title', 'type', 'read', 'createdAt']) &&
+        request.resource.data.keys().hasOnly(['userId', 'title', 'message', 'body', 'type', 'orderId', 'link', 'read', 'createdAt', 'icon']) &&
         request.resource.data.userId is string &&
         request.resource.data.title is string &&
-        request.resource.data.message is string &&
         request.resource.data.read == false &&
         request.resource.data.type in ['order_status', 'delivery', 'buyer', 'store', 'admin'];
     }

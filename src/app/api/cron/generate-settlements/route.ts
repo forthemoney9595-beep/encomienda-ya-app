@@ -45,8 +45,13 @@ export async function GET(request: Request) {
     for (const storeDoc of storesSnap.docs) {
       const storeData = storeDoc.data();
       const ownerId = storeData.ownerId;
-      const payoutCbu = storeData.payoutCbu;
-      if (!ownerId || !payoutCbu) { results.skipped++; continue; }
+      if (!ownerId) { results.skipped++; continue; }
+      // El CBU de la tienda ahora vive en el user doc del dueño (seguridad, ago 2026:
+      // stores/{id} es de lectura pública). Fallback al viejo campo del store por si
+      // queda algún doc sin migrar.
+      const ownerDoc = await adminDb.collection('users').doc(ownerId).get();
+      const payoutCbu = ownerDoc.data()?.payoutCbu || storeData.payoutCbu;
+      if (!payoutCbu) { results.skipped++; continue; }
 
       // No generar si ya tiene una solicitud pendiente.
       // OJO `userRole`: sin ese filtro, una persona que sea dueña de tienda Y repartidor
