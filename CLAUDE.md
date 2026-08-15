@@ -2135,6 +2135,17 @@ Play Store junto al bloque MP pre-lanzamiento (PWABuilder, $25 única vez, revis
 - Instalación: Android/Chrome → menú ⋮ → "Instalar app" (o el prompt); iPhone/Safari →
   Compartir → "Agregar a pantalla de inicio". Cada deploy de Vercel actualiza la app
   instalada solo — no hay versiones que distribuir.
+- **APK/AAB generados (ago 2026, Nivel 2 adelantado sin pagar Play):** vía la API de
+  PWABuilder (`pwabuilder-cloudapk.azurewebsites.net/generateAppPackage`), packageId
+  `com.encomiendaya.app` (INMUTABLE una vez en Play), `locationDelegation` habilitado
+  (GPS nativo). Todo en `D:\KEys\EncomiendaYA-Android\` (FUERA del repo a propósito):
+  APK instalable directo (sideload), AAB para Play Store, y 🔑 `signing.keystore` +
+  `signing-key-info.txt` — **la clave de firma no se pierde NUNCA** (sin ella no hay
+  updates en Play jamás). OJO: el servicio IGNORÓ la contraseña enviada en el payload y
+  generó la suya (está en signing-key-info.txt). `public/.well-known/assetlinks.json`
+  desplegado (verificado en producción) → la app abre sin barra de URL. Los deploys de
+  Vercel actualizan la app sola; el APK solo se regenera para cambiar ícono/nombre/
+  colores o subir versión a Play (`signingMode:'mine'` con ESTE keystore).
 
 ## Fase RR quinquies (ago 2026): carrera del signup — 1ª falla real de la gran prueba
 Reportada por el usuario en la bóveda de Obsidian (captura: "Ese teléfono ya tiene una
