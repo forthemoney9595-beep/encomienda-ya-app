@@ -63,7 +63,11 @@ export default function StoreOrdersView() {
   });
 
   const pendingOrders = sortedOrders.filter(o => o.status === 'Pendiente de Confirmación');
-  const activeOrders = sortedOrders.filter(o => ['Pendiente de Pago', 'En preparación', 'En reparto', 'En camino'].includes(o.status));
+  // 🚨 'Listo para recoger' FALTABA en esta lista (prueba del 15/8): marcar el pedido
+  // listo desde el DETALLE setea ese estado y el pedido desaparecía del panel de la
+  // tienda hasta que un repartidor lo tomaba ('En camino'). El botón del panel no lo
+  // producía (deja 'En preparación' + readyForPickup), por eso nunca se había visto.
+  const activeOrders = sortedOrders.filter(o => ['Pendiente de Pago', 'En preparación', 'Listo para recoger', 'En reparto', 'En camino'].includes(o.status));
   const historyOrders = sortedOrders.filter(o => ['Entregado', 'Cancelado', 'Rechazado'].includes(o.status));
 
   // Alerta sonora de pedido nuevo: solo para ids que aparecen DESPUÉS del primer render
@@ -238,6 +242,25 @@ export default function StoreOrdersView() {
                         isDisabled = false;
                     }
                     badgeColor = "bg-warning/15 text-warning border-warning/30";
+                } else if (order.status === 'Listo para recoger') {
+                    // Estado que setea el DETALLE del pedido. Sin repartidor asignado,
+                    // la tienda puede re-avisar; con repartidor, es informativo.
+                    if (!order.deliveryPersonId) {
+                        action = () => handleNotifyDriver(order);
+                        label = "📢 Reenviar Alerta a Repartidores";
+                        icon = Megaphone;
+                        isDisabled = false;
+                    } else {
+                        label = "Repartidor asignado";
+                        icon = Bike;
+                        isDisabled = true;
+                    }
+                    badgeColor = "bg-warning/15 text-warning border-warning/30";
+                } else if (order.status === 'En camino') {
+                    label = "Repartidor yendo a retirar";
+                    icon = Bike;
+                    isDisabled = true;
+                    badgeColor = "bg-info/15 text-info border-info/30";
                 } else if (order.status === 'En reparto') {
                     label = "En camino con Repartidor";
                     icon = Bike;
@@ -369,7 +392,8 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                     );
                 })()}
 
-                {order.readyForPickup && order.status === 'En preparación' && (
+                {((order.readyForPickup && order.status === 'En preparación') ||
+                  (order.status === 'Listo para recoger' && !order.deliveryPersonId)) && (
                     <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 p-2 rounded border border-warning/30">
                         <Megaphone className="h-3 w-3 animate-pulse" />
                         <span>Buscando repartidor... (Alerta enviada)</span>

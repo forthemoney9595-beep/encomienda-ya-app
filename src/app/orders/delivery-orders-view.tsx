@@ -29,6 +29,7 @@ import {
   Loader2,
   XCircle,
   AlertTriangle,
+  Eye,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -412,7 +413,7 @@ export default function DeliveryOrdersView() {
                         </p>
                     )}
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="flex-col gap-2">
                     <Button
                         className="w-full"
                         size="lg"
@@ -424,6 +425,11 @@ export default function DeliveryOrdersView() {
                           : myActiveOrders.length >= MAX_ACTIVE_ORDERS
                           ? `Ya tenés ${MAX_ACTIVE_ORDERS} pedidos en curso`
                           : 'Tomar Pedido'}
+                    </Button>
+                    {/* Ver qué lleva el pedido ANTES de tomarlo (pedido de la prueba, 15/8):
+                        el detalle solo existía en las tarjetas de "En Curso". */}
+                    <Button variant="secondary" size="sm" className="w-full" onClick={() => goToDetails(order.id)}>
+                        <Eye className="mr-2 h-4 w-4" /> Ver detalle del pedido
                     </Button>
                 </CardFooter>
               </Card>
