@@ -5,7 +5,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyAuthToken } from '@/lib/auth-server';
 import { returnStockForOrder } from '@/lib/stock-service';
-import { notifyUser } from '@/lib/notify-server';
+import { notifyUser, pushTag } from '@/lib/notify-server';
 
 const CANCELABLE_STATUSES = ['Pendiente de Confirmación', 'Pendiente de Pago'];
 // El admin puede cancelar más estados (excepto los terminales)
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
                             title: '❌ Pedido cancelado',
                             body: `${order.customerName || 'Un cliente'} canceló el pedido #${orderId.substring(0, 6)}.`,
                         },
-                        webpush: { fcmOptions: { link: '/orders' } },
+                        webpush: { fcmOptions: { link: '/orders' }, notification: { tag: pushTag('cancel', orderId) } },
                         data: { url: '/orders', orderId },
                     });
                 }

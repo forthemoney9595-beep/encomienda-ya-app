@@ -3,6 +3,7 @@ import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { pushTag } from "@/lib/notify-server";
 
 // Envío de notificaciones desde el panel de admin.
 // Destinos: 'all' | 'stores' | 'drivers' | 'user:{uid}'
@@ -79,6 +80,9 @@ export async function POST(request: Request) {
     const uniqueTokens = [...new Set(tokens)];
 
     let pushSent = 0;
+    // Un tag por ENVÍO: si un aparato tiene dos tokens vivos, ve UNA notificación de este
+    // broadcast; broadcasts distintos no se pisan entre sí.
+    const broadcastTag = pushTag('broadcast', String(Date.now()));
     if (uniqueTokens.length > 0) {
       // sendEachForMulticast admite max 500 tokens por llamada
       for (let i = 0; i < uniqueTokens.length; i += 500) {
@@ -86,7 +90,7 @@ export async function POST(request: Request) {
         const result = await adminMessaging.sendEachForMulticast({
           tokens: chunk,
           notification: { title, body },
-          webpush: { fcmOptions: { link: '/' } },
+          webpush: { fcmOptions: { link: '/' }, notification: { tag: broadcastTag } },
           data: { url: '/' },
         }).catch(() => ({ successCount: 0 }));
         pushSent += result.successCount;

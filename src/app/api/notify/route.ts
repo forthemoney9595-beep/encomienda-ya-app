@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminDb, adminMessaging } from '@/lib/firebase-admin';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyAuthToken } from '@/lib/auth-server';
+import { pushTag } from '@/lib/notify-server';
 
 export async function POST(request: Request) {
     const ip = getClientIp(request);
@@ -77,6 +78,9 @@ export async function POST(request: Request) {
                     icon: '/icons/icon-192x192.png',
                     badge: '/icons/icon-72x72.png',
                     click_action: link || '/orders', // Para navegadores antiguos
+                    // Mismo aviso entregado 2 veces al mismo aparato (token viejo aún
+                    // vivo) => con el mismo tag se ve UNA sola notificación.
+                    tag: pushTag(link, title),
                 },
                 fcmOptions: {
                     link: link || '/orders' // Para navegadores modernos

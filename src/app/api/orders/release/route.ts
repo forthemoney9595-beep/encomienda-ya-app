@@ -3,7 +3,7 @@ import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
-import { notifyUser } from "@/lib/notify-server";
+import { notifyUser, pushTag } from "@/lib/notify-server";
 
 // El repartidor suelta un pedido que tomó pero no puede completar -- ANTES de
 // retirarlo de la tienda. Va por API (no por escritura directa permitida en
@@ -142,7 +142,9 @@ export async function POST(request: Request) {
               title: "📦 Pedido Disponible",
               body: `${orderData.storeName || "Una tienda"} tiene un pedido liberado. ¡Aceptalo!`,
             },
-            webpush: { fcmOptions: { link: "/orders" } },
+            // Mismo tag que el broadcast original del pedido: el re-aviso REEMPLAZA a
+            // la notificación anterior en vez de apilarse.
+            webpush: { fcmOptions: { link: "/orders" }, notification: { tag: pushTag('driver', orderId) } },
             data: { url: "/orders" },
           });
         }

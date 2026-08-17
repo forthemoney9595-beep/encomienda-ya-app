@@ -1,6 +1,6 @@
 import { adminDb, adminMessaging } from "./firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
-import { pruneDeadFcmTokens } from "./notify-server";
+import { pruneDeadFcmTokens, pushTag } from "./notify-server";
 
 // Broadcast a repartidores (campanita + push FCM), en UN solo lugar (Fase RR bis).
 //
@@ -82,7 +82,9 @@ export async function broadcastOrderToDrivers(opts: {
       const res = await adminMessaging.sendEachForMulticast({
         tokens: uniq,
         notification: { title, body },
-        webpush: { fcmOptions: { link: "/orders" } },
+        // Mismo tag para el aviso original y los re-avisos del mismo pedido: el
+        // repartidor ve UNA notificación por pedido (la más nueva), no una pila.
+        webpush: { fcmOptions: { link: "/orders" }, notification: { tag: pushTag('driver', orderId) } },
         data: { url: "/orders", orderId },
       });
       pushed = res.successCount;

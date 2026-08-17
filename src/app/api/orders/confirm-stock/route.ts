@@ -5,6 +5,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyStoreOwnership } from "@/lib/auth-server";
 import { zeroStockForItems } from "@/lib/stock-service";
+import { pushTag } from "@/lib/notify-server";
 
 // Fallback si config/platform.deliveryFee no está configurado (mismo default que
 // /api/orders/create).
@@ -211,7 +212,7 @@ export async function POST(request: Request) {
         await adminMessaging.sendEachForMulticast({
           tokens,
           notification: { title: notifTitle, body: notifBody },
-          webpush: { fcmOptions: { link: `/orders/${orderId}` } },
+          webpush: { fcmOptions: { link: `/orders/${orderId}` }, notification: { tag: pushTag('confirm', orderId) } },
           data: { url: `/orders/${orderId}`, orderId },
         });
       }

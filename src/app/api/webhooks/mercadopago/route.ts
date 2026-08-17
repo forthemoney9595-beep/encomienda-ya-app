@@ -5,6 +5,7 @@ import * as Sentry from "@sentry/nextjs";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { broadcastOrderToDrivers } from "@/lib/driver-broadcast";
+import { pushTag } from "@/lib/notify-server";
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,
@@ -228,7 +229,7 @@ export async function POST(request: Request) {
                 await adminMessaging.sendEachForMulticast({
                     tokens: tokens,
                     notification: { title: titleStore, body: bodyStore },
-                    webpush: { fcmOptions: { link: '/orders' } },
+                    webpush: { fcmOptions: { link: '/orders' }, notification: { tag: pushTag('pago-tienda', orderRefId) } },
                     data: { url: '/orders', orderId: orderRefId }
                 });
                 console.log(`📲 Push enviado a Tienda (${targetStoreUser})`);
@@ -270,7 +271,7 @@ export async function POST(request: Request) {
                 await adminMessaging.sendEachForMulticast({
                     tokens: tokens,
                     notification: { title: titleClient, body: bodyClient },
-                    webpush: { fcmOptions: { link: `/orders/${orderRefId}` } },
+                    webpush: { fcmOptions: { link: `/orders/${orderRefId}` }, notification: { tag: pushTag('pago-cliente', orderRefId) } },
                     data: { url: `/orders/${orderRefId}`, orderId: orderRefId }
                 });
                 console.log(`📲 Push enviado a Cliente (${buyerId})`);

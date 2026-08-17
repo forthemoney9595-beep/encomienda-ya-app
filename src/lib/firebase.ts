@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, onSnapshot, DocumentReference, Query, CollectionReference } from 'firebase/firestore';
+import { getFirestore, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, DocumentReference, Query, CollectionReference } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { getMessaging, getToken, Messaging } from 'firebase/messaging';
@@ -38,6 +38,28 @@ export { app, auth, db, storage, messaging };
 // Tanda C: useStorage y getFirebase eliminados (0 importadores en toda la app).
 export const useAuth = () => auth;
 export const useFirestore = () => db;
+
+// --- GUARDAR EL TOKEN PUSH DE ESTE DISPOSITIVO (único punto de escritura) ---
+// Reemplaza al token ANTERIOR del mismo dispositivo: cuando un aparato re-registra (limpió
+// datos, rotó el token), el viejo puede seguir VIVO en FCM un tiempo — si queda en
+// fcmTokens, ese aparato recibe cada push DOS veces (visto en la prueba del 15/8: la PC
+// tenía 2 tokens vigentes y toda notificación llegaba duplicada). El último token de este
+// dispositivo se recuerda en localStorage y se saca del array al registrar uno nuevo.
+export const persistFcmToken = async (uid: string, token: string): Promise<void> => {
+  const KEY = 'eya-fcm-token';
+  let prev: string | null = null;
+  try { prev = localStorage.getItem(KEY); } catch { /* sin localStorage, sin reemplazo */ }
+  const userRef = doc(db, 'users', uid);
+  if (prev && prev !== token) {
+    await updateDoc(userRef, { fcmTokens: arrayRemove(prev) }).catch(() => { /* mejor esfuerzo */ });
+  }
+  await updateDoc(userRef, {
+    fcmToken: token,
+    fcmTokens: arrayUnion(token),
+    notificationsEnabled: true,
+  });
+  try { localStorage.setItem(KEY, token); } catch { /* ídem */ }
+};
 
 // --- SOLICITAR PERMISO DE NOTIFICACIONES ---
 // Devuelve también el motivo del fallo: devolver null "a secas" hacía que la campanita

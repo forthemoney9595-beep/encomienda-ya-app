@@ -7,6 +7,7 @@ import { verifyAuthToken } from "@/lib/auth-server";
 import { normalizeSchedule, getStoreOpenStatus, nowInArgentina } from "@/lib/store-hours";
 import { isValidCoords } from "@/lib/geo";
 import { deliveryDistanceMeters, computeDeliveryFee, isBeyondDeliveryLimit } from "@/lib/delivery-pricing";
+import { pushTag } from "@/lib/notify-server";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 // Valor fallback si config/platform.deliveryFee no está configurado en Firestore
@@ -330,7 +331,8 @@ export async function POST(request: Request) {
                         body: notifBody,
                     },
                     webpush: {
-                        fcmOptions: { link: '/orders' }
+                        fcmOptions: { link: '/orders' },
+                        notification: { tag: pushTag('nuevo', newOrderRef.id) },
                     },
                     data: {
                         url: '/orders',

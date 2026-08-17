@@ -5,6 +5,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
+import { pushTag } from "@/lib/notify-server";
 
 // Registra un reembolso/compensación sobre un pedido.
 // Nota: NO transfiere plata por sí solo -- deja registro del reembolso, marca el pedido
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
           await adminMessaging.sendEachForMulticast({
             tokens: uniq,
             notification: { title: '💸 Reembolso enviado', body: `Devolvimos $${numAmount.toLocaleString()} de tu pedido.` },
-            webpush: { fcmOptions: { link: `/orders/${orderId}` } },
+            webpush: { fcmOptions: { link: `/orders/${orderId}` }, notification: { tag: pushTag('refund', orderId) } },
           }).catch(() => {});
         }
       } catch { /* noop */ }

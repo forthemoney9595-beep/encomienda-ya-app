@@ -39,6 +39,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const lastSentRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
 
     const chatQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -92,7 +93,13 @@ export function ChatWindow({ order }: ChatWindowProps) {
         const text = textToSend || newMessage;
 
         if (!myUser || !userProfile || !text.trim() || !isAllowed || isAdminViewer || isSending || !firestore) return;
-        
+
+        // Anti re-toque (visto en la prueba: "Llegué al local" 3 veces en 4 segundos —
+        // las respuestas rápidas no daban feedback y se volvían a tocar): el MISMO texto
+        // no se reenvía dentro de los 8 segundos.
+        if (text.trim() === lastSentRef.current.text && Date.now() - lastSentRef.current.at < 8000) return;
+        lastSentRef.current = { text: text.trim(), at: Date.now() };
+
         setIsSending(true);
         try {
             // A. Guardar mensaje en Firestore
@@ -238,10 +245,13 @@ export function ChatWindow({ order }: ChatWindowProps) {
             <CardFooter className="p-3 border-t bg-background flex-col gap-2 items-start">
                 <div className="flex flex-wrap gap-2 w-full overflow-x-auto pb-1 no-scrollbar">
                     {currentReplies.map((reply, index) => (
-                        <Badge 
-                            key={index} 
-                            variant="outline" 
-                            className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors py-1 px-2 text-[10px] font-normal shrink-0 border-primary/20"
+                        <Badge
+                            key={index}
+                            variant="outline"
+                            // Feedback mientras envía: sin esto, tocar una respuesta rápida
+                            // no mostraba NADA y la gente la volvía a tocar (mensajes
+                            // repetidos en la prueba).
+                            className={`cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors py-1 px-2 text-[10px] font-normal shrink-0 border-primary/20 ${isSending ? 'pointer-events-none opacity-50' : ''}`}
                             onClick={() => handleSend(undefined, reply)}
                         >
                             {reply}

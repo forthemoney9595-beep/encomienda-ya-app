@@ -12,6 +12,16 @@ const DEAD_TOKEN_CODES = new Set([
 ]);
 
 /**
+ * `tag` para la notificación web push: dos entregas con el MISMO tag se muestran como
+ * UNA sola (la nueva reemplaza a la anterior). Es la red de seguridad contra el push
+ * duplicado en un mismo aparato (p. ej. un dispositivo con un token viejo todavía vivo
+ * recibía cada aviso dos veces — visto en la prueba del 15/8). Avisos DISTINTOS deben
+ * llevar tags distintos (incluir el título) para no pisarse entre sí.
+ */
+export const pushTag = (...parts: (string | null | undefined)[]): string =>
+  'eya-' + parts.filter(Boolean).join('-').replace(/[^\w-]+/g, '').slice(0, 60);
+
+/**
  * Saca de `users/{uid}` los tokens que FCM reportó como muertos en un envío real.
  * Sin esto las cuentas acumulan tokens vencidos para siempre (en la gran prueba,
  * repartidor@test.com juntó 11 — cada push intentaba contra todos). Un mismo token
@@ -100,7 +110,7 @@ export async function notifyUser(opts: {
     const res = await adminMessaging.sendEachForMulticast({
       tokens: uniq,
       notification: { title, body },
-      webpush: { fcmOptions: { link: target } },
+      webpush: { fcmOptions: { link: target }, notification: { tag: pushTag(type, orderId, title) } },
       // `data.url` además del fcmOptions.link (Fase PP): el service worker en segundo
       // plano lee data.url — sin esto, todos los push de notifyUser abrían la home.
       data: { url: target },

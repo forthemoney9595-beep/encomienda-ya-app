@@ -10,7 +10,7 @@ import { doc, onSnapshot, updateDoc, arrayUnion, setDoc, getDoc, serverTimestamp
 import { isSignupInProgress } from '@/lib/signup-flag';
 import { getToken } from 'firebase/messaging'; // ✅ Importamos getToken
 // ✅ Importamos messaging también
-import { auth, db, messaging } from '@/lib/firebase';
+import { auth, db, messaging, persistFcmToken } from '@/lib/firebase';
 
 // Definimos la interfaz del perfil
 export interface UserProfile {
@@ -95,12 +95,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (currentToken) {
-            // 4. Guardar en la base de datos del usuario
-            const userRef = doc(db, 'users', uid);
-            await updateDoc(userRef, {
-                fcmToken: currentToken,          // Para compatibilidad simple
-                fcmTokens: arrayUnion(currentToken) // Para soporte multi-dispositivo
-            });
+            // 4. Guardar por el punto ÚNICO (persistFcmToken): además de fcmToken +
+            // fcmTokens, reemplaza el token anterior de ESTE dispositivo — sin eso el
+            // mismo aparato acumulaba tokens vivos y recibía cada push duplicado.
+            await persistFcmToken(uid, currentToken);
         }
     } catch (error) {
         console.error("❌ Error configurando notificaciones:", error);

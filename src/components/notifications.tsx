@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { useFirestore, requestNotificationPermission } from '@/lib/firebase';
+import { useFirestore, requestNotificationPermission, persistFcmToken } from '@/lib/firebase';
 import { collection, query, where, limit, doc, updateDoc, writeBatch, orderBy, onSnapshot, arrayUnion } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -47,11 +47,7 @@ export function Notifications() {
             if (token) {
                 setRegistrationError(null);
                 if (!((userProfile as any)?.fcmTokens || []).includes(token)) {
-                    await updateDoc(doc(firestore, 'users', user.uid), {
-                        fcmToken: token,
-                        fcmTokens: arrayUnion(token),
-                        notificationsEnabled: true
-                    });
+                    await persistFcmToken(user.uid, token);
                 }
             } else {
                 // Permiso concedido pero el registro falla: SIN esto era invisible (el
@@ -110,14 +106,10 @@ export function Notifications() {
           setPermissionStatus(perm);
 
           if (token && user && firestore) {
-              // Mismos DOS campos que escribe auth-context (fcmToken + fcmTokens): este
-              // camino escribía solo fcmToken y pisaba el soporte multi-dispositivo.
+              // Punto ÚNICO de guardado (persistFcmToken): fcmToken + fcmTokens + el
+              // reemplazo del token viejo de este dispositivo (anti push duplicado).
               try {
-                  await updateDoc(doc(firestore, 'users', user.uid), {
-                      fcmToken: token,
-                      fcmTokens: arrayUnion(token),
-                      notificationsEnabled: true
-                  });
+                  await persistFcmToken(user.uid, token);
               } catch (saveErr: any) {
                   toast({
                       variant: "destructive",
