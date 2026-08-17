@@ -145,18 +145,38 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
       return next;
     });
   };
+  // Ajuste de cantidad, solo REDUCIR — mismo patrón que store-orders-view (los dos
+  // caminos de confirmación tienen que ofrecer lo mismo, lección R1).
+  const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
+  const bumpQty = (itemId: string, delta: number, orderedQty: number) => {
+    setQtyOverrides(prev => {
+      const current = prev[itemId] ?? orderedQty;
+      const next = Math.min(orderedQty, Math.max(1, current + delta));
+      const copy = { ...prev };
+      if (next === orderedQty) delete copy[itemId]; else copy[itemId] = next;
+      return copy;
+    });
+  };
+  const adjustedCount = Object.keys(qtyOverrides).filter(id => !uncheckedIds.has(id)).length;
   const allItemsUnchecked = order.items?.length > 0 && uncheckedIds.size === order.items.length;
 
   const handleConfirmStock = async () => {
     setIsUpdating(true);
     try {
-      const res = await authedFetch('/api/orders/confirm-stock', appUser, { orderId: order.id, storeId: order.storeId, removedItemIds: Array.from(uncheckedIds) });
+      const cleanAdjusted = Object.fromEntries(
+        Object.entries(qtyOverrides).filter(([id]) => !uncheckedIds.has(id))
+      );
+      const res = await authedFetch('/api/orders/confirm-stock', appUser, { orderId: order.id, storeId: order.storeId, removedItemIds: Array.from(uncheckedIds), adjustedQuantities: cleanAdjusted });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo confirmar el pedido.');
+      const changed = uncheckedIds.size > 0 || Object.keys(cleanAdjusted).length > 0;
       toast({
-        title: uncheckedIds.size > 0 ? 'Stock parcial confirmado' : 'Stock Confirmado',
-        description: uncheckedIds.size > 0
-          ? `Se sacaron ${uncheckedIds.size} producto(s). El cliente ya tiene el nuevo total.`
+        title: changed ? 'Confirmado con cambios' : 'Stock Confirmado',
+        description: changed
+          ? [
+              uncheckedIds.size > 0 ? `${uncheckedIds.size} producto(s) sacado(s)` : '',
+              Object.keys(cleanAdjusted).length > 0 ? `${Object.keys(cleanAdjusted).length} con cantidad reducida` : '',
+            ].filter(Boolean).join(' · ') + '. El cliente ya tiene el nuevo total.'
           : 'El cliente ha sido notificado para pagar.',
       });
       router.refresh();
@@ -351,24 +371,34 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                 <span className="font-semibold text-foreground">Solicitud de Stock</span>
             </div>
             <CardDescription>
-                Destildá los productos que no tengas. Si aceptas, el cliente podrá pagar
-                (con el total recalculado si sacaste algo).
+                Destildá los productos que no tengas, o bajá la cantidad con − si tenés
+                menos de lo pedido. El cliente verá el total recalculado antes de pagar.
             </CardDescription>
             <div className="w-full space-y-1.5 bg-background/50 rounded-md border p-3">
-                {order.items?.map((item) => (
+                {order.items?.map((item) => {
+                    const prepQty = qtyOverrides[item.id] ?? item.quantity;
+                    const isAdjusted = !uncheckedIds.has(item.id) && prepQty < item.quantity;
+                    return (
                     <label key={item.id} className="flex items-center justify-between gap-2 text-sm cursor-pointer">
                         <span className="flex items-center gap-2">
                             <Checkbox
                                 checked={!uncheckedIds.has(item.id)}
                                 onCheckedChange={() => toggleStockItem(item.id)}
                             />
-                            <span className={uncheckedIds.has(item.id) ? 'line-through text-muted-foreground' : ''}>
-                                {item.quantity}x {item.name || (item as any).title || 'Producto'}
+                            <span className={uncheckedIds.has(item.id) ? 'line-through text-muted-foreground' : (isAdjusted ? 'text-warning' : '')}>
+                                {isAdjusted ? `${prepQty} de ${item.quantity}` : `${item.quantity}x`} {item.name || (item as any).title || 'Producto'}
                             </span>
+                            {item.quantity > 1 && !uncheckedIds.has(item.id) && (
+                                <span className="flex items-center gap-1 shrink-0">
+                                    <Button type="button" variant="outline" size="icon" className="h-5 w-5 text-xs" disabled={prepQty <= 1} onClick={(e) => { e.preventDefault(); bumpQty(item.id, -1, item.quantity); }}>−</Button>
+                                    <Button type="button" variant="outline" size="icon" className="h-5 w-5 text-xs" disabled={prepQty >= item.quantity} onClick={(e) => { e.preventDefault(); bumpQty(item.id, +1, item.quantity); }}>+</Button>
+                                </span>
+                            )}
                         </span>
-                        <span className="text-muted-foreground">${(item.price * item.quantity).toFixed(0)}</span>
+                        <span className="text-muted-foreground">${(item.price * prepQty).toFixed(0)}</span>
                     </label>
-                ))}
+                    );
+                })}
             </div>
             <div className="flex w-full gap-3">
                  <Button
@@ -387,7 +417,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                     title={allItemsUnchecked ? 'Destildaste todos los productos -- usá "Sin Stock (todo)"' : undefined}
                 >
                     {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                    {uncheckedIds.size > 0 ? 'Confirmar con cambios' : 'Tengo Stock'}
+                    {(uncheckedIds.size > 0 || adjustedCount > 0) ? 'Confirmar con cambios' : 'Tengo Stock'}
                 </Button>
             </div>
         </CardFooter>

@@ -104,16 +104,24 @@ export default function StoreOrdersView() {
       }
   };
 
-  const handleConfirmStock = async (order: any, removedItemIds: string[] = []) => {
+  const handleConfirmStock = async (order: any, removedItemIds: string[] = [], adjustedQuantities: Record<string, number> = {}) => {
       try {
-          const res = await authedFetch('/api/orders/confirm-stock', user, { orderId: order.id, storeId: userProfile?.storeId, removedItemIds });
+          // No mandar ajustes de ítems que además se destildaron (sacar gana).
+          const cleanAdjusted = Object.fromEntries(
+              Object.entries(adjustedQuantities).filter(([id]) => !removedItemIds.includes(id))
+          );
+          const res = await authedFetch('/api/orders/confirm-stock', user, { orderId: order.id, storeId: userProfile?.storeId, removedItemIds, adjustedQuantities: cleanAdjusted });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'No se pudo confirmar el pedido.');
 
+          const changed = removedItemIds.length > 0 || Object.keys(cleanAdjusted).length > 0;
           toast({
-              title: removedItemIds.length > 0 ? 'Stock parcial confirmado' : 'Stock Confirmado',
-              description: removedItemIds.length > 0
-                  ? `Se sacaron ${removedItemIds.length} producto(s). El cliente ya tiene el nuevo total.`
+              title: changed ? 'Confirmado con cambios' : 'Stock Confirmado',
+              description: changed
+                  ? [
+                      removedItemIds.length > 0 ? `${removedItemIds.length} producto(s) sacado(s)` : '',
+                      Object.keys(cleanAdjusted).length > 0 ? `${Object.keys(cleanAdjusted).length} con cantidad reducida` : '',
+                    ].filter(Boolean).join(' · ') + '. El cliente ya tiene el nuevo total.'
                   : 'El cliente ha sido notificado para pagar.',
           });
       } catch (error: any) {
@@ -202,7 +210,7 @@ export default function StoreOrdersView() {
                     <OrderCard
                         key={order.id}
                         order={order}
-                        onAction={(removedItemIds: string[]) => handleConfirmStock(order, removedItemIds)}
+                        onAction={(removedItemIds: string[], adjustedQuantities: Record<string, number>) => handleConfirmStock(order, removedItemIds, adjustedQuantities)}
                         onReject={() => handleRejectOrder(order)}
                         actionLabel="Confirmar Stock"
                         actionIcon={CheckCircle2}
@@ -319,6 +327,19 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
             return next;
         });
     };
+    // Ajuste de cantidad, solo REDUCIR (caso real: piden 4 pizzas, hay para 2 — antes la
+    // única opción era sacar el renglón entero). itemId -> cantidad a preparar.
+    const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
+    const bumpQty = (itemId: string, delta: number, orderedQty: number) => {
+        setQtyOverrides(prev => {
+            const current = prev[itemId] ?? orderedQty;
+            const next = Math.min(orderedQty, Math.max(1, current + delta));
+            const copy = { ...prev };
+            if (next === orderedQty) delete copy[itemId]; else copy[itemId] = next;
+            return copy;
+        });
+    };
+    const adjustedCount = Object.keys(qtyOverrides).filter(id => !uncheckedIds.has(id)).length;
     const allUnchecked = selectable && order.items?.length > 0 && uncheckedIds.size === order.items.length;
 
     return (
@@ -351,7 +372,10 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                 </div>
                 
                 <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2 border">
-                    {order.items?.map((item: any, i: number) => (
+                    {order.items?.map((item: any, i: number) => {
+                        const prepQty = qtyOverrides[item.id] ?? item.quantity;
+                        const isAdjusted = selectable && !uncheckedIds.has(item.id) && prepQty < item.quantity;
+                        return (
                         <div key={item.id || i} className="flex justify-between items-start gap-2">
                             <span className="font-medium text-foreground flex items-center gap-2">
                                 {selectable && (
@@ -360,15 +384,27 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                                         onCheckedChange={() => toggleItem(item.id)}
                                     />
                                 )}
-                                <span className={uncheckedIds.has(item.id) ? 'line-through text-muted-foreground' : ''}>
-                                    {item.quantity}x {item.title || item.name}
+                                <span className={uncheckedIds.has(item.id) ? 'line-through text-muted-foreground' : (isAdjusted ? 'text-warning' : '')}>
+                                    {isAdjusted ? `${prepQty} de ${item.quantity}` : `${item.quantity}x`} {item.title || item.name}
                                 </span>
+                                {/* Reducir cantidad: "tengo 2 de las 4" sin sacar el renglón */}
+                                {selectable && item.quantity > 1 && !uncheckedIds.has(item.id) && (
+                                    <span className="flex items-center gap-1 shrink-0">
+                                        <Button type="button" variant="outline" size="icon" className="h-5 w-5 text-xs" disabled={prepQty <= 1} onClick={() => bumpQty(item.id, -1, item.quantity)}>−</Button>
+                                        <Button type="button" variant="outline" size="icon" className="h-5 w-5 text-xs" disabled={prepQty >= item.quantity} onClick={() => bumpQty(item.id, +1, item.quantity)}>+</Button>
+                                    </span>
+                                )}
                             </span>
-                            <span className="text-muted-foreground">${(item.price * item.quantity).toLocaleString()}</span>
+                            <span className="text-muted-foreground">${(item.price * prepQty).toLocaleString()}</span>
                         </div>
-                    ))}
-                    {selectable && uncheckedIds.size > 0 && (
-                        <p className="text-xs text-warning pt-1">Vas a confirmar sin {uncheckedIds.size} producto(s) tildado(s) arriba.</p>
+                        );
+                    })}
+                    {selectable && (uncheckedIds.size > 0 || adjustedCount > 0) && (
+                        <p className="text-xs text-warning pt-1">
+                            {uncheckedIds.size > 0 && `Vas a confirmar sin ${uncheckedIds.size} producto(s). `}
+                            {adjustedCount > 0 && `${adjustedCount} producto(s) con cantidad reducida. `}
+                            El cliente verá el total nuevo antes de pagar.
+                        </p>
                     )}
                 </div>
 
@@ -423,12 +459,12 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                     <Button
                         size="sm"
                         className={`${(isDisabled || allUnchecked) ? 'bg-muted text-muted-foreground opacity-80' : 'bg-success hover:bg-success/90 text-success-foreground shadow-sm'} flex-1 sm:flex-none`}
-                        onClick={() => onAction(Array.from(uncheckedIds))}
+                        onClick={() => onAction(Array.from(uncheckedIds), qtyOverrides)}
                         disabled={(isDisabled && !actionLabel.includes("Reenviar")) || allUnchecked}
                         title={allUnchecked ? 'Destildaste todos los productos -- rechazá el pedido en su lugar' : undefined}
                     >
                         {Icon && <Icon className="mr-2 h-4 w-4" />}
-                        {selectable && uncheckedIds.size > 0 ? 'Confirmar con cambios' : actionLabel}
+                        {selectable && (uncheckedIds.size > 0 || adjustedCount > 0) ? 'Confirmar con cambios' : actionLabel}
                     </Button>
                 )}
             </CardFooter>

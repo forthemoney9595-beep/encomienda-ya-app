@@ -46,6 +46,16 @@ export async function POST(request: Request) {
 
     const removedIds: string[] = Array.isArray(removedItemIds) ? removedItemIds : [];
 
+    // Ajustes de cantidad, SOLO reducciones (caso real de la prueba, 16/8: "me piden 4
+    // pizzas y tengo para hacer 2" — antes la única opción era sacar el renglón entero o
+    // que el cliente cancelara todo el pedido). itemId -> cantidad nueva (entero >= 1 y
+    // MENOR a la pedida; aumentar está prohibido: saltearía la validación de stock que
+    // hizo /api/orders/create al reservar).
+    const adjustedQuantities: Record<string, unknown> =
+      body.adjustedQuantities && typeof body.adjustedQuantities === 'object' && !Array.isArray(body.adjustedQuantities)
+        ? body.adjustedQuantities
+        : {};
+
     const orderRef = adminDb.collection("orders").doc(orderId);
     const orderSnap = await orderRef.get();
     if (!orderSnap.exists) {
@@ -81,10 +91,27 @@ export async function POST(request: Request) {
     // 🔒 Precio SIEMPRE del catálogo, nunca del array `items` de la orden (ver comentario
     // de arriba). Mismo criterio y mismo orden de subcolecciones que /api/orders/create.
     const pricedItems: any[] = [];
+    const adjustedItems: { id: string; title: string; from: number; to: number }[] = [];
     for (const it of keptItems) {
-      const quantity = Number(it.quantity) || 0;
-      if (!it.id || quantity <= 0) {
+      const orderedQty = Number(it.quantity) || 0;
+      if (!it.id || orderedQty <= 0) {
         return NextResponse.json({ error: `Ítem inválido en el pedido: ${it.id || '(sin id)'}` }, { status: 400 });
+      }
+
+      // Aplicar el ajuste de cantidad si vino (validado: entero, >=1, < pedida).
+      let quantity = orderedQty;
+      if (adjustedQuantities[it.id] !== undefined) {
+        const adj = Number(adjustedQuantities[it.id]);
+        if (!Number.isInteger(adj) || adj < 1 || adj > orderedQty) {
+          return NextResponse.json(
+            { error: `Ajuste inválido para "${it.title || it.name || it.id}": solo se puede reducir la cantidad (mínimo 1).` },
+            { status: 400 },
+          );
+        }
+        if (adj < orderedQty) {
+          quantity = adj;
+          adjustedItems.push({ id: it.id, title: it.title || it.name || 'Producto', from: orderedQty, to: adj });
+        }
       }
 
       let productSnap = await adminDb.collection("stores").doc(storeId).collection("products").doc(it.id).get();
@@ -129,22 +156,36 @@ export async function POST(request: Request) {
         ? { commissionAmount: newSubtotal * orderData.commissionRate / 100 }
         : {}),
       ...(removedItems.length > 0 ? { removedItems } : {}),
+      ...(adjustedItems.length > 0 ? { adjustedItems } : {}),
     });
 
-    // La tienda dijo "no tengo esto": el stock de esos productos va a 0, no vuelve al número
-    // que acaba de desmentir. Si volviera, el catálogo los ofrecería otra vez y el próximo
-    // cliente chocaría con la misma falta. La tienda lo corrige al reponer.
-    if (removedItems.length > 0) {
-      const { zeroed } = await zeroStockForItems(storeId, removedItems);
+    // La tienda dijo "no tengo esto" (sacado) o "no tengo MÁS que esto" (reducido): el
+    // stock de esos productos va a 0, no vuelve al número que acaba de desmentir. Si
+    // volviera, el catálogo los ofrecería otra vez y el próximo cliente chocaría con la
+    // misma falta. La tienda lo corrige al reponer. (Decisión de producto, Fase MM.)
+    const outOfStockItems = [
+      ...removedItems,
+      ...originalItems.filter((it) => adjustedItems.some((a) => a.id === it.id)),
+    ];
+    if (outOfStockItems.length > 0) {
+      const { zeroed } = await zeroStockForItems(storeId, outOfStockItems);
       if (zeroed.length > 0) {
         console.log(`Stock puesto en 0 para ${zeroed.length} producto(s) sin existencia: ${zeroed.join(', ')}`);
       }
     }
 
-    // Notificar al comprador qué se sacó (si algo se sacó) y el nuevo total.
-    const notifTitle = removedItems.length > 0 ? "⚠️ Stock parcial confirmado" : "✅ Stock Confirmado";
-    const notifBody = removedItems.length > 0
-      ? `La tienda no tenía: ${removedItems.map((it) => it.title || it.name).join(", ")}. Nuevo total: $${newTotal.toFixed(0)}. Ya puedes pagar.`
+    // Notificar al comprador qué cambió (si algo cambió) y el nuevo total.
+    const hasChanges = removedItems.length > 0 || adjustedItems.length > 0;
+    const changeParts: string[] = [];
+    if (removedItems.length > 0) {
+      changeParts.push(`no tenía: ${removedItems.map((it) => it.title || it.name).join(", ")}`);
+    }
+    if (adjustedItems.length > 0) {
+      changeParts.push(`ajustó cantidades: ${adjustedItems.map((a) => `${a.title} ${a.from}→${a.to}`).join(", ")}`);
+    }
+    const notifTitle = hasChanges ? "⚠️ Pedido confirmado con cambios" : "✅ Stock Confirmado";
+    const notifBody = hasChanges
+      ? `La tienda ${changeParts.join(" y ")}. Nuevo total: $${newTotal.toFixed(0)}. Ya puedes pagar.`
       : "Puedes proceder al pago.";
 
     await adminDb.collection("notifications").add({
@@ -178,7 +219,7 @@ export async function POST(request: Request) {
       console.error("Error enviando push de confirmación al comprador:", pushError);
     }
 
-    return NextResponse.json({ success: true, total: newTotal, removedCount: removedItems.length });
+    return NextResponse.json({ success: true, total: newTotal, removedCount: removedItems.length, adjustedCount: adjustedItems.length });
   } catch (error: any) {
     console.error("❌ Error confirmando stock:", error);
     Sentry.captureException(error, { tags: { route: "orders/confirm-stock" } });
