@@ -317,11 +317,11 @@ export default function ProfilePage() {
                                     <CardDescription>Información técnica de tu usuario.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
+                                    {/* 🔒 El uid completo ("ID de Usuario") se ELIMINÓ de acá
+                                        (auditoría de privacidad ago 2026): era ruido técnico sin
+                                        uso para la persona — el soporte encuentra cuentas por
+                                        email, nunca por uid. */}
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <Label className="text-xs text-muted-foreground">ID de Usuario</Label>
-                                            <div className="font-mono text-sm bg-muted p-2 rounded">{user.uid}</div>
-                                        </div>
                                         <div className="space-y-1">
                                             <Label className="text-xs text-muted-foreground">Fecha de Registro</Label>
                                             <div className="text-sm bg-muted p-2 rounded">

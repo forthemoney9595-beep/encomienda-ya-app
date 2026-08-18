@@ -120,11 +120,11 @@ export default function OrderMap({ order }: OrderMapProps) {
                 </Popup>
             </Marker>
 
-            {/* MARCADOR CLIENTE */}
+            {/* MARCADOR CLIENTE — sin nombre a propósito (auditoría de privacidad ago
+                2026): el pin ya dice todo lo que el mapa necesita decir. */}
             <Marker position={customerPos} icon={customerIcon}>
                 <Popup>
-                    <strong>Cliente:</strong> {order.customerName}<br/>
-                    <span className="text-xs">Punto de Entrega</span>
+                    <strong>📍 Punto de Entrega</strong>
                 </Popup>
             </Marker>
 

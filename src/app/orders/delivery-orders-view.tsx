@@ -405,13 +405,9 @@ export default function DeliveryOrdersView() {
                             <p className="text-sm">{cleanAddress(order.storeAddress)}</p>
                         </div>
                     </div>
-                    <div className="flex items-start gap-3">
-                        <Navigation className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-xs font-bold uppercase text-muted-foreground">Entregar a:</p>
-                            <p className="text-sm">{order.shippingInfo?.address}</p>
-                        </div>
-                    </div>
+                    {/* 🔒 La dirección EXACTA del cliente ya no se muestra antes de tomar el
+                        pedido (auditoría de privacidad ago 2026, estándar Rappi): para decidir
+                        alcanza con la tienda + la distancia de abajo. Al aceptar se ve todo. */}
                     {/* Distancia estimada del viaje (Fase RR) — ayuda a decidir si tomarlo.
                         Línea recta a propósito: sin servicio de routing, y en un pueblo en
                         grilla la aproximación alcanza para comparar pedidos entre sí. */}

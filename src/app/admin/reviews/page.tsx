@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Star, Trash2, Search, Loader2, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { publicName } from '@/lib/public-name';
 
 const formatDate = (ts: any) => {
   if (!ts) return '—';
@@ -211,7 +212,7 @@ function AdminReviewsPage() {
                     </Badge>
                     <span className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</span>
                   </div>
-                  <p className="text-sm font-medium">{review.userName}</p>
+                  <p className="text-sm font-medium">{publicName(review.userName)}</p>
                   {review.comment && (
                     <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{review.comment}&rdquo;</p>
                   )}

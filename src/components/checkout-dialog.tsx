@@ -11,7 +11,7 @@ import { useAuth } from '@/context/auth-context';
 import { authedFetch } from '@/lib/authed-fetch';
 // ✅ IMPORTANTE: Agregamos useDoc y useMemoFirebase para leer la config
 import { useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { capturePosition, formatDistance, type GeoCoords } from '@/lib/geo';
@@ -286,6 +286,15 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         setIsSuccess(true);
         clearCart();
 
+        // Backfill del teléfono al perfil (pedido de David, 18/8): el teléfono es
+        // obligatorio al registrarse, pero las cuentas viejas y las creadas con Google
+        // no lo tienen — si el perfil está VACÍO y acá se escribió uno, se guarda para
+        // la próxima. Nunca pisa el teléfono registrado (puede ser el de quien recibe).
+        if (!userProfile?.phoneNumber && phone.trim() && user && firestore) {
+            updateDoc(doc(firestore, 'users', user.uid), { phoneNumber: phone.trim() })
+                .catch(() => { /* mejor esfuerzo: el pedido ya salió bien */ });
+        }
+
         // Tanda B: timeout con referencia para limpiarlo si el componente se desmonta
         // antes de los 2,5 s (setState tras unmount + navegación fantasma).
         successTimeoutRef.current = window.setTimeout(() => {
@@ -452,7 +461,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             </div>
 
             <Input
-                placeholder="Teléfono de contacto"
+                placeholder="Teléfono de contacto para la entrega"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
             />

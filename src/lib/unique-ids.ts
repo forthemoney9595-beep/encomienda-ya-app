@@ -10,7 +10,7 @@
 // se re-chequea (mantener la reserva viva en cada edición es otra pieza — por ahora el
 // objetivo es frenar la creación de multi-cuentas, no el ciclo de vida completo).
 
-import { Firestore, doc, getDoc, type DocumentReference } from 'firebase/firestore';
+import { Firestore, doc, type DocumentReference } from 'firebase/firestore';
 
 export const digitsOnly = (s: string): string => (s || '').replace(/\D/g, '');
 
@@ -21,10 +21,26 @@ export const uniqueKey = (type: UniqueIdType, raw: string): string => `${type}_$
 export const uniqueRef = (db: Firestore, type: UniqueIdType, raw: string): DocumentReference =>
   doc(db, 'unique_ids', uniqueKey(type, raw));
 
-/** Pre-chequeo para mostrar un error claro; la garantía real es el create del batch. */
+/** Pre-chequeo para mostrar un error claro; la garantía real es el create del batch.
+ *  🔒 Va por API y no por `getDoc` directo (auditoría de privacidad ago 2026): el doc
+ *  de `unique_ids` contiene el UID asociado, y con el `get` abierto cualquier logueado
+ *  que conociera un DNI/CUIT/tel ajeno averiguaba de qué cuenta es. La API devuelve
+ *  SOLO un booleano. El parámetro `db` se conserva para no tocar las firmas de los 3
+ *  signups. Ante un fallo de red responde `false`: el batch con las reglas rechaza
+ *  igual un duplicado real — esto es solo el mensaje amable. */
 export async function isTaken(db: Firestore, type: UniqueIdType, raw: string): Promise<boolean> {
-  const snap = await getDoc(uniqueRef(db, type, raw));
-  return snap.exists();
+  try {
+    const res = await fetch('/api/signup/check-unique', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, value: digitsOnly(raw) }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.taken === true;
+  } catch {
+    return false;
+  }
 }
 
 /** Payload estándar del doc de reserva. */

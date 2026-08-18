@@ -27,6 +27,7 @@ import { StarRating } from '@/components/star-rating';
 import { ImageLightbox } from '@/components/image-lightbox';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { publicName } from '@/lib/public-name';
 
 interface StoreData {
   name: string;
@@ -682,7 +683,7 @@ export default function StorePublicPage() {
                       <Card key={review.id}>
                           <CardContent className="py-4 space-y-2">
                               <div className="flex items-center justify-between">
-                                  <span className="font-medium text-sm">{review.userName}</span>
+                                  <span className="font-medium text-sm">{publicName(review.userName)}</span>
                                   <StarRating rating={review.rating} />
                               </div>
                               {review.createdAt?.seconds && (

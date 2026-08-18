@@ -30,6 +30,7 @@ import { ChatWindow } from './chat-window';
 import { ClaimSection } from './claim-section';
 import { LocationTracker } from '@/components/location-tracker';
 import { gmapsDirectionsUrl, isValidCoords } from '@/lib/geo';
+import { publicName } from '@/lib/public-name';
 
 const OrderMap = dynamic(() => import('./order-map'), {
     ssr: false,
@@ -634,20 +635,20 @@ export default function OrderTrackingPage() {
                      )}
                     <Separator/><div className="flex justify-between font-bold text-lg"><p>Total</p><p>${Math.round(displayTotal).toLocaleString('es-AR')}</p></div>
                      <Separator/>
-                     
-                     {isStoreOwner && (
-                        <div className="border-t pt-4 space-y-2">
-                           <h3 className="font-semibold text-lg">Contacto del Cliente</h3>
-                           <p className="text-sm text-muted-foreground flex items-center"><Phone className="h-4 w-4 mr-2" />Teléfono: {order.customerPhoneNumber || 'No especificado'}</p>
-                        </div>
-                     )}
-                     
+
+                     {/* 🔒 Auditoría de privacidad (ago 2026, estándar Rappi): el teléfono del
+                         cliente NO se muestra a la tienda (coordina por el chat) — solo lo ve
+                         el repartidor asignado en reparto (botón Llamar más abajo). Y la
+                         dirección exacta no se muestra al repartidor del POOL (antes de tomar
+                         el pedido decide con la distancia aproximada de la tarjeta). */}
+                     {(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) && (
                      <div>
                         <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4" /> Dirección de Envío (Referencia)</h3>
                         <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded border mt-1">
                             {order.shippingInfo?.address || order.shippingAddress?.address}
                         </p>
                      </div>
+                     )}
                 </CardContent>
                  
                  <OrderStatusUpdater order={order} />
@@ -662,8 +663,19 @@ export default function OrderTrackingPage() {
                 {/* relative z-0 contiene los z-index internos de Leaflet (panes 400-1000):
                     sin esto el mapa flotaba POR ENCIMA del Sheet del carrito (captura real
                     de la gran prueba). Mismo fix que el wrapper del LocationPicker. */}
-                <CardContent className="h-96 relative z-0">{order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">Sin datos de ubicación.</div>}</CardContent>
+                {/* El pin exacto del domicilio solo para los involucrados — el repartidor
+                    del pool ve la distancia aproximada en su tarjeta, no la casa. */}
+                <CardContent className="h-96 relative z-0">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) && order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) ? 'Sin datos de ubicación.' : 'El mapa se habilita al tomar el pedido.'}</div>}</CardContent>
                 <CardFooter className="flex-col items-start gap-2">
+                    {/* "Tu repartidor" (auditoría ago 2026, estándar Rappi): el comprador ve
+                        QUIÉN le lleva el pedido durante el viaje — antes el nombre recién
+                        aparecía al calificar, con el pedido ya entregado. */}
+                    {isBuyer && order.deliveryPersonName && (order.status === 'En camino' || order.status === 'En reparto') && (
+                        <p className="text-sm flex items-center gap-2">
+                            <Bike className="h-4 w-4 text-warning" />
+                            Tu repartidor: <span className="font-semibold">{publicName(order.deliveryPersonName)}</span>
+                        </p>
+                    )}
                     {/* Señal del repartidor (Fase RR): visible mientras hay tracking activo. */}
                     {(order.status === 'En camino' || order.status === 'En reparto') && (
                         <DriverSignal lastUpdate={order.driverCoords?.lastUpdate} />

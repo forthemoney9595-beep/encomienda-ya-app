@@ -4,6 +4,7 @@ import { notifyUser } from "@/lib/notify-server";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
+import { publicName } from "@/lib/public-name";
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -76,11 +77,15 @@ export async function POST(request: Request) {
         const ratingSum = (storeData.ratingSum || 0) + ratingNum;
         const ratingCount = (storeData.ratingCount || 0) + 1;
 
+        // 🔒 Auditoría de privacidad (ago 2026): `reviews` es PÚBLICA (read: if true) —
+        // el doc ya NO guarda `userId` (correlacionaba uid ↔ nombre real ↔ tienda ↔ fecha
+        // para cualquiera con el SDK) y `userName` se guarda como nombre de pila +
+        // inicial ("María G."), estándar Rappi. La trazabilidad para el admin queda por
+        // `orderId` (las órdenes no son legibles públicamente).
         tx.set(reviewRef, {
           storeId,
           orderId,
-          userId,
-          userName: orderData.customerName || "Cliente",
+          userName: publicName(orderData.customerName),
           rating: ratingNum,
           comment: (comment || "").toString().slice(0, 1000),
           createdAt: Timestamp.now(),
@@ -106,7 +111,7 @@ export async function POST(request: Request) {
       await notifyUser({
         userId: ownerId,
         title: "⭐ Nueva reseña",
-        body: `${orderData.customerName || "Un cliente"} calificó tu tienda con ${ratingNum} estrella${ratingNum === 1 ? "" : "s"}.`,
+        body: `${publicName(orderData.customerName, "Un cliente")} calificó tu tienda con ${ratingNum} estrella${ratingNum === 1 ? "" : "s"}.`,
         type: "store_review",
         link: "/my-store/reviews",
       });

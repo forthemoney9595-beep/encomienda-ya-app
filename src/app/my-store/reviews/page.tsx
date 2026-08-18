@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { publicName } from '@/lib/public-name';
 
 interface Review {
   id: string;
@@ -134,7 +135,7 @@ export default function StoreReviewsPage() {
             <Card key={review.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{review.userName}</CardTitle>
+                  <CardTitle className="text-base">{publicName(review.userName)}</CardTitle>
                   <StarRating rating={review.rating} />
                 </div>
                 {review.createdAt?.seconds && (

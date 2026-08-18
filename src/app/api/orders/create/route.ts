@@ -43,6 +43,12 @@ export async function POST(request: Request) {
       name: String(shippingInfo?.name ?? '').slice(0, 120),
       address: String(shippingInfo?.address ?? '').slice(0, 300),
     };
+    // 📞 Teléfono de contacto para la entrega (auditoría de privacidad, ago 2026): el
+    // checkout SIEMPRE lo mandó pero nunca se persistía — el botón "Llamar al Cliente"
+    // del repartidor no aparecía jamás. Sanitizado a dígitos y '+', máx 20. Lo ve
+    // ÚNICAMENTE el repartidor asignado en 'En reparto' (decisión de producto: la
+    // tienda coordina por el chat, como Rappi/PedidosYa).
+    const safePhone = String(body.customerPhoneNumber ?? '').replace(/[^\d+]/g, '').slice(0, 20);
 
     // 🔒 SOLO PAGO DIGITAL (decisión de producto, ago 2026).
     // La app nunca ofreció efectivo en el checkout (CheckoutDialog ni siquiera manda este
@@ -264,6 +270,7 @@ export async function POST(request: Request) {
             id: newOrderRef.id,
             userId,
             customerName: safeShippingInfo.name,
+            ...(safePhone ? { customerPhoneNumber: safePhone } : {}),
             items: verifiedItems,
             shippingInfo: safeShippingInfo,
             storeId,

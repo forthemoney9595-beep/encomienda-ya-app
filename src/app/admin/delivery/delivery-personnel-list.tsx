@@ -166,7 +166,7 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                     </Avatar>
                     {selectedDriver?.name}
                 </DialogTitle>
-                <DialogDescription>ID: {selectedDriver?.id}</DialogDescription>
+                <DialogDescription>ID: {selectedDriver?.id ? `${selectedDriver.id.slice(0, 8)}…` : '—'}</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-2">

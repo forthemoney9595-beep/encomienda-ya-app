@@ -105,7 +105,9 @@ export default function SignupStorePage() {
             address: values.address,
             maintenanceMode: false,
             isApproved: false,      // Requiere aprobación del admin
-            ownerName: values.ownerName,
+            // 🔒 'ownerName' ya NO va acá (auditoría de privacidad ago 2026): stores/{id}
+            // es de lectura pública y el nombre completo del dueño no pinta nada ahí —
+            // vive en su users/{uid} privado (campo `name`). Ninguna pantalla lo usaba.
             createdAt: new Date()
         };
 

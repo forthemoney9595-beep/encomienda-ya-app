@@ -29,6 +29,7 @@ import { driverNetForOrder } from '@/lib/money';
 import { AccountStatement, type StatementMovement } from '@/components/account-statement';
 import { type Order as OrderType } from '@/lib/order-service';
 import Link from 'next/link';
+import { publicName } from '@/lib/public-name';
 
 function getStatusVariant(status: string) {
   switch (status) {
@@ -340,7 +341,7 @@ function DriverProfilePage() {
                       <Star key={s} className={cn('h-3 w-3', r.rating >= s ? 'fill-warning text-warning' : 'text-muted-foreground/30')} />
                     ))}
                   </div>
-                  <span className="text-xs font-medium">{r.userName}</span>
+                  <span className="text-xs font-medium">{publicName(r.userName)}</span>
                   <span className="text-xs text-muted-foreground ml-auto">{formatDate(r.createdAt)}</span>
                 </div>
                 {r.comment && <p className="text-xs text-muted-foreground pl-0.5 line-clamp-2 italic">&quot;{r.comment}&quot;</p>}

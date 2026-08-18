@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { Order } from '@/lib/order-service';
+import { publicName } from '@/lib/public-name';
 
 const formatDate = (ts: any) => {
     if (!ts) return '—';
@@ -470,7 +471,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                                             <Star key={s} className={cn('h-3 w-3', r.rating >= s ? 'fill-warning text-warning' : 'text-muted-foreground/30')} />
                                         ))}
                                     </div>
-                                    <span className="text-xs font-medium">{r.userName}</span>
+                                    <span className="text-xs font-medium">{publicName(r.userName)}</span>
                                     <span className="text-xs text-muted-foreground ml-auto">{formatDate(r.createdAt)}</span>
                                 </div>
                                 {r.comment && <p className="text-xs text-muted-foreground pl-0.5 line-clamp-2">{r.comment}</p>}
