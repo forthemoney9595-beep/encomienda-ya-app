@@ -118,7 +118,12 @@ export default function DeliveryOrdersView() {
      );
   }, [firestore]);
 
-  const { data: availableOrders } = useCollection<Order>(availableQuery);
+  const { data: allAvailableOrders } = useCollection<Order>(availableQuery);
+  // Un repartidor puede COMPRAR como cualquier vecino (decisión de producto, 18/8), pero
+  // su propio pedido no aparece en su pool: tomarlo él mismo sería envío gratis de facto
+  // y habilitaría auto-calificarse. La regla de Firestore también lo bloquea — esto es la
+  // capa visual.
+  const availableOrders = (allAvailableOrders || []).filter(o => o.userId !== user?.uid);
 
   // 3. QUERY: MIS PEDIDOS (Para En Curso y Billetera)
   const myOrdersQuery = useMemo(() => {
@@ -142,6 +147,10 @@ export default function DeliveryOrdersView() {
   // A. TOMAR PEDIDO -> Pasa a 'En camino'
   const handleTakeOrder = async (order: Order) => {
     if (!user || !firestore) return;
+    if ((order as any).userId === user.uid) {
+      toast({ variant: 'destructive', title: 'Este pedido es tuyo', description: 'Tu propio pedido lo lleva otro repartidor.' });
+      return;
+    }
     if (!isApprovedDriver) {
       toast({
         variant: 'destructive',

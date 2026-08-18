@@ -308,6 +308,7 @@ export function MainNav({
           </Link>
         </div>
       </div>
+      {renderClientSection()}
     </>
   );
 
@@ -364,17 +365,43 @@ export function MainNav({
     </>
   );
 
+  // 🛒 Sección "Como cliente" — compartida por tienda y repartidor (ago 2026): pueden
+  // comprar como cualquier vecino (decisión de producto), con las guardas server-side:
+  // la tienda no puede comprarse a sí misma y el repartidor no puede llevar su propio
+  // pedido. Sus compras viven en /my-purchases porque /orders es su panel OPERATIVO.
+  const renderClientSection = () => (
+    <div className="px-3 py-2">
+      <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Como cliente
+      </h2>
+      <div className="space-y-1">
+        <Link href="/">
+          <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Home className="mr-2 h-4 w-4" />
+            Tiendas
+          </Button>
+        </Link>
+        <Link href="/my-purchases">
+          <Button variant={pathname === '/my-purchases' ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <ShoppingBag className="mr-2 h-4 w-4" />
+            Mis Compras
+          </Button>
+        </Link>
+        <Link href="/favorites">
+          <Button variant={pathname === '/favorites' ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Heart className="mr-2 h-4 w-4" />
+            Mis Favoritos
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+
   // 🛵 DELIVERY LINKS (Corregido)
   const renderDeliveryLinks = () => (
     <>
       <div className="px-3 py-2">
         <div className="space-y-1">
-          <Link href="/">
-            <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Home className="mr-2 h-4 w-4" />
-              Principal
-            </Button>
-          </Link>
           <Link href="/delivery">
             <Button variant={pathname === '/delivery' ? 'secondary' : 'ghost'} className="w-full justify-start">
               <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -408,6 +435,7 @@ export function MainNav({
           </Link>
         </div>
       </div>
+      {renderClientSection()}
     </>
   );
 

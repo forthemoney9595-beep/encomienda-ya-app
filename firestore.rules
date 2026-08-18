@@ -261,7 +261,11 @@ service cloud.firestore {
 
         // REPARTIDOR LIBRE: autoasignación de un pedido sin repartidor.
         // Solo repartidores APROBADOS por el admin (users/{uid}.isApproved == true).
+        // `userId != auth.uid` (ago 2026): un repartidor puede COMPRAR como cualquier
+        // vecino, pero su propio pedido lo lleva OTRO — tomarlo él mismo sería envío
+        // gratis de facto y habilitaría auto-calificarse como repartidor.
         (resource.data.deliveryPersonId == null &&
+          resource.data.userId != request.auth.uid &&
           isApprovedDriver() &&
           request.resource.data.deliveryPersonId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()

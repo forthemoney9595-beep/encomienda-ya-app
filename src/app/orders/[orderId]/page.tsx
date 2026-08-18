@@ -419,7 +419,9 @@ export default function OrderTrackingPage() {
   // `isApproved === true` (Fase PP): antes este segundo camino mostraba el botón de
   // aceptar a repartidores NO aprobados — la regla lo rechazaba con un error genérico
   // (botón que siempre falla). Mismo campo que isApprovedDriver() en firestore.rules.
-  const isAvailableToAccept = isDelivery && (myUserProfile as any)?.isApproved === true &&
+  // `!isBuyer`: un repartidor que COMPRÓ (permitido desde 18/8) no puede tomar su propio
+  // pedido — sería envío gratis + auto-calificación. La regla de Firestore también lo exige.
+  const isAvailableToAccept = isDelivery && !isBuyer && (myUserProfile as any)?.isApproved === true &&
     !order.deliveryPersonId && (order.status === 'En preparación' || order.status === 'Listo para recoger');
   // Admin (Fase OO): ve la columna derecha para poder LEER el chat del pedido al arbitrar
   // un reclamo (el ChatWindow le renderiza en modo solo lectura).

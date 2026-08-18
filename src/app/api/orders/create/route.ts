@@ -165,6 +165,18 @@ export async function POST(request: Request) {
 
     // Buscamos el ID del dueño para notificarle
     const ownerId = storeData?.ownerId || storeData?.userId;
+
+    // 🔒 Tiendas y repartidores PUEDEN comprar como cualquier vecino (decisión de
+    // producto, ago 2026 — caso real: un dueño de tienda pidió pizza en otra tienda).
+    // Lo único vedado es la AUTO-COMPRA: una tienda comprándose a sí misma habilitaría
+    // ventas/reseñas fabricadas sobre su propio catálogo.
+    if (ownerId && ownerId === callerUid) {
+      return NextResponse.json(
+        { error: "No podés hacer un pedido en tu propia tienda." },
+        { status: 400 },
+      );
+    }
+
     const newOrderRef = adminDb.collection("orders").doc();
 
     // 2. RE-CALCULAR EL TOTAL, VALIDAR STOCK Y DESCONTARLO — todo en una transacción para
