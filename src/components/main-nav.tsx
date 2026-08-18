@@ -69,10 +69,12 @@ export function MainNav({
   ...props
 }: React.HTMLAttributes<HTMLElement>) {
   const pathname = usePathname();
-  const { userProfile, isFullAdmin } = useAuth();
+  const { user, userProfile, loading, isFullAdmin } = useAuth();
   const firestore = useFirestore();
 
   const isAdminUser = userProfile?.role === 'admin';
+  // Invitado (Opción A): sin sesión y sin estar cargando. Ve un menú de exploración.
+  const isGuest = !loading && !user;
 
   // Contadores de pendientes (solo se consultan si es admin).
   // OJO escala: esta consulta corre en CADA página del panel admin. Antes bajaba la
@@ -106,9 +108,10 @@ export function MainNav({
   // Solo tiendas aprobadas: filtra server-side (antes traía todas y filtraba en el cliente).
   // La colección `stores` es acotada (pueblo chico), así que el ahorro es menor que el de los
   // usuarios, pero además evita que una tienda sin aprobar aporte su rubro al menú.
+  // También para el INVITADO (Opción A): el menú de exploración usa los mismos rubros.
   const storesQuery = useMemoFirebase(
-    () => (firestore && isBuyer ? query(collection(firestore, 'stores'), where('isApproved', '==', true)) : null),
-    [firestore, isBuyer]
+    () => (firestore && (isBuyer || isGuest) ? query(collection(firestore, 'stores'), where('isApproved', '==', true)) : null),
+    [firestore, isBuyer, isGuest]
   );
   const { data: buyerStores } = useCollection<any>(storesQuery);
   const buyerCategories = Array.from(
@@ -122,6 +125,52 @@ export function MainNav({
       ? <span className="ml-auto inline-flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold h-5 min-w-[20px] px-1.5">{count}</span>
       : null
   );
+
+  // Menú del INVITADO (Opción A): explora la vidriera + CTA de registro. Va antes del
+  // guard de abajo porque un invitado no tiene userProfile pero SÍ tiene que ver menú.
+  if (isGuest) {
+    return (
+      <nav className={cn('pb-12 relative', className)} {...props}>
+        <div className="space-y-4 py-4">
+          <div className="px-3 py-2 space-y-1">
+            <Link href="/">
+              <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
+                <Home className="mr-2 h-4 w-4" /> Inicio
+              </Button>
+            </Link>
+            <Link href="/signup/buyer">
+              <Button className="w-full justify-start">
+                <ShoppingBag className="mr-2 h-4 w-4" /> Crear cuenta
+              </Button>
+            </Link>
+          </div>
+          {buyerCategories.length > 0 && (
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Explorar Tiendas
+              </h2>
+              <div className="space-y-1">
+                {buyerCategories.map((cat) => {
+                  const style = getCategoryStyle(cat);
+                  const Icon = style.icon;
+                  return (
+                    <Link key={cat} href={`/?category=${encodeURIComponent(cat)}`}>
+                      <Button variant="ghost" className="w-full justify-start gap-2">
+                        <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md', style.bg)}>
+                          <Icon className={cn('h-3.5 w-3.5', style.text)} />
+                        </span>
+                        {formatCategoryLabel(cat)}
+                      </Button>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+    );
+  }
 
   if (!userProfile) {
     return null;

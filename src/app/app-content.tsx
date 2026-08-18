@@ -178,10 +178,10 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
         return <main className="flex-1">{children}</main>;
     }
 
-    // Si el usuario no está logueado Y está en la raíz, muestra SOLO el contenido.
-    if (!user && !loading && isLandingPage) {
-        return <main className="flex-1">{children}</main>;
-    }
+    // Opción A (ago 2026): el invitado en la home ya NO ve una landing suelta — ve la
+    // vidriera de tiendas dentro del shell completo (header con "Iniciar Sesión" +
+    // sidebar con links de invitado), igual que cuando abre una tienda por link directo.
+    // Por eso se quitó el early-return que le negaba el shell en la raíz.
 
     // En cualquier otra página, o logueado, muestra el layout completo
     return (

@@ -8,7 +8,7 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebase/firestore';
 import { normalizeSchedule, getStoreOpenStatus } from '@/lib/store-hours';
-import { ShoppingBag, Search, Filter, Heart, Zap, ShieldCheck, Smartphone, ArrowRight, type LucideIcon } from 'lucide-react';
+import { ShoppingBag, Search, Filter, Heart, Zap, ArrowRight, type LucideIcon } from 'lucide-react';
 import { StoreCard, type StoreCardStore } from '@/components/store-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
@@ -57,85 +57,8 @@ const cleanAddress = (rawAddress: string | undefined) => {
     return rawAddress;
 };
 
-// --- COMPONENTES DE LA LANDING PAGE (MODO INVITADO) ---
-
-const HeroSection = () => (
-  <div className="relative overflow-hidden bg-background py-20 sm:py-32">
-    <div className="container mx-auto px-4 relative z-10">
-      <div className="mx-auto max-w-2xl text-center">
-        <h1 className="font-headline text-4xl font-extrabold tracking-tight sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-fuchsia-400 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-          Tu ciudad, en la puerta de tu casa.
-        </h1>
-        <p className="mt-6 text-lg leading-8 text-muted-foreground animate-in fade-in slide-in-from-bottom-5 duration-1000 delay-200">
-          Pide comida, ropa, farmacia y más. Conectamos a las mejores tiendas locales contigo en minutos. Rápido, seguro y fácil.
-        </p>
-        <div className="mt-10 flex items-center justify-center gap-x-6 animate-in fade-in zoom-in duration-1000 delay-300">
-          <Link href="/login">
-            <Button size="lg" className="h-12 px-8 text-lg rounded-full shadow-lg hover:shadow-primary/25 transition-all hover:scale-105">
-              Comenzar Ahora <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <Link href="/support" className="text-sm font-semibold leading-6 text-foreground hover:underline">
-            Saber más <span aria-hidden="true">→</span>
-          </Link>
-        </div>
-      </div>
-    </div>
-    
-    {/* Fondo decorativo */}
-    <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
-        <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#8B5CF6] to-[#c084fc] opacity-25 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)' }} />
-    </div>
-  </div>
-);
-
-const FeaturesSection = () => (
-    <div className="container mx-auto py-24 sm:py-32">
-        <div className="mx-auto max-w-2xl lg:text-center">
-            <h2 className="text-base font-semibold leading-7 text-primary">Todo lo que necesitas</h2>
-            <p className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Una experiencia de compra superior
-            </p>
-        </div>
-        <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-4xl">
-            <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 lg:max-w-none lg:grid-cols-3 lg:gap-y-16">
-                <div className="relative pl-16">
-                    <dt className="text-base font-semibold leading-7 text-foreground">
-                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
-                            <Zap className="h-6 w-6 text-primary" aria-hidden="true" />
-                        </div>
-                        Entregas Flash
-                    </dt>
-                    <dd className="mt-2 text-base leading-7 text-muted-foreground">
-                        Nuestros repartidores están listos para llevar tu pedido en tiempo récord. Sigue tu envío en tiempo real.
-                    </dd>
-                </div>
-                <div className="relative pl-16">
-                    <dt className="text-base font-semibold leading-7 text-foreground">
-                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-success/15">
-                            <ShieldCheck className="h-6 w-6 text-success" aria-hidden="true" />
-                        </div>
-                        Pagos Seguros
-                    </dt>
-                    <dd className="mt-2 text-base leading-7 text-muted-foreground">
-                        Paga con tranquilidad. Tu información está protegida y el dinero solo se libera cuando recibes tu pedido.
-                    </dd>
-                </div>
-                <div className="relative pl-16">
-                    <dt className="text-base font-semibold leading-7 text-foreground">
-                        <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-info/15">
-                            <Smartphone className="h-6 w-6 text-info" aria-hidden="true" />
-                        </div>
-                        Todo en tu bolsillo
-                    </dt>
-                    <dd className="mt-2 text-base leading-7 text-muted-foreground">
-                        Gestiona tus favoritos, repite pedidos anteriores y chatea con la tienda desde cualquier lugar.
-                    </dd>
-                </div>
-            </dl>
-        </div>
-    </div>
-);
+// Opción A (ago 2026): la landing pura de invitado (HeroSection + FeaturesSection) se
+// eliminó — el invitado ahora ve la vidriera de tiendas real (ver rama `!user` abajo).
 
 // --- COMPONENTES DE LA APP (MODO USUARIO) ---
 
@@ -260,7 +183,10 @@ function HomeContent() {
   const { data: rawStores, isLoading: storesLoading } = useCollection<Store>(storesQuery);
 
   // Fee de envío configurable (Fase N) — antes estaba hardcodeado "$2000" en la tarjeta.
-  const configRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'platform') : null), [firestore]);
+  // 🔒 `config/platform` exige estar logueado (read: if isSignedIn()) y contiene datos
+  // internos (comisión, día de liquidación). El INVITADO (Opción A) no lo lee — usa el
+  // fallback de abajo, que para la vidriera alcanza (el envío es orientativo hasta pedir).
+  const configRef = useMemoFirebase(() => (firestore && user ? doc(firestore, 'config', 'platform') : null), [firestore, user]);
   const { data: platformConfig } = useDoc<{ deliveryFee?: number; deliveryFeePerKm?: number }>(configRef);
   const deliveryFee = platformConfig?.deliveryFee ?? 2000;
   // Con tarifa por km activa, el envío del listado es "desde $X" (el real depende del pin).
@@ -365,39 +291,9 @@ function HomeContent() {
     );
   }
 
-  // 🟢 MODO INVITADO: LANDING PAGE
-  if (!user) {
-    return (
-        <div className="flex flex-col min-h-screen">
-            <HeroSection />
-            <FeaturesSection />
-            {/* Footer simple */}
-            <footer className="py-6 text-center text-sm text-muted-foreground border-t space-y-2">
-                <p>© 2025 EncomiendaYA. Todos los derechos reservados.</p>
-                <div className="flex justify-center gap-4">
-                    <Link href="/terms" className="underline hover:text-foreground">Términos y Condiciones</Link>
-                    <Link href="/privacy" className="underline hover:text-foreground">Política de Privacidad</Link>
-                    <Link href="/support" className="underline hover:text-foreground">Soporte</Link>
-                </div>
-            </footer>
-        </div>
-    );
-  }
-
-  // 🟢 MODO USUARIO: DASHBOARD DE TIENDAS
-  if (storesLoading) {
-    return (
-      <div className="container mx-auto space-y-6 py-6">
-        <PageHeader title="Cargando..." description="" />
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map(i => <StoreCardSkeleton key={i} />)}
-        </div>
-      </div>
-    );
-  }
-
+  // Derivados usados por AMBAS ramas (invitado y usuario) — definidos antes de los
+  // returns para que la rama de invitado también los tenga.
   const openCount = decorated.filter(d => d.status.isOpen).length;
-
   const renderCard = (d: typeof decorated[number], i: number, variant: 'grid' | 'carousel' = 'grid') => (
     <StoreCard
       key={d.store.id}
@@ -413,6 +309,114 @@ function HomeContent() {
       cleanAddress={cleanAddress}
     />
   );
+
+  // 🟢 MODO INVITADO: vidriera abierta (Opción A, ago 2026). El visitante ve la MISMA
+  // grilla de tiendas que un usuario, navega libre y recién al querer pedir se le pide
+  // cuenta (candado en el carrito de la tienda pública). Sin secciones personales
+  // ("Tus favoritas") ni saludo con nombre — eso es del modo usuario.
+  if (!user) {
+    if (storesLoading) {
+      return (
+        <div className="container mx-auto space-y-6 py-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map(i => <StoreCardSkeleton key={i} />)}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="container mx-auto animate-in fade-in duration-500 pt-4">
+        {/* Bienvenida compacta con CTA de registro (no el hero gigante de antes) */}
+        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card/40 p-5 sm:p-6 mb-6">
+          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
+            <div className="absolute -left-10 -top-16 h-52 w-52 rounded-full bg-primary/25 blur-3xl animate-float" />
+            <div className="absolute -right-12 -bottom-20 h-56 w-56 rounded-full bg-cat-kiosk/20 blur-3xl animate-float" style={{ animationDelay: '2.5s' }} />
+          </div>
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight">
+            Tu ciudad, <span className="text-gradient">en la puerta de tu casa</span> 🛵
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Mirá las tiendas de Tinogasta. Creá tu cuenta gratis cuando quieras pedir.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Link href="/signup/buyer">
+              <Button size="sm" className="rounded-full h-9 px-5 shadow-md">
+                Crear cuenta <ArrowRight className="ml-1.5 h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+              Ya tengo cuenta →
+            </Link>
+            <span className="ml-auto text-xs text-muted-foreground hidden sm:flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+              <strong className="text-foreground">{openCount}</strong> abiertas ahora
+            </span>
+          </div>
+        </div>
+
+        <CategoryChips
+          categories={categories}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          counts={categoryCounts}
+        />
+        <FilterBar
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          minRating={minRating}
+          setMinRating={setMinRating}
+        />
+
+        {/* "Con descuento" sí (es vidriera pura, cero datos personales); "Tus favoritas" no. */}
+        {!hasFilters && discountedStores.length > 0 && (
+          <StoreRow title="Con descuento" icon={Zap} accent="text-cat-food">
+            {discountedStores.map((d, i) => renderCard(d, i, 'carousel'))}
+          </StoreRow>
+        )}
+
+        <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
+          <ShoppingBag className="h-5 w-5 text-primary" />
+          {hasFilters ? 'Resultados' : 'Todas las tiendas'}
+          <span className="text-sm font-normal text-muted-foreground ml-2">({filteredStores.length})</span>
+        </h2>
+        <div className="grid gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredStores.length === 0 ? (
+            <div className="col-span-full text-center py-12 opacity-70">
+              <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+              <p className="text-lg font-medium">No encontramos tiendas</p>
+              {hasFilters && (
+                <Button variant="link" onClick={() => { setSearchTerm(''); setSelectedCategory('Todas'); setMinRating('0'); }} className="mt-2">
+                  Limpiar Filtros
+                </Button>
+              )}
+            </div>
+          ) : (
+            filteredStores.map((d, i) => renderCard(d, i))
+          )}
+        </div>
+
+        <footer className="py-8 mt-6 text-center text-xs text-muted-foreground border-t space-y-2">
+          <div className="flex justify-center gap-4">
+            <Link href="/terms" className="underline hover:text-foreground">Términos</Link>
+            <Link href="/privacy" className="underline hover:text-foreground">Privacidad</Link>
+            <Link href="/support" className="underline hover:text-foreground">Soporte</Link>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
+  // 🟢 MODO USUARIO: DASHBOARD DE TIENDAS
+  if (storesLoading) {
+    return (
+      <div className="container mx-auto space-y-6 py-6">
+        <PageHeader title="Cargando..." description="" />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map(i => <StoreCardSkeleton key={i} />)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto animate-in fade-in duration-500">

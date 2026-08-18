@@ -13,6 +13,7 @@ import { StoreCard } from '@/components/store-card';
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { setDoc, deleteDoc } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -232,7 +233,23 @@ export default function StorePublicPage() {
 
   const handleAddToCart = (product: Product) => {
     if (!storeId) return;
-    
+
+    // 🔒 Candado de la Opción A (ago 2026): el invitado navega la vidriera libre, pero
+    // para PEDIR necesita cuenta. El candado va acá (en la acción), no en la puerta —
+    // recién cuando quiere agregar algo al carrito se le pide registrarse.
+    if (!user) {
+        toast({
+            title: "Creá tu cuenta para pedir",
+            description: "Es gratis y rápido. Después seguí desde donde estabas.",
+            action: (
+                <ToastAction altText="Crear cuenta" onClick={() => router.push('/signup/buyer')}>
+                    Crear cuenta
+                </ToastAction>
+            ),
+        });
+        return;
+    }
+
     if (!storeStatus.isOpen) {
         toast({
             variant: "destructive",
