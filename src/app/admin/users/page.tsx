@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useMemoFirebase } from '@/lib/firebase';
@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Search, MoreHorizontal, Shield, Trash2, Users, Eye, Store, Bike } from 'lucide-react';
+import { Loader2, Search, MoreHorizontal, Shield, Trash2, Users, Eye, Store, Bike, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,17 @@ import { logAdminAction } from '@/lib/admin-audit';
 import { UserDetailDialog } from './user-detail-dialog';
 
 const PAGE_SIZE = 25;
+
+// Identidad visual por rol (18/8): mismo lenguaje de color del resto del panel —
+// azul/info = tienda, ámbar/warning = repartidor, violeta/primary = admin. En "Todos"
+// la tabla se agrupa en secciones colapsables por rol.
+const ROLE_GROUPS = [
+  { k: 'buyer',    label: 'Clientes',     icon: Users,  text: 'text-foreground',  border: 'border-l-border',  ring: 'border-border',     chip: 'bg-foreground text-background' },
+  { k: 'store',    label: 'Tiendas',      icon: Store,  text: 'text-info',        border: 'border-l-info',    ring: 'border-info/50',    chip: 'bg-info text-info-foreground' },
+  { k: 'delivery', label: 'Repartidores', icon: Bike,   text: 'text-warning',     border: 'border-l-warning', ring: 'border-warning/50', chip: 'bg-warning text-warning-foreground' },
+  { k: 'admin',    label: 'Admins',       icon: Shield, text: 'text-primary',     border: 'border-l-primary', ring: 'border-primary/50', chip: 'bg-primary text-primary-foreground' },
+] as const;
+const groupOf = (role?: string) => ROLE_GROUPS.find(g => g.k === (role || 'buyer')) || ROLE_GROUPS[0];
 
 function AdminUsersPage() {
   const { user: currentUser, isFullAdmin } = useAuth();
@@ -40,6 +51,13 @@ function AdminUsersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(qParam.trim().toLowerCase());
   const [roleFilter, setRoleFilter] = useState<'all' | 'buyer' | 'store' | 'delivery' | 'admin'>('all');
   const [detailUser, setDetailUser] = useState<any | null>(null);
+  // Secciones colapsables de la vista "Todos" (arrancan todas abiertas).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (k: string) => setCollapsedGroups(prev => {
+    const next = new Set(prev);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    return next;
+  });
 
   // Lista paginada (getDocs + cursor). No usamos useCollection porque necesitamos el snapshot
   // del último doc para startAfter, y el hook compartido lo descarta.
@@ -317,18 +335,16 @@ function AdminUsersPage() {
                 </div>
             </div>
             <div className="flex gap-1.5 flex-wrap mt-3">
-                {([
-                    { k: 'all',      label: 'Todos' },
-                    { k: 'buyer',    label: 'Clientes' },
-                    { k: 'store',    label: 'Tiendas' },
-                    { k: 'delivery', label: 'Repartidores' },
-                    { k: 'admin',    label: 'Admins' },
-                ] as const).map(({ k, label }) => (
-                    <button key={k} onClick={() => setRoleFilter(k)}
-                        className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-                            roleFilter === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                {[
+                    { k: 'all', label: 'Todos', icon: Users, chip: 'bg-primary text-primary-foreground' },
+                    ...ROLE_GROUPS.map(g => ({ k: g.k, label: g.label, icon: g.icon, chip: g.chip })),
+                ].map(({ k, label, icon: Icon, chip }) => (
+                    <button key={k} onClick={() => setRoleFilter(k as any)}
+                        className={cn('inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all',
+                            roleFilter === k ? chip : 'bg-muted text-muted-foreground hover:bg-muted/70'
                         )}>
-                        {label} ({roleCounts[k]})
+                        <Icon className="h-3 w-3" />
+                        {label} ({roleCounts[k as keyof typeof roleCounts]})
                     </button>
                 ))}
             </div>
@@ -351,16 +367,34 @@ function AdminUsersPage() {
                                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                                 </TableCell>
                             </TableRow>
-                        ) : displayed.map((user) => (
+                        ) : (() => {
+                        const renderUserRow = (user: any) => (
                             <TableRow key={user.id}>
-                                <TableCell className="flex items-center gap-3">
-                                    <Avatar className="h-9 w-9 border">
+                                <TableCell className={cn('flex items-center gap-3 border-l-4', groupOf(user.role).border)}>
+                                    <Avatar className={cn('h-9 w-9 border-2', groupOf(user.role).ring)}>
                                         <AvatarImage src={user.photoURL || user.profileImageUrl} />
                                         <AvatarFallback>{user.displayName?.charAt(0) || user.name?.charAt(0) || 'U'}</AvatarFallback>
                                     </Avatar>
                                     <div>
                                         <div className="font-medium text-sm">{user.displayName || user.name || 'Sin Nombre'}</div>
                                         <div className="text-xs text-muted-foreground">{user.email}</div>
+                                        {/* Info específica del rol, para distinguir de un vistazo */}
+                                        {user.phoneNumber && (user.role === 'buyer' || user.role === 'store') && (
+                                            <div className="text-[11px] text-muted-foreground">📞 {user.phoneNumber}</div>
+                                        )}
+                                        {user.role === 'delivery' && (
+                                            <div className="mt-0.5 flex items-center gap-2 text-[11px]">
+                                                <span className={cn('inline-flex items-center gap-1', user.isOnline !== false ? 'text-success' : 'text-muted-foreground')}>
+                                                    <span className={cn('h-1.5 w-1.5 rounded-full', user.isOnline !== false ? 'bg-success' : 'bg-muted-foreground')} />
+                                                    {user.isOnline !== false ? 'Disponible' : 'No disponible'}
+                                                </span>
+                                                {(() => {
+                                                    const v = user.vehicle;
+                                                    const txt = typeof v === 'string' ? v : v?.type ? `${v.type}${v.plate ? ' · ' + v.plate : ''}` : null;
+                                                    return txt ? <span className="text-muted-foreground">· {txt}</span> : null;
+                                                })()}
+                                            </div>
+                                        )}
                                         {/* Qué tienda es de esta persona — antes solo se veía a la PERSONA */}
                                         {user.role === 'store' && (storeByOwner[user.id] || (user.storeId && Object.values(storeByOwner).find(s => s.id === user.storeId))) && (
                                             <Link
@@ -471,7 +505,32 @@ function AdminUsersPage() {
                                     </div>
                                 </TableCell>
                             </TableRow>
-                        ))}
+                        );
+                        // Con un rol filtrado, lista plana; en "Todos", secciones
+                        // colapsables por rol (Clientes / Tiendas / Repartidores / Admins).
+                        if (roleFilter !== 'all') return displayed.map(renderUserRow);
+                        return ROLE_GROUPS.map(g => {
+                            const rows = displayed.filter(u => (u.role || 'buyer') === g.k);
+                            if (rows.length === 0) return null;
+                            const collapsed = collapsedGroups.has(g.k);
+                            const Icon = g.icon;
+                            return (
+                                <Fragment key={g.k}>
+                                    <TableRow className="bg-muted/40 hover:bg-muted/60 cursor-pointer select-none" onClick={() => toggleGroup(g.k)}>
+                                        <TableCell colSpan={4} className="py-2">
+                                            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                                                <Icon className={cn('h-4 w-4', g.text)} />
+                                                <span className={g.text}>{g.label}</span>
+                                                <span className="text-muted-foreground font-normal normal-case">— {rows.length} en esta página</span>
+                                                <ChevronDown className={cn('h-4 w-4 ml-auto text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
+                                            </span>
+                                        </TableCell>
+                                    </TableRow>
+                                    {!collapsed && rows.map(renderUserRow)}
+                                </Fragment>
+                            );
+                        });
+                        })()}
                         {!isLoading && displayed.length === 0 && (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
