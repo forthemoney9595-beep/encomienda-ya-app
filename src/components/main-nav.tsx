@@ -167,6 +167,24 @@ export function MainNav({
               </div>
             </div>
           )}
+          {/* Puertas de negocio: captación de tiendas y repartidores */}
+          <div className="px-3 py-2">
+            <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Para negocios
+            </h2>
+            <div className="space-y-1">
+              <Link href="/signup/store">
+                <Button variant="ghost" className="w-full justify-start">
+                  <Store className="mr-2 h-4 w-4 text-info" /> Registrá tu tienda
+                </Button>
+              </Link>
+              <Link href="/signup/delivery">
+                <Button variant="ghost" className="w-full justify-start">
+                  <Bike className="mr-2 h-4 w-4 text-warning" /> Sumate como repartidor
+                </Button>
+              </Link>
+            </div>
+          </div>
         </div>
       </nav>
     );

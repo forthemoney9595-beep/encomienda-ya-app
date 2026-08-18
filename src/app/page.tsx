@@ -395,7 +395,12 @@ function HomeContent() {
           )}
         </div>
 
-        <footer className="py-8 mt-6 text-center text-xs text-muted-foreground border-t space-y-2">
+        <footer className="py-8 mt-6 text-center text-xs text-muted-foreground border-t space-y-3">
+          {/* Puertas de NEGOCIO (captación de oferta): un marketplace vive de sus tiendas */}
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+            <Link href="/signup/store" className="font-medium text-foreground hover:text-primary">🏪 Registrá tu tienda</Link>
+            <Link href="/signup/delivery" className="font-medium text-foreground hover:text-primary">🛵 Sumate como repartidor</Link>
+          </div>
           <div className="flex justify-center gap-4">
             <Link href="/terms" className="underline hover:text-foreground">Términos</Link>
             <Link href="/privacy" className="underline hover:text-foreground">Privacidad</Link>

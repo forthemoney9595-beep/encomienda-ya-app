@@ -6,8 +6,8 @@ import PageHeader from "@/components/page-header";
 export default function SignupPage() {
   const roles = [
     {
-      name: "Comprador",
-      description: "Crea una cuenta para navegar por las tiendas y realizar pedidos de tus productos favoritos.",
+      name: "Cliente",
+      description: "Creá tu cuenta para pedir de las tiendas de Tinogasta y recibir en tu puerta.",
       icon: <User className="h-12 w-12" />,
       href: "/signup/buyer"
     },
