@@ -2294,6 +2294,42 @@ Tres tandas de la gran prueba, cada una con e2e propio (scripts `_e2e-*` gitigno
   agregado con tarjeta propia + re-aviso. Y el pool del repartidor ganó "Ver detalle
   del pedido" antes de tomar.
 
+## Fase UU (ago 2026): auditoría de privacidad — minimización de datos al estándar Rappi
+Pregunta de David: "¿qué datos tomamos, qué se muestra, comparado con Rappi/PedidosYa?
+¿los IDs son públicos?". Mapa completo con 2 agentes + 4 decisiones de producto (todas
+al estándar Rappi). **Referencia en la bóveda: "Privacidad de datos"** (tabla quién-ve-qué).
+- **🐛 BUG hallado por la auditoría: `customerPhoneNumber` NUNCA se persistía** (el
+  checkout lo mandaba, `create` no lo escribía) → el botón "Llamar al Cliente" del
+  repartidor no existió jamás en la práctica. Ahora se guarda sanitizado (dígitos/+,
+  máx 20) y lo ve SOLO el repartidor asignado en 'En reparto'; el bloque "Contacto del
+  Cliente" de la TIENDA se eliminó (decisión: la tienda coordina por el chat).
+- **Pool del repartidor discreto**: sin dirección exacta antes de tomar (decide por
+  "≈ X km"); el detalle de un pedido del pool no muestra dirección/mapa/nombre ("El
+  mapa se habilita al tomar el pedido"); el popup del pin ya no dice el nombre.
+- **Reseñas públicas**: `userName` se guarda "Nombre I." (nuevo `src/lib/public-name.ts`)
+  y el doc **ya no incluye `userId`** (`reviews` es read:true — un SDK correlacionaba
+  uid↔nombre↔tienda↔fecha). Display truncado en las 6 vistas (cubre docs legacy).
+  Backfill `_backfill-privacy.js` ejecutado (4 reseñas + ownerName de Levis).
+- **"Tu repartidor: Nombre I."** visible para el comprador DURANTE el viaje (antes
+  recién al calificar).
+- **IDs discretos**: fila "ID de Usuario" (uid completo) eliminada de /profile; uid
+  recortado en el modal admin de repartidores. Ninguna pantalla muestra IDs completos.
+- **🔒 `unique_ids`: `get` cerrado al cliente** — el doc contiene el UID asociado, así
+  que cualquier logueado que conociera un DNI/CUIT/tel ajeno averiguaba de qué cuenta
+  es. Pre-chequeo del signup por `/api/signup/check-unique` (solo booleano, rate-limited,
+  sin auth — corre pre-registro); `isTaken()` de `unique-ids.ts` llama la API (misma
+  firma). La reserva del batch + reglas de create quedan igual.
+- **`ownerName` fuera del doc público de `stores`** (nombre completo del dueño, nadie
+  lo renderizaba) + fuera del hasOnly de create.
+- **Checkout**: teléfono precargado del perfil (ya estaba, Tanda B); si el perfil no
+  tiene (cuentas viejas/Google), el que se escriba en la primera compra se guarda al
+  perfil — nunca pisa el registrado.
+- **Verificado**: e2e 9/9 (`_e2e-privacy.js`: teléfono sanitizado persistido, reseña
+  sin userId + nombre truncado, get de unique_ids DENEGADO con SDK de cliente,
+  check-unique true/false, reserva del signup OK — restaura rating de la tienda usada)
+  + Playwright 6/6 (pool y detalle sin datos del cliente; comprador ve "Tu repartidor"
+  y su propia dirección). Reglas desplegadas ANTES de los tests.
+
 ## Fase SS (ago 2026): auditoría archivo por archivo + Tanda A (8 críticos)
 Pedido del usuario durante la gran prueba: "análisis archivo por archivo para encontrar
 bugs, mejoras o rutas perdidas". 3 agentes en paralelo (páginas/navegación, API, libs/
