@@ -114,9 +114,9 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                       {/* Requisito de aprobación: no aprobar cuentas sin mail verificado */}
                       {emailVerified[user.id] !== undefined && (
                         emailVerified[user.id] ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-success">✉️ Mail verificado</span>
+                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-medium">✉️ Mail verificado</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-warning font-medium">✉️ Sin verificar — no aprobar todavía</span>
+                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 text-[10px] font-medium">⚠️ Sin verificar — no aprobar</span>
                         )
                       )}
                     </div>

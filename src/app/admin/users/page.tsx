@@ -398,11 +398,18 @@ function AdminUsersPage() {
                                     </Avatar>
                                     <div>
                                         <div className="font-medium text-sm">{user.displayName || user.name || 'Sin Nombre'}</div>
-                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                            {user.email}
-                                            {emailVerified[user.id] === true && <span title="Mail verificado" className="text-success">✓</span>}
-                                            {emailVerified[user.id] === false && <span title="Mail sin verificar" className="text-warning">⚠</span>}
-                                        </div>
+                                        <div className="text-xs text-muted-foreground">{user.email}</div>
+                                        {/* Estado del mail como badge propio, bien visible (punto 1) */}
+                                        {emailVerified[user.id] === true && (
+                                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-medium">
+                                                ✉️ Mail verificado
+                                            </span>
+                                        )}
+                                        {emailVerified[user.id] === false && (
+                                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 text-[10px] font-medium">
+                                                ⚠️ Mail sin verificar
+                                            </span>
+                                        )}
                                         {/* Info específica del rol, para distinguir de un vistazo */}
                                         {user.phoneNumber && (user.role === 'buyer' || user.role === 'store') && (
                                             <div className="text-[11px] text-muted-foreground">📞 {user.phoneNumber}</div>
