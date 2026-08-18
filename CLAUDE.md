@@ -2673,6 +2673,10 @@ sigue siendo el seeder liviano de siempre). Password de **todas** las cuentas nu
 - `config/platform` completado con `deliveryFee`/`settlementDayOfWeek` explícitos.
 
 ## Git workflow
+**Antes de CADA push: correr la skill `/verificar`** (`.claude/skills/verificar/`):
+typecheck + `next lint` (0 errores) + build completo leyendo el FINAL de la salida.
+Nació del deploy que falló el 18/8: "✓ Compiled successfully" es solo la compilación,
+el lint corre después y Vercel trata sus errores como fatales.
 ```bash
 # Al terminar de trabajar (en cualquier lugar)
 git add .
