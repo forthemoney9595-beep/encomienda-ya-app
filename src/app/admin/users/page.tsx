@@ -83,6 +83,27 @@ function AdminUsersPage() {
   };
   const refreshCounts = () => { rAll(); rBuyer(); rStore(); rDelivery(); rAdmin(); };
 
+  // ✉️ Mail verificado por usuario (punto 1 de la prueba, 18/8): el dato vive en Firebase
+  // Auth — se pide a la API admin para las filas cargadas. Ayuda a que ninguna verificación
+  // falle: se ve de un vistazo quién confirmó su correo.
+  const [emailVerified, setEmailVerified] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!currentUser || rows.length === 0) return;
+    const uids = rows.map(r => r.id).filter(id => emailVerified[id] === undefined);
+    if (uids.length === 0) return;
+    let cancelled = false;
+    currentUser.getIdToken()
+      .then(token => fetch('/api/admin/email-verified', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uids }),
+      }))
+      .then(res => res.json())
+      .then(data => { if (!cancelled && data.verified) setEmailVerified(prev => ({ ...prev, ...data.verified })); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser, rows, emailVerified]);
+
   // Mapa dueño → tienda (18/8): las filas de rol Tienda mostraban solo a la PERSONA — no
   // se sabía cuál tienda era de quién ni había camino a la ficha de la tienda (pedidos/
   // plata/CBU en /admin/stores/[id]). `stores` es una colección chica por diseño (pueblo),
@@ -377,7 +398,11 @@ function AdminUsersPage() {
                                     </Avatar>
                                     <div>
                                         <div className="font-medium text-sm">{user.displayName || user.name || 'Sin Nombre'}</div>
-                                        <div className="text-xs text-muted-foreground">{user.email}</div>
+                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                            {user.email}
+                                            {emailVerified[user.id] === true && <span title="Mail verificado" className="text-success">✓</span>}
+                                            {emailVerified[user.id] === false && <span title="Mail sin verificar" className="text-warning">⚠</span>}
+                                        </div>
                                         {/* Info específica del rol, para distinguir de un vistazo */}
                                         {user.phoneNumber && (user.role === 'buyer' || user.role === 'store') && (
                                             <div className="text-[11px] text-muted-foreground">📞 {user.phoneNumber}</div>

@@ -21,12 +21,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { target, title, body } = await request.json();
+    const { target, title, body, link } = await request.json();
     if (!target || !title?.trim() || !body?.trim()) {
       return NextResponse.json({ error: "Faltan campos: target, title, body" }, { status: 400 });
     }
     if (title.length > 60) return NextResponse.json({ error: "Título máximo 60 caracteres" }, { status: 400 });
     if (body.length > 160) return NextResponse.json({ error: "Cuerpo máximo 160 caracteres" }, { status: 400 });
+    // Destino del aviso (punto 8): solo rutas internas de la app; default '/'. Se sanitiza
+    // a un path que empiece con '/' para que nadie inyecte una URL externa.
+    const safeLink = (typeof link === 'string' && link.startsWith('/') && link.length < 200) ? link : '/';
 
     let recipientUids: string[] = [];
 
@@ -58,9 +61,9 @@ export async function POST(request: Request) {
         title,
         body,
         type: 'admin_broadcast',
-        // Un anuncio no tiene destino natural; con link '/' al menos tocar la campanita
-        // hace algo (antes era un botón muerto — Fase PP).
-        link: '/',
+        // El admin elige a dónde lleva el aviso (punto 8): inicio, sus pedidos, o un
+        // pedido puntual (ej. avisar de un reembolso). Antes era siempre '/' (botón muerto).
+        link: safeLink,
         read: false,
         createdAt: Timestamp.now(),
       });
@@ -90,8 +93,8 @@ export async function POST(request: Request) {
         const result = await adminMessaging.sendEachForMulticast({
           tokens: chunk,
           notification: { title, body },
-          webpush: { fcmOptions: { link: '/' }, notification: { tag: broadcastTag } },
-          data: { url: '/' },
+          webpush: { fcmOptions: { link: safeLink }, notification: { tag: broadcastTag } },
+          data: { url: safeLink },
         }).catch(() => ({ successCount: 0 }));
         pushSent += result.successCount;
       }
@@ -105,6 +108,7 @@ export async function POST(request: Request) {
       target,
       title,
       body,
+      link: safeLink,
       notified: recipientUids.length,
       pushSent,
       createdAt: Timestamp.now(),

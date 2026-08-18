@@ -20,70 +20,82 @@ interface ManageDriverDialogProps {
   driver: DeliveryPersonnel | null;
 }
 
+// Editor unificado (punto 2 de la prueba, 18/8): email SOLO LECTURA (editarlo acá
+// desincronizaba con Firebase Auth — el login seguía con el viejo), vehículo con
+// TIPO + PATENTE (el modelo real es `{type, plate}`), teléfono editable, y el ESTADO
+// se saca del form: se cambia SOLO por Aprobar/Rechazar (que pasan por approval-service,
+// Fase PP) — mantener un select suelto acá es la familia de bugs R1.
+const VEHICLE_TYPES = [
+  { value: 'motocicleta', label: 'Motocicleta' },
+  { value: 'automovil', label: 'Automóvil' },
+  { value: 'bicicleta', label: 'Bicicleta' },
+];
 const formSchema = z.object({
   name: z.string().min(3, 'El nombre debe tener al menos 3 caracteres.'),
-  email: z.string().email('Debe ser un correo electrónico válido.'),
-  vehicle: z.enum(['motocicleta', 'automovil', 'bicicleta']),
-  status: z.enum(['Activo', 'Pendiente', 'Inactivo', 'Rechazado']),
+  phoneNumber: z.string().regex(/^[0-9+\s-]*$/, 'Solo números, espacios, + y -.').optional(),
+  vehicleType: z.enum(['motocicleta', 'automovil', 'bicicleta']),
+  plate: z.string().max(12, 'Patente demasiado larga.').optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
+
+// Normaliza cualquier forma legacy de `vehicle` (string suelto o objeto) a {type, plate}.
+function readVehicle(v: DeliveryPersonnel['vehicle']): { type: FormData['vehicleType']; plate: string } {
+  const valid: FormData['vehicleType'][] = ['motocicleta', 'automovil', 'bicicleta'];
+  if (typeof v === 'object' && v !== null) {
+    const t = valid.includes(v.type as FormData['vehicleType']) ? (v.type as FormData['vehicleType']) : 'motocicleta';
+    return { type: t, plate: v.plate || '' };
+  }
+  if (typeof v === 'string' && valid.includes(v as FormData['vehicleType'])) {
+    return { type: v as FormData['vehicleType'], plate: '' };
+  }
+  return { type: 'motocicleta', plate: '' };
+}
 
 export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: ManageDriverDialogProps) {
   const isEditing = driver !== null;
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: '',
-      email: '',
-      vehicle: 'motocicleta',
-      status: 'Pendiente',
-    },
+    defaultValues: { name: '', phoneNumber: '', vehicleType: 'motocicleta', plate: '' },
   });
 
   useEffect(() => {
-    if (isOpen) {
-      if (driver) {
-        const validVehicles: FormData['vehicle'][] = ['motocicleta', 'automovil', 'bicicleta'];
-        const vehicle = typeof driver.vehicle === 'string' && validVehicles.includes(driver.vehicle as FormData['vehicle'])
-          ? driver.vehicle as FormData['vehicle']
-          : 'motocicleta';
-        form.reset({ name: driver.name, email: driver.email, vehicle, status: driver.status });
-      } else {
-        form.reset({ name: '', email: '', vehicle: 'motocicleta', status: 'Pendiente' });
-      }
+    if (isOpen && driver) {
+      const v = readVehicle(driver.vehicle);
+      form.reset({ name: driver.name, phoneNumber: driver.phoneNumber || '', vehicleType: v.type, plate: v.plate });
     }
   }, [isOpen, driver, form]);
 
   const handleSubmit = (values: FormData) => {
-    // Si el repartidor ya tenía un vehículo "completo" (modelo/patente/color, cargado
-    // por él mismo), no lo pisamos con solo el tipo — actualizamos el tipo dentro del
-    // mismo objeto para no perder esos datos al guardar desde este diálogo.
-    const existingVehicle = isEditing && driver ? driver.vehicle : undefined;
-    const vehicle = (typeof existingVehicle === 'object' && existingVehicle !== null)
-      ? { ...existingVehicle, type: values.vehicle }
-      : values.vehicle;
-
-    const driverData: DeliveryPersonnel = {
-      id: isEditing && driver ? driver.id : `proto-delivery-${Date.now()}`,
-      name: values.name,
-      email: values.email,
-      vehicle,
-      status: values.status,
-      zone: isEditing && driver ? driver.zone : 'Centro',
+    if (!driver) return;
+    // La bicicleta no lleva patente. El objeto `vehicle` conserva cualquier otro campo
+    // legacy (modelo/color) que el repartidor haya cargado.
+    const existing = typeof driver.vehicle === 'object' && driver.vehicle !== null ? driver.vehicle : {};
+    const vehicle = {
+      ...existing,
+      type: values.vehicleType,
+      plate: values.vehicleType === 'bicicleta' ? '' : (values.plate || '').trim().toUpperCase(),
     };
-    onSave(driverData);
+    // A propósito NO se manda `email` ni `status`: el email es inmutable acá (Auth), el
+    // estado se cambia con Aprobar/Rechazar. onSave arma el update con estos campos.
+    onSave({
+      id: driver.id,
+      name: values.name.trim(),
+      email: driver.email,
+      phoneNumber: (values.phoneNumber || '').trim(),
+      vehicle,
+      status: driver.status,
+      zone: driver.zone,
+    });
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Editar Repartidor' : 'Nuevo Repartidor'}</DialogTitle>
-          <DialogDescription>
-            {isEditing ? 'Modifica los detalles del repartidor.' : 'Crea un nuevo repartidor en el sistema.'}
-          </DialogDescription>
+          <DialogTitle>Editar Repartidor</DialogTitle>
+          <DialogDescription>Datos de contacto y vehículo. El estado se cambia con Aprobar/Rechazar.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-2">
@@ -98,62 +110,62 @@ export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: Manage
                 </FormItem>
               )}
             />
-             <FormField
+            {/* Email SOLO LECTURA: editarlo acá no cambia el login (vive en Firebase Auth) */}
+            <div className="space-y-1">
+              <FormLabel className="text-muted-foreground">Correo Electrónico (no editable)</FormLabel>
+              <Input value={driver?.email || ''} readOnly disabled className="bg-muted/50" />
+            </div>
+            <FormField
               control={form.control}
-              name="email"
+              name="phoneNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Correo Electrónico</FormLabel>
-                  <FormControl><Input type="email" {...field} /></FormControl>
+                  <FormLabel>Teléfono</FormLabel>
+                  <FormControl><Input type="tel" placeholder="Ej. 3834123456" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-                control={form.control}
-                name="vehicle"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vehículo</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                       <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un vehículo" />
-                          </SelectTrigger>
-                        </FormControl>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                  control={form.control}
+                  name="vehicleType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vehículo</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
-                          <SelectItem value="motocicleta">Motocicleta</SelectItem>
-                          <SelectItem value="automovil">Automóvil</SelectItem>
-                          <SelectItem value="bicicleta">Bicicleta</SelectItem>
+                          {VEHICLE_TYPES.map(v => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}
                         </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Estado</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                       <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un estado" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Activo">Activo</SelectItem>
-                          <SelectItem value="Pendiente">Pendiente</SelectItem>
-                          <SelectItem value="Inactivo">Inactivo</SelectItem>
-                          <SelectItem value="Rechazado">Rechazado</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-            />
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+              />
+              <FormField
+                  control={form.control}
+                  name="plate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Patente</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={form.watch('vehicleType') === 'bicicleta' ? 'No aplica' : 'ABC123'}
+                          disabled={form.watch('vehicleType') === 'bicicleta'}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+              />
+            </div>
+            {/* El estado real (Pendiente/Activo/…) se gestiona con Aprobar/Rechazar. */}
+            <div className="text-xs text-muted-foreground bg-muted/40 rounded-md p-2.5">
+              Estado actual: <strong>{driver?.status || '—'}</strong>. Para cambiarlo usá
+              los botones Aprobar/Rechazar de la lista o la ficha completa del repartidor.
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>

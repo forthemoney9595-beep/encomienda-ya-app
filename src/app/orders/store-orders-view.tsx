@@ -18,28 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
-// Dos tonos cortos generados con la Web Audio API -- sin archivo de audio que mantener.
-function playNewOrderBeep() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    [880, 1175].forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      const start = ctx.currentTime + i * 0.18;
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(start);
-      osc.stop(start + 0.18);
-    });
-    setTimeout(() => ctx.close(), 500);
-  } catch {
-    // Navegador sin soporte / sin gesto previo del usuario -- silencioso, no rompe nada.
-  }
-}
+// Beep de pedido nuevo (helper compartido en lib/beep — antes estaba inline acá).
+import { playBeep as playNewOrderBeep } from '@/lib/beep';
 
 export default function StoreOrdersView() {
   const { user, userProfile } = useAuth();
@@ -104,7 +84,13 @@ export default function StoreOrdersView() {
       }
   };
 
+  // Anti doble-toque (punto 6 de la prueba, 18/8): sin esta guarda, el segundo toque
+  // disparaba OTRA confirmación que rebotaba con 400 "ya no está pendiente" — cartel
+  // rojo con el pedido ya aceptado, pura confusión.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const handleConfirmStock = async (order: any, removedItemIds: string[] = [], adjustedQuantities: Record<string, number> = {}) => {
+      if (confirmingId) return;
+      setConfirmingId(order.id);
       try {
           // No mandar ajustes de ítems que además se destildaron (sacar gana).
           const cleanAdjusted = Object.fromEntries(
@@ -126,6 +112,8 @@ export default function StoreOrdersView() {
           });
       } catch (error: any) {
           toast({ variant: "destructive", title: "Error al confirmar stock", description: error.message });
+      } finally {
+          setConfirmingId(null);
       }
   };
 
@@ -212,7 +200,8 @@ export default function StoreOrdersView() {
                         order={order}
                         onAction={(removedItemIds: string[], adjustedQuantities: Record<string, number>) => handleConfirmStock(order, removedItemIds, adjustedQuantities)}
                         onReject={() => handleRejectOrder(order)}
-                        actionLabel="Confirmar Stock"
+                        isDisabled={confirmingId !== null}
+                        actionLabel={confirmingId === order.id ? 'Confirmando...' : 'Confirmar Stock'}
                         actionIcon={CheckCircle2}
                         statusColor="border-l-warning"
                         statusLabel="Solicitud Nueva"

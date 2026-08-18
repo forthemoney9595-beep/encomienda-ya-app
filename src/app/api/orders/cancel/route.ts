@@ -19,11 +19,13 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { orderId, userId } = await request.json();
+        const { orderId, userId, reason } = await request.json();
 
         if (!orderId || !userId) {
             return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
         }
+        // Motivo opcional (lo manda el admin al cancelar) — sanitizado.
+        const cancelReason = String(reason || '').trim().slice(0, 200);
 
         // 🔒 Antes solo se chequeaba que el pedido fuera de ese userId -- pero nada probaba
         // que quien llama REALMENTE sea ese usuario. Ahora se verifica el ID token primero.
@@ -116,11 +118,19 @@ export async function POST(request: Request) {
         const storeOwnerId = order.storeOwnerId;
         const notificationsRef = adminDb.collection('notifications');
 
+        // ¿Canceló la ADMINISTRACIÓN o el propio cliente? (punto 5 de la prueba, 18/8):
+        // cuando cancelaba el admin, los avisos decían "el cliente canceló" — la voz del
+        // mensaje mentía y ni el cliente ni la tienda entendían qué pasó.
+        const cancelledByAdmin = isAdmin && callerUid !== userId;
+        const reasonSuffix = cancelReason ? ` Motivo: ${cancelReason}` : '';
+
         // Notificar al comprador
         await notificationsRef.add({
             userId,
             title: '🚫 Pedido cancelado',
-            body: 'Tu pedido fue cancelado correctamente.',
+            body: cancelledByAdmin
+                ? `La administración canceló tu pedido #${orderId.substring(0, 6)}.${reasonSuffix} Si ya lo habías pagado, te contactamos por el reembolso.`
+                : 'Tu pedido fue cancelado correctamente.',
             type: 'order_cancelled',
             orderId,
             read: false,
@@ -143,8 +153,10 @@ export async function POST(request: Request) {
         if (storeOwnerId) {
             await notificationsRef.add({
                 userId: storeOwnerId,
-                title: '❌ Pedido cancelado por el cliente',
-                body: `El cliente ${order.customerName || ''} canceló el pedido #${orderId.substring(0, 6)}.`,
+                title: cancelledByAdmin ? '❌ Pedido cancelado por la administración' : '❌ Pedido cancelado por el cliente',
+                body: cancelledByAdmin
+                    ? `La administración canceló el pedido #${orderId.substring(0, 6)} de ${order.customerName || 'un cliente'}.${reasonSuffix}`
+                    : `El cliente ${order.customerName || ''} canceló el pedido #${orderId.substring(0, 6)}.`,
                 type: 'order_cancelled',
                 orderId,
                 read: false,
@@ -165,7 +177,9 @@ export async function POST(request: Request) {
                         tokens,
                         notification: {
                             title: '❌ Pedido cancelado',
-                            body: `${order.customerName || 'Un cliente'} canceló el pedido #${orderId.substring(0, 6)}.`,
+                            body: cancelledByAdmin
+                                ? `La administración canceló el pedido #${orderId.substring(0, 6)}.${reasonSuffix}`
+                                : `${order.customerName || 'Un cliente'} canceló el pedido #${orderId.substring(0, 6)}.`,
                         },
                         webpush: { fcmOptions: { link: '/orders' }, notification: { tag: pushTag('cancel', orderId) } },
                         data: { url: '/orders', orderId },

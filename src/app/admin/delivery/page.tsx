@@ -99,16 +99,18 @@ function AdminDeliveryPage() {
 
     try {
       const userRef = doc(firestore, 'users', driverData.id);
+      // Update EXPLÍCITO (punto 2 de la prueba): solo los campos que el editor unificado
+      // toca de verdad — nombre, teléfono y vehículo. Ya NO se escribe `email` (vive en
+      // Auth, editarlo desincronizaba) ni `status`/`isApproved` (se cambian por
+      // Aprobar/Rechazar vía approval-service, para no reintroducir la desincronización R1).
       await updateDoc(userRef, {
-          ...driverData,
-          // Mismo criterio que el detalle individual del repartidor: isApproved siempre
-          // en sync con status, porque la regla de Firestore que habilita tomar pedidos
-          // solo lee isApproved.
-          isApproved: driverData.status === 'Activo',
-          updatedAt: serverTimestamp()
+          name: driverData.name,
+          phoneNumber: driverData.phoneNumber || '',
+          vehicle: driverData.vehicle,
+          updatedAt: serverTimestamp(),
       });
 
-      if (user) logAdminAction(firestore, user.uid, 'edit_driver', driverData.id, `estado: ${driverData.status}`);
+      if (user) logAdminAction(firestore, user.uid, 'edit_driver', driverData.id, `datos actualizados`);
 
       toast({
         title: 'Repartidor Actualizado',

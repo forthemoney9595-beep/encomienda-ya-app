@@ -247,10 +247,13 @@ function AdminOrdersPage() {
 
   const handleCancel = async (orderId: string, orderUserId: string) => {
     if (!user) return;
-    if (!confirm('¿Cancelar este pedido? Esta acción notificará al comprador y a la tienda.')) return;
+    // Motivo opcional (punto 5 de la prueba): viaja en los avisos a comprador y tienda
+    // ("La administración canceló tu pedido... Motivo: X"). Cancelar el prompt = abortar.
+    const reason = prompt('¿Cancelar este pedido? Se avisará al comprador y a la tienda.\n\nMotivo (opcional, lo ven ambos):');
+    if (reason === null) return;
     setCancelling(orderId);
     try {
-      const res = await authedFetch('/api/orders/cancel', user, { orderId, userId: orderUserId });
+      const res = await authedFetch('/api/orders/cancel', user, { orderId, userId: orderUserId, reason: reason.trim() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
       if (firestore) logAdminAction(firestore, user.uid, 'cancel_order', orderId);

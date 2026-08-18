@@ -26,7 +26,7 @@ export interface DeliveryPersonnel {
   email: string;
   status: 'Activo' | 'Inactivo' | 'Pendiente' | 'Rechazado';
   phoneNumber?: string;
-  vehicle?: string | { type: string; model: string; plate: string; color: string };
+  vehicle?: string | { type?: string; plate?: string; model?: string; color?: string };
   profileImageUrl?: string;
   licenseUrl?: string;
   licenseBackUrl?: string;

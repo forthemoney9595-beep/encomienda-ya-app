@@ -38,7 +38,6 @@ export function ChatWindow({ order }: ChatWindowProps) {
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
     const lastSentRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
 
     const chatQuery = useMemoFirebase(() => {
@@ -67,8 +66,14 @@ export function ChatWindow({ order }: ChatWindowProps) {
         (myRole === 'delivery' && order.deliveryPersonId === myUser?.uid) ||
         (myUser?.uid === order.userId);
 
+    // 🚨 Auto-scroll SOLO dentro del contenedor del chat (punto 3 de la prueba, 18/8):
+    // el scrollIntoView anterior arrastraba la PÁGINA entera hasta el chat al abrir el
+    // detalle del pedido — el cliente pedía y "aterrizaba en el chat" en vez de ver el
+    // estado. scrollTop del contenedor no mueve la página jamás.
+    const messagesBoxRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        const box = messagesBoxRef.current;
+        if (box) box.scrollTop = box.scrollHeight;
     }, [messages]);
 
     // --- LÓGICA DE DESTINATARIO Y NOTIFICACIÓN ---
@@ -223,7 +228,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                 </CardDescription>
             </CardHeader>
 
-            <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 bg-muted/30">
+            <CardContent ref={messagesBoxRef} className="flex-1 overflow-y-auto p-3 space-y-3 bg-muted/30">
                 {loadingMessages ? (
                     <div className="text-center py-10">
                         <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
@@ -238,7 +243,6 @@ export function ChatWindow({ order }: ChatWindowProps) {
                         <p className="text-xs opacity-70">Los mensajes enviarán una notificación 🔔</p>
                     </div>
                 )}
-                <div ref={messagesEndRef} />
             </CardContent>
 
             {!isAdminViewer && (

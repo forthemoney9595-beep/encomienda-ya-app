@@ -36,6 +36,10 @@ function AdminCommunicationsPage() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  // ¿A dónde lleva el aviso al tocarlo? (punto 8 de la prueba, 18/8): antes SIEMPRE iba a
+  // '/' — tocar la campanita no llevaba a ningún lado útil. Ahora se elige el destino.
+  const [linkKind, setLinkKind] = useState<'home' | 'orders' | 'order'>('home');
+  const [linkOrderId, setLinkOrderId] = useState('');
 
   // Historial de envíos (Fase GG): antes esta página era solo un formulario, no había forma
   // de saber qué se había comunicado, a quién ni cuándo, ni de reenviar algo anterior.
@@ -90,9 +94,13 @@ function AdminCommunicationsPage() {
     }
     const label = target === 'all' ? 'todos' : target === 'stores' ? 'todas las tiendas' : target === 'drivers' ? 'todos los repartidores' : 'este usuario';
     if (!confirm(`¿Enviar notificación a "${label}"?`)) return;
+    // Destino del link al tocar el aviso.
+    const link = linkKind === 'orders' ? '/orders'
+      : linkKind === 'order' && linkOrderId.trim() ? `/orders/${linkOrderId.trim()}`
+      : '/';
     setSending(true);
     try {
-      const res = await authedFetch('/api/admin/notify-broadcast', user, { target: dest, title, body });
+      const res = await authedFetch('/api/admin/notify-broadcast', user, { target: dest, title, body, link });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       // Un broadcast le llega a todos los usuarios de la plataforma -- no quedaba
@@ -149,6 +157,24 @@ function AdminCommunicationsPage() {
                 )}
               </div>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">¿A dónde lleva el aviso?</label>
+            <div className="flex gap-2 flex-wrap">
+              {([['home', 'Inicio'], ['orders', 'Sus pedidos'], ['order', 'Un pedido puntual']] as const).map(([k, lbl]) => (
+                <button key={k} onClick={() => setLinkKind(k)} type="button"
+                  className={cn('px-3 py-1.5 rounded-full text-sm font-medium transition-all',
+                    linkKind === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                  )}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            {linkKind === 'order' && (
+              <Input placeholder="Pegá el ID del pedido (ej. para avisar de un reembolso)" value={linkOrderId} onChange={e => setLinkOrderId(e.target.value.trim())} />
+            )}
+            <p className="text-xs text-muted-foreground">Al tocar la notificación, el usuario va ahí. "Sus pedidos" abre la lista de cada uno.</p>
           </div>
 
           <div className="space-y-2">

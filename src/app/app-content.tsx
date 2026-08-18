@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 // ✅ CORRECCIÓN: Importación desde la ruta absoluta correcta (components)
 import { Notifications } from '@/components/notifications';
+import { ForegroundPush } from '@/components/foreground-push';
 import { Cart } from '@/components/cart';
 import { GlobalSearch, GlobalSearchTrigger, useGlobalSearchShortcut } from '@/components/global-search';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -259,6 +260,9 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
 
             {/* Buscador global (⌘K). Trae las tiendas recién la primera vez que se abre. */}
             {user && !loading && <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />}
+
+            {/* Banner + sonido para push en primer plano (app abierta) — punto 4 de la prueba */}
+            {user && !loading && <ForegroundPush />}
         </div>
     );
 }
