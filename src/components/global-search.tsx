@@ -17,6 +17,7 @@ import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
 import { UserDetailDialog } from '@/app/admin/users/user-detail-dialog';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
+import { fetchUsersForSearch, userMatchesSearch } from '@/lib/admin-user-search';
 import { cn } from '@/lib/utils';
 
 interface StoreLite {
@@ -199,39 +200,23 @@ function AdminSearch({ open, onOpenChange, isFullAdmin }: GlobalSearchProps & { 
     return () => clearTimeout(t);
   }, [term]);
 
-  // Usuarios: Firestore NO sabe buscar por substring, solo por PREFIJO (rango sobre un
-  // campo). Por eso escribir "test.com" no encuentra "cliente@test.com" -- hay que empezar
-  // por el principio del dato. Se buscan dos campos en paralelo (email y nombre) y se
-  // fusionan los resultados, así "david" encuentra por nombre aunque su email no empiece
-  // igual. Cubre los 4 roles de una: un repartidor o dueño de tienda también son `users`.
+  // Usuarios (mejorado 18/8): búsqueda TOTAL en memoria — nombre, email, teléfono y
+  // DNI/CUIT, por substring y sin distinguir acentos ni mayúsculas ("luis" encuentra a
+  // "jorge luis"). Antes eran queries por PREFIJO de email/nombre, que solo encontraban
+  // lo que EMPEZABA igual. Usa la misma caché con tope que Gestión de Usuarios
+  // (admin-user-search.ts) — la colección se baja una vez cada 5 min como mucho.
   useEffect(() => {
     if (!firestore || debounced.length < 2) { setUsers(null); return; }
+    let cancelled = false;
     setLoadingUsers(true);
-    const t = debounced.toLowerCase();
-    const END = String.fromCharCode(0xf8ff);
-    const byEmail = getDocs(query(
-      collection(firestore, 'users'),
-      where('email', '>=', t), where('email', '<=', t + END), fbLimit(6),
-    ));
-    // Los rangos de Firestore distinguen mayúsculas ('D' < 'd' en ASCII), así que buscar
-    // "david" NO encuentra "David" ni viceversa. Se prueban las dos variantes: tal cual lo
-    // escrito y con la primera en mayúscula.
-    const capitalized = debounced.charAt(0).toUpperCase() + debounced.slice(1);
-    const nameQueries = Array.from(new Set([debounced, capitalized])).map(v => getDocs(query(
-      collection(firestore, 'users'),
-      where('name', '>=', v), where('name', '<=', v + END), fbLimit(6),
-    )));
-
-    Promise.allSettled([byEmail, ...nameQueries])
-      .then(results => {
-        const map = new Map<string, any>();
-        results.forEach(r => {
-          if (r.status !== 'fulfilled') return;
-          r.value.docs.forEach(d => map.set(d.id, { id: d.id, ...(d.data() as any) }));
-        });
-        setUsers(Array.from(map.values()).slice(0, 8));
+    fetchUsersForSearch(firestore)
+      .then(({ users: all }) => {
+        if (cancelled) return;
+        setUsers(all.filter(u => userMatchesSearch(u, debounced)).slice(0, 8));
       })
-      .finally(() => setLoadingUsers(false));
+      .catch(() => { if (!cancelled) setUsers([]); })
+      .finally(() => { if (!cancelled) setLoadingUsers(false); });
+    return () => { cancelled = true; };
   }, [firestore, debounced]);
 
   // Pedido por ID exacto -- el caso de uso más común (alguien pega el ID de un link o de
@@ -285,14 +270,12 @@ function AdminSearch({ open, onOpenChange, isFullAdmin }: GlobalSearchProps & { 
             <Loader2 className="h-4 w-4 animate-spin" /> Buscando...
           </div>
         )}
-        {/* Firestore solo busca por prefijo, no por substring -- si no se aclara, escribir
-            "test.com" y no encontrar nada parece que el buscador está roto. */}
         <CommandEmpty>
           <div className="py-4 px-6 text-center space-y-1">
             <p className="text-sm">No encontramos nada con ese término.</p>
             <p className="text-xs text-muted-foreground">
-              La búsqueda es por el <strong>comienzo</strong> del dato: probá con el inicio del
-              email (&quot;cliente&quot;), del nombre (&quot;David&quot;) o el ID completo del pedido.
+              Usuarios: por cualquier parte del nombre, email, teléfono o DNI.
+              Pedidos: por el ID completo. Tiendas: por el nombre.
             </p>
           </div>
         </CommandEmpty>

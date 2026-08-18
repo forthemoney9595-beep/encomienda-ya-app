@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import type { Order } from '@/lib/order-service';
+import { UserDetailDialog } from '@/app/admin/users/user-detail-dialog';
 
 const PAGE_SIZE = 50;
 // Los IDs de documento de Firestore tienen 20 caracteres; desde acá vale la pena intentar
@@ -102,6 +103,23 @@ function AdminOrdersPage() {
   const [refundReason, setRefundReason] = useState('');
   const [refundOperationRef, setRefundOperationRef] = useState('');
   const [submittingRefund, setSubmittingRefund] = useState(false);
+
+  // Ficha del cliente (18/8): tocar el nombre en la tabla abre el mismo UserDetailDialog
+  // de Gestión de Usuarios, sin salir de acá (patrón del ⌘K de la Fase GG).
+  const [viewUser, setViewUser] = useState<any | null>(null);
+  const openCustomer = async (userId: string) => {
+    if (!firestore) return;
+    try {
+      const snap = await getDoc(doc(firestore, 'users', userId));
+      if (!snap.exists()) {
+        toast({ variant: 'destructive', title: 'Usuario no encontrado', description: 'La cuenta ya no existe (pudo haberse eliminado).' });
+        return;
+      }
+      setViewUser({ id: snap.id, ...snap.data() });
+    } catch {
+      toast({ variant: 'destructive', title: 'No se pudo abrir la ficha' });
+    }
+  };
 
   const dateFrom = useMemo(() => getDateFrom(dateFilter), [dateFilter]);
 
@@ -410,8 +428,27 @@ function AdminOrdersPage() {
                 return (
                   <tr key={order.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDt(order.createdAt)}</td>
-                    <td className="px-4 py-3 font-medium">{order.customerName || '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{(order as any).storeName || '—'}</td>
+                    {/* Cliente y tienda clickeables (18/8): el nombre solo no decía nada — ahora
+                        el cliente abre su ficha (diálogo, sin salir de acá) y la tienda navega
+                        a la suya. */}
+                    <td className="px-4 py-3 font-medium">
+                      {order.userId ? (
+                        <button onClick={() => openCustomer(order.userId!)}
+                          className="text-left hover:text-primary hover:underline underline-offset-2 transition-colors"
+                          title="Ver ficha del cliente">
+                          {order.customerName || '—'}
+                        </button>
+                      ) : (order.customerName || '—')}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {(order as any).storeId ? (
+                        <Link href={`/admin/stores/${(order as any).storeId}`}
+                          className="hover:text-primary hover:underline underline-offset-2 transition-colors"
+                          title="Ver ficha de la tienda">
+                          {(order as any).storeName || '—'}
+                        </Link>
+                      ) : ((order as any).storeName || '—')}
+                    </td>
                     <td className="px-4 py-3 text-right font-bold">${order.total?.toLocaleString()}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1 items-start">
@@ -534,6 +571,8 @@ function AdminOrdersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UserDetailDialog user={viewUser} onClose={() => setViewUser(null)} />
     </div>
   );
 }

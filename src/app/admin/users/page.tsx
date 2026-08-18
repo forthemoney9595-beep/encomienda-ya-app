@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import AdminAuthGuard from '../admin-auth-guard';
 import { logAdminAction } from '@/lib/admin-audit';
 import { UserDetailDialog } from './user-detail-dialog';
+import { fetchUsersForSearch, userMatchesSearch, invalidateUserSearchCache, ADMIN_SEARCH_CAP } from '@/lib/admin-user-search';
 
 const PAGE_SIZE = 25;
 
@@ -66,6 +67,7 @@ function AdminUsersPage() {
   const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searchCapped, setSearchCapped] = useState(false);
 
   // Conteos por rol vía aggregation server-side (antes se contaban bajando TODA la colección).
   const allCountQ      = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
@@ -135,16 +137,13 @@ function AdminUsersPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Arma la query según el modo: búsqueda por prefijo de email, filtro por rol, o todos.
-  // Ninguna combinación necesita índice compuesto: búsqueda = rango sobre un solo campo (email);
-  // filtro por rol = igualdad + orderBy(documentId) (servido por el índice de un solo campo).
+  // Arma la query de NAVEGACIÓN (sin término de búsqueda): filtro por rol o todos,
+  // paginado por cursor. La búsqueda ya NO usa query de Firestore — ver resetLoad.
   const buildQuery = useCallback((cursor: QueryDocumentSnapshot | null) => {
     if (!firestore) return null;
     const col = collection(firestore, 'users');
     const cons: any[] = [];
-    if (debouncedSearch) {
-      cons.push(where('email', '>=', debouncedSearch), where('email', '<=', debouncedSearch + ''), orderBy('email'));
-    } else if (roleFilter !== 'all') {
+    if (roleFilter !== 'all') {
       cons.push(where('role', '==', roleFilter), orderBy(documentId()));
     } else {
       cons.push(orderBy(documentId()));
@@ -152,24 +151,39 @@ function AdminUsersPage() {
     cons.push(limit(PAGE_SIZE));
     if (cursor) cons.push(startAfter(cursor));
     return query(col, ...cons);
-  }, [firestore, debouncedSearch, roleFilter]);
+  }, [firestore, roleFilter]);
 
   const resetLoad = useCallback(async () => {
-    const q = buildQuery(null);
-    if (!q) return;
+    if (!firestore) return;
     setIsLoading(true);
     try {
-      const snap = await getDocs(q);
-      setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLastSnap(snap.docs[snap.docs.length - 1] || null);
-      setHasMore(snap.docs.length === PAGE_SIZE);
+      if (debouncedSearch) {
+        // Búsqueda TOTAL (18/8): nombre, email, teléfono y DNI/CUIT — substring y sin
+        // acentos, así "luis" encuentra a "jorge luis". Reemplaza al viejo prefijo de
+        // email server-side, que solo encontraba lo que EMPEZABA igual. Baja la
+        // colección una vez con caché y tope (ver admin-user-search.ts).
+        const { users, capped } = await fetchUsersForSearch(firestore);
+        setSearchCapped(capped);
+        setRows(users
+          .filter(u => userMatchesSearch(u, debouncedSearch))
+          .sort((a, b) => (a.name || a.displayName || '').localeCompare(b.name || b.displayName || '')));
+        setLastSnap(null);
+        setHasMore(false);
+      } else {
+        const q = buildQuery(null);
+        if (!q) return;
+        const snap = await getDocs(q);
+        setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLastSnap(snap.docs[snap.docs.length - 1] || null);
+        setHasMore(snap.docs.length === PAGE_SIZE);
+      }
     } catch (e) {
       console.error(e);
       toast({ variant: 'destructive', title: 'Error al cargar usuarios' });
     } finally {
       setIsLoading(false);
     }
-  }, [buildQuery, toast]);
+  }, [firestore, debouncedSearch, buildQuery, toast]);
 
   useEffect(() => { resetLoad(); }, [resetLoad]);
 
@@ -263,7 +277,7 @@ function AdminUsersPage() {
 
         toast({ title: 'Rol actualizado', description: `El usuario ahora es ${newRole}${promotingToAdmin ? ` (${level === 'full' ? 'completo' : 'soporte'})` : ''}.` });
         if (firestore && currentUser) logAdminAction(firestore, currentUser.uid, 'change_role', userId, `${oldRole} → ${newRole}${promotingToAdmin ? ` (${level})` : ''}`);
-        resetLoad();
+        invalidateUserSearchCache(); resetLoad();
         refreshCounts();
     } catch (error) {
         console.error(error);
@@ -292,7 +306,7 @@ function AdminUsersPage() {
         await batch.commit();
         toast({ title: 'Nivel actualizado', description: `Ahora es admin ${newLevel === 'full' ? 'completo' : 'de soporte'}.` });
         if (currentUser) logAdminAction(firestore, currentUser.uid, 'change_admin_level', userId, newLevel);
-        resetLoad();
+        invalidateUserSearchCache(); resetLoad();
     } catch (error) {
         console.error(error);
         toast({ variant: 'destructive', title: 'Error al cambiar nivel' });
@@ -322,7 +336,7 @@ function AdminUsersPage() {
         if (!res.ok) throw new Error(data.error || 'Error al eliminar');
         toast({ title: 'Usuario eliminado', description: 'La cuenta fue borrada de Auth y Firestore.' });
         // La auditoria la escribe la propia API (admin-audit-server).
-        resetLoad();
+        invalidateUserSearchCache(); resetLoad();
         refreshCounts();
     } catch (error: any) {
         console.error(error);
@@ -348,13 +362,19 @@ function AdminUsersPage() {
                 <div className="relative w-full sm:w-72">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Buscar por email (prefijo)..."
+                        placeholder="Buscar por nombre, email, teléfono o DNI..."
                         className="pl-8"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
             </div>
+            {debouncedSearch && !isLoading && (
+                <p className="text-xs text-muted-foreground mt-2">
+                    {displayed.length} resultado{displayed.length === 1 ? '' : 's'} para «{search.trim()}» en toda la base
+                    {searchCapped && ` — ⚠️ la base superó los ${ADMIN_SEARCH_CAP.toLocaleString('es-AR')} usuarios, la búsqueda puede estar incompleta (avisar a Claude: toca migrar a un índice de búsqueda)`}
+                </p>
+            )}
             <div className="flex gap-1.5 flex-wrap mt-3">
                 {[
                     { k: 'all', label: 'Todos', icon: Users, chip: 'bg-primary text-primary-foreground' },

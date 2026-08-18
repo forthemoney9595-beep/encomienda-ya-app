@@ -47,7 +47,15 @@ function AdminDeliveryPage() {
       if (statusFilter === 'rejected' && !['Rechazado', 'Inactivo'].includes(p.status)) return false;
       if (!t) return true;
       const plate = typeof p.vehicle === 'object' && p.vehicle ? p.vehicle.plate || '' : '';
-      return `${p.name || ''} ${p.email || ''} ${plate}`.toLowerCase().includes(t);
+      if (`${p.name || ''} ${p.email || ''} ${plate}`.toLowerCase().includes(t)) return true;
+      // También por dígitos de teléfono/DNI/CUIL (18/8) — mismo criterio que Gestión de
+      // Usuarios; mínimo 3 dígitos para no matchear todo.
+      const digits = t.replace(/\D+/g, '');
+      if (digits.length >= 3) {
+        const nums = `${p.phoneNumber || ''} ${(p as any).dni || ''} ${(p as any).cuil || ''}`.replace(/\D+/g, ' ');
+        if (nums.includes(digits)) return true;
+      }
+      return false;
     });
   }, [personnel, search, statusFilter]);
 
@@ -184,7 +192,7 @@ function AdminDeliveryPage() {
       <div className="flex flex-col gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nombre, email o patente..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder="Buscar por nombre, email, patente, teléfono o DNI..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {([
