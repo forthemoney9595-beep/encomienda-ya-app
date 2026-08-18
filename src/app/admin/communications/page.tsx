@@ -174,7 +174,7 @@ function AdminCommunicationsPage() {
             {linkKind === 'order' && (
               <Input placeholder="Pegá el ID del pedido (ej. para avisar de un reembolso)" value={linkOrderId} onChange={e => setLinkOrderId(e.target.value.trim())} />
             )}
-            <p className="text-xs text-muted-foreground">Al tocar la notificación, el usuario va ahí. "Sus pedidos" abre la lista de cada uno.</p>
+            <p className="text-xs text-muted-foreground">Al tocar la notificación, el usuario va ahí. &quot;Sus pedidos&quot; abre la lista de cada uno.</p>
           </div>
 
           <div className="space-y-2">
