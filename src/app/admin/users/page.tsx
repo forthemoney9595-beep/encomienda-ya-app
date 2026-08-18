@@ -18,7 +18,8 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Search, MoreHorizontal, Shield, Trash2, Users, Eye } from 'lucide-react';
+import { Loader2, Search, MoreHorizontal, Shield, Trash2, Users, Eye, Store, Bike } from 'lucide-react';
+import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import AdminAuthGuard from '../admin-auth-guard';
@@ -63,6 +64,24 @@ function AdminUsersPage() {
     all: cAll ?? 0, buyer: cBuyer ?? 0, store: cStore ?? 0, delivery: cDelivery ?? 0, admin: cAdmin ?? 0,
   };
   const refreshCounts = () => { rAll(); rBuyer(); rStore(); rDelivery(); rAdmin(); };
+
+  // Mapa dueño → tienda (18/8): las filas de rol Tienda mostraban solo a la PERSONA — no
+  // se sabía cuál tienda era de quién ni había camino a la ficha de la tienda (pedidos/
+  // plata/CBU en /admin/stores/[id]). `stores` es una colección chica por diseño (pueblo),
+  // un getDocs one-shot no viola la regla de escala de las Fases Y/Z.
+  const [storeByOwner, setStoreByOwner] = useState<Record<string, { id: string; name: string }>>({});
+  useEffect(() => {
+    if (!firestore) return;
+    getDocs(collection(firestore, 'stores')).then(snap => {
+      const map: Record<string, { id: string; name: string }> = {};
+      snap.docs.forEach(d => {
+        const s = d.data() as any;
+        const owner = s.ownerId || s.userId;
+        if (owner) map[owner] = { id: d.id, name: s.name || 'Tienda' };
+      });
+      setStoreByOwner(map);
+    }).catch(() => { /* la columna extra simplemente no se muestra */ });
+  }, [firestore]);
 
   // Si el ⌘K navega acá estando YA en esta página, la ruta no cambia (solo el query param)
   // y el componente no se re-monta -- sin esto el buscador quedaba con el valor viejo y
@@ -342,6 +361,16 @@ function AdminUsersPage() {
                                     <div>
                                         <div className="font-medium text-sm">{user.displayName || user.name || 'Sin Nombre'}</div>
                                         <div className="text-xs text-muted-foreground">{user.email}</div>
+                                        {/* Qué tienda es de esta persona — antes solo se veía a la PERSONA */}
+                                        {user.role === 'store' && (storeByOwner[user.id] || (user.storeId && Object.values(storeByOwner).find(s => s.id === user.storeId))) && (
+                                            <Link
+                                                href={`/admin/stores/${(storeByOwner[user.id] || Object.values(storeByOwner).find(s => s.id === user.storeId))!.id}`}
+                                                className="mt-0.5 inline-flex items-center gap-1 text-xs text-info hover:underline"
+                                            >
+                                                <Store className="h-3 w-3" />
+                                                {(storeByOwner[user.id] || Object.values(storeByOwner).find(s => s.id === user.storeId))!.name}
+                                            </Link>
+                                        )}
                                     </div>
                                 </TableCell>
                                 <TableCell>
@@ -372,7 +401,23 @@ function AdminUsersPage() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex items-center justify-end gap-2">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalle" onClick={() => setDetailUser(user)}>
+                                        {/* Ficha COMPLETA del negocio (pedidos, plata, CBU) — el ojito muestra a
+                                            la persona; esto lleva a la tienda / repartidor como operación. */}
+                                        {user.role === 'store' && storeByOwner[user.id] && (
+                                            <Link href={`/admin/stores/${storeByOwner[user.id].id}`}>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" title={`Ficha de ${storeByOwner[user.id].name}`}>
+                                                    <Store className="h-4 w-4 text-info" />
+                                                </Button>
+                                            </Link>
+                                        )}
+                                        {user.role === 'delivery' && (
+                                            <Link href={`/admin/delivery/${user.id}`}>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" title="Ficha del repartidor">
+                                                    <Bike className="h-4 w-4 text-warning" />
+                                                </Button>
+                                            </Link>
+                                        )}
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalle de la persona" onClick={() => setDetailUser(user)}>
                                             <Eye className="h-4 w-4 text-muted-foreground" />
                                         </Button>
                                         <DropdownMenu>
