@@ -2264,6 +2264,36 @@ puntos en la bóveda. Diagnóstico contra la base antes de tocar nada:
   bóveda (Ruta al lanzamiento) como mejora**; reorganización del inicio con favoritos →
   anotada para después de la prueba.
 
+## Fase RR octies (ago 2026): tiendas/repartidores compran como clientes + anti-duplicados push + ajuste de cantidades
+Tres tandas de la gran prueba, cada una con e2e propio (scripts `_e2e-*` gitignored):
+- **Compras por rol (decisión de producto, opción B):** tiendas y repartidores PUEDEN
+  comprar (caso real: Dario compró pizza con su cuenta de tienda) con dos guardas:
+  `create` rechaza la AUTO-COMPRA (`ownerId == callerUid` → 400) y la regla de
+  autoasignación de `orders` exige `userId != auth.uid` (un repartidor no toma SU pedido
+  — sería envío gratis + auto-calificación; UI acorde en pool y detalle). Menú **"Como
+  cliente"** (Tiendas/Mis Compras/Favoritos) en main-nav para ambos roles + nueva
+  `/my-purchases` (reusa `BuyerOrdersView`, la consulta ya filtra por userId) — sus
+  compras eran invisibles porque `/orders` muestra el panel operativo. Verificado 6/6
+  ataque+regresión contra reglas de producción. OJO e2e: el SDK de cliente tiene UNA
+  sesión — loguear al comprador pisa la del repartidor (falso denegado; diagnóstico con
+  órdenes controladas por Admin SDK).
+- **Anti-duplicados de notificaciones (3 capas):** la campanita NO duplicaba — el push
+  llegaba 2 veces al mismo aparato con dos tokens vivos (uno viejo sin morir). (1)
+  `webpush.notification.tag` en los 11 senders (`pushTag` en notify-server; mismo aviso
+  = un tag = UNA notificación visible; re-avisos de un pedido REEMPLAZAN al anterior);
+  (2) `persistFcmToken` (lib/firebase.ts) = punto único de guardado que recuerda el
+  token de ESTE dispositivo en localStorage y saca el anterior al re-registrar; (3) chat:
+  respuestas rápidas deshabilitadas mientras envía + mismo texto no se reenvía en 8s.
+- **Ajuste de cantidades en confirm-stock** ("piden 4, tengo 2"): `adjustedQuantities`
+  (solo REDUCIR, entero ≥1; aumentar rechazado — saltearía la validación de stock de
+  create), mismo recálculo server-side que sacar ítems, `adjustedItems` en la orden,
+  notificación "Pizza 4→2. Nuevo total: $X", producto reducido a stock 0 (regla MM).
+  Botones −/+ en LOS DOS caminos de confirmación (lección R1). E2e 19/19.
+- **'Listo para recoger' era invisible para la tienda** (no estaba en las listas de
+  pestañas del panel; el botón del panel no produce ese estado pero el detalle sí) —
+  agregado con tarjeta propia + re-aviso. Y el pool del repartidor ganó "Ver detalle
+  del pedido" antes de tomar.
+
 ## Fase SS (ago 2026): auditoría archivo por archivo + Tanda A (8 críticos)
 Pedido del usuario durante la gran prueba: "análisis archivo por archivo para encontrar
 bugs, mejoras o rutas perdidas". 3 agentes en paralelo (páginas/navegación, API, libs/
