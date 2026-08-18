@@ -93,6 +93,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
+    // 🔒 TELÉFONO OBLIGATORIO PARA PEDIR (decisión de producto, 18/8): sin contacto no
+    // hay pedido — el repartidor necesita un plan B en la puerta. El checkout ya lo
+    // exige; esto es la defensa real contra un body manipulado. Va DESPUÉS del chequeo
+    // de identidad: un request sin token sigue recibiendo 401, no este 400.
+    if (safePhone.replace(/\D/g, '').length < 8) {
+      return NextResponse.json(
+        { error: "Falta un teléfono de contacto válido para coordinar la entrega." },
+        { status: 400 },
+      );
+    }
+
     // 🔒 Idempotencia: evitar doble pedido por doble click / doble request
     const idempotencyKey = body.idempotencyKey as string | undefined;
     if (idempotencyKey) {

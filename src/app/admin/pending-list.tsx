@@ -41,6 +41,25 @@ interface PendingListProps {
 export function PendingList({ title, icon: Icon, users, onApprove, onReject, isLoading }: PendingListProps) {
   const { user: adminUser } = useAuth();
   const [selectedUser, setSelectedUser] = useState<PendingUser | null>(null);
+
+  // ✉️ Mail verificado (decisión de David, 18/8): requisito para aprobar. El dato vive
+  // en Firebase AUTH (el cliente no puede leerlo de otros) — se pide a la API admin en
+  // un solo viaje para todos los pendientes de la lista.
+  const [emailVerified, setEmailVerified] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!adminUser || users.length === 0) { setEmailVerified({}); return; }
+    let cancelled = false;
+    adminUser.getIdToken()
+      .then(token => fetch('/api/admin/email-verified', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uids: users.map(u => u.id) }),
+      }))
+      .then(res => res.json())
+      .then(data => { if (!cancelled && data.verified) setEmailVerified(data.verified); })
+      .catch(() => { /* sin el dato, simplemente no se muestra el badge */ });
+    return () => { cancelled = true; };
+  }, [adminUser, users]);
   // Fotos de licencia: se piden como URLs firmadas de corta duración (nunca el link
   // permanente con token viejo) al abrir el detalle -- ver /api/licenses/signed-url.
   const [licenseUrls, setLicenseUrls] = useState<Record<string, string | null>>({});
@@ -92,6 +111,14 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                     <div className="overflow-hidden">
                       <p className="font-semibold text-sm truncate max-w-[120px]">{user.displayName || user.name || 'Usuario'}</p>
                       <p className="text-xs text-muted-foreground truncate max-w-[120px]">{user.email}</p>
+                      {/* Requisito de aprobación: no aprobar cuentas sin mail verificado */}
+                      {emailVerified[user.id] !== undefined && (
+                        emailVerified[user.id] ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-success">✉️ Mail verificado</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-warning font-medium">✉️ Sin verificar — no aprobar todavía</span>
+                        )
+                      )}
                     </div>
                   </div>
                   <div className="flex space-x-1 shrink-0">

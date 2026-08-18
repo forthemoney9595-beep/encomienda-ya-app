@@ -239,6 +239,19 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         return;
     }
 
+    // 🔒 TELÉFONO OBLIGATORIO PARA PEDIR (decisión de David, 18/8): sin un número de
+    // contacto el repartidor no tiene plan B en la puerta. Para cuentas registradas
+    // viene precargado (invisible); cubre a las cuentas de Google/viejas que no tienen.
+    // El servidor lo exige igual (defensa doble en /api/orders/create).
+    if (phone.replace(/\D/g, '').length < 8) {
+        toast({
+            variant: "destructive",
+            title: "Falta tu teléfono",
+            description: "Ingresá un número de contacto válido (con código de área) para coordinar la entrega.",
+        });
+        return;
+    }
+
     if (!address) {
         toast({ variant: "destructive", title: "Falta Referencia", description: "Escribe un detalle de tu casa (ej: Portón negro)." });
         return;
@@ -273,7 +286,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             customerCoords: locationCoords,
 
             customerName: userProfile?.name || user.displayName || 'Cliente',
-            customerPhoneNumber: phone || 'Sin teléfono',
+            customerPhoneNumber: phone,
             idempotencyKey
         });
 
