@@ -2482,6 +2482,25 @@ código/reglas. Uso: `node _approve-payment.js --list` (pedidos esperando pago) 
   Almendra). El circuito de pago REAL (checkout MP + webhook) se prueba en el bloque MP
   con un pago chico de verdad — este script cubre el resto del recorrido.
 
+## Rediseño visual (ago 2026, en curso) — "Mezcla de David" + FAMILIAS de color
+Diseño aprobado por el usuario en un lienzo iterativo (bóveda → "Rediseño visual", con
+galería PNG en `Diseños/`). **D1-D3 implementadas y en producción**; D4 pendiente.
+- **D1 — Familias de color:** los 10 matices `--cat-*` pasaron a 4 FAMILIAS (comida=
+  naranja, almacén=dorado, salud=verde agua, ropa/hogar=azul; violeta SOLO marca). Las
+  claves de `category-style.ts` se conservan: cada una es un TONO dentro de su familia
+  (los degradés no cruzan familias). Matchers nuevos: rotisería/heladería/panadería →
+  comida; verdulería/carnicería → almacén (antes caían al hash con color al azar).
+  **Regla: naranja intenso además = OFERTAS; verde NUNCA para descuentos.**
+- **D2 — Home:** tarjeta estilo Mezcla (badge "Hasta -X%" junto al nombre, rubro en
+  color de familia + "Llega en {deliveryTime}", estado en texto verde, botón "Ver menú
+  y pedir"; la dirección salió de la tarjeta) + banner naranja con la mejor oferta
+  (`maxDiscountPercent`, ambas vistas: usuario e invitado).
+- **D3 — Tienda pública:** rubro coloreado bajo el nombre, franja naranja de ofertas,
+  badges de descuento de verde → violeta de marca (`bg-brand-gradient`).
+- **D4 — PENDIENTE: toggle claro/oscuro** (el tema claro ya existe en globals.css; falta
+  el switch en Perfil + quitar el `dark` forzado + revisión pantalla por pantalla) y D5
+  opcional "modo fácil" para mayores. Plan completo en la bóveda.
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —
