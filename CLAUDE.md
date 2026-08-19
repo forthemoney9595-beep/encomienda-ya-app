@@ -2516,9 +2516,15 @@ galería PNG en `Diseños/`). **D1-D3 implementadas y en producción**; D4 pendi
   (`maxDiscountPercent`, ambas vistas: usuario e invitado).
 - **D3 — Tienda pública:** rubro coloreado bajo el nombre, franja naranja de ofertas,
   badges de descuento de verde → violeta de marca (`bg-brand-gradient`).
-- **D4 — PENDIENTE: toggle claro/oscuro** (el tema claro ya existe en globals.css; falta
-  el switch en Perfil + quitar el `dark` forzado + revisión pantalla por pantalla) y D5
-  opcional "modo fácil" para mayores. Plan completo en la bóveda.
+- **D4 — HECHO (19/8): toggle claro/oscuro.** Interruptor en Perfil → Apariencia
+  (`theme-toggle.tsx`); default OSCURO; localStorage `eya-theme` aplicado por script
+  inline en el head de layout.tsx ANTES del primer paint (+ meta theme-color;
+  `suppressHydrationWarning` en el html). **Los tokens `--cat-*` ahora existen también
+  en `:root` claro** con tonos más profundos — solo vivían en `.dark` y el modo claro
+  dejaba TODAS las familias de color sin pintar (la trampa silenciosa de Tailwind).
+  Verificado: home + tienda en claro (familias pintadas, sin overflow) y regresión del
+  oscuro default. Revisión fina de paneles tienda/repartidor/admin en claro: durante
+  la prueba. Queda D5 opcional (modo fácil para mayores).
 
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
