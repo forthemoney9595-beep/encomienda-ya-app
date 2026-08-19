@@ -412,7 +412,7 @@ function HomeContent() {
     return (
       <div className="container mx-auto animate-in fade-in duration-500 pt-4">
         {/* Bienvenida compacta con CTA de registro (no el hero gigante de antes) */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card/40 p-5 sm:p-6 mb-6">
+        <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/40 p-5 sm:p-6 mb-6">
           <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
             <div className="absolute -left-10 -top-16 h-52 w-52 rounded-full bg-primary/25 blur-3xl animate-float" />
             <div className="absolute -right-12 -bottom-20 h-56 w-56 rounded-full bg-cat-kiosk/20 blur-3xl animate-float" style={{ animationDelay: '2.5s' }} />
@@ -513,7 +513,7 @@ function HomeContent() {
   return (
     <div className="container mx-auto animate-in fade-in duration-500">
       {/* HERO — con globos difuminados detrás (decorativos, no interactivos) */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card/40 p-5 sm:p-6 mb-6">
+      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/40 p-5 sm:p-6 mb-6">
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
           <div className="absolute -left-10 -top-16 h-52 w-52 rounded-full bg-primary/25 blur-3xl animate-float" />
           <div className="absolute -right-12 -bottom-20 h-56 w-56 rounded-full bg-cat-kiosk/20 blur-3xl animate-float" style={{ animationDelay: '2.5s' }} />

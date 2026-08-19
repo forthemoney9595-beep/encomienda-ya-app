@@ -48,10 +48,19 @@ export default function RootLayout({
 }>) {
 
   return (
-    <html lang="es" className="dark">
+    // Rediseño D4 (19/8): el `dark` dejó de estar forzado — el tema se elige en Perfil
+    // (localStorage 'eya-theme', default oscuro = la identidad de siempre). El script
+    // de abajo aplica la clase ANTES del primer paint para que no haya parpadeo;
+    // suppressHydrationWarning porque la clase la pone el script, no el server.
+    <html lang="es" className="dark" suppressHydrationWarning>
       <head>
         {/* PWA: Color de la barra de estado del navegador/móvil */}
         <meta name="theme-color" content="#8B5CF6" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('eya-theme')==='light'){document.documentElement.classList.remove('dark');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content','#F6F5FA');}}catch(e){}`,
+          }}
+        />
         {/* PWA: el manifest vive en src/app/manifest.json (Next lo sirve como
             /manifest.json — NO crear otro en public/, genera un conflicto de rutas). */}
         <link rel="manifest" href="/manifest.json" />

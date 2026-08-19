@@ -45,6 +45,22 @@
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217 32.6% 17.5%;
     --sidebar-ring: 258 90% 66%;
+
+    /* Familias de RUBRO en TEMA CLARO (Rediseño D4, 19/8): mismos matices que en
+       .dark pero más profundos — sobre blanco, un color necesita menos luz para
+       leerse como texto. OJO: estos tokens existían SOLO en .dark; sin este bloque,
+       activar el modo claro dejaba chips/banners/placeholders SIN pintar (la trampa
+       silenciosa de Tailwind de la Fase AA). Mapa de familias: lib/category-style.ts. */
+    --cat-brand: 258 80% 56%;   /* violeta — SOLO "Todas"/marca */
+    --cat-food: 24 90% 48%;     /* COMIDA: naranja base */
+    --cat-fast: 15 84% 46%;     /*   tono profundo */
+    --cat-drink: 30 86% 44%;    /*   tono claro */
+    --cat-kiosk: 40 82% 40%;    /* ALMACÉN: dorado profundo */
+    --cat-market: 44 88% 42%;   /*   dorado base */
+    --cat-pharma: 168 78% 32%;  /* SALUD: verde agua */
+    --cat-cloth: 218 78% 48%;   /* ROPA/HOGAR: azul base */
+    --cat-home: 212 78% 42%;    /*   azul profundo */
+    --cat-other: 226 62% 52%;   /*   azul claro (fallback) */
   }
 
   /* Tema oscuro tipo "app moderna": fondo indigo profundo + tarjetas elevadas

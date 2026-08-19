@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -311,6 +312,20 @@ export default function ProfilePage() {
                         </TabsList>
 
                         <TabsContent value="info">
+                            {/* Apariencia (Rediseño D4, 19/8): tema claro pensado para
+                                usuarios mayores — el oscuro sigue siendo el default. */}
+                            <Card className="mb-4">
+                                <CardHeader>
+                                    <CardTitle>Apariencia</CardTitle>
+                                    <CardDescription>Elegí cómo se ve la app en este dispositivo.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <ThemeToggle />
+                                    <p className="mt-2 text-xs text-muted-foreground">
+                                        El modo claro puede leerse más cómodo con mucha luz o para la vista cansada.
+                                    </p>
+                                </CardContent>
+                            </Card>
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Detalles de la Cuenta</CardTitle>
