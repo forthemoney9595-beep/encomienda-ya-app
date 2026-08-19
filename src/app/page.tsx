@@ -239,6 +239,17 @@ function HomeContent() {
   );
   const favoriteStores = useMemo(() => filteredStores.filter(d => d.isFav), [filteredStores]);
 
+  // Banner naranja de promo (Rediseño 19/8): la MEJOR oferta activa. Naranja intenso =
+  // el color de OFERTAS del sistema de familias; sale de maxDiscountPercent
+  // (denormalizado, 0 lecturas extra).
+  const topOffer = useMemo(() => {
+    let best: (typeof discountedStores)[number] | null = null;
+    for (const d of discountedStores) {
+      if (!best || (d.store.maxDiscountPercent || 0) > (best.store.maxDiscountPercent || 0)) best = d;
+    }
+    return best;
+  }, [discountedStores]);
+
   // Los rubros salen de las tiendas APROBADAS, no de rawStores: si no, una tienda pendiente
   // de aprobación aportaba su rubro al chip y ese chip después daba 0 resultados.
   const categories = useMemo(() => {
@@ -310,6 +321,22 @@ function HomeContent() {
     />
   );
 
+  // Se muestra en las dos vistas (usuario e invitado): es vidriera pura, sin datos
+  // personales — y para el invitado es el mejor motivo para registrarse.
+  const promoBanner = !hasFilters && topOffer ? (
+    <Link href={`/stores/${topOffer.store.id}`} className="mb-6 block">
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-cat-food px-4 py-3.5 transition-transform hover:scale-[1.01]">
+        <div className="min-w-0">
+          <p className="line-clamp-1 font-headline text-base font-bold text-white">
+            Hasta -{topOffer.store.maxDiscountPercent}% en {topOffer.store.name}
+          </p>
+          <p className="text-xs text-white/85">Ofertas de hoy · tocá para verlas</p>
+        </div>
+        <ArrowRight className="h-5 w-5 shrink-0 text-white" />
+      </div>
+    </Link>
+  ) : null;
+
   // 🟢 MODO INVITADO: vidriera abierta (Opción A, ago 2026). El visitante ve la MISMA
   // grilla de tiendas que un usuario, navega libre y recién al querer pedir se le pide
   // cuenta (candado en el carrito de la tienda pública). Sin secciones personales
@@ -366,6 +393,8 @@ function HomeContent() {
           minRating={minRating}
           setMinRating={setMinRating}
         />
+
+        {promoBanner}
 
         {/* "Con descuento" sí (es vidriera pura, cero datos personales); "Tus favoritas" no. */}
         {!hasFilters && discountedStores.length > 0 && (
@@ -473,6 +502,8 @@ function HomeContent() {
         minRating={minRating}
         setMinRating={setMinRating}
       />
+
+      {promoBanner}
 
       {/* Secciones destacadas — solo en modo "explorar" (sin filtros activos). Con filtros
           se muestra una única grilla de resultados, si no la página confunde. */}

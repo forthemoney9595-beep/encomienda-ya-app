@@ -5,6 +5,11 @@ import {
 // Ícono + color por RUBRO. Lo usan los chips de categoría del inicio, los del menú de una
 // tienda y el sidebar, para que los tres hablen el mismo idioma visual.
 //
+// v2 (Rediseño visual, 19/8): los colores dejaron de ser 10 matices sueltos y pasaron a
+// 4 FAMILIAS (comida=naranja, almacén=dorado, salud=verde agua, ropa/hogar=azul; el
+// violeta es SOLO de la marca). Las claves de acá se conservan: cada una es un TONO
+// dentro de su familia. Los valores reales viven en globals.css (--cat-*).
+//
 // OJO Tailwind: todos los nombres de clase de acá tienen que ser literales. Construirlos
 // concatenando (`from-cat-${key}`) NO funciona: el JIT escanea texto, no evalúa. Además
 // `src/lib` tuvo que agregarse al `content` de tailwind.config.ts para que estas clases
@@ -24,7 +29,7 @@ export const CATEGORY_STYLES: Record<string, CategoryStyle> = {
     icon: LayoutGrid,
     bg: 'bg-cat-brand/15', text: 'text-cat-brand', ring: 'ring-cat-brand/40',
     solid: 'bg-cat-brand text-white',
-    gradient: 'from-cat-brand via-cat-brand/70 to-cat-other/60',
+    gradient: 'from-cat-brand via-cat-brand/70 to-cat-brand/40',
   },
   food: {
     icon: Utensils,
@@ -42,43 +47,43 @@ export const CATEGORY_STYLES: Record<string, CategoryStyle> = {
     icon: Coffee,
     bg: 'bg-cat-drink/15', text: 'text-cat-drink', ring: 'ring-cat-drink/40',
     solid: 'bg-cat-drink text-black',
-    gradient: 'from-cat-drink via-cat-drink/70 to-cat-cloth/60',
+    gradient: 'from-cat-drink via-cat-drink/70 to-cat-food/60',
   },
   kiosk: {
     icon: Store,
     bg: 'bg-cat-kiosk/15', text: 'text-cat-kiosk', ring: 'ring-cat-kiosk/40',
-    solid: 'bg-cat-kiosk text-white',
-    gradient: 'from-cat-kiosk via-cat-kiosk/70 to-cat-brand/60',
+    solid: 'bg-cat-kiosk text-black',
+    gradient: 'from-cat-kiosk via-cat-kiosk/70 to-cat-market/60',
   },
   market: {
     icon: ShoppingCart,
     bg: 'bg-cat-market/15', text: 'text-cat-market', ring: 'ring-cat-market/40',
     solid: 'bg-cat-market text-black',
-    gradient: 'from-cat-market via-cat-market/70 to-cat-pharma/60',
+    gradient: 'from-cat-market via-cat-market/70 to-cat-kiosk/60',
   },
   pharma: {
     icon: Pill,
     bg: 'bg-cat-pharma/15', text: 'text-cat-pharma', ring: 'ring-cat-pharma/40',
     solid: 'bg-cat-pharma text-white',
-    gradient: 'from-cat-pharma via-cat-pharma/70 to-cat-drink/60',
+    gradient: 'from-cat-pharma via-cat-pharma/70 to-cat-pharma/40',
   },
   cloth: {
     icon: Shirt,
     bg: 'bg-cat-cloth/15', text: 'text-cat-cloth', ring: 'ring-cat-cloth/40',
     solid: 'bg-cat-cloth text-white',
-    gradient: 'from-cat-cloth via-cat-cloth/70 to-cat-brand/60',
+    gradient: 'from-cat-cloth via-cat-cloth/70 to-cat-home/60',
   },
   home: {
     icon: Laptop,
     bg: 'bg-cat-home/15', text: 'text-cat-home', ring: 'ring-cat-home/40',
-    solid: 'bg-cat-home text-black',
-    gradient: 'from-cat-home via-cat-home/70 to-cat-food/60',
+    solid: 'bg-cat-home text-white',
+    gradient: 'from-cat-home via-cat-home/70 to-cat-cloth/60',
   },
   other: {
     icon: Store,
     bg: 'bg-cat-other/15', text: 'text-cat-other', ring: 'ring-cat-other/40',
-    solid: 'bg-cat-other text-white',
-    gradient: 'from-cat-other via-cat-other/70 to-cat-kiosk/60',
+    solid: 'bg-cat-other text-black',
+    gradient: 'from-cat-other via-cat-other/70 to-cat-cloth/60',
   },
 };
 
@@ -137,6 +142,10 @@ export function getCategoryKey(category: string): string {
   if (c.includes('kiosco') || c.includes('kiosk') || c.includes('almac') || c.includes('despensa')) return 'kiosk';
   if (c.includes('super') || c.includes('mercado') || c.includes('market')) return 'market';
   if (c.includes('bebida') || c.includes('drink') || c.includes('vino') || c.includes('cerveza') || c.includes('café') || c.includes('cafe')) return 'drink';
+  // Rubros de comida que antes caían al fallback por hash (rotisería/heladería/panadería
+  // terminaban con un color al azar fuera de la familia) y verdulería → familia almacén.
+  if (c.includes('rotiser') || c.includes('rostiser') || c.includes('helader') || c.includes('helado') || c.includes('panader') || c.includes('sandwich') || c.includes('lomiter')) return 'food';
+  if (c.includes('verduler') || c.includes('fruter') || c.includes('carnicer')) return 'market';
   if (c.includes('comida') || c.includes('food') || c.includes('pizza') || c.includes('empanada') || c.includes('resto') || c.includes('parrilla')) return 'food';
   if (c.includes('ropa') || c.includes('cloth') || c.includes('indument') || c.includes('calzado') || c.includes('boutique')) return 'cloth';
   if (c.includes('hogar') || c.includes('home') || c.includes('electr') || c.includes('ferret') || c.includes('mueble')) return 'home';

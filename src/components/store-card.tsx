@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Heart, Star, MapPin, Clock, Bike } from 'lucide-react';
+import { Heart, Star } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { StoreImage } from '@/components/store-image';
@@ -43,7 +43,9 @@ export function StoreCard({
 }: StoreCardProps) {
   const catStyle = getCategoryStyle(store.category || '');
   const isCarousel = variant === 'carousel';
-  const address = cleanAddress ? cleanAddress(store.address) : store.address;
+  // La dirección salió de la tarjeta con el rediseño (19/8): vive en la tienda pública.
+  // `cleanAddress`/`address` se mantienen en la interfaz para no romper llamadores.
+  void cleanAddress;
 
   return (
     <Link
@@ -53,86 +55,76 @@ export function StoreCard({
     >
       <Card
         className={cn(
-          'relative h-full overflow-hidden border-transparent transition-all duration-300',
+          'relative flex h-full flex-col overflow-hidden border-transparent transition-all duration-300',
           'hover:-translate-y-1 hover:border-primary/30 hover:shadow-glow',
+        )}
+      >
+        {/* Rediseño visual (19/8, "Mezcla de David"): badge de descuento junto al nombre,
+            rubro en el color de su FAMILIA + "Llega en...", fila de detalles con el
+            estado en texto (verde "Abierto"), y botón "Ver menú y pedir". */}
+        <div className={cn(
           // Fila en celular, tarjeta apilada de sm en adelante. Un solo markup: evita
           // duplicar el DOM con `sm:hidden` / `hidden sm:block`.
           isCarousel ? 'flex flex-col' : 'flex flex-row sm:flex-col',
-        )}
-      >
-        {/* --- Imagen --- */}
-        <div
-          className={cn(
-            'relative shrink-0 overflow-hidden',
-            isCarousel ? 'aspect-[16/10] w-full' : 'h-28 w-28 sm:h-auto sm:w-full sm:aspect-[16/10]',
-          )}
-        >
-          <StoreImage
-            src={store.imageUrl}
-            name={store.name}
-            category={store.category}
-            seed={store.id}
-            grayscale={!isOpen}
-            sizes={isCarousel ? '260px' : '(max-width: 640px) 112px, 320px'}
-            initialsClassName={isCarousel ? 'text-3xl' : 'text-2xl sm:text-3xl'}
-          />
-
-          {/* Estado (arriba izq.) */}
-          <span
+        )}>
+          {/* --- Imagen --- */}
+          <div
             className={cn(
-              'absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm',
-              isOpen ? 'bg-success/90 text-success-foreground' : 'bg-black/70 text-white',
+              'relative shrink-0 overflow-hidden',
+              isCarousel ? 'aspect-[16/10] w-full' : 'h-[104px] w-[104px] self-center rounded-xl ml-3 sm:ml-0 sm:h-auto sm:w-full sm:self-auto sm:rounded-none sm:aspect-[16/10]',
             )}
           >
-            <span className={cn('h-1.5 w-1.5 rounded-full', isOpen ? 'bg-white animate-pulse-glow' : 'bg-muted-foreground')} />
-            {statusLabel}
-          </span>
+            <StoreImage
+              src={store.imageUrl}
+              name={store.name}
+              category={store.category}
+              seed={store.id}
+              grayscale={!isOpen}
+              sizes={isCarousel ? '260px' : '(max-width: 640px) 104px, 320px'}
+              initialsClassName={isCarousel ? 'text-3xl' : 'text-2xl sm:text-3xl'}
+            />
+          </div>
 
-          {/* Descuento (abajo der.) — usa el campo denormalizado, 0 lecturas extra */}
-          {(store.maxDiscountPercent || 0) > 0 && (
-            <span className="absolute bottom-1.5 right-1.5 rounded-full bg-brand-gradient px-2 py-0.5 text-[10px] font-bold text-white shadow-glow-sm">
-              -{store.maxDiscountPercent}%
-            </span>
-          )}
+          {/* --- Contenido --- */}
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 p-3 sm:p-4 sm:pb-2">
+            <div className="flex items-center gap-2">
+              <h3 className="line-clamp-1 font-headline text-sm font-bold sm:text-base">{store.name}</h3>
+              {(store.maxDiscountPercent || 0) > 0 && (
+                <span className="shrink-0 rounded-full bg-brand-gradient px-2 py-0.5 text-[10px] font-bold text-white shadow-glow-sm">
+                  Hasta -{store.maxDiscountPercent}%
+                </span>
+              )}
+            </div>
+
+            {/* Rubro coloreado por familia + tiempo estimado */}
+            <p className="line-clamp-1 text-xs sm:text-[13px]">
+              <span className={cn('font-bold', catStyle.text)}>{formatCategoryLabel(store.category) || 'General'}</span>
+              <span className="text-muted-foreground"> · Llega en {store.deliveryTime || '30-45 min'}</span>
+            </p>
+
+            <div className="flex items-center gap-3 text-xs sm:text-[13px]">
+              {(store.rating || 0) > 0 && (
+                <span className="flex items-center gap-1 font-bold text-warning">
+                  <Star className="h-3.5 w-3.5 fill-current" />
+                  {store.rating?.toFixed(1).replace('.', ',')}
+                </span>
+              )}
+              {deliveryFee !== undefined && (
+                <span className="text-muted-foreground">
+                  Envío {deliveryFeeFrom ? 'desde ' : ''}${deliveryFee.toLocaleString('es-AR')}
+                </span>
+              )}
+              <span className={cn('font-bold', isOpen ? 'text-success' : 'text-muted-foreground')}>
+                {statusLabel}
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* --- Contenido --- */}
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 p-3 sm:p-4">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-1 font-headline text-sm font-bold sm:text-base">{store.name}</h3>
-            {(store.rating || 0) > 0 && (
-              <span className="flex shrink-0 items-center gap-0.5 rounded bg-warning/15 px-1.5 py-0.5 text-xs font-semibold text-warning">
-                <Star className="h-3 w-3 fill-current" />
-                {store.rating?.toFixed(1)}
-              </span>
-            )}
-          </div>
-
-          {/* Rubro con el color de su categoría */}
-          <div className="flex items-center gap-1.5">
-            <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', catStyle.bg, catStyle.text)}>
-              {formatCategoryLabel(store.category) || 'General'}
-            </span>
-          </div>
-
-          {address && (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="line-clamp-1">{address}</span>
-            </p>
-          )}
-
-          <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {store.deliveryTime || '30-45 min'}
-            </span>
-            {deliveryFee !== undefined && (
-              <span className="flex items-center gap-1">
-                <Bike className="h-3 w-3" />
-                {deliveryFeeFrom ? 'desde ' : ''}${deliveryFee.toLocaleString()}
-              </span>
-            )}
+        {/* CTA de la tarjeta — la tarjeta entera ya navega; esto le da la acción obvia */}
+        <div className="px-3 pb-3 sm:px-4 sm:pb-4">
+          <div className="flex h-10 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground transition-colors group-hover:bg-primary/90">
+            Ver menú y pedir
           </div>
         </div>
 

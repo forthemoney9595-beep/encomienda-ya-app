@@ -6,7 +6,7 @@ import { doc, collection, query, orderBy, where, limit } from 'firebase/firestor
 import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X, ShoppingBag, Home, Heart } from 'lucide-react';
+import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X, ShoppingBag, Home, Heart, BadgePercent } from 'lucide-react';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { StoreImage } from '@/components/store-image';
 import { StoreCard } from '@/components/store-card';
@@ -41,6 +41,7 @@ interface StoreData {
   rating?: number;
   ratingCount?: number;
   manuallyPaused?: boolean;
+  maxDiscountPercent?: number;
   // Gate de aprobación (Tanda A): sin true, la tienda solo la ven dueño y admin.
   isApproved?: boolean;
   ownerId?: string;
@@ -427,7 +428,24 @@ export default function StorePublicPage() {
               </Button>
           </div>
 
+          {/* Rubro en el color de su FAMILIA (Rediseño 19/8) — mismo lenguaje que el home */}
+          {storeCategory && (
+              <p className={cn('text-sm font-bold -mt-1', getCategoryStyle(storeCategory).text)}>
+                  {formatCategoryLabel(storeCategory)}
+              </p>
+          )}
+
           <p className="text-muted-foreground max-w-2xl">{store.description || 'Sin descripción disponible.'}</p>
+
+          {/* Franja naranja de OFERTAS (naranja intenso = ofertas en el sistema de familias) */}
+          {(store.maxDiscountPercent || 0) > 0 && (
+              <div className="flex items-center gap-2.5 rounded-xl bg-cat-food px-4 py-3">
+                  <BadgePercent className="h-5 w-5 shrink-0 text-white" />
+                  <p className="text-sm font-bold text-white">
+                      Hasta -{store.maxDiscountPercent}% en productos seleccionados — mirá los marcados abajo
+                  </p>
+              </div>
+          )}
 
           {/* Tarjeta de info: rating clickeable + dirección + horario, con más jerarquía que una línea de texto suelta */}
           <div className="rounded-xl border bg-card divide-y sm:divide-y-0 sm:divide-x sm:flex">
@@ -834,8 +852,9 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
                             Quedan {product.stock}
                         </span>
                     )}
+                    {/* Descuento en violeta de marca (Rediseño 19/8): el verde queda para éxito/abierto */}
                     {!!product.discountPercent && (
-                        <span className="absolute bottom-2 left-2 bg-success text-success-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                        <span className="absolute bottom-2 left-2 bg-brand-gradient text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
                             -{product.discountPercent}%
                         </span>
                     )}
@@ -877,7 +896,7 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
                     )}
                     <span className="font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
                     {!!product.discountPercent && (
-                        <span className="text-xs font-bold text-success">-{product.discountPercent}%</span>
+                        <span className="rounded-full bg-brand-gradient px-1.5 py-0.5 text-[10px] font-bold text-white">-{product.discountPercent}%</span>
                     )}
                 </p>
                 {outOfStock ? (

@@ -90,21 +90,27 @@
     --sidebar-border: 240 15% 20%;
     --sidebar-ring: 258 90% 66%;
 
-    /* Escala de RUBROS (Fase AA) — deliberadamente separada de los semánticos.
-       Los semánticos tienen significado fijo en toda la app (verde=éxito/dinero,
-       rojo=error, amarillo=aviso); usarlos como color de categoría (farmacia=rojo,
-       supermercado=verde, como estaba antes) rompía ese lenguaje. Matices bien
-       espaciados y L 45-66% para que contrasten sobre --background (240 24% 11%). */
-    --cat-brand: 258 90% 66%;   /* violeta      — Todas */
-    --cat-food: 25 92% 58%;     /* naranja      — Comida */
-    --cat-fast: 355 85% 62%;    /* rojo coral   — Comida rápida */
-    --cat-drink: 192 90% 55%;   /* cian         — Bebidas */
-    --cat-kiosk: 322 82% 62%;   /* magenta      — Kiosco */
-    --cat-market: 95 65% 50%;   /* lima         — Supermercado */
-    --cat-pharma: 165 75% 45%;  /* verde agua   — Farmacia */
-    --cat-cloth: 220 90% 64%;   /* azul         — Ropa */
-    --cat-home: 45 90% 58%;     /* dorado       — Hogar/electro */
-    --cat-other: 280 60% 62%;   /* violeta rosa — Otros/fallback */
+    /* Escala de RUBROS v2 — FAMILIAS de color (Rediseño visual, 19/8, decisión de
+       David: "un color para todo lo que es comida"). De 10 matices sueltos a 4
+       familias; dentro de una familia los rubros se distinguen por TONO (mismo matiz,
+       distinta luz), nunca por otro color. Violeta = SOLO la marca (nunca un rubro);
+       los semánticos siguen aparte (verde=éxito, rojo=error, ámbar=aviso) y el
+       naranja intenso además significa OFERTAS. Mapa completo: bóveda → Rediseño
+       visual / lib/category-style.ts. Las claves se conservan por compat de clases. */
+    --cat-brand: 258 90% 66%;   /* violeta — SOLO "Todas"/marca */
+    /* Familia COMIDA — naranja (restaurante, pizzería, rotisería, rápida, heladería, bebidas) */
+    --cat-food: 25 92% 58%;     /* naranja base */
+    --cat-fast: 16 86% 54%;     /* naranja profundo (tono) */
+    --cat-drink: 32 88% 62%;    /* naranja claro (tono) */
+    /* Familia ALMACÉN — dorado (almacén, supermercado, kiosco) */
+    --cat-kiosk: 42 86% 52%;    /* dorado profundo (tono) */
+    --cat-market: 46 90% 58%;   /* dorado base */
+    /* Familia SALUD — verde agua (farmacia) */
+    --cat-pharma: 165 75% 45%;
+    /* Familia ROPA Y HOGAR — azul (ropa, hogar/electro, otros) */
+    --cat-cloth: 220 85% 62%;   /* azul base */
+    --cat-home: 212 80% 55%;    /* azul profundo (tono) */
+    --cat-other: 228 70% 68%;   /* azul claro (tono, fallback) */
   }
 }
 
