@@ -322,6 +322,18 @@ export async function POST(request: Request) {
         };
 
         tx.set(newOrderRef, orderData);
+
+        // PIN de entrega (19/8): 4 dígitos que SOLO ve el comprador (regla de lectura
+        // por userId sobre orders/{id}/secure). El repartidor lo pide al entregar y
+        // /api/orders/confirm-delivery lo valida — prueba de entrega para reclamos.
+        // Va en la MISMA transacción: un pedido sin PIN sería "entregable sin código"
+        // por el fallback legacy de confirm-delivery.
+        tx.set(newOrderRef.collection("secure").doc("pin"), {
+            pin: String(Math.floor(Math.random() * 10000)).padStart(4, "0"),
+            userId: userId,
+            attempts: 0,
+            createdAt: Timestamp.now(),
+        });
     });
 
     // 5. ✅ NOTIFICAR A LA TIENDA (Campana + Push)

@@ -9,6 +9,7 @@ import { authedFetch } from '@/lib/authed-fetch';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
+import { ConfirmDeliveryDialog } from '@/components/confirm-delivery-dialog';
 import { useEffect, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -65,6 +66,29 @@ function DriverSignal({ lastUpdate }: { lastUpdate?: string }) {
         <p className="text-xs text-warning">
             ⚠️ Última señal del repartidor hace {min} min — puede haber perdido conexión.
         </p>
+    );
+}
+
+// PIN de entrega (19/8): el código de 4 dígitos que el comprador le da al repartidor al
+// recibir el pedido — la prueba de entrega. SOLO el comprador puede leer
+// orders/{id}/secure/pin (regla por userId); el repartidor lo ingresa y
+// /api/orders/confirm-delivery lo valida. Pedidos viejos sin PIN: no se muestra nada.
+function BuyerDeliveryPin({ orderId }: { orderId: string }) {
+    const firestore = useFirestore();
+    const pinRef = useMemoFirebase(
+        () => (firestore ? doc(firestore, 'orders', orderId, 'secure', 'pin') : null),
+        [firestore, orderId],
+    );
+    const { data } = useDoc<{ pin?: string }>(pinRef);
+    if (!data?.pin) return null;
+    return (
+        <div className="w-full rounded-xl border border-primary/30 bg-primary/10 p-3 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Código de entrega</p>
+            <p className="font-headline text-3xl font-bold tracking-[0.4em] pl-[0.4em]">{data.pin}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+                Dáselo al repartidor <strong>solo cuando tengas tu pedido en la mano</strong>.
+            </p>
+        </div>
     );
 }
 
@@ -175,6 +199,8 @@ export default function OrderTrackingPage() {
   const [isReorderAlertOpen, setReorderAlertOpen] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  // PIN de entrega (19/8): 'Entregado' va por el diálogo compartido + API, nunca directo.
+  const [confirmDeliveryOpen, setConfirmDeliveryOpen] = useState(false);
   
   const processedPayment = useRef(false);
 
@@ -578,10 +604,18 @@ export default function OrderTrackingPage() {
                                     </Button>
                                 )}
                                 {order.status === 'En reparto' && (
-                                    <Button className="w-full bg-success hover:bg-success/90 text-success-foreground h-14 text-xl shadow-md" onClick={() => handleUpdateStatus('Entregado')} disabled={isUpdatingStatus}>
-                                        <CheckCircle className="mr-2 h-6 w-6" /> {isUpdatingStatus ? "..." : "Confirmar Entrega"}
+                                    <Button className="w-full bg-success hover:bg-success/90 text-success-foreground h-14 text-xl shadow-md" onClick={() => setConfirmDeliveryOpen(true)} disabled={isUpdatingStatus}>
+                                        <CheckCircle className="mr-2 h-6 w-6" /> Confirmar Entrega
                                     </Button>
                                 )}
+                                <ConfirmDeliveryDialog
+                                    open={confirmDeliveryOpen}
+                                    onOpenChange={setConfirmDeliveryOpen}
+                                    orderId={order.id}
+                                    customerName={order.customerName}
+                                    cashTotal={(order as any).paymentMethod === 'Efectivo' ? order.total : null}
+                                    user={user}
+                                />
                             </div>
                         </div>
                     )}
@@ -667,6 +701,11 @@ export default function OrderTrackingPage() {
                     del pool ve la distancia aproximada en su tarjeta, no la casa. */}
                 <CardContent className="h-96 relative z-0">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) && order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) ? 'Sin datos de ubicación.' : 'El mapa se habilita al tomar el pedido.'}</div>}</CardContent>
                 <CardFooter className="flex-col items-start gap-2">
+                    {/* PIN de entrega (19/8): visible desde que hay repartidor en camino,
+                        así el comprador lo tiene a mano cuando le golpean la puerta. */}
+                    {isBuyer && (order.status === 'En camino' || order.status === 'En reparto') && (
+                        <BuyerDeliveryPin orderId={order.id} />
+                    )}
                     {/* "Tu repartidor" (auditoría ago 2026, estándar Rappi): el comprador ve
                         QUIÉN le lleva el pedido durante el viaje — antes el nombre recién
                         aparecía al calificar, con el pedido ya entregado. */}

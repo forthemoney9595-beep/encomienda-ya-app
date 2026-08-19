@@ -3,12 +3,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
-import { collection, query, where, doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { OrderService, MAX_ACTIVE_ORDERS } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { gmapsDirectionsUrl, distanceMeters, formatDistance, isValidCoords } from '@/lib/geo';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
 import { LocationTracker } from '@/components/location-tracker';
+import { ConfirmDeliveryDialog } from '@/components/confirm-delivery-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -42,7 +43,7 @@ import {
 } from "@/components/ui/dialog";
 
 const RELEASE_REASONS = ['Se me rompió el vehículo', 'Emergencia personal', 'No pude ubicar la dirección'];
-const PROBLEM_REASONS = ['El cliente no responde', 'Dirección incorrecta/inaccesible', 'El cliente rechazó el pedido'];
+const PROBLEM_REASONS = ['El cliente no responde', 'Dirección incorrecta/inaccesible', 'El cliente rechazó el pedido', 'El cliente no tiene el código de entrega'];
 
 // Definimos la interfaz localmente
 interface Order {
@@ -245,41 +246,10 @@ export default function DeliveryOrdersView() {
     setConfirmDeliveryOrder(order);
   };
 
-  // C. FINALIZAR -> Pasa a 'Entregado'
-  const confirmFinishDelivery = async () => {
-    if (!confirmDeliveryOrder || !firestore) return;
-    try {
-      const orderRef = doc(firestore, 'orders', confirmDeliveryOrder.id);
-      await updateDoc(orderRef, {
-        status: 'Entregado',
-        deliveredAt: serverTimestamp(),
-        // La posición en vivo del repartidor no queda guardada en la orden (Fase RR).
-        driverCoords: deleteField()
-      });
-      toast({ title: "¡Entrega Completada!", description: "Ganancia registrada en tu Billetera." });
-
-      // Este es el flujo real de "marcar entregado" (a diferencia del updateDoc de
-      // arriba, no pasa por OrderService.updateOrderStatus) -- sin esto el comprador
-      // nunca se enteraba de que llegó su pedido ni se lo invitaba a calificar.
-      if (confirmDeliveryOrder.userId) {
-        OrderService.sendNotification(
-          firestore, confirmDeliveryOrder.userId, "🏠 ¡Llegamos!",
-          "Disfruta tu pedido. No olvides calificar.", "order_status", confirmDeliveryOrder.id, user
-        ).catch(console.error);
-      }
-      // La TIENDA cierra su ciclo (Fase PP): antes nunca sabía si el pedido llegó.
-      if ((confirmDeliveryOrder as any).storeOwnerId) {
-        OrderService.sendNotification(
-          firestore, (confirmDeliveryOrder as any).storeOwnerId, "✅ Pedido entregado",
-          `El pedido de ${confirmDeliveryOrder.customerName || 'un cliente'} fue entregado con éxito.`, "order_status", confirmDeliveryOrder.id, user
-        ).catch(console.error);
-      }
-
-      setConfirmDeliveryOrder(null);
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo finalizar." });
-    }
-  };
+  // C. FINALIZAR -> 'Entregado' va SIEMPRE por /api/orders/confirm-delivery (PIN de
+  // entrega, 19/8): el diálogo compartido ConfirmDeliveryDialog maneja el flujo
+  // (pide el código de 4 dígitos del cliente si el pedido lo tiene) y el servidor
+  // valida, marca entregado y avisa a comprador y tienda.
 
   // NAVEGACIÓN AL DETALLE (GPS/CHAT)
   const goToDetails = (orderId: string) => {
@@ -571,30 +541,14 @@ export default function DeliveryOrdersView() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={!!confirmDeliveryOrder} onOpenChange={(open) => !open && setConfirmDeliveryOrder(null)}>
-        <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-                <DialogTitle>Confirmar Entrega</DialogTitle>
-                <DialogDescription>
-                    ¿Entregaste el pedido a {confirmDeliveryOrder?.customerName}?
-                </DialogDescription>
-            </DialogHeader>
-
-            {confirmDeliveryOrder?.paymentMethod === 'Efectivo' && (
-                <div className="bg-warning/15 p-4 rounded-lg border border-warning text-center my-2">
-                    <p className="font-bold text-warning uppercase">¡COBRAR AL CLIENTE!</p>
-                    <h3 className="font-black text-2xl text-foreground">${confirmDeliveryOrder.total}</h3>
-                </div>
-            )}
-
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirmDeliveryOrder(null)}>Cancelar</Button>
-                <Button className="bg-success hover:bg-success/90 text-success-foreground" onClick={confirmFinishDelivery}>
-                    Sí, Entregado
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDeliveryDialog
+        open={!!confirmDeliveryOrder}
+        onOpenChange={(open) => !open && setConfirmDeliveryOrder(null)}
+        orderId={confirmDeliveryOrder?.id || null}
+        customerName={confirmDeliveryOrder?.customerName}
+        cashTotal={confirmDeliveryOrder?.paymentMethod === 'Efectivo' ? confirmDeliveryOrder?.total : null}
+        user={user}
+      />
 
       <Dialog open={!!incidentDialog} onOpenChange={(open) => !open && setIncidentDialog(null)}>
         <DialogContent className="sm:max-w-md">

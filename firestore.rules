@@ -245,11 +245,15 @@ service cloud.firestore {
         //   - BORRARLO siempre se puede (es lo que hace marcar 'Entregado');
         //   - ESCRIBIRLO exige lat/lng numéricos en rango y que el pedido esté en la
         //     calle ('En camino' va a la tienda, 'En reparto' va al cliente).
+        // 🔒 PIN de entrega (19/8): 'Entregado' y deliveredAt SALIERON de esta regla —
+        // marcar entregado va SOLO por /api/orders/confirm-delivery (valida el código
+        // que tiene el comprador). Mismo criterio que 'Rechazado' en la Fase MM: sin
+        // cerrar la escritura directa, la API sería decorativa.
         (resource.data.deliveryPersonId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'pickedUpAt', 'deliveredAt', 'driverCoords']) &&
+            .hasOnly(['status', 'pickedUpAt', 'driverCoords']) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
-            request.resource.data.status in ['En reparto', 'Entregado']) &&
+            request.resource.data.status in ['En reparto']) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['driverCoords']) ||
             !('driverCoords' in request.resource.data) ||
             (request.resource.data.driverCoords is map &&
@@ -285,6 +289,15 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['itemRatings']) &&
           resource.data.status == 'Entregado')
       );
+
+      // 🔑 PIN de entrega (19/8): el código de 4 dígitos que el comprador le da al
+      // repartidor al recibir. SOLO lo lee el comprador del pedido (el doc guarda su
+      // userId al crearse — sin get() cruzado). Si el REPARTIDOR pudiera leerlo, el
+      // código no probaría nada. Escrituras: solo Admin SDK (create + validación).
+      match /secure/{docId} {
+        allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow write: if false;
+      }
     }
 
     // 5b. RESEÑAS DE REPARTIDOR — solo vía /api/delivery-reviews/create (Admin SDK).
