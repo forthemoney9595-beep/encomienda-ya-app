@@ -73,7 +73,7 @@ function DriverSignal({ lastUpdate }: { lastUpdate?: string }) {
 // recibir el pedido — la prueba de entrega. SOLO el comprador puede leer
 // orders/{id}/secure/pin (regla por userId); el repartidor lo ingresa y
 // /api/orders/confirm-delivery lo valida. Pedidos viejos sin PIN: no se muestra nada.
-function BuyerDeliveryPin({ orderId }: { orderId: string }) {
+function BuyerDeliveryPin({ orderId, delivered, verified }: { orderId: string; delivered?: boolean; verified?: boolean }) {
     const firestore = useFirestore();
     const pinRef = useMemoFirebase(
         () => (firestore ? doc(firestore, 'orders', orderId, 'secure', 'pin') : null),
@@ -85,9 +85,15 @@ function BuyerDeliveryPin({ orderId }: { orderId: string }) {
         <div className="w-full rounded-xl border border-primary/30 bg-primary/10 p-3 text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary">Código de entrega</p>
             <p className="font-headline text-3xl font-bold tracking-[0.4em] pl-[0.4em]">{data.pin}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-                Dáselo al repartidor <strong>solo cuando tengas tu pedido en la mano</strong>.
-            </p>
+            {delivered ? (
+                verified
+                    ? <p className="text-xs font-semibold text-success mt-1">✓ Entrega verificada con este código</p>
+                    : <p className="text-xs font-semibold text-warning mt-1">Entregado SIN código (pedido anterior al sistema o resuelto por admin)</p>
+            ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                    Dáselo al repartidor <strong>solo cuando tengas tu pedido en la mano</strong>.
+                </p>
+            )}
         </div>
     );
 }
@@ -701,12 +707,16 @@ export default function OrderTrackingPage() {
                     del pool ve la distancia aproximada en su tarjeta, no la casa. */}
                 <CardContent className="h-96 relative z-0">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) && order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) ? 'Sin datos de ubicación.' : 'El mapa se habilita al tomar el pedido.'}</div>}</CardContent>
                 <CardFooter className="flex-col items-start gap-2">
-                    {/* PIN de entrega (19/8): visible desde que hay repartidor en camino,
-                        así el comprador lo tiene a mano cuando le golpean la puerta.
-                        El ADMIN también lo ve (regla): lo necesita para arbitrar el
-                        "cliente no tiene el código" de Reportar problema. */}
-                    {(isBuyer || isAdminViewer) && (order.status === 'En camino' || order.status === 'En reparto') && (
-                        <BuyerDeliveryPin orderId={order.id} />
+                    {/* PIN de entrega (19/8): el comprador lo ve durante el viaje (para
+                        tenerlo a mano al recibir); el ADMIN lo ve SIEMPRE que exista —
+                        lo necesita para arbitrar en vivo ("el cliente no tiene el
+                        código") y para auditar después (¿la entrega se verificó?). */}
+                    {((isBuyer && (order.status === 'En camino' || order.status === 'En reparto')) || isAdminViewer) && (
+                        <BuyerDeliveryPin
+                            orderId={order.id}
+                            delivered={order.status === 'Entregado'}
+                            verified={(order as any).deliveryPinVerified === true}
+                        />
                     )}
                     {/* "Tu repartidor" (auditoría ago 2026, estándar Rappi): el comprador ve
                         QUIÉN le lleva el pedido durante el viaje — antes el nombre recién
