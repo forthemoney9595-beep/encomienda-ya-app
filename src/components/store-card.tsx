@@ -71,7 +71,7 @@ export function StoreCard({
           <div
             className={cn(
               'relative shrink-0 overflow-hidden',
-              isCarousel ? 'aspect-[16/10] w-full' : 'h-[104px] w-[104px] self-center rounded-xl ml-3 sm:ml-0 sm:h-auto sm:w-full sm:self-auto sm:rounded-none sm:aspect-[16/10]',
+              isCarousel ? 'aspect-[16/10] w-full' : 'h-24 w-24 self-center rounded-xl ml-3 my-2 sm:ml-0 sm:my-0 sm:h-auto sm:w-full sm:self-auto sm:rounded-none sm:aspect-[16/10]',
             )}
           >
             <StoreImage
@@ -122,8 +122,9 @@ export function StoreCard({
         </div>
 
         {/* CTA de la tarjeta — la tarjeta entera ya navega; esto le da la acción obvia.
-            Compacto a pedido (19/8): h-9 + texto 13px, el h-10 bold se veía tosco. */}
-        <div className="px-3 pb-2.5 sm:px-4 sm:pb-3.5">
+            Compacto a pedido (19/8): h-9 + 13px, y la pill más ANGOSTA que la tarjeta
+            (px-4) con aire vertical (my-2 en la foto) para que no toque la imagen. */}
+        <div className="px-4 pb-3 sm:pb-3.5">
           <div className="flex h-9 items-center justify-center rounded-lg bg-primary text-[13px] font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90">
             Ver menú y pedir
           </div>

@@ -10,6 +10,7 @@ import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebas
 import { normalizeSchedule, getStoreOpenStatus } from '@/lib/store-hours';
 import { ShoppingBag, Search, Filter, Heart, Zap, ArrowRight, type LucideIcon } from 'lucide-react';
 import { StoreCard, type StoreCardStore } from '@/components/store-card';
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { Input } from '@/components/ui/input';
@@ -156,52 +157,71 @@ const FilterBar = ({ searchTerm, setSearchTerm, minRating, setMinRating }: Filte
 );
 
 // Banner de promos ROTATIVO (slider, pedido de David 19/8): recorre todas las tiendas
-// con descuento activo cada 5s, la mejor oferta primero, con puntitos para saltar a
-// mano. Con una sola oferta queda fijo (sin puntitos ni timer). Cero lecturas extra:
-// todo sale de maxDiscountPercent ya cargado. Anotado a futuro: este espacio puede
-// venderse como publicidad (tienda destacada paga) — hoy el orden es solo por % de
-// descuento, sin favoritismos.
+// con descuento activo cada 5s, la mejor oferta primero, y se puede ARRASTRAR con el
+// dedo o el mouse (embla, el mismo carrusel de la tienda pública — v2 a pedido) además
+// de los puntitos. Con una sola oferta queda fijo. Cero lecturas extra: todo sale de
+// maxDiscountPercent ya cargado. Anotado a futuro: este espacio puede venderse como
+// publicidad (tienda destacada paga) — hoy el orden es solo por % de descuento.
 function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscountPercent?: number }[] }) {
+  const [api, setApi] = useState<CarouselApi>();
   const [index, setIndex] = useState(0);
-  // setTimeout dependiente del índice (no setInterval): así CADA slide dura 5s completos
-  // aunque el usuario haya saltado a mano con un puntito — el timer se reinicia solo.
+
   useEffect(() => {
-    if (offers.length <= 1) return;
-    const t = setTimeout(() => setIndex(i => (i + 1) % offers.length), 5000);
+    if (!api) return;
+    const onSelect = () => setIndex(api.selectedScrollSnap());
+    api.on('select', onSelect);
+    return () => { api.off('select', onSelect); };
+  }, [api]);
+
+  // Autoplay: 5s completos desde CUALQUIER cambio (automático, puntito o arrastre) —
+  // el efecto depende del índice, así el timer se reinicia solo.
+  useEffect(() => {
+    if (!api || offers.length <= 1) return;
+    const t = setTimeout(() => api.scrollNext(), 5000);
     return () => clearTimeout(t);
-  }, [offers.length, index]);
+  }, [api, index, offers.length]);
+
   if (offers.length === 0) return null;
-  const offer = offers[index % offers.length];
+
+  const slide = (offer: (typeof offers)[number]) => (
+    <Link href={`/stores/${offer.id}`} className="block" draggable={false}>
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-cat-food px-4 py-3.5">
+        <div className="min-w-0">
+          <p className="line-clamp-1 font-headline text-base font-bold text-white">
+            Hasta -{offer.maxDiscountPercent}% en {offer.name}
+          </p>
+          <p className="text-xs text-white/85">Ofertas de hoy · tocá para verlas</p>
+        </div>
+        <ArrowRight className="h-5 w-5 shrink-0 text-white" />
+      </div>
+    </Link>
+  );
+
+  if (offers.length === 1) return <div className="mb-6">{slide(offers[0])}</div>;
+
   return (
     <div className="mb-6">
-      <Link href={`/stores/${offer.id}`} className="block">
-        {/* key={offer.id}: remonta el bloque en cada rotación para que el fade-in corra */}
-        <div key={offer.id} className="flex animate-in fade-in duration-500 items-center justify-between gap-3 rounded-2xl bg-cat-food px-4 py-3.5 transition-transform hover:scale-[1.01]">
-          <div className="min-w-0">
-            <p className="line-clamp-1 font-headline text-base font-bold text-white">
-              Hasta -{offer.maxDiscountPercent}% en {offer.name}
-            </p>
-            <p className="text-xs text-white/85">Ofertas de hoy · tocá para verlas</p>
-          </div>
-          <ArrowRight className="h-5 w-5 shrink-0 text-white" />
-        </div>
-      </Link>
-      {offers.length > 1 && (
-        <div className="mt-2 flex justify-center gap-1.5">
-          {offers.map((o, i) => (
-            <button
-              key={o.id}
-              type="button"
-              onClick={() => setIndex(i)}
-              aria-label={`Ver oferta ${i + 1} de ${offers.length}`}
-              className={cn(
-                'h-1.5 rounded-full transition-all duration-300',
-                i === index % offers.length ? 'w-5 bg-cat-food' : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60',
-              )}
-            />
+      <Carousel setApi={setApi} opts={{ loop: true }}>
+        <CarouselContent>
+          {offers.map(o => (
+            <CarouselItem key={o.id}>{slide(o)}</CarouselItem>
           ))}
-        </div>
-      )}
+        </CarouselContent>
+      </Carousel>
+      <div className="mt-2 flex justify-center gap-1.5">
+        {offers.map((o, i) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => api?.scrollTo(i)}
+            aria-label={`Ver oferta ${i + 1} de ${offers.length}`}
+            className={cn(
+              'h-1.5 rounded-full transition-all duration-300',
+              i === index ? 'w-5 bg-cat-food' : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60',
+            )}
+          />
+        ))}
+      </div>
     </div>
   );
 }
