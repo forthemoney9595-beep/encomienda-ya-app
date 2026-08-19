@@ -2482,6 +2482,25 @@ código/reglas. Uso: `node _approve-payment.js --list` (pedidos esperando pago) 
   Almendra). El circuito de pago REAL (checkout MP + webhook) se prueba en el bloque MP
   con un pago chico de verdad — este script cubre el resto del recorrido.
 
+## PIN de entrega (ago 2026) — prueba objetiva de que el pedido llegó
+Estándar Rappi/PedidosYa/Uber Eats, pedido de David. Cada pedido nace con un código de
+4 dígitos en `orders/{id}/secure/pin` (creado en la MISMA transacción de
+`/api/orders/create`; regla: lo lee SOLO el comprador — `resource.data.userId`, sin
+get() cruzado; escrituras solo Admin SDK). El comprador lo ve en el detalle desde
+'En camino' (tarjeta violeta); el repartidor lo pide al entregar y
+**`/api/orders/confirm-delivery`** lo valida: repartidor asignado + 'En reparto' +
+código (tope 10 intentos, contado en transacción) → Entregado + `deliveredAt` +
+borra `driverCoords` + **`deliveryPinVerified`** (el campo que arbitra reclamos de
+"no me llegó") + avisos server-side a comprador y tienda. Los 3 botones de "Confirmar
+Entrega" (panel del repartidor, detalle, updater) usan el MISMO
+`confirm-delivery-dialog.tsx` (flujo: intenta sin código → 428 `pin_required` → lo
+pide). **La regla ya NO acepta 'Entregado' ni `deliveredAt` del repartidor** (criterio
+Fase MM); pedidos anteriores sin doc de PIN se entregan sin código (fallback legacy,
+`deliveryPinVerified:false`). Salida de emergencia: atajo "El cliente no tiene el
+código de entrega" en Reportar problema (resuelve el admin; sin bypass en la API).
+Verificado `_e2e-pin.js` 14/14 (ataque+regresión contra reglas de producción; OJO:
+las tiendas seed pueden estar pausadas por testers — el script busca una utilizable).
+
 ## Rediseño visual (ago 2026, en curso) — "Mezcla de David" + FAMILIAS de color
 Diseño aprobado por el usuario en un lienzo iterativo (bóveda → "Rediseño visual", con
 galería PNG en `Diseños/`). **D1-D3 implementadas y en producción**; D4 pendiente.
