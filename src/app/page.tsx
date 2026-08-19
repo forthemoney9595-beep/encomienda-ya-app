@@ -155,6 +155,57 @@ const FilterBar = ({ searchTerm, setSearchTerm, minRating, setMinRating }: Filte
   </div>
 );
 
+// Banner de promos ROTATIVO (slider, pedido de David 19/8): recorre todas las tiendas
+// con descuento activo cada 5s, la mejor oferta primero, con puntitos para saltar a
+// mano. Con una sola oferta queda fijo (sin puntitos ni timer). Cero lecturas extra:
+// todo sale de maxDiscountPercent ya cargado. Anotado a futuro: este espacio puede
+// venderse como publicidad (tienda destacada paga) — hoy el orden es solo por % de
+// descuento, sin favoritismos.
+function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscountPercent?: number }[] }) {
+  const [index, setIndex] = useState(0);
+  // setTimeout dependiente del índice (no setInterval): así CADA slide dura 5s completos
+  // aunque el usuario haya saltado a mano con un puntito — el timer se reinicia solo.
+  useEffect(() => {
+    if (offers.length <= 1) return;
+    const t = setTimeout(() => setIndex(i => (i + 1) % offers.length), 5000);
+    return () => clearTimeout(t);
+  }, [offers.length, index]);
+  if (offers.length === 0) return null;
+  const offer = offers[index % offers.length];
+  return (
+    <div className="mb-6">
+      <Link href={`/stores/${offer.id}`} className="block">
+        {/* key={offer.id}: remonta el bloque en cada rotación para que el fade-in corra */}
+        <div key={offer.id} className="flex animate-in fade-in duration-500 items-center justify-between gap-3 rounded-2xl bg-cat-food px-4 py-3.5 transition-transform hover:scale-[1.01]">
+          <div className="min-w-0">
+            <p className="line-clamp-1 font-headline text-base font-bold text-white">
+              Hasta -{offer.maxDiscountPercent}% en {offer.name}
+            </p>
+            <p className="text-xs text-white/85">Ofertas de hoy · tocá para verlas</p>
+          </div>
+          <ArrowRight className="h-5 w-5 shrink-0 text-white" />
+        </div>
+      </Link>
+      {offers.length > 1 && (
+        <div className="mt-2 flex justify-center gap-1.5">
+          {offers.map((o, i) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setIndex(i)}
+              aria-label={`Ver oferta ${i + 1} de ${offers.length}`}
+              className={cn(
+                'h-1.5 rounded-full transition-all duration-300',
+                i === index % offers.length ? 'w-5 bg-cat-food' : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60',
+              )}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ✅ Separamos el contenido lógico del componente principal para usar Suspense
 function HomeContent() {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -239,16 +290,15 @@ function HomeContent() {
   );
   const favoriteStores = useMemo(() => filteredStores.filter(d => d.isFav), [filteredStores]);
 
-  // Banner naranja de promo (Rediseño 19/8): la MEJOR oferta activa. Naranja intenso =
-  // el color de OFERTAS del sistema de familias; sale de maxDiscountPercent
-  // (denormalizado, 0 lecturas extra).
-  const topOffer = useMemo(() => {
-    let best: (typeof discountedStores)[number] | null = null;
-    for (const d of discountedStores) {
-      if (!best || (d.store.maxDiscountPercent || 0) > (best.store.maxDiscountPercent || 0)) best = d;
-    }
-    return best;
-  }, [discountedStores]);
+  // Ofertas para el banner rotativo (Rediseño 19/8 + slider a pedido de David): TODAS
+  // las tiendas con descuento activo, la mejor primero. Naranja intenso = color de
+  // OFERTAS; sale de maxDiscountPercent (denormalizado, 0 lecturas extra).
+  const promoOffers = useMemo(
+    () => [...discountedStores]
+      .sort((a, b) => (b.store.maxDiscountPercent || 0) - (a.store.maxDiscountPercent || 0))
+      .map(d => ({ id: d.store.id, name: d.store.name, maxDiscountPercent: d.store.maxDiscountPercent })),
+    [discountedStores],
+  );
 
   // Los rubros salen de las tiendas APROBADAS, no de rawStores: si no, una tienda pendiente
   // de aprobación aportaba su rubro al chip y ese chip después daba 0 resultados.
@@ -323,19 +373,7 @@ function HomeContent() {
 
   // Se muestra en las dos vistas (usuario e invitado): es vidriera pura, sin datos
   // personales — y para el invitado es el mejor motivo para registrarse.
-  const promoBanner = !hasFilters && topOffer ? (
-    <Link href={`/stores/${topOffer.store.id}`} className="mb-6 block">
-      <div className="flex items-center justify-between gap-3 rounded-2xl bg-cat-food px-4 py-3.5 transition-transform hover:scale-[1.01]">
-        <div className="min-w-0">
-          <p className="line-clamp-1 font-headline text-base font-bold text-white">
-            Hasta -{topOffer.store.maxDiscountPercent}% en {topOffer.store.name}
-          </p>
-          <p className="text-xs text-white/85">Ofertas de hoy · tocá para verlas</p>
-        </div>
-        <ArrowRight className="h-5 w-5 shrink-0 text-white" />
-      </div>
-    </Link>
-  ) : null;
+  const promoBanner = !hasFilters ? <PromoSlider offers={promoOffers} /> : null;
 
   // 🟢 MODO INVITADO: vidriera abierta (Opción A, ago 2026). El visitante ve la MISMA
   // grilla de tiendas que un usuario, navega libre y recién al querer pedir se le pide

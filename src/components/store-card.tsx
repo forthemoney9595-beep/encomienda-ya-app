@@ -121,9 +121,10 @@ export function StoreCard({
           </div>
         </div>
 
-        {/* CTA de la tarjeta — la tarjeta entera ya navega; esto le da la acción obvia */}
-        <div className="px-3 pb-3 sm:px-4 sm:pb-4">
-          <div className="flex h-10 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground transition-colors group-hover:bg-primary/90">
+        {/* CTA de la tarjeta — la tarjeta entera ya navega; esto le da la acción obvia.
+            Compacto a pedido (19/8): h-9 + texto 13px, el h-10 bold se veía tosco. */}
+        <div className="px-3 pb-2.5 sm:px-4 sm:pb-3.5">
+          <div className="flex h-9 items-center justify-center rounded-lg bg-primary text-[13px] font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90">
             Ver menú y pedir
           </div>
         </div>
