@@ -702,8 +702,10 @@ export default function OrderTrackingPage() {
                 <CardContent className="h-96 relative z-0">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) && order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) ? 'Sin datos de ubicación.' : 'El mapa se habilita al tomar el pedido.'}</div>}</CardContent>
                 <CardFooter className="flex-col items-start gap-2">
                     {/* PIN de entrega (19/8): visible desde que hay repartidor en camino,
-                        así el comprador lo tiene a mano cuando le golpean la puerta. */}
-                    {isBuyer && (order.status === 'En camino' || order.status === 'En reparto') && (
+                        así el comprador lo tiene a mano cuando le golpean la puerta.
+                        El ADMIN también lo ve (regla): lo necesita para arbitrar el
+                        "cliente no tiene el código" de Reportar problema. */}
+                    {(isBuyer || isAdminViewer) && (order.status === 'En camino' || order.status === 'En reparto') && (
                         <BuyerDeliveryPin orderId={order.id} />
                     )}
                     {/* "Tu repartidor" (auditoría ago 2026, estándar Rappi): el comprador ve

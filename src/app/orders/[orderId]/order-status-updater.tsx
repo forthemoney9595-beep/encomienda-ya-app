@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2, CreditCard, AlertTriangle, CheckCircle2, XCircle, Clock, ShoppingBag, Ban } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ConfirmDeliveryDialog } from '@/components/confirm-delivery-dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface OrderStatusUpdaterProps {
@@ -55,7 +54,6 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
   const [isUpdating, setIsUpdating] = useState(false);
-  const [confirmDeliveryOpen, setConfirmDeliveryOpen] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const handleCancelOrder = async () => {
@@ -78,7 +76,6 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   // Lógica de permisos
   const isStoreOwner = userProfile?.role === 'store' && userProfile?.storeId === order.storeId;
   const isBuyer = appUser?.uid === order.userId;
-  const isDeliveryPerson = userProfile?.role === 'delivery';
 
   const possibleNextStatuses = statusTransitions[order.status] || [];
 
@@ -269,25 +266,11 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   }
 
   // --- VISTA REPARTIDOR ---
-  // 'Entregado' va por el diálogo compartido con PIN (19/8) — nunca escritura directa.
-  if (isDeliveryPerson && order.status === 'En reparto' && order.deliveryPersonId === appUser?.uid) {
-     return (
-       <CardFooter>
-            <Button onClick={() => setConfirmDeliveryOpen(true)} disabled={isUpdating} className="w-full h-12 text-lg bg-success hover:bg-success/90 text-success-foreground">
-                <CheckCircle2 className="mr-2 h-5 w-5" />
-                Confirmar Entrega
-            </Button>
-            <ConfirmDeliveryDialog
-                open={confirmDeliveryOpen}
-                onOpenChange={setConfirmDeliveryOpen}
-                orderId={order.id}
-                customerName={order.customerName}
-                cashTotal={(order as any).paymentMethod === 'Efectivo' ? order.total : null}
-                user={appUser}
-            />
-       </CardFooter>
-     );
-  }
+  // Este componente ya NO renderiza nada para el repartidor: su botón de "Confirmar
+  // Entrega" acá DUPLICABA al del bloque "Tu Misión" de la página (que es el completo:
+  // dirección + llamar + navegar + entregar con PIN) — David vio los dos botones en la
+  // prueba del 19/8. Un solo camino de entrega: el de la página, vía
+  // ConfirmDeliveryDialog + /api/orders/confirm-delivery.
 
   // --- ESCENARIO 1: CLIENTE ESPERANDO CONFIRMACIÓN ---
   if (isBuyer && order.status === 'Pendiente de Confirmación') {
