@@ -104,18 +104,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // 🔒 Idempotencia: evitar doble pedido por doble click / doble request
+    // 🔒 Idempotencia: evitar doble pedido por doble click / doble request.
+    // El chequeo de abajo es un FAST-PATH (evita recargar la tienda/productos en un
+    // reintento que llega DESPUÉS de que el original ya commiteó). La garantía real
+    // contra la carrera (dos requests con la misma clave ANTES de que ninguna commitee
+    // — el retry por red lenta en Android de gama baja) es el documento centinela
+    // `order_idempotency/{userId}__{key}` que se lee y escribe DENTRO de la transacción
+    // más abajo. Sin eso, ambas queries veían `empty` y se creaban DOS pedidos con doble
+    // descuento de stock y doble cobro (auditoría pre-producción, BUG-200).
     const idempotencyKey = body.idempotencyKey as string | undefined;
-    if (idempotencyKey) {
-      const existing = await adminDb.collection("orders")
-        .where("userId", "==", userId)
-        .where("idempotencyKey", "==", idempotencyKey)
-        .limit(1)
-        .get();
-      if (!existing.empty) {
-        const existingOrder = existing.docs[0].data();
-        console.log(`ℹ️ [API Segura] Pedido duplicado detectado: ${existingOrder.id}`);
-        return NextResponse.json({ orderId: existingOrder.id, total: existingOrder.total, duplicate: true });
+    const idemRef = idempotencyKey
+      ? adminDb.collection("order_idempotency").doc(`${userId}__${idempotencyKey}`)
+      : null;
+    if (idemRef) {
+      const existing = await idemRef.get();
+      if (existing.exists) {
+        const d = existing.data()!;
+        console.log(`ℹ️ [API Segura] Pedido duplicado detectado (fast-path): ${d.orderId}`);
+        return NextResponse.json({ orderId: d.orderId, total: d.total, duplicate: true });
       }
     }
 
@@ -210,6 +216,22 @@ export async function POST(request: Request) {
     await adminDb.runTransaction(async (tx) => {
         calculatedSubtotal = 0;
         verifiedItems.length = 0;
+
+        // 🔒 Idempotencia ATÓMICA (BUG-200): leer el centinela ANTES de cualquier otra
+        // lectura/escritura. Si ya existe, otra request con la misma clave ya está creando
+        // (o creó) el pedido → abortamos y devolvemos el existente. Como es la primera
+        // lectura de la tx, Firestore garantiza que si dos corren en paralelo, solo una
+        // escribe el centinela y la otra reintenta, ve que existe y aborta.
+        if (idemRef) {
+            const idemSnap = await tx.get(idemRef);
+            if (idemSnap.exists) {
+                const d = idemSnap.data()!;
+                throw Object.assign(new Error("__DUPLICATE_ORDER__"), {
+                    duplicateOrderId: d.orderId as string,
+                    duplicateTotal: d.total as number,
+                });
+            }
+        }
 
         // Pasada 1: leer y validar TODOS los productos (las transacciones de Firestore
         // exigen que todas las lecturas pasen antes de cualquier escritura).
@@ -334,6 +356,18 @@ export async function POST(request: Request) {
             attempts: 0,
             createdAt: Timestamp.now(),
         });
+
+        // 🔒 Marca de idempotencia, en la MISMA tx que crea el pedido: cierra la ventana
+        // de carrera (BUG-200). Guarda el orderId+total para que el fast-path y el
+        // reintento devuelvan el pedido existente sin recrear nada.
+        if (idemRef) {
+            tx.set(idemRef, {
+                orderId: newOrderRef.id,
+                userId,
+                total: finalTotal,
+                createdAt: Timestamp.now(),
+            });
+        }
     });
 
     // 5. ✅ NOTIFICAR A LA TIENDA (Campana + Push)
@@ -394,6 +428,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ orderId: newOrderRef.id, total: finalTotal });
 
   } catch (error: any) {
+    // Carrera de idempotencia ganada por otra request (BUG-200): no es un error, es el
+    // duplicado que justamente queremos evitar. Devolvemos el pedido que sí se creó.
+    if (error?.message === "__DUPLICATE_ORDER__") {
+      console.log(`ℹ️ [API Segura] Pedido duplicado detectado (carrera en tx): ${error.duplicateOrderId}`);
+      return NextResponse.json({ orderId: error.duplicateOrderId, total: error.duplicateTotal, duplicate: true });
+    }
     console.error("❌ [API Error Global]:", error);
     Sentry.captureException(error, { tags: { route: "orders/create" } });
     return NextResponse.json({ error: error.message }, { status: 500 });

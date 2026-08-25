@@ -86,19 +86,44 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    const ref = await adminDb.collection('withdrawals').add({
-      userId: uid,
-      userName,
-      userRole: role,
-      amount: Math.round(amount),
-      cbu,
-      status: 'pending',
-      source: 'manual',
-      // Saldo real en el momento de pedirlo: sirve para entender después por qué se pidió
-      // ese monto si el saldo cambió (un reembolso posterior, por ejemplo).
-      balanceAtRequest: Math.round(availableBalance),
-      createdAt: Timestamp.now(),
-    });
+    // 🚨 BUG-203 — dedupe atómico de solicitudes. Antes era un `add()` directo: dos requests
+    // concurrentes (doble click / dos pestañas) leían el mismo `availableBalance` y creaban
+    // DOS retiros pending por el saldo completo. Eso además habilitaba BUG-101 (dos pending
+    // de la misma cuenta aprobados en paralelo → doble pago). Ahora se crea DENTRO de una tx
+    // que rechaza si ya existe un pending de esta cuenta: dos requests en paralelo entran en
+    // conflicto sobre el result-set de la query y solo una crea el retiro.
+    const pendingQuery = adminDb.collection('withdrawals')
+      .where('userId', '==', uid).where('userRole', '==', role).where('status', '==', 'pending');
+    const ref = adminDb.collection('withdrawals').doc();
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const pendingSnap = await tx.get(pendingQuery);
+        if (!pendingSnap.empty) {
+          throw new Error('__ALREADY_PENDING__');
+        }
+        tx.set(ref, {
+          userId: uid,
+          userName,
+          userRole: role,
+          amount: Math.round(amount),
+          cbu,
+          status: 'pending',
+          source: 'manual',
+          // Saldo real en el momento de pedirlo: sirve para entender después por qué se pidió
+          // ese monto si el saldo cambió (un reembolso posterior, por ejemplo).
+          balanceAtRequest: Math.round(availableBalance),
+          createdAt: Timestamp.now(),
+        });
+      });
+    } catch (e: any) {
+      if (e?.message === '__ALREADY_PENDING__') {
+        return NextResponse.json(
+          { error: "Ya tenés una solicitud de retiro pendiente de aprobación. Esperá a que se procese antes de pedir otra." },
+          { status: 400 },
+        );
+      }
+      throw e;
+    }
 
     // Guardar el CBU para que la liquidación automática lo use (antes lo escribía el cliente).
     // Tanda B: el fallo acá NO aborta la solicitud (ya creada), pero tampoco puede morir

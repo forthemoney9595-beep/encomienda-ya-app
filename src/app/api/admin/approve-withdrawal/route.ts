@@ -63,20 +63,34 @@ export async function POST(request: Request) {
     // aprobando está justamente en `pending`, así que usando `availableBalance` se restaba a
     // sí mismo: un retiro por el saldo completo daba siempre "supera el saldo disponible
     // ($0)" y ninguna liquidación del cron era aprobable.
+    // `earned` = lo facturado por la cuenta (neto, vía money.ts). Es la base estable del
+    // saldo; lo que cambia con la concurrencia es la suma de retiros YA APROBADOS, que se
+    // re-lee DENTRO de la transacción (ver BUG-101 abajo). También armamos la query de
+    // retiros aprobados de esta cuenta para re-leerla en la tx.
+    let earned = 0;
     let approvableBalance = 0;
+    let approvedQuery: FirebaseFirestore.Query | null = null;
     if (w.userRole === 'store') {
       // Encontrar la tienda del dueño
       const storesSnap = await adminDb.collection('stores').where('ownerId', '==', w.userId).limit(1).get();
       if (!storesSnap.empty) {
         const result = await computeStoreBalance(storesSnap.docs[0].id);
+        earned = result.totalRevenue;
         approvableBalance = result.approvableBalance;
       }
+      approvedQuery = adminDb.collection('withdrawals')
+        .where('userId', '==', w.userId).where('userRole', '==', 'store').where('status', '==', 'approved');
     } else if (w.userRole === 'delivery') {
       const result = await computeDriverBalance(w.userId);
+      earned = result.totalEarned;
       approvableBalance = result.approvableBalance;
+      approvedQuery = adminDb.collection('withdrawals')
+        .where('userId', '==', w.userId).where('userRole', '==', 'delivery').where('status', '==', 'approved');
     }
 
     const requestedAmount = Number(w.amount) || 0;
+    // Fast-check (mejor UX: rechaza el sobregiro obvio sin abrir la tx). La validación
+    // AUTORITATIVA está dentro de la transacción.
     if (requestedAmount > approvableBalance + 1) {
       // Tolerancia de $1 para redondeos -- si el monto pedido supera el saldo real, se rechaza
       return NextResponse.json({
@@ -93,24 +107,51 @@ export async function POST(request: Request) {
     // 🔒 Transacción (Tanda A de la auditoría): la transición pending→approved se decide
     // ADENTRO — dos aprobaciones simultáneas del mismo retiro ya no pueden pasar las dos
     // (la validación de arriba era read-then-write y ambas leían "pending").
+    let freshApprovable = approvableBalance;
     try {
       await adminDb.runTransaction(async (tx) => {
+        // TODAS las lecturas antes de cualquier escritura (regla de las tx de Firestore).
         const fresh = await tx.get(withdrawalRef);
         if (!fresh.exists || fresh.data()!.status !== 'pending') {
           throw new Error('__ALREADY_PROCESSED__');
         }
+
+        // 🚨 BUG-101 — validación AUTORITATIVA del saldo DENTRO de la tx. Antes el saldo se
+        // calculaba afuera y la tx solo re-chequeaba el propio doc: dos retiros DISTINTOS de
+        // la MISMA cuenta aprobados en paralelo veían ambos el saldo completo (ninguno estaba
+        // aprobado todavía) → se pagaban los dos. Ahora re-leo la suma de retiros ya aprobados
+        // con `tx.get(query)`: si otra aprobación de la misma cuenta commitea primero, el
+        // result-set de esta query cambia, Firestore aborta esta tx y la reintenta viendo el
+        // retiro recién aprobado → freshApprovable baja y el segundo se rechaza si sobregira.
+        if (approvedQuery) {
+          const approvedSnap = await tx.get(approvedQuery);
+          let freshSettled = 0;
+          approvedSnap.forEach((d) => { freshSettled += Number(d.data().amount) || 0; });
+          freshApprovable = Math.max(0, earned - freshSettled);
+          if (requestedAmount > freshApprovable + 1) {
+            throw Object.assign(new Error('__INSUFFICIENT_BALANCE__'), { freshApprovable });
+          }
+        }
+
         tx.update(withdrawalRef, {
           status: 'approved',
           processedAt: Timestamp.now(),
           approvedBy: callerUid,
           operationRef: opRef,
           ...(note ? { adminNote: String(note).trim().slice(0, 300) } : {}),
-          balanceAtApproval: Math.round(approvableBalance),
+          balanceAtApproval: Math.round(freshApprovable),
         });
       });
     } catch (e: any) {
       if (e?.message === '__ALREADY_PROCESSED__') {
         return NextResponse.json({ error: "Esta solicitud ya fue procesada por otra acción — refrescá la lista." }, { status: 400 });
+      }
+      if (e?.message === '__INSUFFICIENT_BALANCE__') {
+        return NextResponse.json({
+          error: `El monto solicitado ($${requestedAmount.toLocaleString()}) supera el saldo real disponible ($${Number(e.freshApprovable).toFixed(0)}) — puede haber otro retiro de esta cuenta recién aprobado. Refrescá la lista.`,
+          saldoReal: e.freshApprovable,
+          montoSolicitado: requestedAmount,
+        }, { status: 400 });
       }
       throw e;
     }
