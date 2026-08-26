@@ -2526,6 +2526,92 @@ galería PNG en `Diseños/`). **D1-D3 implementadas y en producción**; D4 pendi
   oscuro default. Revisión fina de paneles tienda/repartidor/admin en claro: durante
   la prueba. Queda D5 opcional (modo fácil para mayores).
 
+## Fase SS-audit (ago 2026): auditoría exhaustiva pre-producción (protocolo 35 fases) + correcciones P1/P2
+Auditoría completa con un fleet de 8 agentes en paralelo (rutas/APIs · roles/autorización ·
+reglas de negocio/dinero · concurrencia/idempotencia · seguridad web · frontend/errores ·
+base de datos · deployment/testing), cada hallazgo **verificado personalmente** contra el
+código real. Informe completo con IDs, evidencia `file:line` y matriz de riesgo en
+**`docs/PRE_RELEASE_AUDIT.md`** + nota **[[Auditoría pre-producción]]** en la bóveda.
+Veredicto: 🟡 READY WITH CONDITIONS — bases sólidas, sin exploits anónimos de un click; el
+susto mayor (índices de billetera faltantes) se descartó verificando producción en vivo
+(existen). 4 temas transversales: TOCTOU read-then-write fuera de tx · privacidad UI-only sin
+enforcement en reglas · canales de escritura abiertos al cliente · migración de Firebase a
+medias. **Correcciones aplicadas (verificadas + desplegadas):**
+
+**P1 · Tanda 1 — Dinero/TOCTOU** (patrón común: validar DENTRO de la transacción):
+- **BUG-200** `orders/create`: la idempotencia se chequeaba con una query ANTES de la tx (id
+  aleatorio, la tx no revalidaba) → dos requests con la misma clave (retry por red lenta)
+  creaban DOS pedidos + doble stock + doble cobro. Ahora un doc centinela
+  **`order_idempotency/{userId}__{key}`** se lee/escribe DENTRO de la tx. El chequeo previo
+  queda como fast-path.
+- **BUG-101** `admin/approve-withdrawal`: el saldo se calculaba FUERA de la tx; dos retiros de
+  la misma cuenta aprobados en paralelo veían ambos el saldo completo → doble pago. Ahora la
+  tx re-lee la suma de retiros APROBADOS con `tx.get(query)` (si otro commitea, el result-set
+  cambia y Firestore reintenta).
+- **BUG-203** `withdrawals/request`: doble click creaba dos pending. Ahora la creación va en
+  una tx que rechaza si ya hay un pending de esa cuenta.
+- Verificado `_e2e-concurrency.js` **12/12** bajo concurrencia real.
+
+**P1 · Tanda 2 — Privacidad (AUTHZ-001):** el pool de repartidores leía el doc ENTERO de cada
+pedido disponible → cualquier repartidor aprobado cosechaba teléfono+GPS+dirección de TODOS
+los clientes sin tomar nada (la discreción de la Fase UU estaba SOLO en la UI). Fix:
+- La PII de alta sensibilidad (teléfono/GPS/dirección) va a una colección top-level
+  **`order_private/{orderId}`** (Admin SDK); el doc principal conserva el nombre + un nuevo
+  **`deliveryDistanceM`** (distancia denormalizada) para que el pool muestre "≈ X km" sin las
+  coords crudas. Los lectores (`delivery-orders-view`, `orders/[orderId]`, el mapa vía merge)
+  leen `order_private` con fallback a los campos embebidos de los pedidos legacy.
+- **Nueva `/api/orders/take`**: tomar un pedido ya NO es un updateDoc directo del cliente
+  (esa regla `REPARTIDOR LIBRE` se cerró). Asigna en una tx claim-once Y **espeja
+  `deliveryPersonId` en `order_private`** → la regla de lectura compara el campo PROPIO del doc
+  (`resource.data.deliveryPersonId == uid`), NO un `get(orders/{id})`. **OJO — hallazgo clave:
+  el `get()` de reglas lee con LAG un campo recién escrito** (verificado: `deliveryPersonId`
+  seteado por updateDoc no se ve en el `get()` de reglas por varios segundos), así que gate por
+  ahí dejaba al repartidor sin poder ver la dirección justo al tomar. El espejo lo resuelve. La
+  tienda sí usa `get()` sobre `storeId` (campo ESTABLE, sin lag). `release` limpia el espejo.
+  Ambos caminos de UI (panel + detalle) → la misma API (lección R1).
+- Verificado `_e2e-pool-privacy.js` **10/10** (el repartidor asignado lee la PII INMEDIATAMENTE
+  tras tomar, sin lag). **Residual:** pedidos legacy (pre-deploy) aún tienen PII embebida — se
+  van con la limpieza del seed; para datos reales haría falta un backfill.
+
+**P1 · Tanda 3 — Estabilidad:**
+- **BUG-300**: `FirebaseErrorListener` RE-LANZABA los permission-error de la capa `@/firebase`
+  → caían en `global-error.tsx` y crasheaban TODA la app a "Algo salió mal" (3 páginas:
+  favorites, my-store/categories, admin/delivery/[id]). **Era la causa del "Algo salió mal"
+  intermitente del arranque.** Ahora reporta a Sentry en vez de crashear.
+- **BUG-303/304**: guardas de `order.total`/`order.items` que crasheaban panel de tienda / CTA
+  de pago / detalle ante un pedido malformado (el fix de la Fase HH no cubría estos spots).
+
+**P2 · Seguridad** (menor riesgo, sin refactor):
+- **AUTHZ-002 + API-035** (phishing): la regla de `notifications` exige que el `link` (si viene)
+  sea una ruta interna (empieza con `/`, no `//`), y `/api/notify` lo sanitiza. Cierra el
+  phishing a sitio EXTERNO. Residual (notif interna falsa = spam): necesita Admin SDK + App Check.
+- **AUTHZ-003**: la regla de `order_chats` exige `senderId == uid` + forma exacta → no se puede
+  suplantar el remitente en el chat (relevante porque el admin arbitra reclamos con ese chat).
+- **API-034/SEC-100**: `getClientIp` usa `x-vercel-forwarded-for` (no falsificable) en vez del
+  valor más a la izquierda de `x-forwarded-for` (que lo manda el cliente).
+- Verificado `_e2e-notif-chat.js` **8/8**.
+
+**P2 · 2ª parte:**
+- **BUG-201**: el webhook de MP marca pagado dentro de una transacción → cierra el doble-cobro
+  invisible en ventana concurrente (mismo patrón que la Tanda 1).
+- **BUG-301**: gate de carga en el panel del repartidor (ya no muestra "sin pedidos" antes de
+  cargar).
+
+**Scripts de verificación nuevos** (gitignored, `_e2e-*`): `_e2e-concurrency.js`,
+`_e2e-pool-privacy.js`, `_e2e-notif-chat.js`.
+
+**P1 restantes (a propósito):** INFRA-001 (borrar `approve-test-payment` — se usa en la gran
+prueba, se borra al lanzar) e INFRA-004 (firma webhook MP + regenerar secret — bloque MP).
+**P2 restantes:** AUTHZ-004 (squatting de `unique_ids` → Admin SDK), residual de AUTHZ-002,
+BUG-103 (confirm-stock puede subir el total sin avisar al comprador), TEST-001/002 (CI + test
+del webhook). Todo en `docs/PRE_RELEASE_AUDIT.md`.
+
+**Colecciones/rutas nuevas (respetar):** `order_private/{orderId}` (PII del cliente, solo
+Admin SDK; la lee comprador/repartidor-asignado/tienda/admin) · `order_idempotency` (centinela)
+· `/api/orders/take` (única vía de tomar pedido). **Regla aprendida: el `get()` de Firestore
+Rules lee con LAG un campo recién escrito — no gatear una lectura por un campo que se acaba de
+escribir en otro doc; usar un espejo en el mismo doc, o get() solo sobre campos estables.**
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —
