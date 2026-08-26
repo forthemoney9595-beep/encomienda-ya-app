@@ -63,7 +63,12 @@ export interface Order {
   deliveryPersonName?: string | null;
   readyForPickup?: boolean;
   storeCoords?: { latitude: number; longitude: number };
+  // customerCoords/customerPhoneNumber/shippingInfo: PII de alta sensibilidad. En pedidos
+  // NUEVOS viven en orders/{id}/private (AUTHZ-001), no en el doc principal; se fusionan al
+  // leer el detalle. Opcionales por los legacy que aún los traen embebidos.
   customerCoords?: { latitude: number; longitude: number };
+  // Distancia tienda→cliente (metros) denormalizada para el pool, sin exponer coords.
+  deliveryDistanceM?: number | null;
   deliveryRating?: number;
   deliveryReview?: string;
   deliveryReviewed?: boolean;

@@ -10,12 +10,12 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrderStatusUpdater } from './order-status-updater';
 import { ConfirmDeliveryDialog } from '@/components/confirm-delivery-dialog';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context';
 import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { doc, updateDoc, addDoc, collection, serverTimestamp, query, where, getCountFromServer } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection, serverTimestamp, query, where, getCountFromServer, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { CircularProgress } from '@/components/ui/circular-progress';
@@ -211,7 +211,36 @@ export default function OrderTrackingPage() {
   const processedPayment = useRef(false);
 
   const orderRef = useMemoFirebase(() => firestore ? doc(firestore, 'orders', orderId) : null, [firestore, orderId]);
-  const { data: order, isLoading: orderLoading } = useDoc<Order>(orderRef);
+  const { data: orderRaw, isLoading: orderLoading } = useDoc<Order>(orderRef);
+
+  // 🔒 PII de contacto/ubicación (AUTHZ-001): en los pedidos NUEVOS, teléfono/GPS/dirección
+  // viven en orders/{id}/private (fuera del doc que ve el pool). Los lee quien tiene permiso
+  // (comprador / repartidor asignado / tienda / admin) y se FUSIONAN en `order` para que todo
+  // el resto del render (mapa incluido) siga usando order.customerCoords/etc. sin cambios.
+  // Un repartidor del POOL (no asignado) recibe permission-denied → no ve la PII (correcto).
+  // Los pedidos legacy ya traen esos campos embebidos en el doc principal → siguen andando.
+  const [orderPrivate, setOrderPrivate] = useState<any>(null);
+  useEffect(() => {
+    if (!firestore || !orderRaw?.id) { setOrderPrivate(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(firestore, 'order_private', orderRaw.id));
+        if (!cancelled) setOrderPrivate(snap.exists() ? snap.data() : null);
+      } catch { if (!cancelled) setOrderPrivate(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [firestore, orderRaw?.id]);
+  const order = useMemo(() => {
+    if (!orderRaw) return orderRaw;
+    if (!orderPrivate) return orderRaw;
+    // Solo los campos de PII (NO userId/createdAt del doc private, que pisarían los del pedido).
+    const merged: any = { ...orderRaw };
+    if (orderPrivate.customerPhoneNumber != null) merged.customerPhoneNumber = orderPrivate.customerPhoneNumber;
+    if (orderPrivate.customerCoords != null) merged.customerCoords = orderPrivate.customerCoords;
+    if (orderPrivate.shippingInfo != null) merged.shippingInfo = orderPrivate.shippingInfo;
+    return merged as Order;
+  }, [orderRaw, orderPrivate]);
 
   // Nota: antes había acá un useDoc leyendo users/{order.userId} (el perfil del
   // comprador) para mostrárselo a la tienda/repartidor -- pero las reglas de Firestore
@@ -339,48 +368,19 @@ export default function OrderTrackingPage() {
         if (!user || !orderRef || !order || !firestore) return;
         setIsAccepting(true);
         try {
-            // Mismo tope que el panel de entregas (Fase PP): este era un segundo camino
-            // que permitía acaparar pedidos sin límite. La regla de Firestore no puede
-            // contar pedidos activos, así que el guardrail vive en los DOS caminos de UI.
-            const activeSnap = await getCountFromServer(query(
-                collection(firestore, 'orders'),
-                where('deliveryPersonId', '==', user.uid),
-                where('status', 'in', ['En camino', 'En reparto']),
-            ));
-            if (activeSnap.data().count >= MAX_ACTIVE_ORDERS) {
-                toast({
-                    variant: 'destructive',
-                    title: 'Ya tenés el máximo de pedidos en curso',
-                    description: `Terminá alguno de tus ${MAX_ACTIVE_ORDERS} pedidos activos antes de tomar otro.`,
-                });
+            // Tomar el pedido va por /api/orders/take (AUTHZ-001): asigna en tx claim-once,
+            // espeja deliveryPersonId en order_private (para leer la PII sin lag del get de
+            // reglas), valida repartidor aprobado + tope de activos + no-propio server-side, y
+            // notifica. Este era el SEGUNDO camino de toma (el otro es el panel de entregas);
+            // ambos apuntan ahora a la misma API (lección R1: dos caminos que divergen = bug).
+            const res = await authedFetch('/api/orders/take', user, { orderId: order.id });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                toast({ variant: 'destructive', title: res.status === 409 ? 'Pedido ya tomado' : 'No se pudo aceptar', description: data.error || 'Probá de nuevo.' });
                 setIsAccepting(false);
                 return;
             }
-
-            const driverName = myUserProfile?.displayName || 'Repartidor';
-            await updateDoc(orderRef, {
-                deliveryPersonId: user.uid,
-                deliveryPersonName: driverName,
-                status: 'En camino',
-                takenAt: serverTimestamp()
-            });
             toast({ title: "¡Pedido Aceptado!", description: "Ve a la tienda a retirarlo." });
-
-            // Avisar a la tienda y al comprador — este botón es un camino alternativo al
-            // de "Panel de Entregas" (delivery-orders-view.tsx), que ya hace esto mismo.
-            const targetStoreUser = order.storeOwnerId || order.storeId;
-            if (targetStoreUser) {
-                OrderService.sendNotification(
-                    firestore, targetStoreUser, "🛵 Repartidor en camino",
-                    `${driverName} aceptó el pedido y va a retirarlo.`, "order_status", order.id, user
-                ).catch(console.error);
-            }
-            if (order.userId) {
-                OrderService.sendNotification(
-                    firestore, order.userId, "🛵 Repartidor Asignado",
-                    "Un repartidor está yendo a retirar tu pedido.", "order_status", order.id, user
-                ).catch(console.error);
-            }
         } catch (error) {
             console.error(error);
             toast({ variant: 'destructive', title: "Error", description: "No se pudo aceptar el pedido." });

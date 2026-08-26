@@ -303,16 +303,23 @@ export async function POST(request: Request) {
             id: newOrderRef.id,
             userId,
             customerName: safeShippingInfo.name,
-            ...(safePhone ? { customerPhoneNumber: safePhone } : {}),
+            // 🔒 PII de alta sensibilidad (teléfono, GPS exacto, dirección) NO va en el doc
+            // principal (auditoría pre-producción, AUTHZ-001): el pool de repartidores lee
+            // el doc ENTERO de cada pedido disponible, así que cualquier repartidor aprobado
+            // podía cosechar teléfono+GPS+dirección de TODOS los clientes sin tomar nada.
+            // Ahora esos campos viven en orders/{id}/private/data (lo lee solo el repartidor
+            // ASIGNADO, el comprador, la tienda y el admin). El pool solo ve la distancia
+            // ya calculada (deliveryDistanceM) + el nombre, nunca las coordenadas crudas.
             items: verifiedItems,
-            shippingInfo: safeShippingInfo,
             storeId,
             storeName: storeData?.name || "Tienda",
             storeAddress: storeData?.address || "",
             storeOwnerId: ownerId || null,
 
             storeCoords: storeCoords,
-            customerCoords: safeCustomerCoords,
+            // Distancia tienda→cliente (línea recta, metros) denormalizada para que el pool
+            // muestre "≈ X km" SIN exponer las coords del cliente. `null` si falta algún dato.
+            deliveryDistanceM: (typeof deliveryDistM === 'number' && isFinite(deliveryDistM)) ? Math.round(deliveryDistM) : null,
 
             deliveryPersonId: null as string | null,
             readyForPickup: false,
@@ -354,6 +361,21 @@ export async function POST(request: Request) {
             pin: String(Math.floor(Math.random() * 10000)).padStart(4, "0"),
             userId: userId,
             attempts: 0,
+            createdAt: Timestamp.now(),
+        });
+
+        // 🔒 PII de contacto/ubicación del cliente (AUTHZ-001): fuera del doc principal que
+        // ve el pool. Colección TOP-LEVEL order_private/{orderId} (no subcolección) para que
+        // la regla de lectura pueda usar el patrón get(orders/{orderId}) probado en
+        // order_chats — desde un match ANIDADO ese get no bindea bien el orderId. La lee el
+        // repartidor ASIGNADO, el comprador, la tienda y el admin. `userId` guardado para la
+        // regla de lectura del comprador (mismo criterio que secure/pin).
+        tx.set(adminDb.collection("order_private").doc(newOrderRef.id), {
+            orderId: newOrderRef.id,
+            userId,
+            ...(safePhone ? { customerPhoneNumber: safePhone } : {}),
+            customerCoords: safeCustomerCoords,
+            shippingInfo: safeShippingInfo,
             createdAt: Timestamp.now(),
         });
 

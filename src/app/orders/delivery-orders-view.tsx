@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
-import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { OrderService, MAX_ACTIVE_ORDERS } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { gmapsDirectionsUrl, distanceMeters, formatDistance, isValidCoords } from '@/lib/geo';
@@ -66,7 +66,14 @@ interface Order {
   // Snapshot de coords guardado por /api/orders/create — alimenta el botón "Navegar"
   // y la distancia estimada del viaje (Fase RR).
   storeCoords?: { latitude: number; longitude: number } | null;
+  // customerCoords/shippingInfo: PII de alta sensibilidad (AUTHZ-001). En los pedidos
+  // NUEVOS ya NO vienen en el doc principal (viven en orders/{id}/private) — solo se
+  // leen para los pedidos ASIGNADOS vía privateById. Se dejan opcionales por los pedidos
+  // legacy que todavía los tienen embebidos.
   customerCoords?: { latitude: number; longitude: number } | null;
+  // Distancia tienda→cliente (metros, línea recta) denormalizada: la muestra el pool SIN
+  // exponer las coords del cliente.
+  deliveryDistanceM?: number | null;
 }
 
 export default function DeliveryOrdersView() {
@@ -143,6 +150,31 @@ export default function DeliveryOrdersView() {
       return allMyOrders?.filter(o => ['En camino', 'En reparto', 'En preparación', 'Listo para recoger'].includes(o.status)) || [];
   }, [allMyOrders]);
 
+  // 🔒 PII de los pedidos ASIGNADOS (AUTHZ-001): dirección + coords + teléfono viven en
+  // orders/{id}/private (no en el doc que ve el pool). Como repartidor ASIGNADO tengo
+  // permiso de leerlas; las traigo por getDoc para las ≤3 activas (con fallback a los
+  // campos embebidos de los pedidos legacy que todavía las traen en el doc principal).
+  const [privateById, setPrivateById] = useState<Record<string, { customerCoords?: { latitude: number; longitude: number } | null; shippingInfo?: { address?: string } }>>({});
+  const activeIdsKey = myActiveOrders.map(o => o.id).join(',');
+  useEffect(() => {
+    if (!firestore || !myActiveOrders.length) { setPrivateById({}); return; }
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(myActiveOrders.map(async (o) => {
+        try {
+          const snap = await getDoc(doc(firestore, 'order_private', o.id));
+          return [o.id, snap.exists() ? snap.data() : null] as const;
+        } catch { return [o.id, null] as const; }
+      }));
+      if (!cancelled) setPrivateById(Object.fromEntries(entries.filter(([, v]) => v)) as any);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firestore, activeIdsKey]);
+  // Dirección/coords del cliente para un pedido asignado: private primero, legacy después.
+  const custAddress = (o: Order) => privateById[o.id]?.shippingInfo?.address ?? o.shippingInfo?.address;
+  const custCoords = (o: Order) => privateById[o.id]?.customerCoords ?? o.customerCoords;
+
   // --- ACCIONES DEL PROCESO ---
 
   // A. TOMAR PEDIDO -> Pasa a 'En camino'
@@ -169,36 +201,19 @@ export default function DeliveryOrdersView() {
       return;
     }
     try {
-      const driverName = userProfile?.name || user.displayName || 'Un repartidor';
-      const orderRef = doc(firestore, 'orders', order.id);
-      await updateDoc(orderRef, {
-        deliveryPersonId: user.uid,
-        deliveryPersonName: driverName,
-        status: 'En camino',
-        takenAt: serverTimestamp()
-      });
+      // Tomar el pedido va por /api/orders/take (AUTHZ-001): asigna en una tx claim-once Y
+      // espeja deliveryPersonId en order_private (para que el repartidor pueda leer la PII sin
+      // el lag del get() de reglas). Antes era un updateDoc directo del cliente.
+      const res = await authedFetch('/api/orders/take', user, { orderId: order.id });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast({ variant: 'destructive', title: res.status === 409 ? 'Pedido ya tomado' : 'No se pudo tomar', description: data.error || 'Probá de nuevo.' });
+        return;
+      }
       toast({ title: "¡Pedido Asignado!", description: "Ve a la tienda a retirarlo." });
       setActiveTab('active');
-
-      // Avisar a la tienda y al comprador — antes este flujo no avisaba a nadie
-      const targetStoreUser = order.storeOwnerId || order.storeId;
-      if (targetStoreUser) {
-        OrderService.sendNotification(
-          firestore, targetStoreUser, "🛵 Repartidor en camino",
-          `${driverName} aceptó el pedido y va a retirarlo.`, "order_status", order.id, user
-        ).catch(console.error);
-      }
-      if (order.userId) {
-        OrderService.sendNotification(
-          firestore, order.userId, "🛵 Repartidor Asignado",
-          "Un repartidor está yendo a retirar tu pedido.", "order_status", order.id, user
-        ).catch(console.error);
-      }
     } catch (error: any) {
       console.error(error);
-      // Si Firestore rechazó la escritura, lo más probable es que otro repartidor
-      // ya haya tomado este pedido un instante antes (la regla de seguridad exige
-      // que deliveryPersonId siga siendo null en el momento exacto de escribir).
       const isPermissionDenied = error?.code === 'permission-denied';
       toast({
         variant: "destructive",
@@ -381,12 +396,22 @@ export default function DeliveryOrdersView() {
                     {/* Distancia estimada del viaje (Fase RR) — ayuda a decidir si tomarlo.
                         Línea recta a propósito: sin servicio de routing, y en un pueblo en
                         grilla la aproximación alcanza para comparar pedidos entre sí. */}
-                    {isValidCoords(order.storeCoords) && isValidCoords(order.customerCoords) && (
+                    {(() => {
+                      // Distancia en el POOL: sale de deliveryDistanceM (denormalizado, sin
+                      // exponer las coords del cliente). Fallback a coords solo para pedidos
+                      // legacy que todavía las traen embebidas.
+                      const distM = typeof order.deliveryDistanceM === 'number'
+                        ? order.deliveryDistanceM
+                        : (isValidCoords(order.storeCoords) && isValidCoords(order.customerCoords)
+                            ? distanceMeters(order.storeCoords!, order.customerCoords!) : null);
+                      if (distM == null) return null;
+                      return (
                         <p className="text-xs text-muted-foreground flex items-center gap-1.5 pl-8">
                             <Truck className="h-3.5 w-3.5" />
-                            ≈ {formatDistance(distanceMeters(order.storeCoords!, order.customerCoords!))} de la tienda al cliente (línea recta)
+                            ≈ {formatDistance(distM)} de la tienda al cliente (línea recta)
                         </p>
-                    )}
+                      );
+                    })()}
                 </CardContent>
                 <CardFooter className="flex-col gap-2">
                     <Button
@@ -454,7 +479,7 @@ export default function DeliveryOrdersView() {
 
                             <div className="p-3 bg-muted/50 rounded-lg border space-y-1">
                                 <p className="text-xs text-muted-foreground uppercase font-bold">Destino Final:</p>
-                                <p className="text-sm font-medium">{order.shippingInfo?.address}</p>
+                                <p className="text-sm font-medium">{custAddress(order) || 'Cargando dirección…'}</p>
                                 <p className="text-xs text-muted-foreground">Cliente: {order.customerName}</p>
                             </div>
                             
@@ -489,7 +514,7 @@ export default function DeliveryOrdersView() {
                                 retirado. Es como navegan los repartidores de Rappi/PedidosYa. */}
                             {(() => {
                                 const goingToStore = order.status !== 'En reparto';
-                                const dest = goingToStore ? order.storeCoords : order.customerCoords;
+                                const dest = goingToStore ? order.storeCoords : custCoords(order);
                                 if (!isValidCoords(dest)) return null;
                                 return (
                                     <Button asChild variant="outline" className="w-full h-11 border-info/40 text-info hover:bg-info/10 hover:text-info">

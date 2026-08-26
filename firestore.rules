@@ -265,18 +265,11 @@ service cloud.firestore {
               request.resource.data.driverCoords.longitude <= 180 &&
               resource.data.status in ['En camino', 'En reparto']))) ||
 
-        // REPARTIDOR LIBRE: autoasignación de un pedido sin repartidor.
-        // Solo repartidores APROBADOS por el admin (users/{uid}.isApproved == true).
-        // `userId != auth.uid` (ago 2026): un repartidor puede COMPRAR como cualquier
-        // vecino, pero su propio pedido lo lleva OTRO — tomarlo él mismo sería envío
-        // gratis de facto y habilitaría auto-calificarse como repartidor.
-        (resource.data.deliveryPersonId == null &&
-          resource.data.userId != request.auth.uid &&
-          isApprovedDriver() &&
-          request.resource.data.deliveryPersonId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['deliveryPersonId', 'deliveryPersonName', 'status', 'takenAt']) &&
-          request.resource.data.status == 'En camino') ||
+        // 🔒 TOMAR PEDIDO — ya NO es una escritura directa del cliente (AUTHZ-001). Pasa por
+        // /api/orders/take (Admin SDK), que asigna en una tx claim-once Y espeja
+        // deliveryPersonId en order_private para que el repartidor pueda leer la PII del
+        // cliente sin el lag del get() de reglas. Un updateDoc directo dejaría ese espejo sin
+        // escribir, así que se cierra este camino: la autoasignación del cliente ya no existe.
 
         // CLIENTE: solo puede calificar productos, y SOLO sobre el mapa `itemRatings`.
         // 🚨 Antes esto permitía escribir `items`, que es donde vive el PRECIO de cada
@@ -300,6 +293,39 @@ service cloud.firestore {
           (resource.data.userId == request.auth.uid || isAdmin());
         allow write: if false;
       }
+
+    }
+
+    // 5a-ter. PII DE CONTACTO/UBICACIÓN DEL CLIENTE (AUTHZ-001, auditoría pre-producción):
+    // teléfono, GPS exacto y dirección. NO están en el doc principal del pedido porque el
+    // POOL de repartidores lee el doc entero de cada pedido disponible — cualquier repartidor
+    // aprobado podía cosechar teléfono+GPS+dirección de TODOS los clientes sin tomar ninguno.
+    // Es una colección top-level (id = orderId) a propósito: así la regla usa el mismo patrón
+    // get(orders/{orderId}) que order_chats (desde un match anidado ese get no bindea bien el
+    // orderId). La lee SOLO: el comprador (userId del doc), el repartidor YA ASIGNADO al
+    // pedido, la tienda dueña, y el admin. El pool solo ve deliveryDistanceM en el doc
+    // principal, nunca las coords crudas. Escrituras: solo Admin SDK (/api/orders/create).
+    match /order_private/{orderId} {
+      // El comprador lee por su userId (campo propio del doc). El repartidor asignado lee por
+      // el ESPEJO deliveryPersonId que /api/orders/take escribe en la MISMA tx que asigna el
+      // pedido — así se compara el campo PROPIO del doc, sin get(orders/{id}) (ese get() de
+      // reglas lee con lag un deliveryPersonId recién escrito y dejaba al repartidor sin poder
+      // ver la dirección justo después de tomar). La tienda usa get() sobre storeId, que es
+      // ESTABLE (nunca cambia tras crear el pedido) → no sufre ese lag.
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.deliveryPersonId == request.auth.uid ||
+        isAdmin() ||
+        isStoreOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.storeId)
+      );
+      allow write: if false;
+    }
+
+    // 5a-bis. IDEMPOTENCIA DE PEDIDOS (auditoría pre-producción, BUG-200) — un doc centinela
+    // por (userId, idempotencyKey), escrito DENTRO de la tx de /api/orders/create para cerrar
+    // la carrera de doble pedido. Solo Admin SDK; el cliente nunca lo toca.
+    match /order_idempotency/{key} {
+      allow read, write: if false;
     }
 
     // 5b. RESEÑAS DE REPARTIDOR — solo vía /api/delivery-reviews/create (Admin SDK).

@@ -63,6 +63,11 @@ export async function POST(request: Request) {
       status: "Listo para recoger",
       takenAt: null,
     });
+    // 🔒 Limpiar el espejo de asignación en order_private (AUTHZ-001): si no, el repartidor
+    // que soltó el pedido seguiría pudiendo leer la PII del cliente vía su deliveryPersonId
+    // espejado. Vuelve al pool sin dueño.
+    await adminDb.collection("order_private").doc(orderId)
+      .set({ deliveryPersonId: null }, { merge: true }).catch(() => {});
 
     await adminDb.collection("driver_incidents").add({
       type: "released",
