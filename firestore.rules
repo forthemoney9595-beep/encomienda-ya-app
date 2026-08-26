@@ -443,23 +443,50 @@ service cloud.firestore {
       // notify-server), pero este hasOnly no lo incluía → TODA notificación de campanita
       // del lado cliente quedaba denegada en silencio (asignación de repartidor, retiro,
       // entrega, chat, aprobación de cuenta). El error se tragaba en order-service.ts.
+      // 🔒 AUTHZ-002 (auditoría pre-producción): el `link` (si viene) DEBE ser una ruta
+      // interna (empieza con '/' y NO con '//', que sería un destino externo protocol-relative).
+      // El create sigue abierto a cualquier logueado a propósito (la tienda avisa al
+      // repartidor, el chat, etc.), pero antes el creador podía meter un `link` a un sitio
+      // EXTERNO y armar un phishing con apariencia oficial (`type:'admin'`) en la campanita de
+      // una víctima. Los flujos legítimos ni siquiera escriben `link` en la campanita; el push
+      // (con su link) va aparte por /api/notify, que también lo sanitiza (API-035).
+      // Residual conocido: un logueado todavía puede crear una notificación INTERNA falsa a
+      // otro uid (spam/confusión, no robo). Cerrarlo del todo = mover la creación a Admin SDK
+      // + App Check (refactor mayor, anotado).
       allow create: if isSignedIn() &&
         request.resource.data.keys().hasAll(['userId', 'title', 'type', 'read', 'createdAt']) &&
         request.resource.data.keys().hasOnly(['userId', 'title', 'message', 'body', 'type', 'orderId', 'link', 'read', 'createdAt', 'icon']) &&
         request.resource.data.userId is string &&
         request.resource.data.title is string &&
         request.resource.data.read == false &&
-        request.resource.data.type in ['order_status', 'delivery', 'buyer', 'store', 'admin'];
+        request.resource.data.type in ['order_status', 'delivery', 'buyer', 'store', 'admin'] &&
+        (!('link' in request.resource.data) ||
+          (request.resource.data.link is string &&
+            request.resource.data.link.size() < 200 &&
+            request.resource.data.link.matches('/[^/].*')));
     }
 
     // 7. CHATS — solo participantes de la orden (cliente, tienda, repartidor, admin)
     match /order_chats/{orderId}/messages/{msgId} {
-      allow read, create: if isSignedIn() && (
+      allow read: if isSignedIn() && (
         isAdmin() ||
         get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid ||
         get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryPersonId == request.auth.uid ||
         isStoreOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.storeId)
       );
+      // 🔒 AUTHZ-003 (auditoría pre-producción): además de ser participante, el remitente del
+      // mensaje DEBE ser quien lo envía (senderId == su uid) y con la forma exacta. Antes la
+      // regla solo validaba participación, así que el comprador podía postear un mensaje
+      // marcado como enviado por la TIENDA o el REPARTIDOR — evidencia manipulable, y el admin
+      // usa este chat (solo-lectura, Fase OO) para arbitrar reclamos de plata.
+      allow create: if isSignedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['senderId', 'senderName', 'senderRole', 'text', 'createdAt']) &&
+        (
+          get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryPersonId == request.auth.uid ||
+          isStoreOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.storeId)
+        );
     }
 
     // 8. RETIROS (Withdrawals) — solicitudes de pago a tiendas y repartidores

@@ -33,9 +33,22 @@ export function checkRateLimit(
 }
 
 export function getClientIp(request: Request): string {
-    return (
-        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-        request.headers.get('x-real-ip') ||
-        'unknown'
-    );
+    // 🔒 API-034 (auditoría pre-producción): la IP del cliente se toma de
+    // `x-vercel-forwarded-for`, que lo setea el edge de Vercel y NO es falsificable por el
+    // cliente. Antes se usaba `x-forwarded-for.split(',')[0]` — pero el valor MÁS A LA
+    // IZQUIERDA de x-forwarded-for es el que MANDA el cliente, así que rotándolo se evadían
+    // todos los topes (crear pedidos, checkout, martillar la API de MP). En Vercel,
+    // x-forwarded-for también trae la IP real, pero como ÚLTIMO valor de la cadena (el que
+    // agrega el proxy), así que si no está x-vercel-forwarded-for usamos ese último. En dev
+    // local (sin proxy de Vercel) cae a x-real-ip / 'unknown'.
+    const vercelIp = request.headers.get('x-vercel-forwarded-for');
+    if (vercelIp) return vercelIp.split(',')[0].trim();
+
+    const fwd = request.headers.get('x-forwarded-for');
+    if (fwd) {
+        const parts = fwd.split(',').map(s => s.trim()).filter(Boolean);
+        // último valor = el que agrega el proxy de confianza (no el que manda el cliente)
+        if (parts.length) return parts[parts.length - 1];
+    }
+    return request.headers.get('x-real-ip') || 'unknown';
 }

@@ -21,11 +21,18 @@ export async function POST(request: Request) {
         }
 
         const parsed = await request.json().catch(() => ({}));
-        const { userId, link } = parsed;
+        const { userId } = parsed;
 
         if (!userId || !parsed.title || !parsed.body) {
             return NextResponse.json({ error: "Faltan datos requeridos (userId, title, body)" }, { status: 400 });
         }
+
+        // 🔒 API-035 (auditoría pre-producción): el `link` se sanitiza a una ruta INTERNA
+        // (mismo criterio que notify-broadcast). Antes se usaba crudo, así que cualquier
+        // logueado podía mandar un push con apariencia oficial de EncomiendaYA y un destino
+        // EXTERNO (phishing). Solo se permiten paths que empiezan con '/'.
+        const rawLink = parsed.link;
+        const link = (typeof rawLink === 'string' && rawLink.startsWith('/') && rawLink.length < 200) ? rawLink : '/orders';
 
         // Tanda B: topes de longitud (mismo criterio que notify-broadcast, que ya los
         // tenía) — sin esto, cualquier usuario logueado podía mandar push con textos de
