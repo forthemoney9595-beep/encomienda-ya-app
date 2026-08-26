@@ -190,6 +190,18 @@ Consistencias verificadas OK: no hay ruta sin funcionalidad ni funcionalidad sin
 
 **P4 — LOW/deuda:** API-036/037, BUG-105/106/107, BUG-203/204, AUTHZ-006, DB-005/006/007/008, INFRA-005/008/009, FUNC-300/301/303, SEC-103, FUNC-302.
 
+## ✅ CORRECCIONES APLICADAS (post-auditoría, verificadas + desplegadas)
+
+**Tanda 1 — Dinero/TOCTOU** (commit `57ee107`): BUG-200 (idempotencia de crear pedido con doc centinela en la tx), BUG-101 (aprobar retiro recalcula saldo DENTRO de la tx con tx.get(query)), BUG-203 (solicitar retiro deduplica pending en tx). Verificado `_e2e-concurrency.js` **12/12** bajo concurrencia real (dos retiros de $10.500 con saldo $10.500 aprobados en paralelo → solo uno pasa, sin doble pago).
+
+**Tanda 2 — Privacidad** (commit `478d724`): AUTHZ-001 — la PII de alta sensibilidad (teléfono/GPS/dirección) salió del doc que ve el pool a una colección `order_private/{orderId}`; el doc principal conserva el nombre + `deliveryDistanceM` (distancia denormalizada). Nueva `/api/orders/take` que asigna en tx claim-once Y espeja `deliveryPersonId` en `order_private` (resuelve el lag del get() de reglas — el repartidor lee la dirección al instante tras tomar). Autoasignación directa del cliente cerrada (toda toma por API, lección R1). Verificado `_e2e-pool-privacy.js` **10/10** contra reglas de producción. **Residual anotado:** pedidos legacy (pre-deploy) aún tienen PII embebida — se van con la limpieza del seed; para datos reales haría falta un backfill.
+
+**Tanda 3 — Estabilidad** (commit `726ee90`): BUG-300 (FirebaseErrorListener ya no re-lanza los permission-error → no crashea la app; reporta a Sentry — cierra el "Algo salió mal" intermitente), BUG-304 (`order.total` con guarda en panel de tienda + CTA de pago), BUG-303 (`order.items` con guarda en el detalle). /verificar OK.
+
+**NO tocados a propósito** (P1 restantes): INFRA-001 (borrar `approve-test-payment`) — se necesita para la gran prueba en curso, se borra al lanzar. INFRA-004 (firma webhook MP + regenerar secret) — requiere credenciales de MP + pago real, es la tarea del bloque MP.
+
+**Estado P1: 4 de 6 resueltos y desplegados. Faltan los 2 pendientes conocidos** (approve-test-payment cleanup + firma MP), que van en su momento propio.
+
 ## 🏁 VEREDICTO FINAL
 
 ### 🟡 READY WITH CONDITIONS — NO lanzar hoy; a una lista P1 acotada de estarlo.
