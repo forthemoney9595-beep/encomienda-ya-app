@@ -203,7 +203,8 @@ Consistencias verificadas OK: no hay ruta sin funcionalidad ni funcionalidad sin
 **Estado P1: 4 de 6 resueltos y desplegados. Faltan los 2 pendientes conocidos** (approve-test-payment cleanup + firma MP), que van en su momento propio.
 
 **Tanda P2 — Seguridad** (commit `56bcfb1`): AUTHZ-002+API-035 (phishing por notificaciones — la regla exige link interno + /api/notify lo sanitiza; cierra el phishing a sitio EXTERNO), AUTHZ-003 (anti-suplantación en el chat — la regla exige `senderId == uid` + forma exacta), API-034/SEC-100 (rate-limit por `x-vercel-forwarded-for` no falsificable). Verificado `_e2e-notif-chat.js` **8/8** contra reglas de producción.
-- **P2 restantes (no hechos):** AUTHZ-004 (squatting de unique_ids → mover reserva a Admin SDK, refactor), residual de AUTHZ-002 (spam de notif interna falsa → Admin SDK + App Check), BUG-201 (webhook no transaccional → tx), BUG-103 (confirm-stock sube total sin avisar), BUG-301 (flash "sin pedidos" del repartidor), TEST-001/002 (CI + test del webhook MP).
+**Tanda P2 — 2ª parte** (commit `87cd05d`): BUG-201 (webhook MP ahora marca pagado dentro de una transacción → cierra el doble-cobro invisible en ventana concurrente; mismo patrón TOCTOU de la Tanda 1), BUG-301 (gate de carga en el panel del repartidor → ya no muestra "sin pedidos" un instante antes de cargar). /verificar OK.
+- **P2 restantes (no hechos):** AUTHZ-004 (squatting de unique_ids → mover reserva a Admin SDK, refactor), residual de AUTHZ-002 (spam de notif interna falsa → Admin SDK + App Check), BUG-103 (confirm-stock sube total sin avisar al comprador), TEST-001/002 (CI + test del webhook MP).
 
 ## 🏁 VEREDICTO FINAL
 
