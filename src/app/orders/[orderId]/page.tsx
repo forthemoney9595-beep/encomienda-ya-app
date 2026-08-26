@@ -342,7 +342,7 @@ export default function OrderTrackingPage() {
     const executeReorder = () => {
         if (!order) return;
         clearCart();
-        order.items.forEach(item => {
+        (order.items || []).forEach(item => {
             addToCart({
                 id: item.id,
                 name: item.name,
@@ -443,7 +443,7 @@ export default function OrderTrackingPage() {
 
   if (isLoading || !order) return <OrderPageSkeleton />;
 
-  const displayTotal = order.total || (order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + order.deliveryFee);
+  const displayTotal = order.total || ((order.items || []).reduce((sum, item) => sum + item.price * item.quantity, 0) + (order.deliveryFee || 0));
   const isBuyer = user?.uid === order.userId;
   const isStoreOwner = myUserProfile?.role === 'store' && myUserProfile?.storeId === order.storeId;
   const isDeliveryPerson = myUserProfile?.role === 'delivery' && user?.uid === order.deliveryPersonId;
@@ -645,7 +645,7 @@ export default function OrderTrackingPage() {
 
                     <CardDescription>Estado actual: <span className="font-bold text-primary">{order.status}</span></CardDescription>
                     <Separator/>
-                    {order.items.map(item => (
+                    {(order.items || []).map(item => (
                         <div key={item.id} className="flex justify-between items-center">
                             <div>
                                 {/* ✅ FIX: Buscamos 'name' o 'title' */}

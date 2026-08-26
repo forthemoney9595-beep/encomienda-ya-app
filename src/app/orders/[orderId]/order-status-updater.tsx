@@ -328,7 +328,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
           </Alert>
           <Button onClick={handleBuyerPayment} disabled={isUpdating} className="w-full h-12 text-lg shadow-md">
               {isUpdating ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
-              Pagar ${order.total.toFixed(2)} Ahora
+              Pagar ${(order.total || 0).toLocaleString('es-AR')} Ahora
           </Button>
           <p className="text-xs text-muted-foreground text-center">* Procesado seguro vía MercadoPago</p>
           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>

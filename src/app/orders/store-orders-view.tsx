@@ -357,7 +357,7 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
             <CardContent className="py-4 space-y-3">
                 <div className="flex justify-between items-center">
                     <p className="text-sm font-medium">Cliente: <span className="text-muted-foreground">{order.customerName}</span></p>
-                    <p className="font-bold text-base text-success">${order.total.toLocaleString()}</p>
+                    <p className="font-bold text-base text-success">${(order.total || 0).toLocaleString('es-AR')}</p>
                 </div>
                 
                 <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2 border">
