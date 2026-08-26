@@ -141,55 +141,62 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: "received_but_not_approved" });
     }
 
-    // 🔒 Idempotencia: si la orden ya fue procesada, no reprocesar.
-    if (existingData.paymentStatus === "paid") {
-      // 🚨 Pero si el paymentId es DISTINTO del que ya tenía, es un SEGUNDO pago del mismo
-      // pedido (el comprador abrió dos veces el link de pago): plata cobrada dos veces que
-      // antes salía por acá sin dejar ningún registro.
-      if (existingData.mpPaymentId && String(existingData.mpPaymentId) !== String(paymentId)) {
-        console.error(`🚨 [Webhook] DOBLE PAGO en la orden ${orderRefId}: ya tenía ${existingData.mpPaymentId}, llegó ${paymentId}.`);
-        await flagIssue("duplicate_payment", { previousPaymentId: existingData.mpPaymentId });
-        return NextResponse.json({ status: "duplicate_payment_flagged" });
-      }
-      console.log(`ℹ️ [Webhook] Orden ${orderRefId} ya procesada — ignorando duplicado`);
-      return NextResponse.json({ status: "already_processed" });
-    }
-
-    // 🔒 El monto realmente pagado tiene que coincidir con el total real del pedido —
-    // nunca se asume que un pago aprobado corresponde al monto que dice la orden.
+    // 🔒 BUG-201 (auditoría pre-producción): decidir y marcar el pago dentro de una
+    // TRANSACCIÓN. Antes era read-check-write sin tx: dos webhooks con paymentIds distintos
+    // sobre una orden impaga (el comprador abrió el link de pago dos veces) leían AMBOS
+    // "no paid", los dos pasaban y marcaban pagado, y el `duplicate_payment` NO se disparaba
+    // (solo corría si ya estaba paid al leer) → doble cobro invisible en tiempo real. Ahora la
+    // relectura + los chequeos + la marca van atómicos: si otro webhook commitea primero, este
+    // reintenta, ve la orden ya `paid` y cae en la rama de duplicado. Los efectos secundarios
+    // (registrar la discrepancia, notificar) van FUERA de la tx.
     const paidAmount = Number(paymentData.transaction_amount) || 0;
-    const orderTotal = Number(existingData.total) || 0;
-    if (Math.abs(paidAmount - orderTotal) > 1) {
-      console.error(`❌ [Webhook] Monto pagado ($${paidAmount}) no coincide con el total de la orden ${orderRefId} ($${orderTotal}). No se marca como pagada, queda para revisión manual.`);
-      await flagIssue("amount_mismatch");
-      return NextResponse.json({ status: "amount_mismatch_flagged_for_review" });
-    }
-
-    // 🔒 Solo se procesa si la orden sigue esperando el pago — si mientras tanto se
-    // canceló/rechazó, no se marca pagada (queda como posible reembolso manual).
-    if (existingData.status !== "Pendiente de Pago") {
-      console.error(`❌ [Webhook] Orden ${orderRefId} no está "Pendiente de Pago" (está "${existingData.status}"). Pago recibido pero no se marca, queda para revisión manual.`);
-      await flagIssue("unexpected_order_status", { orderStatus: existingData.status });
-      return NextResponse.json({ status: "unexpected_order_status_flagged_for_review" });
-    }
-
-    console.log(`✅ [Webhook] Pago Aprobado. Procesando Orden ${orderRefId}...`);
-
-    // 3. Actualizar la Orden en Firestore
-    const updateData = {
+    const outcome = await adminDb.runTransaction(async (tx) => {
+      const fresh = await tx.get(ordersCollection.doc(orderRefId));
+      const d = fresh.data()!;
+      if (d.paymentStatus === "paid") {
+        if (d.mpPaymentId && String(d.mpPaymentId) !== String(paymentId)) {
+          return { type: "duplicate", previousPaymentId: d.mpPaymentId };
+        }
+        return { type: "already" };
+      }
+      const orderTotal = Number(d.total) || 0;
+      if (Math.abs(paidAmount - orderTotal) > 1) return { type: "amount_mismatch" };
+      if (d.status !== "Pendiente de Pago") return { type: "unexpected_status", orderStatus: d.status };
+      // OK: marcar pagado en la MISMA tx que decidió que correspondía.
+      tx.update(ordersCollection.doc(orderRefId), {
         paymentStatus: "paid",
-        status: "En preparación", // Pasa directo a cocina
+        status: "En preparación",
         mpPaymentId: paymentId,
-        // Monto REALMENTE cobrado por MercadoPago. Antes se validaba y se descartaba, así
-        // que si después había que conciliar contra el extracto de MP no existía el dato:
-        // solo quedaba el `total` de la orden, que además pudo cambiar después.
+        // Monto REALMENTE cobrado por MP (para conciliar contra el extracto después).
         paidAmount,
         paidAt: new Date(),
         updatedAt: new Date(),
-        readyForPickup: false
-    };
+        readyForPickup: false,
+      });
+      return { type: "paid" };
+    });
 
-    await ordersCollection.doc(orderRefId).set(updateData, { merge: true });
+    if (outcome.type === "duplicate") {
+      console.error(`🚨 [Webhook] DOBLE PAGO en la orden ${orderRefId}: ya tenía ${outcome.previousPaymentId}, llegó ${paymentId}.`);
+      await flagIssue("duplicate_payment", { previousPaymentId: outcome.previousPaymentId });
+      return NextResponse.json({ status: "duplicate_payment_flagged" });
+    }
+    if (outcome.type === "already") {
+      console.log(`ℹ️ [Webhook] Orden ${orderRefId} ya procesada — ignorando duplicado`);
+      return NextResponse.json({ status: "already_processed" });
+    }
+    if (outcome.type === "amount_mismatch") {
+      console.error(`❌ [Webhook] Monto pagado ($${paidAmount}) no coincide con el total de la orden ${orderRefId}. No se marca pagada, queda para revisión manual.`);
+      await flagIssue("amount_mismatch");
+      return NextResponse.json({ status: "amount_mismatch_flagged_for_review" });
+    }
+    if (outcome.type === "unexpected_status") {
+      console.error(`❌ [Webhook] Orden ${orderRefId} no está "Pendiente de Pago" (está "${outcome.orderStatus}"). Pago recibido pero no se marca, queda para revisión manual.`);
+      await flagIssue("unexpected_order_status", { orderStatus: outcome.orderStatus });
+      return NextResponse.json({ status: "unexpected_order_status_flagged_for_review" });
+    }
+
+    console.log(`✅ [Webhook] Pago Aprobado. Orden ${orderRefId} marcada pagada.`);
 
     // ==========================================
     // 4. NOTIFICACIONES PUSH (LO QUE FALTABA)

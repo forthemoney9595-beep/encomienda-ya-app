@@ -126,7 +126,7 @@ export default function DeliveryOrdersView() {
      );
   }, [firestore]);
 
-  const { data: allAvailableOrders } = useCollection<Order>(availableQuery);
+  const { data: allAvailableOrders, isLoading: availableLoading } = useCollection<Order>(availableQuery);
   // Un repartidor puede COMPRAR como cualquier vecino (decisión de producto, 18/8), pero
   // su propio pedido no aparece en su pool: tomarlo él mismo sería envío gratis de facto
   // y habilitaría auto-calificarse. La regla de Firestore también lo bloquea — esto es la
@@ -142,7 +142,7 @@ export default function DeliveryOrdersView() {
       );
   }, [firestore, user]);
 
-  const { data: allMyOrders } = useCollection<Order>(myOrdersQuery);
+  const { data: allMyOrders, isLoading: myOrdersLoading } = useCollection<Order>(myOrdersQuery);
 
   // 4. FILTROS EN MEMORIA
   const myActiveOrders = useMemo(() => {
@@ -354,7 +354,15 @@ export default function DeliveryOrdersView() {
 
         {/* --- PESTAÑA: PEDIDOS DISPONIBLES --- */}
         <TabsContent value="available" className="space-y-4">
-          {availableOrders?.length === 0 ? (
+          {/* 🔒 BUG-301: gate de carga. Antes no se destructuraba isLoading, así que en el
+              primer render (data = []) el repartidor veía "No hay pedidos disponibles" un
+              instante aunque hubiera pedidos — podía cerrar la app y perder entregas. */}
+          {availableLoading ? (
+            <div className="text-center py-12">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground mt-2">Buscando pedidos disponibles…</p>
+            </div>
+          ) : availableOrders?.length === 0 ? (
             <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed">
                 <Truck className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
                 <h3 className="text-lg font-medium">No hay pedidos disponibles</h3>
@@ -439,7 +447,12 @@ export default function DeliveryOrdersView() {
 
         {/* --- PESTAÑA: PEDIDOS EN CURSO --- */}
         <TabsContent value="active" className="space-y-4">
-            {myActiveOrders?.length === 0 ? (
+            {myOrdersLoading ? (
+                <div className="text-center py-12">
+                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mt-2">Cargando tus pedidos…</p>
+                </div>
+            ) : myActiveOrders?.length === 0 ? (
                 <div className="text-center py-12 bg-muted/20 rounded-xl">
                     <CheckCircle2 className="mx-auto h-12 w-12 text-success mb-3" />
                     <h3 className="text-lg font-medium">Estás libre</h3>
