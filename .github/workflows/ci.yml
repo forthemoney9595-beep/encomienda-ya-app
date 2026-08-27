@@ -1,0 +1,31 @@
+name: CI
+
+# Corre en cada push a main y en cada PR. El objetivo es que NINGÚN cambio se mergee sin
+# pasar typecheck + lint + los tests unitarios — antes no corría nada automático (auditoría
+# pre-producción, TEST-001). El BUILD lo hace Vercel en cada deploy, así que no se duplica acá
+# (evita tener que meter env vars de Firebase en el CI). Los tests son funciones PURAS
+# (money/geo/delivery-pricing), no tocan Firestore ni necesitan secretos.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Tests unitarios
+        run: npm run test
