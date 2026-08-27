@@ -89,8 +89,9 @@ export async function POST(request: Request) {
     // cobraba un monto distinto y el webhook lo marcaba como discrepancia (pago trabado).
     const deliveryFee = Number(orderData.deliveryFee ?? platformConfig.deliveryFee ?? DEFAULT_DELIVERY_FEE);
 
-    // 🔒 Precio SIEMPRE del catálogo, nunca del array `items` de la orden (ver comentario
-    // de arriba). Mismo criterio y mismo orden de subcolecciones que /api/orders/create.
+    // 🔒 Precio de cada ítem = el CONGELADO en el pedido (lo que el comprador aceptó), NO el
+    // del catálogo actual — ver el detalle de BUG-103 dentro del loop. Solo se valida contra
+    // el catálogo que el producto siga existiendo.
     const pricedItems: any[] = [];
     const adjustedItems: { id: string; title: string; from: number; to: number }[] = [];
     for (const it of keptItems) {
@@ -115,6 +116,25 @@ export async function POST(request: Request) {
         }
       }
 
+      // 🔒 BUG-103 (auditoría pre-producción): el precio es el CONGELADO en el pedido
+      // (it.price), NO el del catálogo actual. El precio de order.items lo fijó y verificó el
+      // servidor contra el catálogo al CREAR el pedido, y el comprador NO puede editarlo (la
+      // regla de orders solo deja escribir itemRatings). Releerlo del catálogo acá dejaba que
+      // la tienda SUBIERA el precio entre el pedido y la confirmación y el comprador terminara
+      // pagando más de lo que aceptó SIN aviso (el aviso solo saltaba si se sacaban/ajustaban
+      // ítems, no ante una suba pura de precio). Con el precio congelado, el total solo puede
+      // BAJAR (por ítems sacados / cantidades reducidas), nunca subir en silencio.
+      const price = Number(it.price);
+      if (!(price > 0)) {
+        return NextResponse.json(
+          { error: `El producto "${it.title || it.name || it.id}" tiene un precio inválido en el pedido.` },
+          { status: 400 },
+        );
+      }
+
+      // El producto tiene que seguir existiendo en el catálogo (si la tienda lo borró, hay que
+      // sacarlo del pedido — no se puede confirmar un ítem fantasma). El precio ya NO se toma
+      // de acá (ver arriba), solo se valida la existencia.
       let productSnap = await adminDb.collection("stores").doc(storeId).collection("products").doc(it.id).get();
       if (!productSnap.exists) {
         productSnap = await adminDb.collection("stores").doc(storeId).collection("items").doc(it.id).get();
@@ -125,14 +145,7 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-
       const p = productSnap.data()!;
-      const catalogPrice = Number(p.price ?? p.unit_price ?? 0);
-      if (!(catalogPrice > 0)) {
-        return NextResponse.json({ error: `El producto "${p.name || p.title || it.id}" tiene precio inválido.` }, { status: 400 });
-      }
-      const discountPercent = Number(p.discountPercent) || 0;
-      const price = discountPercent > 0 ? catalogPrice * (1 - discountPercent / 100) : catalogPrice;
 
       pricedItems.push({ ...it, price, quantity, title: p.name || p.title || it.title || 'Producto' });
     }
@@ -176,13 +189,21 @@ export async function POST(request: Request) {
     }
 
     // Notificar al comprador qué cambió (si algo cambió) y el nuevo total.
-    const hasChanges = removedItems.length > 0 || adjustedItems.length > 0;
+    // Guarda defensiva (BUG-103): con el precio congelado el total NUNCA debería subir, pero
+    // si por cualquier motivo `newTotal` supera el total que el comprador aceptó, se fuerza el
+    // aviso con el nuevo monto en vez de un "proceder al pago" mudo.
+    const originalTotal = Number(orderData.total) || 0;
+    const totalWentUp = newTotal > originalTotal + 1;
+    const hasChanges = removedItems.length > 0 || adjustedItems.length > 0 || totalWentUp;
     const changeParts: string[] = [];
     if (removedItems.length > 0) {
       changeParts.push(`no tenía: ${removedItems.map((it) => it.title || it.name).join(", ")}`);
     }
     if (adjustedItems.length > 0) {
       changeParts.push(`ajustó cantidades: ${adjustedItems.map((a) => `${a.title} ${a.from}→${a.to}`).join(", ")}`);
+    }
+    if (totalWentUp && changeParts.length === 0) {
+      changeParts.push('actualizó el precio de algún producto');
     }
     const notifTitle = hasChanges ? "⚠️ Pedido confirmado con cambios" : "✅ Stock Confirmado";
     const notifBody = hasChanges
