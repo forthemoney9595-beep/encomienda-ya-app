@@ -68,7 +68,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Este pedido no pertenece a tu tienda." }, { status: 403 });
     }
     if (orderData.status !== "Pendiente de Confirmación") {
-      return NextResponse.json({ error: "Este pedido ya no está pendiente de confirmación." }, { status: 400 });
+      const st = String(orderData.status);
+      return NextResponse.json(
+        { error: st === "Cancelado" || st === "Rechazado"
+            ? `El pedido fue ${st.toLowerCase()} por el cliente. No se puede confirmar.`
+            : "Este pedido ya no está pendiente de confirmación." },
+        { status: 400 },
+      );
     }
 
     const originalItems: any[] = orderData.items || [];
@@ -154,24 +160,51 @@ export async function POST(request: Request) {
     const newServiceFee = (newSubtotal * serviceFeePercent) / 100;
     const newTotal = newSubtotal + deliveryFee + newServiceFee;
 
-    await orderRef.update({
-      items: pricedItems,
-      subtotal: newSubtotal,
-      serviceFee: newServiceFee,
-      deliveryFee,
-      total: newTotal,
-      status: "Pendiente de Pago",
-      updatedAt: Timestamp.now(),
-      // commissionAmount congelado al crear: si el subtotal cambió (ítems sacados), hay
-      // que recalcularlo -- era el único campo de plata que quedaba viejo acá, y el
-      // desglose del dashboard admin lo suma tal cual (Fase PP, N7). Las fórmulas de
-      // pago no lo usan (recalculan desde subtotal), por eso nunca pagó mal.
-      ...(typeof orderData.commissionRate === 'number'
-        ? { commissionAmount: newSubtotal * orderData.commissionRate / 100 }
-        : {}),
-      ...(removedItems.length > 0 ? { removedItems } : {}),
-      ...(adjustedItems.length > 0 ? { adjustedItems } : {}),
-    });
+    // 🔒 ARQ-006 / BUG-202 (auditoría oct 2026): la escritura va en una TRANSACCIÓN que
+    // re-lee el pedido y vuelve a exigir 'Pendiente de Confirmación'. Antes era un
+    // `update` suelto ~N lecturas después del chequeo de estado: si el comprador
+    // cancelaba (cancel SÍ es transaccional y devuelve stock) mientras la tienda
+    // confirmaba, este update pisaba 'Cancelado' con 'Pendiente de Pago' — pedido
+    // resucitado, stock devuelto dos veces, link de pago para un pedido muerto.
+    const ALREADY = "__ALREADY_NOT_PENDING__";
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const fresh = await tx.get(orderRef);
+        const current = fresh.data();
+        if (!fresh.exists || current?.status !== "Pendiente de Confirmación") {
+          throw new Error(ALREADY + ":" + (current?.status ?? "inexistente"));
+        }
+        tx.update(orderRef, {
+          items: pricedItems,
+          subtotal: newSubtotal,
+          serviceFee: newServiceFee,
+          deliveryFee,
+          total: newTotal,
+          status: "Pendiente de Pago",
+          updatedAt: Timestamp.now(),
+          // commissionAmount congelado al crear: si el subtotal cambió (ítems sacados), hay
+          // que recalcularlo -- era el único campo de plata que quedaba viejo acá, y el
+          // desglose del dashboard admin lo suma tal cual (Fase PP, N7). Las fórmulas de
+          // pago no lo usan (recalculan desde subtotal), por eso nunca pagó mal.
+          ...(typeof orderData.commissionRate === 'number'
+            ? { commissionAmount: newSubtotal * orderData.commissionRate / 100 }
+            : {}),
+          ...(removedItems.length > 0 ? { removedItems } : {}),
+          ...(adjustedItems.length > 0 ? { adjustedItems } : {}),
+        });
+      });
+    } catch (e: any) {
+      if (typeof e?.message === "string" && e.message.startsWith(ALREADY)) {
+        const st = e.message.split(":")[1];
+        return NextResponse.json(
+          { error: st === "Cancelado" || st === "Rechazado"
+              ? `El pedido fue ${st.toLowerCase()} mientras lo confirmabas. No se puede confirmar.`
+              : "Este pedido ya no está pendiente de confirmación." },
+          { status: 400 },
+        );
+      }
+      throw e;
+    }
 
     // La tienda dijo "no tengo esto" (sacado) o "no tengo MÁS que esto" (reducido): el
     // stock de esos productos va a 0, no vuelve al número que acaba de desmentir. Si

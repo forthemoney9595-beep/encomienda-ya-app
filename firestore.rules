@@ -252,8 +252,11 @@ service cloud.firestore {
         (resource.data.deliveryPersonId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'pickedUpAt', 'driverCoords']) &&
+          // 🔒 ARQ-003 (auditoría oct 2026): 'En reparto' SOLO desde 'En camino'. Sin el
+          // estado previo, el repartidor podía volver su propio pedido Entregado (o
+          // Cancelado) a 'En reparto' y reabrir el ciclo (reclamos, saldo, PIN).
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
-            request.resource.data.status in ['En reparto']) &&
+            (request.resource.data.status == 'En reparto' && resource.data.status == 'En camino')) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['driverCoords']) ||
             !('driverCoords' in request.resource.data) ||
             (request.resource.data.driverCoords is map &&

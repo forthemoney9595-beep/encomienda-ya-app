@@ -2,21 +2,21 @@
 
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, serverTimestamp, orderBy, limit, startAfter, getDocs, type QueryDocumentSnapshot } from 'firebase/firestore';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { OrderService } from '@/lib/order-service';
+import { OrderService, STORE_LIVE_STATUSES, STORE_HISTORY_STATUSES } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { Clock, CheckCircle2, Megaphone, Utensils, CreditCard, Bike, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 // Beep de pedido nuevo (helper compartido en lib/beep — antes estaba inline acá).
 import { playBeep as playNewOrderBeep } from '@/lib/beep';
@@ -26,29 +26,75 @@ export default function StoreOrdersView() {
   const firestore = useFirestore();
   const { toast } = useToast();
   
+  // 🚨 PERF-002 (auditoría oct 2026): antes escuchaba TODOS los pedidos de la tienda
+  // (`where storeId` a secas) y partía en memoria: a 200 pedidos/día son 2.400 docs
+  // (3,4 MB) por apertura de una pestaña que queda abierta 12 h. Ahora el listener trae
+  // SOLO nuevos + en curso (set chico y acotado) y el historial se pagina con getDocs.
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !userProfile?.storeId) return null;
     return query(
       collection(firestore, 'orders'),
-      where('storeId', '==', userProfile.storeId)
+      where('storeId', '==', userProfile.storeId),
+      where('status', 'in', STORE_LIVE_STATUSES)
     );
   }, [firestore, userProfile?.storeId]);
 
-  const { data: allOrders, isLoading } = useCollection<any>(ordersQuery);
+  const { data: liveOrders, isLoading } = useCollection<any>(ordersQuery);
 
-  const sortedOrders = (allOrders || []).sort((a, b) => {
+  // Copia ordenada (antes era `.sort()` in-place sobre el array del hook, en cada render).
+  const sortedOrders = useMemo(() => [...(liveOrders || [])].sort((a, b) => {
       const dateA = a.createdAt?.seconds || 0;
       const dateB = b.createdAt?.seconds || 0;
       return dateB - dateA;
-  });
+  }), [liveOrders]);
 
-  const pendingOrders = sortedOrders.filter(o => o.status === 'Pendiente de Confirmación');
+  const pendingOrders = useMemo(() => sortedOrders.filter(o => o.status === 'Pendiente de Confirmación'), [sortedOrders]);
   // 🚨 'Listo para recoger' FALTABA en esta lista (prueba del 15/8): marcar el pedido
   // listo desde el DETALLE setea ese estado y el pedido desaparecía del panel de la
   // tienda hasta que un repartidor lo tomaba ('En camino'). El botón del panel no lo
   // producía (deja 'En preparación' + readyForPickup), por eso nunca se había visto.
-  const activeOrders = sortedOrders.filter(o => ['Pendiente de Pago', 'En preparación', 'Listo para recoger', 'En reparto', 'En camino'].includes(o.status));
-  const historyOrders = sortedOrders.filter(o => ['Entregado', 'Cancelado', 'Rechazado'].includes(o.status));
+  const activeOrders = useMemo(() => sortedOrders.filter(o => o.status !== 'Pendiente de Confirmación'), [sortedOrders]);
+
+  // Historial: getDocs + cursor de a 20 (mismo patrón que el admin, Fase Z). Índice
+  // `orders(storeId, status, createdAt DESC)`. Se carga recién al abrir la pestaña.
+  const HISTORY_PAGE = 20;
+  const [historyOrders, setHistoryOrders] = useState<any[]>([]);
+  const [historyCursor, setHistoryCursor] = useState<QueryDocumentSnapshot | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyDone, setHistoryDone] = useState(false);
+  const [historyOpened, setHistoryOpened] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const loadHistory = async (reset = false) => {
+      if (!firestore || !userProfile?.storeId || historyLoading) return;
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+          const base = [
+              where('storeId', '==', userProfile.storeId),
+              where('status', 'in', STORE_HISTORY_STATUSES),
+              orderBy('createdAt', 'desc'),
+          ];
+          const q = (!reset && historyCursor)
+              ? query(collection(firestore, 'orders'), ...base, startAfter(historyCursor), limit(HISTORY_PAGE))
+              : query(collection(firestore, 'orders'), ...base, limit(HISTORY_PAGE));
+          const snap = await getDocs(q);
+          const page = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setHistoryOrders(prev => (reset ? page : [...prev, ...page]));
+          setHistoryCursor(snap.docs[snap.docs.length - 1] ?? null);
+          setHistoryDone(snap.docs.length < HISTORY_PAGE);
+      } catch (e: any) {
+          console.error('Historial de pedidos:', e);
+          setHistoryError(e?.code === 'failed-precondition'
+              ? 'Falta un índice de Firestore para el historial (avisale a soporte).'
+              : 'No se pudo cargar el historial.');
+      } finally {
+          setHistoryLoading(false);
+      }
+  };
+  useEffect(() => {
+      if (historyOpened && historyOrders.length === 0 && !historyDone) loadHistory(true);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyOpened, userProfile?.storeId]);
 
   // Alerta sonora de pedido nuevo: solo para ids que aparecen DESPUÉS del primer render
   // (la primera carga siembra el set sin sonar, para no pitar pedidos viejos al entrar).
@@ -175,7 +221,7 @@ export default function StoreOrdersView() {
     <div className="container mx-auto pb-20">
       <PageHeader title="Gestión de Pedidos" description="Administra los pedidos entrantes." />
 
-      <Tabs defaultValue="active" className="w-full">
+      <Tabs defaultValue="active" className="w-full" onValueChange={(v) => { if (v === 'history') setHistoryOpened(true); }}>
         <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="pending" className="relative">
              Nuevos
@@ -286,18 +332,34 @@ export default function StoreOrdersView() {
             )}
         </TabsContent>
 
-        {/* PESTAÑA HISTORIAL */}
+        {/* PESTAÑA HISTORIAL (paginado bajo demanda, PERF-002) */}
         <TabsContent value="history" className="space-y-4">
             {historyOrders.map(order => (
-                <OrderCard 
-                    key={order.id} 
-                    order={order} 
-                    isDisabled={true} 
+                <OrderCard
+                    key={order.id}
+                    order={order}
+                    isDisabled={true}
                     statusColor="border-l-border"
                     statusLabel={order.status}
                     statusBadgeColor="bg-muted text-muted-foreground border-border"
                 />
             ))}
+            {historyError && (
+                <p className="text-center text-sm text-destructive py-4">{historyError}</p>
+            )}
+            {!historyLoading && !historyError && historyOrders.length === 0 && historyDone && (
+                <div className="text-center py-10 text-muted-foreground">
+                    <p>Todavía no hay pedidos entregados, cancelados ni rechazados.</p>
+                </div>
+            )}
+            {historyLoading && (
+                <div className="p-6 text-center text-muted-foreground"><Clock className="mx-auto h-6 w-6 animate-spin mb-2"/>Cargando historial...</div>
+            )}
+            {!historyLoading && !historyDone && historyOrders.length > 0 && (
+                <div className="text-center pt-2">
+                    <Button variant="outline" onClick={() => loadHistory(false)}>Cargar más</Button>
+                </div>
+            )}
         </TabsContent>
       </Tabs>
     </div>

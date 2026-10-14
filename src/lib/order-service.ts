@@ -113,6 +113,16 @@ export interface Order {
 // límite — en la Fase PP se encontró que el detalle no validaba nada y lo salteaba.
 export const MAX_ACTIVE_ORDERS = 3;
 
+// Estados en los que un pedido está "en manos" del repartidor asignado. Es el filtro
+// del listener del panel y del dashboard (PERF-001, auditoría oct 2026): el repartidor
+// NUNCA escucha su historial completo, solo esto.
+export const DRIVER_ACTIVE_STATUSES: OrderStatus[] = ['En preparación', 'Listo para recoger', 'En camino', 'En reparto'];
+
+// Estados que la tienda ve "en vivo" en su panel: nuevos + en curso. El historial
+// (Entregado/Cancelado/Rechazado) se pagina bajo demanda (PERF-002).
+export const STORE_LIVE_STATUSES: OrderStatus[] = ['Pendiente de Confirmación', 'Pendiente de Pago', 'En preparación', 'Listo para recoger', 'En camino', 'En reparto'];
+export const STORE_HISTORY_STATUSES: OrderStatus[] = ['Entregado', 'Cancelado', 'Rechazado'];
+
 export const OrderService = {
     // Notificaciones Genéricas (Campanita)
     // callerUser es quien DISPARA la notificación (la tienda avisando al repartidor, etc.),

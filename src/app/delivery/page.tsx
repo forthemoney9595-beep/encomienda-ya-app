@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { driverNetForOrder } from '@/lib/money';
+import { DRIVER_ACTIVE_STATUSES } from '@/lib/order-service';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -40,23 +41,43 @@ export default function DeliveryDashboardPage() {
   }, [firestore]);
   const { data: availableOrders } = useCollection<any>(availableQuery);
 
-  const myOrdersQuery = useMemoFirebase(() => {
+  // 🚨 PERF-001 (auditoría oct 2026): antes UNA query con todo el historial del
+  // repartidor. Ahora dos acotadas: activos en vivo + entregados RECIENTES (creados en
+  // los últimos 7 días, índice `orders(deliveryPersonId, status, createdAt)`), y el
+  // "hoy" se decide en memoria por `deliveredAt` sobre ese set chico — un pedido tomado
+  // ayer y entregado hoy cuenta para hoy (mismo buffer que /delivery/analytics, N9).
+  const myActiveQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'orders'), where('deliveryPersonId', '==', user.uid));
+    return query(
+      collection(firestore, 'orders'),
+      where('deliveryPersonId', '==', user.uid),
+      where('status', 'in', DRIVER_ACTIVE_STATUSES)
+    );
   }, [firestore, user]);
-  const { data: myOrders, isLoading: ordersLoading } = useCollection<any>(myOrdersQuery);
+  const { data: activeOrders, isLoading: ordersLoading } = useCollection<any>(myActiveQuery);
+
+  const recentDeliveredQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    const since = new Date();
+    since.setDate(since.getDate() - 7);
+    since.setHours(0, 0, 0, 0);
+    return query(
+      collection(firestore, 'orders'),
+      where('deliveryPersonId', '==', user.uid),
+      where('status', '==', 'Entregado'),
+      where('createdAt', '>=', Timestamp.fromDate(since)),
+      orderBy('createdAt', 'desc') // usa el índice (deliveryPersonId, status, createdAt DESC); sin orderBy pediría el ASC
+    );
+  }, [firestore, user]);
+  const { data: recentDelivered } = useCollection<any>(recentDeliveredQuery);
 
   const stats = useMemo(() => {
-    const all = myOrders || [];
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const todaySec = startOfToday.getTime() / 1000;
 
-    const active = all.filter(o => ['En camino', 'En reparto', 'En preparación', 'Listo para recoger'].includes(o.status));
-    // "Hoy" según cuándo se entregó (no cuándo se creó el pedido) -- un pedido tomado
-    // ayer pero entregado hoy cuenta para las ganancias de hoy.
-    const deliveredToday = all.filter(o => {
-      if (o.status !== 'Entregado') return false;
+    const active = activeOrders || [];
+    const deliveredToday = (recentDelivered || []).filter(o => {
       const d = o.deliveredAt?.seconds || o.createdAt?.seconds || 0;
       return d >= todaySec;
     });
@@ -70,7 +91,7 @@ export default function DeliveryDashboardPage() {
       deliveredTodayCount: deliveredToday.length,
       earningsToday,
     };
-  }, [myOrders, availableOrders]);
+  }, [activeOrders, recentDelivered, availableOrders]);
 
   if (authLoading || ordersLoading) {
     return (

@@ -2612,6 +2612,43 @@ Admin SDK; la lee comprador/repartidor-asignado/tienda/admin) · `order_idempote
 Rules lee con LAG un campo recién escrito — no gatear una lectura por un campo que se acaba de
 escribir en otro doc; usar un espejo en el mismo doc, o get() solo sobre campos estables.**
 
+## Fase VV (oct 2026): auditoría total del sistema + Tanda 0 de correcciones
+Tras 6 semanas sin actividad (27/8 → 13/10) el usuario pidió una auditoría completa
+backend + frontend, 4 roles, modo **informe primero** y arreglos solo con aprobación,
+empezando por los críticos. Fleet de 6 agentes (ARQ arquitectura · RG regresión · PERF
+escala · FE-C comprador en vivo · FE-R tienda/repartidor/admin en vivo · CY ciclos
+completos), cada hallazgo verificado personalmente. **Informe: `docs/AUDIT_2026-10.md`**
+(contexto, método, 6 frentes, resumen ejecutivo, tabla por severidad, plan en 4 tandas,
+recomendaciones de escala para 50-200 pedidos/día) + nota [[🟢 ÚLTIMA — Auditoría total
+(13-10)]] en la bóveda. Veredicto: sistema sano (regresión 201 OK / 0 fallas; ciclo
+completo ejecutado con ground truth y plata que cuadra), nada nuevo mueve plata mal ni
+expone datos a anónimos. **2 Críticas de ESCALA + 24 Altas + 42 Medias + ~43 Bajas.**
+
+**Tanda 0 ejecutada y desplegada (13/10)** — detalle y pruebas en la sección "Estado de
+ejecución" del informe:
+- **PERF-001/002 (Críticas):** los paneles de repartidor y tienda escuchaban TODO su
+  historial de pedidos. Ahora: constantes `DRIVER_ACTIVE_STATUSES` / `STORE_LIVE_STATUSES`
+  / `STORE_HISTORY_STATUSES` en `order-service.ts`; listeners solo de activos; "hoy" por
+  rango de `createdAt` con `orderBy desc` (**sin `orderBy`, un rango pide el índice ASC
+  aunque exista el DESC** — pasó en vivo); historial de la tienda paginado con cursor de 20;
+  índice nuevo `orders(storeId, status, createdAt DESC)`. Las billeteras NO se tocaron
+  (saldo exacto = todos los entregados; se resuelve con acumuladores, PERF-006).
+- **ARQ-003:** regla — `'En reparto'` solo desde `'En camino'` (un repartidor podía
+  "des-entregar" su pedido). **ARQ-006:** `confirm-stock` escribe en transacción que
+  re-exige `'Pendiente de Confirmación'` (ya no resucita un pedido cancelado).
+  **ARQ-007:** `confirm-delivery` espera los 2 avisos antes de responder. **PERF-003:**
+  conciliación MP en tandas de 8 en paralelo + registro de corrida al inicio
+  (`status:'running'` → `'done'`). **FE-R-001:** `/admin/settings` con `CONFIG_RANGES`
+  (min/max por campo, vacío = bloqueado). **RG-002:** `_e2e-stock.js` reparado.
+- **Scripts nuevos (gitignored):** `_verify-perf-queries.js`, `_attack-order-state.js`,
+  `_e2e-confirm-vs-cancel.js`, `_pw-settings-ranges.js`. Los e2e viejos (`stock`,
+  `adjust-qty`, `pin`) ahora limpian también `order_private` / `order_idempotency` /
+  `secure/pin` — eran la fuente de los huérfanos que la auditoría encontró.
+- **Pendiente de decisión:** Tanda 1 (sesión vencida, checkout/carrito, validaciones de
+  tienda y vehículo, Términos, "Invitado", avisos unificados, GPS), Next 16, Vercel Pro,
+  y el cambio `pushEnabled` (los tokens FCM de los 5 testers se borraron el 13/10; sin ese
+  cambio, al abrir la app se re-registran solos).
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —

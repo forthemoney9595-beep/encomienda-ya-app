@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { doc, collection, query, where, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, collection, query, where, orderBy, updateDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { useState } from 'react';
 import { storeNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
+import { STORE_LIVE_STATUSES } from '@/lib/order-service';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,11 +46,26 @@ export default function StoreDashboardPage() {
   const { data: store, isLoading: storeLoading } = useDoc<any>(storeRef);
 
   // --- Pedidos ---
-  const ordersQuery = useMemoFirebase(
-    () => (firestore && storeId ? query(collection(firestore, 'orders'), where('storeId', '==', storeId)) : null),
+  // 🚨 PERF-002 (auditoría oct 2026): antes bajaba TODO el historial de la tienda para
+  // contar 4 números. Ahora: listener de nuevos + en curso (acotado) y, aparte, solo los
+  // pedidos creados HOY (índice `orders(storeId, createdAt)`) para "entregados hoy".
+  const liveQuery = useMemoFirebase(
+    () => (firestore && storeId
+      ? query(collection(firestore, 'orders'), where('storeId', '==', storeId), where('status', 'in', STORE_LIVE_STATUSES))
+      : null),
     [firestore, storeId]
   );
-  const { data: orders } = useCollection<any>(ordersQuery);
+  const { data: liveOrders } = useCollection<any>(liveQuery);
+  const todayQuery = useMemoFirebase(
+    () => {
+      if (!firestore || !storeId) return null;
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      return query(collection(firestore, 'orders'), where('storeId', '==', storeId), where('createdAt', '>=', Timestamp.fromDate(startOfToday)), orderBy('createdAt', 'desc')); // índice (storeId, createdAt DESC)
+    },
+    [firestore, storeId]
+  );
+  const { data: todayOrders } = useCollection<any>(todayQuery);
 
   // --- Productos (items + legacy 'products') para el aviso de stock bajo ---
   const itemsQuery = useMemoFirebase(
@@ -76,14 +92,10 @@ export default function StoreDashboardPage() {
   }, [firestore]);
 
   const stats = useMemo(() => {
-    const all = orders || [];
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const todaySec = startOfToday.getTime() / 1000;
-
-    const pending = all.filter(o => o.status === 'Pendiente de Confirmación');
-    const active = all.filter(o => PRODUCT_STATES.includes(o.status));
-    const deliveredToday = all.filter(o => o.status === 'Entregado' && (o.createdAt?.seconds || 0) >= todaySec);
+    const live = liveOrders || [];
+    const pending = live.filter(o => o.status === 'Pendiente de Confirmación');
+    const active = live.filter(o => PRODUCT_STATES.includes(o.status));
+    const deliveredToday = (todayOrders || []).filter(o => o.status === 'Entregado');
     // 🚨 Fase PP (N2): antes era `total − envío`, o sea subtotal + TARIFA DE SERVICIO —
     // le atribuía a la tienda plata de la plataforma, sin comisión, sin reembolsos y sin
     // excluir efectivo (justo el error que money.ts corrigió en las billeteras). La
@@ -98,7 +110,7 @@ export default function StoreDashboardPage() {
       deliveredTodayCount: deliveredToday.length,
       salesToday: Math.round(salesToday),
     };
-  }, [orders, store, defaultCommission]);
+  }, [liveOrders, todayOrders, store, defaultCommission]);
 
   const lowStock = useMemo(() => {
     const all = [...(items || []), ...(legacyItems || [])];

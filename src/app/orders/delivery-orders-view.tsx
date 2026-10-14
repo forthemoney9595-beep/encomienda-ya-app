@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { OrderService, MAX_ACTIVE_ORDERS } from '@/lib/order-service';
+import { OrderService, MAX_ACTIVE_ORDERS, DRIVER_ACTIVE_STATUSES } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { gmapsDirectionsUrl, distanceMeters, formatDistance, isValidCoords } from '@/lib/geo';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
@@ -133,22 +133,22 @@ export default function DeliveryOrdersView() {
   // capa visual.
   const availableOrders = (allAvailableOrders || []).filter(o => o.userId !== user?.uid);
 
-  // 3. QUERY: MIS PEDIDOS (Para En Curso y Billetera)
+  // 3. QUERY: MIS PEDIDOS EN CURSO
+  // 🚨 PERF-001 (auditoría oct 2026): antes escuchaba TODO el historial del repartidor
+  // (`where deliveryPersonId` a secas) y filtraba los activos en memoria — a 40
+  // entregas/día son ~15.000 docs (20 MB) en el celular por apertura, re-filtrados en
+  // cada fix de GPS. Ahora el listener trae SOLO los activos; el historial vive en
+  // /delivery/analytics (acotado por período) y la billetera.
   const myOrdersQuery = useMemo(() => {
       if (!firestore || !user) return null;
       return query(
         collection(firestore, 'orders'),
-        where('deliveryPersonId', '==', user.uid)
+        where('deliveryPersonId', '==', user.uid),
+        where('status', 'in', DRIVER_ACTIVE_STATUSES)
       );
   }, [firestore, user]);
 
-  const { data: allMyOrders, isLoading: myOrdersLoading } = useCollection<Order>(myOrdersQuery);
-
-  // 4. FILTROS EN MEMORIA
-  const myActiveOrders = useMemo(() => {
-      // Filtramos los que están activos en mi posesión
-      return allMyOrders?.filter(o => ['En camino', 'En reparto', 'En preparación', 'Listo para recoger'].includes(o.status)) || [];
-  }, [allMyOrders]);
+  const { data: myActiveOrders, isLoading: myOrdersLoading } = useCollection<Order>(myOrdersQuery);
 
   // 🔒 PII de los pedidos ASIGNADOS (AUTHZ-001): dirección + coords + teléfono viven en
   // orders/{id}/private (no en el doc que ve el pool). Como repartidor ASIGNADO tengo

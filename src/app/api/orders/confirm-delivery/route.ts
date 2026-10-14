@@ -111,27 +111,34 @@ export async function POST(request: Request) {
     }
 
     // Avisos fuera de la transacción (avisar no debe abortar una entrega ya hecha).
+    // 🚨 ARQ-007 (auditoría oct 2026): iban SIN await y la ruta respondía enseguida —
+    // en Vercel la función se congela al responder, así que el "¡Llegamos!" (el aviso
+    // que dispara calificar y la ventana de reclamo) salía "a veces". notifyUser nunca
+    // lanza (traga y reporta a Sentry), por eso esperar los dos no puede abortar la
+    // entrega ya confirmada.
     const order = result.order;
+    const notices: Promise<unknown>[] = [];
     if (order.userId) {
-      notifyUser({
+      notices.push(notifyUser({
         userId: order.userId,
         title: "🏠 ¡Llegamos!",
         body: "Tu pedido fue entregado. Disfrutalo — y no te olvides de calificar.",
         type: "order_status",
         orderId,
         link: `/orders/${orderId}`,
-      }).catch(() => {});
+      }).catch(() => {}));
     }
     if (order.storeOwnerId) {
-      notifyUser({
+      notices.push(notifyUser({
         userId: order.storeOwnerId,
         title: "✅ Pedido entregado",
         body: `El pedido de ${order.customerName || "un cliente"} fue entregado con éxito.`,
         type: "order_status",
         orderId,
         link: `/orders/${orderId}`,
-      }).catch(() => {});
+      }).catch(() => {}));
     }
+    await Promise.all(notices);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -88,6 +88,17 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
   const payment = new Payment(client);
   const note = (s: string) => { if (summary.notes.length < 40) summary.notes.push(s); };
 
+  // PERF-003: el registro de corrida se crea AL INICIO (status 'running') y se completa al
+  // final. Si la función muere por timeout, queda un doc 'running' sin finishedAt — antes
+  // se escribía recién al terminar, así que una conciliación que moría no dejaba rastro.
+  const runRef = adminDb.collection("reconciliations").doc();
+  await runRef.set({
+    startedAt: Timestamp.fromDate(startedAt),
+    status: "running",
+    source,
+    ...(byUid ? { byUid } : {}),
+  });
+
   // ── Dirección A: órdenes pagadas → ¿MP sigue diciendo lo mismo? ──
   try {
     const cutoff = Timestamp.fromMillis(Date.now() - ORDERS_LOOKBACK_DAYS * 86_400_000);
@@ -98,11 +109,19 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
       .limit(ORDERS_CAP)
       .get();
 
-    for (const orderDoc of paidSnap.docs) {
-      const order = orderDoc.data();
-      if (!order.mpPaymentId) { summary.unverifiable++; continue; }
+    // 🚨 PERF-003 (auditoría oct 2026): antes era `for … await payment.get` SECUENCIAL
+    // (300-500 ms por pago) contra un maxDuration de 60 s → con ~150 órdenes pagadas en
+    // 30 días el cron moría en silencio (y el doc de corrida nunca se escribía). Ahora va
+    // en tandas de 8 en paralelo: 300 órdenes ≈ 15-20 s. Las mutaciones de `summary` son
+    // seguras (JS es single-thread; cada tanda se espera entera antes de la siguiente).
+    const verifiable = paidSnap.docs.filter((d) => {
+      if (!d.data().mpPaymentId) { summary.unverifiable++; return false; }
       summary.checkedOrders++;
-
+      return true;
+    });
+    const BATCH = 8;
+    const checkPaidOrder = async (orderDoc: (typeof verifiable)[number]) => {
+      const order = orderDoc.data();
       try {
         const p = await payment.get({ id: order.mpPaymentId });
         const mpStatus = String(p.status);
@@ -148,6 +167,9 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
           Sentry.captureException(e, { tags: { area: "reconcile-mp", direction: "A" }, extra: { orderId: orderDoc.id } });
         }
       }
+    };
+    for (let i = 0; i < verifiable.length; i += BATCH) {
+      await Promise.all(verifiable.slice(i, i + BATCH).map(checkPaidOrder));
     }
   } catch (e) {
     summary.errors++;
@@ -271,11 +293,9 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
     Sentry.captureException(e, { tags: { area: "reconcile-mp", direction: "B" } });
   }
 
-  await adminDb.collection("reconciliations").add({
-    startedAt: Timestamp.fromDate(startedAt),
+  await runRef.set({
     finishedAt: Timestamp.now(),
-    source,
-    ...(byUid ? { byUid } : {}),
+    status: "done",
     checkedOrders: summary.checkedOrders,
     checkedPayments: summary.checkedPayments,
     ok: summary.ok,
@@ -284,7 +304,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
     unverifiable: summary.unverifiable,
     errors: summary.errors,
     notes: summary.notes,
-  });
+  }, { merge: true });
 
   return summary;
 }

@@ -55,6 +55,12 @@ function AdminSettingsPage() {
       return;
     }
 
+    const rangeError = findConfigError(localConfig as any);
+    if (rangeError) {
+      toast({ variant: 'destructive', title: 'Valor fuera de rango', description: rangeError });
+      return;
+    }
+
     // El modo mantenimiento corta los pedidos en TODA la plataforma -- pedía menos
     // confirmación que cancelar un solo pedido. Solo se pregunta al ACTIVARLO.
     const turningOnMaintenance = localConfig.maintenanceMode && !configData?.maintenanceMode;
@@ -114,8 +120,8 @@ function AdminSettingsPage() {
           <div className="space-y-2">
             <Label htmlFor="fee" className="text-sm font-semibold">Tarifa de Servicio al Cliente (%)</Label>
             <div className="relative">
-              <Input id="fee" type="number" value={localConfig.serviceFee}
-                onChange={(e) => setLocalConfig({ ...localConfig, serviceFee: Number(e.target.value) })}
+              <Input id="fee" type="number" min={CONFIG_RANGES.serviceFee.min} max={CONFIG_RANGES.serviceFee.max} value={shown(localConfig.serviceFee, 5)}
+                onChange={(e) => setLocalConfig({ ...localConfig, serviceFee: numOrNaN(e) })}
                 className="pl-8 border-primary/30" />
               <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
             </div>
@@ -124,8 +130,8 @@ function AdminSettingsPage() {
           <div className="space-y-2">
             <Label htmlFor="deliveryFee" className="text-sm font-semibold">Fee de envío fijo (ARS)</Label>
             <div className="relative">
-              <Input id="deliveryFee" type="number" value={localConfig.deliveryFee ?? 2000}
-                onChange={(e) => setLocalConfig({ ...localConfig, deliveryFee: Number(e.target.value) })}
+              <Input id="deliveryFee" type="number" min={CONFIG_RANGES.deliveryFee.min} max={CONFIG_RANGES.deliveryFee.max} value={shown(localConfig.deliveryFee, 2000)}
+                onChange={(e) => setLocalConfig({ ...localConfig, deliveryFee: numOrNaN(e) })}
                 className="pl-8 border-primary/30" />
               <span className="absolute left-3 top-2.5 text-muted-foreground font-bold text-xs">$</span>
             </div>
@@ -136,8 +142,8 @@ function AdminSettingsPage() {
           <div className="space-y-2">
             <Label htmlFor="feePerKm" className="text-sm font-semibold">Adicional por distancia ($ por km extra)</Label>
             <div className="relative">
-              <Input id="feePerKm" type="number" min={0} value={localConfig.deliveryFeePerKm ?? 0}
-                onChange={(e) => setLocalConfig({ ...localConfig, deliveryFeePerKm: Number(e.target.value) })}
+              <Input id="feePerKm" type="number" min={CONFIG_RANGES.deliveryFeePerKm.min} max={CONFIG_RANGES.deliveryFeePerKm.max} value={shown(localConfig.deliveryFeePerKm, 0)}
+                onChange={(e) => setLocalConfig({ ...localConfig, deliveryFeePerKm: numOrNaN(e) })}
                 className="pl-8 border-primary/30" />
               <span className="absolute left-3 top-2.5 text-muted-foreground font-bold text-xs">$</span>
             </div>
@@ -151,8 +157,8 @@ function AdminSettingsPage() {
 
           <div className="space-y-2">
             <Label htmlFor="includedKm" className="text-sm font-semibold">Km incluidos en el envío base</Label>
-            <Input id="includedKm" type="number" min={0} value={localConfig.deliveryIncludedKm ?? 5}
-              onChange={(e) => setLocalConfig({ ...localConfig, deliveryIncludedKm: Number(e.target.value) })}
+            <Input id="includedKm" type="number" min={CONFIG_RANGES.deliveryIncludedKm.min} max={CONFIG_RANGES.deliveryIncludedKm.max} value={shown(localConfig.deliveryIncludedKm, 5)}
+              onChange={(e) => setLocalConfig({ ...localConfig, deliveryIncludedKm: numOrNaN(e) })}
               className="border-primary/30" />
             <p className="text-xs text-muted-foreground">
               Hasta esta distancia se cobra solo la base (default: 5 km — cubre todo el casco
@@ -162,8 +168,8 @@ function AdminSettingsPage() {
 
           <div className="space-y-2">
             <Label htmlFor="maxKm" className="text-sm font-semibold">Distancia máxima de entrega (km)</Label>
-            <Input id="maxKm" type="number" min={0} value={localConfig.maxDeliveryDistanceKm ?? 50}
-              onChange={(e) => setLocalConfig({ ...localConfig, maxDeliveryDistanceKm: Number(e.target.value) })}
+            <Input id="maxKm" type="number" min={CONFIG_RANGES.maxDeliveryDistanceKm.min} max={CONFIG_RANGES.maxDeliveryDistanceKm.max} value={shown(localConfig.maxDeliveryDistanceKm, 50)}
+              onChange={(e) => setLocalConfig({ ...localConfig, maxDeliveryDistanceKm: numOrNaN(e) })}
               className="border-primary/30" />
             <p className="text-xs text-muted-foreground">
               Cerco anti-error: si el pin del cliente queda a más de esto de la tienda, el pedido
@@ -176,8 +182,8 @@ function AdminSettingsPage() {
           <div className="space-y-2">
             <Label htmlFor="commission" className="text-sm font-semibold">Comisión por defecto a tiendas (%)</Label>
             <div className="relative">
-              <Input id="commission" type="number" value={localConfig.defaultCommissionRate ?? 10}
-                onChange={(e) => setLocalConfig({ ...localConfig, defaultCommissionRate: Number(e.target.value) })}
+              <Input id="commission" type="number" min={CONFIG_RANGES.defaultCommissionRate.min} max={CONFIG_RANGES.defaultCommissionRate.max} value={shown(localConfig.defaultCommissionRate, 10)}
+                onChange={(e) => setLocalConfig({ ...localConfig, defaultCommissionRate: numOrNaN(e) })}
                 className="pl-8 border-primary/30" />
               <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
             </div>
@@ -189,8 +195,8 @@ function AdminSettingsPage() {
 
           <div className="space-y-2">
             <Label htmlFor="claimWindow" className="text-sm font-semibold">Ventana de reclamo del comprador (horas)</Label>
-            <Input id="claimWindow" type="number" min={1} value={localConfig.claimWindowHours ?? 24}
-              onChange={(e) => setLocalConfig({ ...localConfig, claimWindowHours: Number(e.target.value) })}
+            <Input id="claimWindow" type="number" min={CONFIG_RANGES.claimWindowHours.min} max={CONFIG_RANGES.claimWindowHours.max} value={shown(localConfig.claimWindowHours, 24)}
+              onChange={(e) => setLocalConfig({ ...localConfig, claimWindowHours: numOrNaN(e) })}
               className="border-primary/30" />
             <p className="text-xs text-muted-foreground">
               Cuántas horas después de la entrega el cliente puede reportar un problema con su
@@ -232,6 +238,31 @@ function AdminSettingsPage() {
       </Card>
     </div>
   );
+}
+
+// 🚨 FE-R-001 (auditoría oct 2026): estos valores alimentan /api/orders/create para TODA la
+// plataforma. Antes se guardaba cualquier número (tarifa negativa, comisión 150 %, campo
+// vacío → 0) sin aviso. Rangos amplios a propósito: frenan el dedo de más, no la decisión.
+const CONFIG_RANGES: Record<string, { min: number; max: number; label: string }> = {
+  serviceFee:            { min: 0, max: 30,     label: 'Tarifa de servicio (%)' },
+  deliveryFee:           { min: 0, max: 50000,  label: 'Fee de envío ($)' },
+  deliveryFeePerKm:      { min: 0, max: 10000,  label: 'Adicional por km ($)' },
+  deliveryIncludedKm:    { min: 0, max: 100,    label: 'Km incluidos' },
+  maxDeliveryDistanceKm: { min: 1, max: 500,    label: 'Distancia máxima (km)' },
+  defaultCommissionRate: { min: 0, max: 50,     label: 'Comisión por defecto (%)' },
+  claimWindowHours:      { min: 1, max: 168,    label: 'Ventana de reclamo (horas)' },
+};
+// Campo vacío → NaN (no 0): así el validador lo frena en vez de guardar un 0 silencioso.
+const numOrNaN = (e: React.ChangeEvent<HTMLInputElement>) => (e.target.value === '' ? NaN : Number(e.target.value));
+const shown = (v: unknown, fallback: number) => (typeof v === 'number' ? (Number.isFinite(v) ? v : '') : fallback);
+function findConfigError(cfg: Record<string, unknown>): string | null {
+  for (const [key, r] of Object.entries(CONFIG_RANGES)) {
+    const v = cfg[key];
+    if (v === undefined || v === null) continue; // no cargado: el server usa su default
+    if (typeof v !== 'number' || !Number.isFinite(v)) return `${r.label}: el campo está vacío o no es un número.`;
+    if (v < r.min || v > r.max) return `${r.label}: tiene que estar entre ${r.min} y ${r.max} (pusiste ${v}).`;
+  }
+  return null;
 }
 
 export default function AdminSettingsPageGuarded() {
