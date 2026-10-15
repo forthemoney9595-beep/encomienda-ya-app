@@ -81,16 +81,14 @@ export async function POST(request: Request) {
       createdAt: Timestamp.now(),
     });
 
-    // Avisar a la tienda que sigue buscando repartidor.
+    // Avisar a la tienda que sigue buscando repartidor (ARQ-005: ahora también push).
     if (orderData.storeOwnerId) {
-      await adminDb.collection("notifications").add({
+      await notifyUser({
         userId: orderData.storeOwnerId,
         title: "🔄 Buscando otro repartidor",
         body: `${driverName} no pudo continuar con el pedido. Estamos avisando a otros repartidores.`,
         type: "order_status",
         orderId,
-        read: false,
-        createdAt: Timestamp.now(),
       });
     }
 

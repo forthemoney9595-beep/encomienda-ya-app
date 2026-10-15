@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function TermsPage() {
   return (
-    <div className="container mx-auto max-w-3xl py-12 px-4 prose prose-slate">
+    <div className="container mx-auto max-w-3xl py-12 px-4 prose prose-slate dark:prose-invert">
       <h1>Términos y Condiciones de Uso</h1>
       <p className="text-muted-foreground text-sm">Última actualización: abril de 2025</p>
 

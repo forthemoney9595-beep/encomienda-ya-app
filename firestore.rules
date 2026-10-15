@@ -257,16 +257,11 @@ service cloud.firestore {
           // Cancelado) a 'En reparto' y reabrir el ciclo (reclamos, saldo, PIN).
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
             (request.resource.data.status == 'En reparto' && resource.data.status == 'En camino')) &&
+          // PERF-004 (oct 2026): driverCoords ya NO se escribe en el doc del pedido — la
+          // posición vive en el subdoc live/driver (ver abajo). Acá solo se permite BORRARLO
+          // (lo que hace marcar 'Entregado' en pedidos legacy que aún lo tengan).
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['driverCoords']) ||
-            !('driverCoords' in request.resource.data) ||
-            (request.resource.data.driverCoords is map &&
-              request.resource.data.driverCoords.latitude is number &&
-              request.resource.data.driverCoords.longitude is number &&
-              request.resource.data.driverCoords.latitude >= -90 &&
-              request.resource.data.driverCoords.latitude <= 90 &&
-              request.resource.data.driverCoords.longitude >= -180 &&
-              request.resource.data.driverCoords.longitude <= 180 &&
-              resource.data.status in ['En camino', 'En reparto']))) ||
+            !('driverCoords' in request.resource.data))) ||
 
         // 🔒 TOMAR PEDIDO — ya NO es una escritura directa del cliente (AUTHZ-001). Pasa por
         // /api/orders/take (Admin SDK), que asigna en una tx claim-once Y espeja
@@ -295,6 +290,35 @@ service cloud.firestore {
         allow read: if isSignedIn() &&
           (resource.data.userId == request.auth.uid || isAdmin());
         allow write: if false;
+      }
+
+      // 📍 POSICIÓN EN VIVO DEL REPARTIDOR (PERF-004, auditoría oct 2026):
+      // orders/{id}/live/driver = { latitude, longitude, lastUpdate }. Antes se escribía
+      // en el doc del pedido y cada fix de GPS despertaba a TODOS los listeners de la orden
+      // (detalle, chat-listener ×3 roles, dashboard admin): 75-90 % del costo por pedido.
+      // Acá la escucha SOLO quien mira el mapa. Lectura: los mismos que pueden ver el pedido
+      // (el get() es sobre campos estables — userId/storeId/deliveryPersonId ya existen
+      // mucho antes de que haya GPS). Escritura: solo el repartidor asignado, con forma
+      // validada y el pedido en la calle. Borrado: repartidor asignado o admin (al entregar).
+      match /live/{docId} {
+        allow read: if isSignedIn() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryPersonId == request.auth.uid ||
+          isStoreOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.storeId)
+        );
+        allow create, update: if isSignedIn() &&
+          get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryPersonId == request.auth.uid &&
+          get(/databases/$(database)/documents/orders/$(orderId)).data.status in ['En camino', 'En reparto'] &&
+          request.resource.data.keys().hasOnly(['latitude', 'longitude', 'lastUpdate']) &&
+          request.resource.data.latitude is number &&
+          request.resource.data.longitude is number &&
+          request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90 &&
+          request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180;
+        allow delete: if isSignedIn() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.deliveryPersonId == request.auth.uid
+        );
       }
 
     }

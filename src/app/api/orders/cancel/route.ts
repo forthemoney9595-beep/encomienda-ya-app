@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
-import { adminDb, adminMessaging } from '@/lib/firebase-admin';
+import { adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyAuthToken } from '@/lib/auth-server';
 import { returnStockForOrder } from '@/lib/stock-service';
-import { notifyUser, pushTag } from '@/lib/notify-server';
+import { notifyUser } from '@/lib/notify-server';
 
 const CANCELABLE_STATUSES = ['Pendiente de Confirmación', 'Pendiente de Pago'];
 // El admin puede cancelar más estados (excepto los terminales)
@@ -124,8 +124,9 @@ export async function POST(request: Request) {
         const cancelledByAdmin = isAdmin && callerUid !== userId;
         const reasonSuffix = cancelReason ? ` Motivo: ${cancelReason}` : '';
 
-        // Notificar al comprador
-        await notificationsRef.add({
+        // Notificar al comprador — ARQ-005: campanita + push por notifyUser (antes solo
+        // campanita; con la app cerrada el comprador no se enteraba).
+        await notifyUser({
             userId,
             title: '🚫 Pedido cancelado',
             body: cancelledByAdmin
@@ -133,8 +134,6 @@ export async function POST(request: Request) {
                 : 'Tu pedido fue cancelado correctamente.',
             type: 'order_cancelled',
             orderId,
-            read: false,
-            createdAt: Timestamp.now(),
         });
 
         // Notificar al REPARTIDOR asignado (Fase PP): si ya lo había tomado, antes nadie
@@ -149,9 +148,9 @@ export async function POST(request: Request) {
             });
         }
 
-        // Notificar a la tienda
+        // Notificar a la tienda (campanita + push, ARQ-005)
         if (storeOwnerId) {
-            await notificationsRef.add({
+            await notifyUser({
                 userId: storeOwnerId,
                 title: cancelledByAdmin ? '❌ Pedido cancelado por la administración' : '❌ Pedido cancelado por el cliente',
                 body: cancelledByAdmin
@@ -159,35 +158,7 @@ export async function POST(request: Request) {
                     : `El cliente ${order.customerName || ''} canceló el pedido #${orderId.substring(0, 6)}.`,
                 type: 'order_cancelled',
                 orderId,
-                read: false,
-                createdAt: Timestamp.now(),
             });
-
-            // Push a la tienda si tiene token FCM
-            try {
-                const storeUserDoc = await adminDb.collection('users').doc(storeOwnerId).get();
-                const storeUserData = storeUserDoc.data();
-                let tokens: string[] = [];
-                if (storeUserData?.fcmToken) tokens.push(storeUserData.fcmToken);
-                if (Array.isArray(storeUserData?.fcmTokens)) tokens.push(...storeUserData.fcmTokens);
-                tokens = [...new Set(tokens)];
-
-                if (tokens.length > 0) {
-                    await adminMessaging.sendEachForMulticast({
-                        tokens,
-                        notification: {
-                            title: '❌ Pedido cancelado',
-                            body: cancelledByAdmin
-                                ? `La administración canceló el pedido #${orderId.substring(0, 6)}.${reasonSuffix}`
-                                : `${order.customerName || 'Un cliente'} canceló el pedido #${orderId.substring(0, 6)}.`,
-                        },
-                        webpush: { fcmOptions: { link: '/orders' }, notification: { tag: pushTag('cancel', orderId) } },
-                        data: { url: '/orders', orderId },
-                    });
-                }
-            } catch (e) {
-                console.error('Error enviando push a tienda:', e);
-            }
         }
 
         console.log(`✅ Orden ${orderId} cancelada por comprador ${userId}`);

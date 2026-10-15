@@ -11,6 +11,7 @@
 //      carpeta privada `licenses/{uid}` — el admin los ve por URL firmada de 5 minutos.
 
 import { useState } from 'react';
+import { DOC_FIELDS } from '@/lib/driver-docs';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -53,17 +54,7 @@ const formSchema = z.object({
   { message: "Ingresá la patente del vehículo (ej: AB 123 CD).", path: ['plate'] },
 );
 
-// Los documentos requeridos según el vehículo. Los campos de licencia se reusan para el
-// DNI cuando es bicicleta (no necesita licencia de conducir) — el rótulo cambia, el campo no.
-const DOC_FIELDS = (isBike: boolean) => [
-  { key: 'licenseUrl', label: isBike ? 'DNI — frente' : 'Licencia de conducir — frente' },
-  { key: 'licenseBackUrl', label: isBike ? 'DNI — dorso' : 'Licencia de conducir — dorso' },
-  { key: 'licenseSelfieUrl', label: isBike ? 'Selfie sosteniendo tu DNI' : 'Selfie sosteniendo tu licencia' },
-  ...(isBike ? [] : [
-    { key: 'vehicleDocUrl', label: 'Cédula / papeles del vehículo' },
-    { key: 'vehicleInsuranceUrl', label: 'Seguro del vehículo vigente' },
-  ]),
-] as { key: string; label: string }[];
+// DOC_FIELDS vive en src/lib/driver-docs.ts (compartido con el Perfil — FE-R-003).
 
 export default function SignupDeliveryPage() {
   const { toast } = useToast();
@@ -132,6 +123,7 @@ export default function SignupDeliveryPage() {
         batch.set(doc(firestore, "users", user.uid), {
             uid: user.uid,
             name: values.name,
+            displayName: values.name, // FE-C-002
             email: values.email,
             phoneNumber: values.phoneNumber,
             dni: values.dni,
@@ -235,7 +227,7 @@ export default function SignupDeliveryPage() {
             </Button>
             {!allDocsUploaded && (
               <p className="text-xs text-muted-foreground text-center">
-                Subí {requiredDocs.length === 4 ? 'las 4 fotos' : 'las 3 fotos'} para poder enviar la solicitud.
+                Subí las {requiredDocs.length} fotos para poder enviar la solicitud.
               </p>
             )}
           </CardFooter>

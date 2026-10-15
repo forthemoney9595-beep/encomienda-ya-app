@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken } from "@/lib/auth-server";
+import { verifyAuthTokenStrict } from "@/lib/auth-server";
 import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
 
 /**
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Demasiadas solicitudes. Esperá un minuto." }, { status: 429 });
   }
 
-  const uid = await verifyAuthToken(request);
+  const uid = await verifyAuthTokenStrict(request);
   if (!uid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   try {

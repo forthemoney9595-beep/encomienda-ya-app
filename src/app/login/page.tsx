@@ -35,6 +35,17 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, userProfile, loading } = useAuth();
+  // ARQ-004 / CY-002: /login?expired=1&next=/ruta — llega acá authed-fetch (sesión vencida o
+  // cuenta deshabilitada). Se lee de window.location en vez de useSearchParams para no
+  // exigir el Suspense de Next 14 en esta página.
+  const [expired, setExpired] = useState(false);
+  const [nextPath, setNextPath] = useState<string | null>(null);
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    setExpired(sp.get('expired') === '1');
+    const n = sp.get('next');
+    if (n && n.startsWith('/') && !n.startsWith('//')) setNextPath(n);
+  }, []);
 
   // Redirección única para TODOS los caminos (Tanda B): si ya estás logueado, /login te
   // manda directo a tu panel (antes mostraba el formulario igual); y tras un login
@@ -42,9 +53,9 @@ export default function LoginPage() {
   // el primer login con Google de una cuenta nueva (el perfil lo crea auth-context).
   useEffect(() => {
     if (!loading && user && userProfile) {
-      router.replace(roleHome(userProfile.role));
+      router.replace(nextPath || roleHome(userProfile.role));
     }
-  }, [loading, user, userProfile, router]);
+  }, [loading, user, userProfile, router, nextPath]);
 
   // ✅ Login con Email/Password
   const handleLogin = async (e: React.FormEvent) => {
@@ -96,6 +107,11 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {expired && (
+            <div role="status" className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+              Tu sesión venció o se cerró. Volvé a iniciar sesión para continuar.
+            </div>
+          )}
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Correo Electrónico</Label>

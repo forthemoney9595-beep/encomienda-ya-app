@@ -231,16 +231,31 @@ export default function OrderTrackingPage() {
     })();
     return () => { cancelled = true; };
   }, [firestore, orderRaw?.id]);
+  // PERF-004 (auditoría oct 2026): la posición en vivo del repartidor dejó de escribirse en el
+  // doc del pedido (cada fix despertaba a todos los listeners de la orden) y vive en
+  // orders/{id}/live/driver — SOLO esta pantalla lo escucha, y solo mientras el pedido está
+  // en la calle. Se fusiona como `driverCoords` para que mapa y DriverSignal no cambien.
+  // Pedidos legacy (pre-cambio) conservan el campo embebido como fallback.
+  const liveRef = useMemoFirebase(
+    () => (firestore && orderRaw && ['En camino', 'En reparto'].includes(orderRaw.status)) ? doc(firestore, 'orders', orderId, 'live', 'driver') : null,
+    [firestore, orderId, orderRaw?.status]
+  );
+  const { data: liveDriver } = useDoc<{ latitude: number; longitude: number; lastUpdate?: string }>(liveRef);
+
   const order = useMemo(() => {
     if (!orderRaw) return orderRaw;
-    if (!orderPrivate) return orderRaw;
-    // Solo los campos de PII (NO userId/createdAt del doc private, que pisarían los del pedido).
     const merged: any = { ...orderRaw };
-    if (orderPrivate.customerPhoneNumber != null) merged.customerPhoneNumber = orderPrivate.customerPhoneNumber;
-    if (orderPrivate.customerCoords != null) merged.customerCoords = orderPrivate.customerCoords;
-    if (orderPrivate.shippingInfo != null) merged.shippingInfo = orderPrivate.shippingInfo;
+    if (orderPrivate) {
+      // Solo los campos de PII (NO userId/createdAt del doc private, que pisarían los del pedido).
+      if (orderPrivate.customerPhoneNumber != null) merged.customerPhoneNumber = orderPrivate.customerPhoneNumber;
+      if (orderPrivate.customerCoords != null) merged.customerCoords = orderPrivate.customerCoords;
+      if (orderPrivate.shippingInfo != null) merged.shippingInfo = orderPrivate.shippingInfo;
+    }
+    if (liveDriver && typeof liveDriver.latitude === 'number' && typeof liveDriver.longitude === 'number') {
+      merged.driverCoords = { latitude: liveDriver.latitude, longitude: liveDriver.longitude, lastUpdate: liveDriver.lastUpdate };
+    }
     return merged as Order;
-  }, [orderRaw, orderPrivate]);
+  }, [orderRaw, orderPrivate, liveDriver]);
 
   // Nota: antes había acá un useDoc leyendo users/{order.userId} (el perfil del
   // comprador) para mostrárselo a la tienda/repartidor -- pero las reglas de Firestore

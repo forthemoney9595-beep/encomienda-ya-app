@@ -162,6 +162,33 @@ export default function EditStorePage() {
     e.preventDefault();
     if (!firestore || !userProfile?.storeId || !user) return;
 
+    // FE-R-002 (auditoría oct 2026): no había NINGUNA validación — se guardaban tiendas sin
+    // nombre ni dirección (así salían en el home) y horarios con apertura > cierre (la tienda
+    // quedaba cerrada todo el día sin que nadie supiera por qué).
+    const name = (formData.name || '').trim();
+    const addressText = (formData.address || '').trim();
+    if (name.length < 3) {
+        toast({ variant: "destructive", title: "Falta el nombre de la tienda", description: "Mínimo 3 caracteres." });
+        return;
+    }
+    if (addressText.length < 5 || addressText.includes('Ubicación GPS')) {
+        toast({ variant: "destructive", title: "Falta la dirección", description: "Escribí calle y número (ej: San Martín 500)." });
+        return;
+    }
+    for (const [dayIdx, day] of weeklySchedule.entries()) {
+        if (day.closed) continue;
+        for (const r of day.ranges) {
+            if (!r.open || !r.close || r.open >= r.close) {
+                toast({
+                    variant: "destructive",
+                    title: `Horario inválido (${DAY_LABELS[dayIdx] ?? 'día'})`,
+                    description: `La franja ${r.open || '—'} → ${r.close || '—'} no sirve: la hora de cierre tiene que ser posterior a la de apertura.`,
+                });
+                return;
+            }
+        }
+    }
+
     // VALIDACIÓN: Si hay GPS pero no hay dirección escrita, avisar
     if (coords && (!formData.address || formData.address.trim() === '' || formData.address.includes('Ubicación GPS'))) {
         toast({

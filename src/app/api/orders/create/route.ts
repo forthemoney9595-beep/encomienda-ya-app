@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
+import { notifyUser } from '@/lib/notify-server';
 import * as Sentry from "@sentry/nextjs";
-import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
 import { normalizeSchedule, getStoreOpenStatus, nowInArgentina } from "@/lib/store-hours";
 import { isValidCoords } from "@/lib/geo";
 import { deliveryDistanceMeters, computeDeliveryFee, isBeyondDeliveryLimit } from "@/lib/delivery-pricing";
-import { pushTag } from "@/lib/notify-server";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 // Valor fallback si config/platform.deliveryFee no está configurado en Firestore
@@ -260,6 +260,12 @@ export async function POST(request: Request) {
 
             const productData = productSnap.data()!;
             const title = productData.name || productData.title || "Producto sin nombre";
+            // CY-004 (auditoría oct 2026): la UI oculta los productos marcados "no disponible",
+            // pero la API los aceptaba igual — la tienda recibía pedidos de cosas que marcó
+            // agotadas y los rechazaba a mano. `available` ausente = disponible (compat).
+            if (productData.available === false) {
+                throw new Error(`"${title}" no está disponible en este momento.`);
+            }
             const catalogPrice = Number(productData.price ?? productData.unit_price ?? 0);
 
             if (catalogPrice <= 0 || isNaN(catalogPrice)) {
@@ -392,57 +398,16 @@ export async function POST(request: Request) {
         }
     });
 
-    // 5. ✅ NOTIFICAR A LA TIENDA (Campana + Push)
+    // 5. ✅ NOTIFICAR A LA TIENDA (campanita + push) — ARQ-005: un solo camino (notifyUser),
+    // que además limpia los tokens FCM muertos del dueño.
     if (ownerId) {
-        const notifTitle = "🔔 Nueva Solicitud";
-        const notifBody = `Tienes un pedido nuevo de ${safeShippingInfo.name} ($${finalTotal}). Revisa el stock.`;
-
-        // A. Escribir en Firestore (Para la Campanita dentro de la App)
-        await adminDb.collection("notifications").add({
+        await notifyUser({
             userId: ownerId,
-            title: notifTitle,
-            body: notifBody,
+            title: "🔔 Nueva Solicitud",
+            body: `Tienes un pedido nuevo de ${safeShippingInfo.name} ($${Math.round(finalTotal).toLocaleString('es-AR')}). Revisa el stock.`,
             type: "order_request",
             orderId: newOrderRef.id,
-            read: false,
-            createdAt: Timestamp.now(),
-            icon: "store"
         });
-
-        // B. Enviar Push al Celular (Si tiene token)
-        try {
-            // Buscamos tokens del dueño
-            const ownerUserDoc = await adminDb.collection("users").doc(ownerId).get();
-            const ownerUserData = ownerUserDoc.data();
-            
-            // Recopilar tokens (string o array)
-            let tokens: string[] = [];
-            if (ownerUserData?.fcmToken && typeof ownerUserData.fcmToken === 'string') tokens.push(ownerUserData.fcmToken);
-            if (ownerUserData?.fcmTokens && Array.isArray(ownerUserData.fcmTokens)) tokens.push(...ownerUserData.fcmTokens);
-            tokens = [...new Set(tokens)]; // Únicos
-
-            if (tokens.length > 0) {
-                await adminMessaging.sendEachForMulticast({
-                    tokens: tokens,
-                    notification: {
-                        title: notifTitle,
-                        body: notifBody,
-                    },
-                    webpush: {
-                        fcmOptions: { link: '/orders' },
-                        notification: { tag: pushTag('nuevo', newOrderRef.id) },
-                    },
-                    data: {
-                        url: '/orders',
-                        orderId: newOrderRef.id
-                    }
-                });
-                console.log(`🔔 Push de nuevo pedido enviado al dueño ${ownerId}`);
-            }
-        } catch (pushError) {
-            console.error("Error enviando push al dueño:", pushError);
-            // No fallamos la request si el push falla, solo lo logueamos
-        }
     }
 
     console.log(`✅ [API Éxito] Orden ${newOrderRef.id} creada y notificada.`);

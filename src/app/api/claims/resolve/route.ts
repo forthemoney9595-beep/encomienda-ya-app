@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken, verifyAdmin } from "@/lib/auth-server";
+import { verifyAuthTokenStrict, verifyAdmin } from "@/lib/auth-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
 import { notifyUser } from "@/lib/notify-server";
 import * as Sentry from "@sentry/nextjs";
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const { allowed } = checkRateLimit(ip, "claims:resolve", 20, 60_000);
   if (!allowed) return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
 
-  const callerUid = await verifyAuthToken(request);
+  const callerUid = await verifyAuthTokenStrict(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   if (!(await verifyAdmin(callerUid))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });

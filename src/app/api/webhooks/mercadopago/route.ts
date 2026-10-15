@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
+import { notifyUser } from '@/lib/notify-server';
 import MercadoPagoConfig, { Payment } from "mercadopago";
 import { createHmac } from "crypto";
 import * as Sentry from "@sentry/nextjs";
-import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { adminDb } from '@/lib/firebase-admin';
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { broadcastOrderToDrivers } from "@/lib/driver-broadcast";
-import { pushTag } from "@/lib/notify-server";
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,
@@ -202,90 +202,27 @@ export async function POST(request: Request) {
     // 4. NOTIFICACIONES PUSH (LO QUE FALTABA)
     // ==========================================
     
-    // --- A) Notificación a la TIENDA ---
+    // --- A) Notificación a la TIENDA --- (ARQ-005: notifyUser = campanita + push + limpieza de tokens)
     const targetStoreUser = storeOwnerId || storeId;
-
     if (targetStoreUser) {
-        const titleStore = "¡Pago Confirmado! 💰";
-        const bodyStore = `Orden #${orderRefId.substring(0,6)} pagada por $${paymentData.transaction_amount}. A cocinar.`;
-
-        // A1. Guardar en Base de Datos (Campanita)
-        await notificationsCollection.add({
+        await notifyUser({
             userId: targetStoreUser,
-            title: titleStore,
-            body: bodyStore,
-            read: false,
+            title: "¡Pago Confirmado! 💰",
+            body: `Orden #${orderRefId.substring(0,6)} pagada por $${Number(paymentData.transaction_amount).toLocaleString('es-AR')}. A cocinar.`,
             type: "order_paid",
             orderId: orderRefId,
-            createdAt: new Date(),
-            role: "store",
-            icon: "coins"
         });
-
-        // A2. Enviar Push al Celular (Sonido)
-        try {
-            const userDoc = await adminDb.collection("users").doc(targetStoreUser).get();
-            const userData = userDoc.data();
-            
-            let tokens: string[] = [];
-            if (userData?.fcmToken && typeof userData.fcmToken === 'string') tokens.push(userData.fcmToken);
-            if (userData?.fcmTokens && Array.isArray(userData.fcmTokens)) tokens.push(...userData.fcmTokens);
-            tokens = [...new Set(tokens)];
-
-            if (tokens.length > 0) {
-                await adminMessaging.sendEachForMulticast({
-                    tokens: tokens,
-                    notification: { title: titleStore, body: bodyStore },
-                    webpush: { fcmOptions: { link: '/orders' }, notification: { tag: pushTag('pago-tienda', orderRefId) } },
-                    data: { url: '/orders', orderId: orderRefId }
-                });
-                console.log(`📲 Push enviado a Tienda (${targetStoreUser})`);
-            }
-        } catch (e) {
-            console.error("Error enviando push tienda:", e);
-        }
     }
 
     // --- B) Notificación al CLIENTE ---
     if (buyerId) {
-        const titleClient = "Pago Recibido ✅";
-        const bodyClient = "Tu pago se acreditó y la tienda ya está preparando tu pedido.";
-
-        // B1. Guardar en Base de Datos
-        await notificationsCollection.add({
+        await notifyUser({
             userId: buyerId,
-            title: titleClient,
-            body: bodyClient,
-            read: false,
+            title: "Pago Recibido ✅",
+            body: "Tu pago se acreditó y la tienda ya está preparando tu pedido.",
             type: "payment_success",
             orderId: orderRefId,
-            createdAt: new Date(),
-            role: "buyer",
-            icon: "check"
         });
-
-        // B2. Enviar Push al Celular
-        try {
-            const userDoc = await adminDb.collection("users").doc(buyerId).get();
-            const userData = userDoc.data();
-            
-            let tokens: string[] = [];
-            if (userData?.fcmToken && typeof userData.fcmToken === 'string') tokens.push(userData.fcmToken);
-            if (userData?.fcmTokens && Array.isArray(userData.fcmTokens)) tokens.push(...userData.fcmTokens);
-            tokens = [...new Set(tokens)];
-
-            if (tokens.length > 0) {
-                await adminMessaging.sendEachForMulticast({
-                    tokens: tokens,
-                    notification: { title: titleClient, body: bodyClient },
-                    webpush: { fcmOptions: { link: `/orders/${orderRefId}` }, notification: { tag: pushTag('pago-cliente', orderRefId) } },
-                    data: { url: `/orders/${orderRefId}`, orderId: orderRefId }
-                });
-                console.log(`📲 Push enviado a Cliente (${buyerId})`);
-            }
-        } catch (e) {
-            console.error("Error enviando push cliente:", e);
-        }
     }
 
     // --- C) Broadcast a REPARTIDORES (Fase RR bis) ---

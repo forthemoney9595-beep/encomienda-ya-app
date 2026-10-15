@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
 import { notifyUser } from "@/lib/notify-server";
 
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
   }
 
-  const callerUid = await verifyAuthToken(request);
+  const callerUid = await verifyAuthTokenStrict(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   // Mismo nivel que aprobar: cambia el saldo disponible de un tercero.

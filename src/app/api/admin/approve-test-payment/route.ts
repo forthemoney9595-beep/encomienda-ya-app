@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { notifyUser } from "@/lib/notify-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const callerUid = await verifyAuthToken(request);
+    const callerUid = await verifyAuthTokenStrict(request);
     if (!callerUid) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }

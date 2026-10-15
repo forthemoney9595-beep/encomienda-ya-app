@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useFirestore } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, type Firestore } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { distanceMeters, geoErrorMessage } from '@/lib/geo';
 
@@ -22,9 +22,19 @@ const TRACKED_STATUSES = ['En camino', 'En reparto'];
 // entrega de 15 min, y cada write se multiplica en lecturas hacia todos los que miran la
 // orden (comprador/tienda/admin). Con "cada 30 m o cada 15 s" quedan ~60-80 por entrega,
 // que para un pin en un mapa de pueblo es visualmente lo mismo.
-const HEARTBEAT_MS = 15_000;   // aunque esté quieto, refrescar lastUpdate cada tanto
-const MIN_MOVE_METERS = 30;    // o si se movió esto...
-const MIN_MOVE_MS = 5_000;     // ...pero nunca más seguido que esto
+// PERF-004 (auditoría oct 2026): el piso de 5 s / 30 m daba 70-180 writes por entrega (una
+// moto a 20-30 km/h recorre 30 m cada 4-5 s) y cada write despertaba a 5-8 listeners del
+// DOC DEL PEDIDO (detalle, chat-listener ×3 roles, dashboard admin…): 75-90 % del costo por
+// pedido. Dos cambios: (1) piso 10 s / 50 m (≈40-60 writes por entrega, el pin se ve igual
+// en un mapa de pueblo); (2) la posición vive en `orders/{id}/live/driver`, un subdocumento
+// que SOLO escucha quien mira el mapa — el doc del pedido deja de cambiar con cada fix.
+const HEARTBEAT_MS = 20_000;   // aunque esté quieto, refrescar lastUpdate cada tanto
+const MIN_MOVE_METERS = 50;    // o si se movió esto...
+const MIN_MOVE_MS = 10_000;    // ...pero nunca más seguido que esto
+
+// Ruta del subdocumento de posición en vivo (compartida con el detalle del pedido y los
+// dos caminos que marcan 'Entregado', que lo borran).
+export const liveDriverRef = (firestore: Firestore, orderId: string) => doc(firestore, 'orders', orderId, 'live', 'driver');
 
 // A nivel módulo: con varios pedidos activos hay un tracker por pedido (el panel monta
 // uno por cada orden en curso) — el toast "GPS Activo" tiene que salir UNA vez, no tres.
@@ -71,13 +81,10 @@ export function LocationTracker({ orderId, isDriver, status }: LocationTrackerPr
                 lastWriteRef.current = { t: now, latitude, longitude };
 
                 try {
-                    const orderRef = doc(firestore, 'orders', orderId);
-                    await updateDoc(orderRef, {
-                        driverCoords: {
-                            latitude,
-                            longitude,
-                            lastUpdate: new Date().toISOString(),
-                        },
+                    await setDoc(liveDriverRef(firestore, orderId), {
+                        latitude,
+                        longitude,
+                        lastUpdate: new Date().toISOString(),
                     });
                 } catch (error) {
                     console.error('Error guardando ubicación:', error);

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from "react";
+import { money } from '@/lib/format-money';
 import { ShoppingCart, Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import { Button } from "./ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "./ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { useCart } from "@/context/cart-context";
 import { Badge } from "./ui/badge";
 import Image from "next/image";
@@ -54,7 +55,7 @@ export function Cart() {
                         </div>
                         <div className="flex-1 min-w-0">
                         <p className="font-semibold truncate">{item.name}</p>
-                        <p className="text-sm text-muted-foreground">${item.price.toFixed(2)}</p>
+                        <p className="text-sm text-muted-foreground">{money(item.price)}</p>
                         <div className="mt-2 flex items-center gap-2">
                             <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
                             <Minus className="h-3 w-3" />
@@ -66,7 +67,7 @@ export function Cart() {
                         </div>
                         </div>
                         <div className="text-right flex flex-col justify-between h-full">
-                            <p className="font-bold text-sm">${(item.price * item.quantity).toFixed(2)}</p>
+                            <p className="font-bold text-sm">{money(item.price * item.quantity)}</p>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 self-end" onClick={() => removeFromCart(item.id)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
@@ -87,16 +88,17 @@ export function Cart() {
             )}
           </div>
 
+          {/* FE-C-004: era SheetFooter, que en celular es flex-col-reverse y ponía "Iniciar Pago" ANTES del subtotal */}
           {cart.length > 0 && (
-            <SheetFooter className="border-t pt-4 sm:flex-col sm:space-x-0 space-y-4">
+            <div className="border-t pt-4 space-y-4">
                 <div className="space-y-1">
                     <div className="flex justify-between text-sm text-muted-foreground">
                         <span>Subtotal productos</span>
-                        <span>${totalPrice.toFixed(2)}</span>
+                        <span>{money(totalPrice)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg pt-2">
                         <span>Subtotal</span>
-                        <span className="text-primary">${totalPrice.toFixed(2)}</span>
+                        <span className="text-primary">{money(totalPrice)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">El envío y la tarifa de servicio se calculan al pagar.</p>
                 </div>
@@ -114,7 +116,7 @@ export function Cart() {
                         Vaciar Carrito
                     </Button>
                 </div>
-            </SheetFooter>
+            </div>
           )}
         </SheetContent>
       </Sheet>

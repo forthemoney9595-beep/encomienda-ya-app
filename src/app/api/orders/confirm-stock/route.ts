@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken, verifyStoreOwnership } from "@/lib/auth-server";
 import { zeroStockForItems } from "@/lib/stock-service";
-import { pushTag } from "@/lib/notify-server";
+import { notifyUser } from "@/lib/notify-server";
 
 // Fallback si config/platform.deliveryFee no está configurado (mismo default que
 // /api/orders/create).
@@ -243,36 +243,14 @@ export async function POST(request: Request) {
       ? `La tienda ${changeParts.join(" y ")}. Nuevo total: $${newTotal.toFixed(0)}. Ya puedes pagar.`
       : "Puedes proceder al pago.";
 
-    await adminDb.collection("notifications").add({
+    // ARQ-005: campanita + push por el único camino (notifyUser), que además limpia tokens muertos.
+    await notifyUser({
       userId: orderData.userId,
       title: notifTitle,
       body: notifBody,
       type: "order_status",
       orderId,
-      read: false,
-      createdAt: Timestamp.now(),
-      icon: "store",
     });
-
-    try {
-      const buyerDoc = await adminDb.collection("users").doc(orderData.userId).get();
-      const buyerData = buyerDoc.data();
-      let tokens: string[] = [];
-      if (buyerData?.fcmToken && typeof buyerData.fcmToken === "string") tokens.push(buyerData.fcmToken);
-      if (buyerData?.fcmTokens && Array.isArray(buyerData.fcmTokens)) tokens.push(...buyerData.fcmTokens);
-      tokens = [...new Set(tokens)];
-
-      if (tokens.length > 0) {
-        await adminMessaging.sendEachForMulticast({
-          tokens,
-          notification: { title: notifTitle, body: notifBody },
-          webpush: { fcmOptions: { link: `/orders/${orderId}` }, notification: { tag: pushTag('confirm', orderId) } },
-          data: { url: `/orders/${orderId}`, orderId },
-        });
-      }
-    } catch (pushError) {
-      console.error("Error enviando push de confirmación al comprador:", pushError);
-    }
 
     return NextResponse.json({ success: true, total: newTotal, removedCount: removedItems.length, adjustedCount: adjustedItems.length });
   } catch (error: any) {

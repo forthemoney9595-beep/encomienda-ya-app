@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { 
-    onAuthStateChanged, 
+    onIdTokenChanged,
+    signOut,
     User, 
     signInWithCustomToken 
 } from 'firebase/auth';
@@ -125,9 +126,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // cambio de sesión y seguían vivos tras el logout (tirando permission-denied). Ahora
     // la desuscripción vive afuera y se ejecuta en cada cambio de usuario y al desmontar.
     let unsubscribeProfile: (() => void) | null = null;
+    let subscribedUid: string | null = null;
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    // ARQ-004 (auditoría oct 2026): onIdTokenChanged en vez de onAuthStateChanged — además
+    // de login/logout dispara en cada renovación del token (~1 h), así `user` siempre apunta
+    // al objeto con el token vigente. Como también dispara con el MISMO usuario, el listener
+    // del perfil solo se re-arma cuando cambia el uid (si no se re-suscribiría cada hora).
+    const unsubscribe = onIdTokenChanged(auth, (currentUser) => {
       setUser(currentUser);
+
+      if (currentUser && currentUser.uid === subscribedUid) return; // solo se renovó el token
+      subscribedUid = currentUser?.uid ?? null;
 
       // Soltar el listener del usuario anterior (si había).
       if (unsubscribeProfile) { unsubscribeProfile(); unsubscribeProfile = null; }
@@ -198,9 +207,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }, 2500);
           }
           setLoading(false);
-        }, (error) => {
+        }, (error: any) => {
            console.error("Error fetching profile:", error);
            setLoading(false);
+           // ARQ-004: permission-denied sobre el PROPIO perfil con usuario presente = la
+           // cuenta fue deshabilitada/borrada o sus sesiones revocadas. `reload()` falla con
+           // user-disabled / user-token-expired en ese caso → cerramos la sesión acá mismo
+           // en vez de dejar al usuario "logueado" con una cuenta muerta.
+           if (error?.code === 'permission-denied') {
+             currentUser.reload().catch(() => { signOut(auth).catch(() => {}); });
+           }
         });
       } else {
         setUserProfile(null);

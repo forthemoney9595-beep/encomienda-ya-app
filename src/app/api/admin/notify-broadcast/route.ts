@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb, adminMessaging } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { pushTag } from "@/lib/notify-server";
 
 // Envío de notificaciones desde el panel de admin.
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   const { allowed } = checkRateLimit(ip, 'admin:notify-broadcast', 5, 3_600_000); // 5 por hora
   if (!allowed) return NextResponse.json({ error: "Límite de envíos alcanzado (5 por hora)." }, { status: 429 });
 
-  const callerUid = await verifyAuthToken(request);
+  const callerUid = await verifyAuthTokenStrict(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   // Manda mensajes masivos -- exige admin de nivel 'full', no alcanza con 'support'.

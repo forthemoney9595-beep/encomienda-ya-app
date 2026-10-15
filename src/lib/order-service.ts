@@ -7,8 +7,7 @@ import {
   serverTimestamp,
   deleteField,
   Firestore,
-  Timestamp
-} from 'firebase/firestore';
+  Timestamp, deleteDoc } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 
 export type PaymentMethod = 'CARD' | 'Efectivo' | 'mercadopago'; // ✅ Agregado para soportar tus métodos reales
@@ -191,6 +190,11 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
   await updateDoc(orderRef, status === 'Entregado'
     ? { status, deliveredAt: serverTimestamp(), driverCoords: deleteField() }
     : { status });
+  // PERF-004: la posición en vivo ahora es el subdoc orders/{id}/live/driver — se borra
+  // también (la regla deja borrarlo al repartidor asignado y al admin). Best-effort.
+  if (status === 'Entregado') {
+    await deleteDoc(doc(db, 'orders', orderId, 'live', 'driver')).catch(() => {});
+  }
 
   try {
       const orderSnap = await getDoc(orderRef);

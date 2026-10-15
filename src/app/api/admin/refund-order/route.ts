@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
+import { notifyUser } from '@/lib/notify-server';
 import * as Sentry from "@sentry/nextjs";
-import { adminDb, adminMessaging } from "@/lib/firebase-admin";
+import { adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
-import { pushTag } from "@/lib/notify-server";
 
 // Registra un reembolso/compensación sobre un pedido.
 // Nota: NO transfiere plata por sí solo -- deja registro del reembolso, marca el pedido
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const { allowed } = checkRateLimit(ip, 'admin:refund-order', 20, 60_000);
   if (!allowed) return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
 
-  const callerUid = await verifyAuthToken(request);
+  const callerUid = await verifyAuthTokenStrict(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   // Registra un reembolso (plata real) -- exige admin de nivel 'full', no alcanza con 'support'.
@@ -130,37 +130,17 @@ export async function POST(request: Request) {
       throw e;
     }
 
-    // Notificar al comprador (campanita)
+    // Notificar al comprador (campanita + push, ARQ-005). El texto habla del dinero YA
+    // devuelto por MercadoPago (el admin no puede registrar el reembolso sin el número de
+    // operación) y avisa que la acreditación depende del medio de pago.
     if (order.userId) {
-      await adminDb.collection('notifications').add({
+      await notifyUser({
         userId: order.userId,
         title: '💸 Reembolso enviado',
-        // El texto habla del dinero YA devuelto por MercadoPago (el admin no puede
-        // registrar el reembolso sin el número de operación), y avisa que la acreditación
-        // depende del medio de pago -- no promete que el dinero ya esté en la cuenta.
-        body: `Devolvimos $${numAmount.toLocaleString()} de tu pedido. Puede tardar unos días en verse acreditado según tu medio de pago.${reason ? ` Motivo: ${reason}` : ''}`,
+        body: `Devolvimos $${Math.round(numAmount).toLocaleString('es-AR')} de tu pedido. Puede tardar unos días en verse acreditado según tu medio de pago.${reason ? ` Motivo: ${reason}` : ''}`,
         type: 'refund',
         orderId,
-        read: false,
-        createdAt: Timestamp.now(),
       });
-
-      // Push si tiene token
-      try {
-        const buyerDoc = await adminDb.collection('users').doc(order.userId).get();
-        const bd = buyerDoc.data();
-        const tokens: string[] = [];
-        if (bd?.fcmToken) tokens.push(bd.fcmToken);
-        if (Array.isArray(bd?.fcmTokens)) tokens.push(...bd.fcmTokens);
-        const uniq = [...new Set(tokens)];
-        if (uniq.length > 0) {
-          await adminMessaging.sendEachForMulticast({
-            tokens: uniq,
-            notification: { title: '💸 Reembolso enviado', body: `Devolvimos $${numAmount.toLocaleString()} de tu pedido.` },
-            webpush: { fcmOptions: { link: `/orders/${orderId}` }, notification: { tag: pushTag('refund', orderId) } },
-          }).catch(() => {});
-        }
-      } catch { /* noop */ }
     }
 
     // Auditoría en la misma request que registra el reembolso (antes la escribía el

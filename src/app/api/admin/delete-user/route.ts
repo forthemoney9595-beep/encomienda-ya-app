@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
 import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
 
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const { allowed } = checkRateLimit(ip, 'admin:delete-user', 10, 60_000);
   if (!allowed) return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
 
-  const callerUid = await verifyAuthToken(request);
+  const callerUid = await verifyAuthTokenStrict(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   // Borrado permanente de cuenta -- exige admin de nivel 'full', no alcanza con 'support'.
@@ -64,6 +64,9 @@ export async function POST(request: Request) {
     }
 
     // Borrar de Firebase Auth (la cuenta real)
+    // CY-003: revocar las sesiones ANTES de borrar — si no, el ID token vigente del
+    // dispositivo seguía valiendo hasta 1 h contra las rutas que no usan checkRevoked.
+    await adminAuth.revokeRefreshTokens(userId).catch(() => {});
     await adminAuth.deleteUser(userId).catch(() => {
       // Si la cuenta no existe en Auth (ej. creada solo en Firestore), ignorar el error
     });

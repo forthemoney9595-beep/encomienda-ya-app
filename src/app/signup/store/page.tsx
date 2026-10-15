@@ -120,6 +120,7 @@ export default function SignupStorePage() {
         batch.set(doc(firestore, "users", user.uid), {
             uid: user.uid,
             name: values.ownerName,
+            displayName: values.ownerName, // FE-C-002
             email: values.email,
             phoneNumber: values.phoneNumber,
             dni: values.dni,

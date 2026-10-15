@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken, verifyFullAdmin } from "@/lib/auth-server";
+import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { runReconciliation } from "@/lib/reconcile-mp";
 import { updateMonthlyStats } from "@/lib/platform-stats";
 
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "La conciliación ya corrió hace poco. Esperá unos minutos." }, { status: 429 });
   }
 
-  const callerUid = await verifyAuthToken(request);
+  const callerUid = await verifyAuthTokenStrict(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   if (!(await verifyFullAdmin(callerUid))) {
     return NextResponse.json({ error: "No autorizado — se requiere admin con acceso completo" }, { status: 403 });

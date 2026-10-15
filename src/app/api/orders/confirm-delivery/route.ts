@@ -80,6 +80,8 @@ export async function POST(request: Request) {
         deliveryPinVerified: pinSnap.exists,
         updatedAt: Timestamp.now(),
       });
+      // PERF-004: la posición en vivo vive en orders/{id}/live/driver — se borra al entregar.
+      tx.delete(orderRef.collection("live").doc("driver"));
       return { ok: true as const, order };
     });
 

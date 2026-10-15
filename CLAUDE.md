@@ -2644,10 +2644,49 @@ ejecución" del informe:
   `_e2e-confirm-vs-cancel.js`, `_pw-settings-ranges.js`. Los e2e viejos (`stock`,
   `adjust-qty`, `pin`) ahora limpian también `order_private` / `order_idempotency` /
   `secure/pin` — eran la fuente de los huérfanos que la auditoría encontró.
-- **Pendiente de decisión:** Tanda 1 (sesión vencida, checkout/carrito, validaciones de
-  tienda y vehículo, Términos, "Invitado", avisos unificados, GPS), Next 16, Vercel Pro,
-  y el cambio `pushEnabled` (los tokens FCM de los 5 testers se borraron el 13/10; sin ese
-  cambio, al abrir la app se re-registran solos).
+**Tanda 1 ejecutada y desplegada (14/10)** — tabla con prueba por ítem en el informe:
+- **Sesión vencida (ARQ-004/CY-002):** `src/lib/authed-fetch.ts` es ahora el único punto
+  que maneja 401/token muerto: reintento con token forzado y, si persiste, `signOut` +
+  navegación dura a `/login?expired=1&next=…` (`SessionExpiredError`). `auth-context` usa
+  `onIdTokenChanged` (guard por uid: no re-suscribe el perfil en cada renovación) y cierra
+  sesión ante `permission-denied` sobre el propio perfil. `/login` lee `?expired`/`?next`
+  de `window.location` (no `useSearchParams`: en Next 14 exige Suspense).
+- **Token estricto (CY-003):** `verifyAuthTokenStrict` (= `checkRevoked`) en las 10 rutas
+  de plata/admin; `delete-user` revoca sesiones antes de borrar. `liability` exige full
+  (ARQ-015); CSV neutraliza `=+-@` (ARQ-016); `create` rechaza `available:false` (CY-004).
+- **`src/lib/format-money.ts`** (`money()`, es-AR sin centavos) — usarlo para TODA plata
+  nueva en UI (quedan sitios viejos con `toFixed`/`toLocaleString()`, Tanda 2).
+- **Frontend comprador:** checkout con cuerpo scrolleable + footer fijo con total, errores
+  inline (`aria-invalid` + mensaje + foco) y teclado `tel`; carrito sin `SheetFooter`
+  (orden correcto en celular) y montos es-AR; `@tailwindcss/typography` registrado
+  (`prose dark:prose-invert` en Términos/Privacidad); los 3 signups escriben
+  `displayName`; campanita con tokens del tema.
+- **Tienda/repartidor:** `my-store/edit` valida nombre/dirección/franjas (`open < close`);
+  nuevo **`src/lib/driver-docs.ts`** = fuente única de tipo de vehículo (canónico
+  `motocicleta/automovil/bicicleta`, normaliza los legacy `Moto/Bici/Auto`) y de
+  `DOC_FIELDS(isBike)` — alta y Perfil lo importan; Perfil oculta patente en bici.
+- **ARQ-005:** 7 sitios de campanita+push a mano → `notifyUser`. Quedan con multicast
+  propio a propósito: `/api/notify`, `notify-broadcast`, `driver-broadcast`.
+- **PERF-004 — GPS:** throttle 10 s / 50 m / heartbeat 20 s y la posición vive en
+  **`orders/{id}/live/driver`** (`liveDriverRef` en `location-tracker.tsx`); el detalle
+  del pedido la escucha solo en 'En camino'/'En reparto' y la fusiona como `driverCoords`
+  (mapa/`DriverSignal` sin cambios; legacy embebido sigue sirviendo de fallback). Los 2
+  caminos de 'Entregado' borran el subdoc. **Reglas:** `match /live/{docId}` nueva y el
+  doc principal ya NO acepta valores de `driverCoords` (solo borrarlo). Al desplegar
+  reglas de este tipo: verificar 0 repartos en la calle (el código viejo escribía en el
+  doc) o desplegar código primero.
+- **Verificado:** `_attack-order-state.js` 14/14, `_e2e-pin.js` 15/15, notif-chat 8/8,
+  confirm-vs-cancel 19/19, payout 21/21, claims 31/31, Playwright `_pw-tanda1-ui.js`
+  9/9 (0 pedidos creados), residuo 0. **A confirmar en vivo con el celular:** una entrega
+  real (pin moviéndose), un repartidor registrado por el alta abriendo Perfil, y el
+  camino completo de sesión vencida desde la UI.
+- **OJO CRLF:** varios archivos del repo tienen CRLF — un parche por string con `\n`
+  no matchea. Normalizar a LF al leer y restaurar al escribir (los scripts del scratchpad
+  de esta fase lo hacen).
+- **Pendiente de decisión:** Tanda 2 (formato de plata único, a11y en bloque,
+  rendimiento barato, validaciones menores), Next 16, Vercel Pro, y el cambio
+  `pushEnabled` (los tokens FCM de los 5 testers se borraron el 13/10; sin ese cambio,
+  al abrir la app se re-registran solos).
 
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso

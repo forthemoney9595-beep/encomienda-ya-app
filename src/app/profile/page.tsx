@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { VEHICLE_TYPES, DOC_FIELDS, normalizeVehicleType, isBikeType } from '@/lib/driver-docs';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -57,7 +58,7 @@ export default function ProfilePage() {
     const [isLocating, setIsLocating] = useState(false);
 
     // Estados Repartidor (Solo Delivery)
-    const [vehicleInfo, setVehicleInfo] = useState({ plate: '', model: '', color: '', type: 'Moto' });
+    const [vehicleInfo, setVehicleInfo] = useState({ plate: '', model: '', color: '', type: 'motocicleta' as string });
     const [licenseUrl, setLicenseUrl] = useState('');          // frente del carnet (compat con el campo viejo)
     const [licenseBackUrl, setLicenseBackUrl] = useState('');   // dorso del carnet
     const [licenseSelfieUrl, setLicenseSelfieUrl] = useState(''); // selfie sosteniendo el carnet
@@ -88,7 +89,12 @@ export default function ProfilePage() {
                 setAddresses(userProfile.addresses as Address[] || []);
             }
             if (userProfile.role === 'delivery') {
-                setVehicleInfo((userProfile as any).vehicle || { plate: '', model: '', color: '', type: 'Moto' });
+                {
+                    // FE-R-003: el alta guarda 'motocicleta'|'automovil'|'bicicleta' y el Perfil ofrecía
+                    // 'Moto'|'Bici'|'Auto' → Select vacío y, al guardar, se pisaba el tipo. Se normaliza.
+                    const v = (userProfile as any).vehicle || {};
+                    setVehicleInfo({ plate: v.plate || '', model: v.model || '', color: v.color || '', type: normalizeVehicleType(v.type) });
+                }
                 setLicenseUrl((userProfile as any).licenseUrl || '');
                 setLicenseBackUrl((userProfile as any).licenseBackUrl || '');
                 setLicenseSelfieUrl((userProfile as any).licenseSelfieUrl || '');
@@ -487,12 +493,11 @@ export default function ProfilePage() {
                                                         <SelectValue placeholder="Selecciona" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="Moto">Moto</SelectItem>
-                                                        <SelectItem value="Bici">Bicicleta</SelectItem>
-                                                        <SelectItem value="Auto">Auto</SelectItem>
+                                                        {VEHICLE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                            {!isBikeType(vehicleInfo.type) && (
                                             <div className="space-y-2">
                                                 <Label>Patente / Placa</Label>
                                                 <div className="relative">
@@ -500,6 +505,7 @@ export default function ProfilePage() {
                                                     <Input placeholder="Ej: A123BCD" value={vehicleInfo.plate} onChange={(e) => setVehicleInfo({...vehicleInfo, plate: e.target.value})} className="pl-9 uppercase" />
                                                 </div>
                                             </div>
+                                            )}
                                             <div className="space-y-2">
                                                 <Label>Modelo</Label>
                                                 <Input placeholder="Ej: Honda Wave 110" value={vehicleInfo.model} onChange={(e) => setVehicleInfo({...vehicleInfo, model: e.target.value})} />
@@ -512,19 +518,23 @@ export default function ProfilePage() {
 
                                         <div className="space-y-3 pt-4 border-t">
                                             <Label className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4" /> Verificación de Licencia de Conducir
+                                                <FileText className="h-4 w-4" /> {isBikeType(vehicleInfo.type) ? 'Verificación de identidad (DNI)' : 'Verificación de Licencia de Conducir'}
                                             </Label>
                                             <p className="text-xs text-muted-foreground -mt-1">
                                                 Subí las fotos de tus documentos para agilizar tu aprobación. Deben ser claras y legibles.
                                             </p>
                                             <div className="grid gap-3 sm:grid-cols-2">
-                                                {([
-                                                    { label: 'Frente del carnet', field: 'licenseUrl', value: licenseUrl, set: setLicenseUrl },
-                                                    { label: 'Dorso del carnet', field: 'licenseBackUrl', value: licenseBackUrl, set: setLicenseBackUrl },
-                                                    { label: 'Selfie con el carnet', field: 'licenseSelfieUrl', value: licenseSelfieUrl, set: setLicenseSelfieUrl },
-                                                    { label: 'Cédula / papeles del vehículo', field: 'vehicleDocUrl', value: vehicleDocUrl, set: setVehicleDocUrl },
-                                                    { label: 'Seguro del vehículo vigente', field: 'vehicleInsuranceUrl', value: vehicleInsuranceUrl, set: setVehicleInsuranceUrl },
-                                                ] as const).map(({ label, field, value, set }) => {
+                                                {DOC_FIELDS(isBikeType(vehicleInfo.type)).map(({ key: field, label }) => {
+                                                    // Mismos documentos que pide el alta (src/lib/driver-docs.ts): bici = DNI ×3,
+                                                    // moto/auto = licencia ×3 + cédula + seguro.
+                                                    const docState = {
+                                                        licenseUrl: [licenseUrl, setLicenseUrl],
+                                                        licenseBackUrl: [licenseBackUrl, setLicenseBackUrl],
+                                                        licenseSelfieUrl: [licenseSelfieUrl, setLicenseSelfieUrl],
+                                                        vehicleDocUrl: [vehicleDocUrl, setVehicleDocUrl],
+                                                        vehicleInsuranceUrl: [vehicleInsuranceUrl, setVehicleInsuranceUrl],
+                                                    } as const;
+                                                    const [value, set] = docState[field] as unknown as [string, (v: string) => void];
                                                     // Compat con datos viejos (URL completa con token ya guardada); lo nuevo es
                                                     // un path que se resuelve a una URL firmada de 5 min vía el useEffect de arriba.
                                                     const isLegacyUrl = value.startsWith('http');
@@ -561,7 +571,7 @@ export default function ProfilePage() {
                                                 })}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground">
-                                                💡 La selfie sirve para confirmar que el carnet es tuyo. Sostené el carnet junto a tu cara.
+                                                💡 La selfie sirve para confirmar que el documento es tuyo. Sostenelo junto a tu cara.
                                             </p>
                                         </div>
 

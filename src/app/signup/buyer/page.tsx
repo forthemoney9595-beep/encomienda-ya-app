@@ -100,6 +100,7 @@ export default function SignupBuyerPage() {
         batch.set(doc(firestore, 'users', user.uid), {
             uid: user.uid,
             name: values.name,
+            displayName: values.name, // FE-C-002: el saludo del home lee displayName
             email: values.email,
             phoneNumber: values.phoneNumber,
             role: 'buyer' as const,

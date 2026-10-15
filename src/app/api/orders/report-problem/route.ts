@@ -67,14 +67,13 @@ export async function POST(request: Request) {
     });
 
     if (orderData.storeOwnerId) {
-      await adminDb.collection("notifications").add({
+      // ARQ-005: antes solo campanita — la tienda con la app cerrada no se enteraba.
+      await notifyUser({
         userId: orderData.storeOwnerId,
         title: "⚠️ Problema con la entrega",
         body: `${driverName} reportó un problema con un pedido ya retirado. El admin fue avisado.`,
         type: "order_status",
         orderId,
-        read: false,
-        createdAt: Timestamp.now(),
       });
     }
 

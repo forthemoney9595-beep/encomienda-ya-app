@@ -528,7 +528,7 @@ function HomeContent() {
           </Avatar>
           <div className="min-w-0">
             <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight">
-              Hola, <span className="text-gradient">{userProfile?.displayName || 'Invitado'}</span> 👋
+              Hola, <span className="text-gradient">{((userProfile?.displayName || userProfile?.name || '').trim().split(' ')[0]) || 'Invitado'}</span> 👋
             </h1>
             <p className="text-sm text-muted-foreground">¿Qué se te antoja hoy?</p>
           </div>

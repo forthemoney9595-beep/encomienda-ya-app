@@ -288,10 +288,10 @@ export function Notifications() {
               {localNotifications.map((notif: any) => (
                 <button
                   key={notif.id}
-                  className={`flex items-start gap-3 p-4 text-left hover:bg-muted/50 transition-colors border-b last:border-0 ${!notif.read ? 'bg-blue-50/40' : ''}`}
+                  className={`flex items-start gap-3 p-4 text-left hover:bg-muted/50 transition-colors border-b last:border-0 ${!notif.read ? 'bg-info/10' : ''}`}
                   onClick={() => handleNotificationClick(notif)}
                 >
-                  <div className="mt-1 bg-white p-2 rounded-full border shadow-sm shrink-0">
+                  <div className="mt-1 bg-card p-2 rounded-full border shadow-sm shrink-0">
                     {getIcon(notif.type)}
                   </div>
                   <div className="space-y-1 w-full">
@@ -305,7 +305,7 @@ export function Notifications() {
                       {getTimeAgo(notif.createdAt)}
                     </p>
                   </div>
-                  {!notif.read && <div className="h-2 w-2 rounded-full bg-blue-500 mt-2 shrink-0" />}
+                  {!notif.read && <div className="h-2 w-2 rounded-full bg-info mt-2 shrink-0" />}
                 </button>
               ))}
             </div>

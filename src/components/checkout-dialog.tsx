@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { money } from '@/lib/format-money';
 import * as Sentry from '@sentry/nextjs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,10 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   const router = useRouter();
 
   // Estados de Formulario
+  // FE-C-003: error por campo (aria-invalid + mensaje debajo), además del toast.
+  const [fieldErrors, setFieldErrors] = useState<{ phone?: boolean; address?: boolean }>({});
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const addressRef = useRef<HTMLInputElement>(null);
   const [address, setAddress] = useState(''); // Ahora es solo REFERENCIA
   const [phone, setPhone] = useState(userProfile?.phoneNumber || '');
 
@@ -244,6 +249,8 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
     // viene precargado (invisible); cubre a las cuentas de Google/viejas que no tienen.
     // El servidor lo exige igual (defensa doble en /api/orders/create).
     if (phone.replace(/\D/g, '').length < 8) {
+        setFieldErrors({ phone: true });
+        phoneRef.current?.focus();
         toast({
             variant: "destructive",
             title: "Falta tu teléfono",
@@ -252,7 +259,9 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         return;
     }
 
-    if (!address) {
+    if (!address.trim()) {
+        setFieldErrors({ address: true });
+        addressRef.current?.focus();
         toast({ variant: "destructive", title: "Falta Referencia", description: "Escribe un detalle de tu casa (ej: Portón negro)." });
         return;
     }
@@ -355,13 +364,17 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      {/* FE-C-003 (auditoría oct 2026): el diálogo medía más que la pantalla (981/808 px) y el
+          botón + el total quedaban bajo el fold incluso en escritorio. Ahora el cuerpo scrollea
+          y el footer con el total es fijo. */}
+      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col gap-0 p-0">
+        <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle>Solicitar Disponibilidad</DialogTitle>
           <DialogDescription>
             Confirmar stock con <span className="font-semibold text-primary">{storeName}</span>
           </DialogDescription>
         </DialogHeader>
+        <div className="flex-1 overflow-y-auto px-6 pb-4 min-h-0">
         
         <div className="grid gap-6 py-2">
           
@@ -465,19 +478,37 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
 
             {/* INPUT REFERENCIA VISUAL */}
             <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground ml-1">Referencias visuales (Casa, portón, etc)</label>
+                <label htmlFor="checkout-address" className="text-xs font-medium text-muted-foreground ml-1">Referencias visuales (Casa, portón, etc)</label>
                 <Input
+                    id="checkout-address"
+                    ref={addressRef}
                     placeholder="Ej: Casa blanca rejas negras, frente a plaza."
                     value={address}
-                    onChange={(e) => setAddress(e.target.value)}
+                    onChange={(e) => { setAddress(e.target.value); if (fieldErrors.address) setFieldErrors({}); }}
+                    aria-invalid={fieldErrors.address || undefined}
+                    aria-describedby={fieldErrors.address ? 'checkout-address-error' : undefined}
+                    className={fieldErrors.address ? 'border-destructive focus-visible:ring-destructive' : undefined}
                 />
+                {fieldErrors.address && <p id="checkout-address-error" className="text-xs text-destructive ml-1">Escribí una referencia de tu casa (ej: portón negro).</p>}
             </div>
 
-            <Input
-                placeholder="Teléfono de contacto para la entrega"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-            />
+            <div className="space-y-1">
+                <label htmlFor="checkout-phone" className="text-xs font-medium text-muted-foreground ml-1">Teléfono de contacto para la entrega</label>
+                <Input
+                    id="checkout-phone"
+                    ref={phoneRef}
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="Ej: 3837 123456"
+                    value={phone}
+                    onChange={(e) => { setPhone(e.target.value); if (fieldErrors.phone) setFieldErrors({}); }}
+                    aria-invalid={fieldErrors.phone || undefined}
+                    aria-describedby={fieldErrors.phone ? 'checkout-phone-error' : undefined}
+                    className={fieldErrors.phone ? 'border-destructive focus-visible:ring-destructive' : undefined}
+                />
+                {fieldErrors.phone && <p id="checkout-phone-error" className="text-xs text-destructive ml-1">Ingresá un número válido con código de área (mínimo 8 dígitos).</p>}
+            </div>
           </div>
 
           <div className="bg-info/10 p-4 rounded-lg border border-info/30 flex items-start gap-3">
@@ -494,7 +525,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
           <div className="bg-muted/50 p-4 rounded-lg space-y-2 text-sm border">
              <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
-                <span>${cartSubtotal.toLocaleString()}</span>
+                <span>{money(cartSubtotal)}</span>
              </div>
              <div className="flex justify-between text-muted-foreground">
                 <span>
@@ -504,23 +535,28 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                         <span className="text-xs"> (≈ {formatDistance(deliveryDistM)})</span>
                     )}
                 </span>
-                <span>${shippingCost.toLocaleString()}</span>
+                <span>{money(shippingCost)}</span>
              </div>
              {serviceFeeAmount > 0 && (
                  <div className="flex justify-between text-muted-foreground">
                     <span>Servicio</span>
-                    <span>${serviceFeeAmount.toLocaleString()}</span>
+                    <span>{money(serviceFeeAmount)}</span>
                  </div>
              )}
              
              <div className="border-t pt-2 mt-2 flex justify-between font-bold text-base text-primary">
                 <span>Total Estimado</span>
-                <span>${finalTotal.toLocaleString()}</span>
+                <span>{money(finalTotal)}</span>
             </div>
           </div>
         </div>
 
-        <DialogFooter>
+        </div>
+        <DialogFooter className="border-t bg-background px-6 py-4 flex-col sm:flex-col gap-3 sm:space-x-0">
+          <div className="flex justify-between items-baseline w-full">
+            <span className="text-sm text-muted-foreground">Total estimado</span>
+            <span className="text-xl font-bold text-primary">{money(finalTotal)}</span>
+          </div>
           <Button onClick={handleRequestOrder} className="w-full h-12 text-lg font-bold" disabled={isProcessing}>
             {isProcessing ? (
                 <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Enviando...</>

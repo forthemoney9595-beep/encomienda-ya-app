@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { verifyAuthToken, verifyAdmin } from "@/lib/auth-server";
+import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service";
 
 /**
@@ -30,11 +30,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Demasiadas solicitudes. Esperá un minuto." }, { status: 429 });
   }
 
-  const callerUid = await verifyAuthToken(request);
+  const callerUid = await verifyAuthTokenStrict(request);
   if (!callerUid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  // Es una lectura: alcanza con ser admin (cualquier nivel). Aprobar el pago sí exige 'full'.
-  if (!(await verifyAdmin(callerUid))) {
+  // ARQ-015 (auditoría oct 2026): el pasivo completo (a quién se le debe cuánto) es info de
+  // plata — la UI de Finanzas ya exige 'full'; la API tiene que exigir lo mismo o el nivel
+  // 'support' lo leía igual por URL directa.
+  if (!(await verifyFullAdmin(callerUid))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
