@@ -1,0 +1,97 @@
+{
+  // ───────── Entorno de trabajo de EncomiendaYA (20/10/2026) ─────────
+  // Objetivo: un explorador que no confunda. Los archivos "satélite" se anidan bajo su
+  // archivo principal, el ruido (.next, node_modules, caches) no aparece, y los scripts de
+  // verificación (_e2e-*, _attack-*, _pw-*) quedan agrupados bajo CLAUDE.md para no mezclarse
+  // con el código de la app.
+
+  // --- Explorador ---
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "package.json": "package-lock.json, .npmrc, .nvmrc",
+    "next.config.js": "next-env.d.ts, postcss.config.*, tailwind.config.*, tsconfig.json, components.json, vercel.json, vitest.config.ts, vitest.rules.config.ts",
+    "firebase.json": "firestore.rules, firestore.indexes.json, storage.rules, firebase.emulator.json, .firebaserc",
+    "CLAUDE.md": "_e2e-*.js, _attack-*.js, _pw-*.js, _audit-*.js, _verify-*.js, _check-*.js, _seed-*.js, _approve-*.js, _backfill-*.js, _clean-*.js",
+    "sentry.server.config.ts": "sentry.edge.config.ts",
+    ".eslintrc.json": ".eslintignore, .prettierrc*, .editorconfig",
+    "README.md": "LICENSE*, CHANGELOG*",
+    "*.tsx": "${capture}.test.tsx",
+    "*.ts": "${capture}.test.ts"
+  },
+  "explorer.compactFolders": true,
+  "explorer.sortOrder": "foldersNestsFiles",
+  "explorer.confirmDelete": true,
+  "explorer.confirmDragAndDrop": true,
+  "files.exclude": {
+    "**/.git": true,
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/tsconfig.tsbuildinfo": true,
+    "**/*.pack.gz_": true
+  },
+  "search.exclude": {
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/package-lock.json": true,
+    "**/playwright-report": true
+  },
+  "files.watcherExclude": {
+    "**/.next/**": true,
+    "**/node_modules/**": true
+  },
+
+  // --- Editor ---
+  "editor.tabSize": 2,
+  "editor.wordWrap": "on",
+  "editor.minimap.enabled": false,
+  "editor.linkedEditing": true,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": "active",
+  "editor.stickyScroll.enabled": true,
+  "editor.inlineSuggest.enabled": true,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  // --- TypeScript / ESLint / Prettier ---
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+  "eslint.workingDirectories": [{ "mode": "auto" }],
+  // Sin formatOnSave global a propósito: el repo no tiene config de Prettier y reformatear
+  // archivos enteros ensucia los diffs. Formatear a mano con Shift+Alt+F cuando convenga.
+  "editor.formatOnSave": false,
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[markdown]": { "editor.wordWrap": "on", "files.trimTrailingWhitespace": false },
+
+  // --- Tailwind (shadcn: cva/cn/clsx también sugieren clases) ---
+  "tailwindCSS.experimental.classRegex": [
+    ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+    ["cn\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+    ["clsx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+  ],
+  "files.associations": { "*.css": "tailwindcss" },
+  "editor.quickSuggestions": { "strings": "on" },
+
+  // --- Error Lens: el error se ve en la línea, sin pasar el mouse ---
+  "errorLens.enabledDiagnosticLevels": ["error", "warning"],
+  "errorLens.fontSize": "12px",
+  "errorLens.messageBackgroundMode": "message",
+
+  // --- Git ---
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "git.enableSmartCommit": true,
+  "gitlens.currentLine.enabled": false,
+  "gitlens.codeLens.enabled": false,
+
+  // --- Terminal ---
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.scrollback": 20000,
+
+  // --- Corrector / idioma de los diccionarios ---
+  "cSpell.language": "es,en"
+}
