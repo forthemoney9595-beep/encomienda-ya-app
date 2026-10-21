@@ -1,6 +1,7 @@
 'use client';
 
 import PageHeader from '@/components/page-header';
+import { money } from '@/lib/format-money';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Users, DollarSign, PackageCheck, Store as StoreIcon, Bike, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw, Clock, CreditCard, ChefHat, Truck, ChevronRight, MessageSquareWarning } from 'lucide-react';
 import { CLAIM_TYPES, type ClaimType } from '@/lib/claim-types';
@@ -73,7 +74,6 @@ const ALERT_KINDS: { k: AlertKind; label: string; icon: any; href: string }[] = 
  * en el lugar equivocado para la convención local. Sin decimales: son pesos, los centavos
  * no aportan nada en un total de plataforma.
  */
-const money = (n: number) => `$${Math.round(n || 0).toLocaleString('es-AR')}`;
 
 /**
  * "hace X" legible a cualquier escala. Antes solo formateaba horas y minutos, así que un
@@ -405,7 +405,7 @@ function AdminDashboard() {
       severity: 'high', // siempre: es plata real sin conciliar
       title: m.reason === 'amount_mismatch' ? 'Monto no coincide' : 'Estado de orden inesperado',
       subtitle: m.reason === 'amount_mismatch'
-        ? `Pagó $${(m.paidAmount || 0).toLocaleString()} · pedido $${(m.orderTotal || 0).toLocaleString()}`
+        ? `Pagó ${money((m.paidAmount || 0))} · pedido ${money((m.orderTotal || 0))}`
         : `El pago llegó con el pedido en "${m.orderStatus}"`,
       meta: 'revisar',
       sortKey: Number.MAX_SAFE_INTEGER, // primero de todo
@@ -581,7 +581,7 @@ function AdminDashboard() {
         <div className="rounded-xl border border-border bg-background/40 p-4 sm:p-5">
           <div className="mb-5 flex items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Flujo del pedido
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">Tocá una etapa para ver esos pedidos</p>
@@ -633,7 +633,7 @@ function AdminDashboard() {
                         <span className={cn('mt-1.5 block text-[13px] font-medium leading-tight sm:text-xs', active ? 'text-foreground' : 'text-muted-foreground')}>
                           {stage.label}
                         </span>
-                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground sm:text-[10px]">
+                        <span className="mt-0.5 block text-xs leading-snug text-muted-foreground sm:text-xs">
                           {stage.who}
                         </span>
                       </span>
@@ -654,7 +654,7 @@ function AdminDashboard() {
                     <div
                       key={zone.label}
                       style={{ flexGrow: span }}
-                      className="rounded-md border border-dashed border-border/70 px-2 py-1 text-center text-[10px] uppercase tracking-wider text-muted-foreground"
+                      className="rounded-md border border-dashed border-border/70 px-2 py-1 text-center text-xs uppercase tracking-wider text-muted-foreground"
                     >
                       {zone.label} · {count}
                     </div>
@@ -667,7 +667,7 @@ function AdminDashboard() {
 
         {/* Estado de la red: responde "¿tengo con qué operar?" */}
         <div>
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Capacidad de la red
           </p>
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
@@ -717,7 +717,7 @@ function AdminDashboard() {
                     <c.icon className={cn('h-5 w-5 shrink-0', c.color)} />
                   </div>
                   <div className="mt-2.5 text-[13px] font-medium leading-tight">{c.label}</div>
-                  <div className={cn('mt-0.5 text-[11px] leading-snug', c.alert ? c.color : 'text-muted-foreground')}>{c.hint}</div>
+                  <div className={cn('mt-0.5 text-xs leading-snug', c.alert ? c.color : 'text-muted-foreground')}>{c.hint}</div>
                 </Link>
               ));
             })()}
@@ -804,7 +804,7 @@ function AdminDashboard() {
             </Link>
           )}
 
-          <p className="border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
+          <p className="border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
             Un pedido se marca trabado según su estado: confirmación ≥1h · pago ≥2h · preparación ≥3h · retiro ≥2h · entrega ≥3h
           </p>
         </div>
@@ -904,7 +904,7 @@ function AdminDashboard() {
                     <Row label="Envíos (a repartidores)" value={money(shipping)} accent="text-info" />
                     <Row label="Ticket promedio" value={money(avgTicket)} />
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Cifras brutas (sin descontar reembolsos ni efectivo).{' '}
                     <Link href="/admin/finances" className="text-primary hover:underline">
                       Ver la ganancia neta real en Finanzas →
@@ -913,7 +913,7 @@ function AdminDashboard() {
                   {/* Los pedidos anteriores a esta versión no tienen `commissionAmount`, así
                       que su comisión no suma acá y aparece como "a las tiendas". */}
                   {commission === 0 && revenue > 0 && (
-                    <p className="text-[11px] text-warning">
+                    <p className="text-xs text-warning">
                       La comisión histórica no está registrada por pedido: estos pedidos son anteriores al cambio.
                     </p>
                   )}
@@ -988,7 +988,7 @@ function AdminDashboard() {
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="date" tickLine={false} tickMargin={10} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} tickMargin={10} tickFormatter={(value) => `$${value}`} />
-                   <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => `$${Number(value).toFixed(2)}`} />} />
+                   <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => `${money(Number(value))}`} />} />
                   <Bar dataKey="Ventas" fill="var(--color-Ventas)" radius={4} />
                 </RechartsBarChart>
             </ChartContainer>
@@ -1077,9 +1077,9 @@ function AdminDashboard() {
                   {storeAnalytics.map((s, i) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium">{s.name}</TableCell>
-                      <TableCell className="text-right text-success font-bold">${s.revenue.toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-success font-bold">{money(s.revenue)}</TableCell>
                       <TableCell className="text-right">{s.delivered}</TableCell>
-                      <TableCell className="text-right text-primary">${s.commission.toFixed(0)}</TableCell>
+                      <TableCell className="text-right text-primary">{money(s.commission)}</TableCell>
                       <TableCell className="text-right text-warning">{s.ratingCount > 0 ? `${s.rating.toFixed(1)} ★` : '—'}</TableCell>
                     </TableRow>
                   ))}
@@ -1111,7 +1111,7 @@ function AdminDashboard() {
                     <TableRow key={i}>
                       <TableCell className="font-medium">{d.name}</TableCell>
                       <TableCell className="text-right">{d.deliveries}</TableCell>
-                      <TableCell className="text-right text-success font-bold">${d.earnings.toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-success font-bold">{money(d.earnings)}</TableCell>
                       <TableCell className="text-right text-warning">{d.ratingCount > 0 ? `${d.rating.toFixed(1)} ★` : '—'}</TableCell>
                     </TableRow>
                   ))}

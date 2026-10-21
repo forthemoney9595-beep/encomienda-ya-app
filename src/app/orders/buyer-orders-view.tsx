@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card } from '@/components/ui/card';
@@ -173,12 +174,12 @@ export default function BuyerOrdersView() {
                                     </p>
                                     <div className="mt-2 flex flex-wrap gap-2">
                                         {/* Badge de Estado del Pedido */}
-                                        <Badge variant="outline" className={cn('text-[10px]', orderStatusBadgeClass[getOrderStatusKind(order.status)])}>
+                                        <Badge variant="outline" className={cn('text-xs', orderStatusBadgeClass[getOrderStatusKind(order.status)])}>
                                             {order.status}
                                         </Badge>
 
                                         {/* Badge de Método de Pago */}
-                                        <Badge variant="outline" className={`text-[10px] flex items-center gap-1 ${isPaid ? 'bg-success/15 text-success border-success/30' : ''}`}>
+                                        <Badge variant="outline" className={`text-xs flex items-center gap-1 ${isPaid ? 'bg-success/15 text-success border-success/30' : ''}`}>
                                             {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : order.paymentMethod}
                                             {isPaid && <CheckCircle2 className="h-3 w-3 ml-1" />}
                                         </Badge>
@@ -186,7 +187,7 @@ export default function BuyerOrdersView() {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="font-bold text-lg">${displayTotal.toLocaleString()}</p>
+                                <p className="font-bold text-lg">{money(displayTotal)}</p>
                                 <ChevronRight className="h-5 w-5 text-muted-foreground ml-auto mt-2 group-hover:translate-x-1 transition-transform" />
                             </div>
                         </div>

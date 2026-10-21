@@ -114,21 +114,21 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                       {/* Requisito de aprobación: no aprobar cuentas sin mail verificado */}
                       {emailVerified[user.id] !== undefined && (
                         emailVerified[user.id] ? (
-                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-medium">✉️ Mail verificado</span>
+                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-xs font-medium">✉️ Mail verificado</span>
                         ) : (
-                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 text-[10px] font-medium">⚠️ Sin verificar — no aprobar</span>
+                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 text-xs font-medium">⚠️ Sin verificar — no aprobar</span>
                         )
                       )}
                     </div>
                   </div>
                   <div className="flex space-x-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-info hover:bg-info/10" onClick={() => setSelectedUser(user)}>
+                    <Button size="icon" variant="ghost" className="h-9 w-9 text-info hover:bg-info/10" aria-label={`Ver solicitud de ${user.name || "usuario"}`} onClick={() => setSelectedUser(user)}>
                       <Eye className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="outline" className="h-8 w-8 text-success hover:text-success hover:bg-success/10 border-success/30" onClick={() => onApprove(user.id, user.name || 'Usuario')}>
+                    <Button size="icon" variant="outline" className="h-9 w-9 text-success hover:text-success hover:bg-success/10 border-success/30" aria-label={`Aprobar a ${user.name || "usuario"}`} onClick={() => onApprove(user.id, user.name || 'Usuario')}>
                       <Check className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={() => onReject(user.id, user.name || 'Usuario')}>
+                    <Button size="icon" variant="outline" className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" aria-label={`Rechazar a ${user.name || "usuario"}`} onClick={() => onReject(user.id, user.name || 'Usuario')}>
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -185,15 +185,15 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                         { label: 'Seguro vigente', has: !!(selectedUser as any).vehicleInsuranceUrl, url: (licenseUrls as any).vehicleInsuranceUrl },
                       ]).map(({ label, has, url }) => (
                         <div key={label} className="space-y-1">
-                          <p className="text-[10px] text-muted-foreground text-center">{label}</p>
+                          <p className="text-xs text-muted-foreground text-center">{label}</p>
                           {!has ? (
-                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-destructive text-center px-1">Falta</div>
+                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-xs text-destructive text-center px-1">Falta</div>
                           ) : url ? (
                             <a href={url} target="_blank" rel="noreferrer" className="block relative h-20 rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition">
                               <img src={url} alt={label} className="h-full w-full object-cover" />
                             </a>
                           ) : (
-                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-muted-foreground text-center px-1">
+                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-xs text-muted-foreground text-center px-1">
                               {loadingLicenses ? 'Cargando...' : 'Error'}
                             </div>
                           )}

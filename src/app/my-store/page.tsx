@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
@@ -202,7 +203,7 @@ export default function StoreDashboardPage() {
         <StatCard label="Entregados hoy" value={stats.deliveredTodayCount} icon={ListOrdered} tone="muted" href="/orders" />
         <StatCard
           label="Tuyo de hoy (neto)"
-          value={`$${stats.salesToday.toLocaleString()}`}
+          value={`${money(stats.salesToday)}`}
           icon={Wallet}
           tone="success"
           href="/my-store/wallet"

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { money } from '@/lib/format-money';
 import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { notifyUser } from "@/lib/notify-server";
@@ -86,7 +87,7 @@ export async function GET(request: Request) {
         await notifyUser({
           userId: ownerId,
           title: "💰 Liquidación generada",
-          body: `Tu liquidación de $${Math.floor(availableBalance).toLocaleString()} fue generada. El admin la procesará pronto.`,
+          body: `Tu liquidación de ${money(Math.floor(availableBalance))} fue generada. El admin la procesará pronto.`,
           type: "payout",
           link: "/my-store/wallet",
         });
@@ -144,7 +145,7 @@ export async function GET(request: Request) {
         await notifyUser({
           userId: driverDoc.id,
           title: "💰 Liquidación generada",
-          body: `Tu liquidación de $${Math.floor(availableBalance).toLocaleString()} fue generada. El admin la procesará pronto.`,
+          body: `Tu liquidación de ${money(Math.floor(availableBalance))} fue generada. El admin la procesará pronto.`,
           type: "payout",
           link: "/delivery/earnings",
         });

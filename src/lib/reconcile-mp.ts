@@ -1,4 +1,5 @@
-import MercadoPagoConfig, { Payment } from "mercadopago";
+import { Payment } from "mercadopago";
+import { getMpClient } from "@/lib/mp-client";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { notifyUser } from "@/lib/notify-server";
@@ -23,7 +24,6 @@ import * as Sentry from "@sentry/nextjs";
 // pagos revisó, qué reparó, qué marcó) — una conciliación sin historial no permite saber
 // si viene corriendo o desde cuándo está rota.
 
-const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN! });
 
 // Ventanas de revisión. A escala Tinogasta esto cubre de sobra; si algún día el volumen
 // crece, achicar la ventana A (los pagos viejos ya conciliados no cambian solos).
@@ -85,7 +85,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
     checkedOrders: 0, checkedPayments: 0, ok: 0, repaired: 0,
     flagged: 0, unverifiable: 0, errors: 0, notes: [],
   };
-  const payment = new Payment(client);
+  const payment = new Payment(getMpClient());
   const note = (s: string) => { if (summary.notes.length < 40) summary.notes.push(s); };
 
   // PERF-003: el registro de corrida se crea AL INICIO (status 'running') y se completa al

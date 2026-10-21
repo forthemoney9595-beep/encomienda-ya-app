@@ -26,8 +26,15 @@ type AggregateOptions = { refreshOnFocus?: boolean };
 function useFocusRefresh(run: () => void, enabled: boolean) {
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;
+    // PERF-009: focus + visibilitychange disparan juntos (2× la misma consulta) y cada
+    // alt-tab re-escaneaba el historial. Como mucho una vez cada 30 s.
+    let last = 0;
     const onFocus = () => {
-      if (document.visibilityState === 'visible') run();
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - last < 30_000) return;
+      last = now;
+      run();
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);

@@ -9,6 +9,7 @@
 // duplica ninguna fórmula (la lección de money.ts).
 
 import { useMemo } from 'react';
+import { money as fmtMoney } from '@/lib/format-money';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,8 @@ export interface StatementMovement {
   href?: string;
 }
 
-const money = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString('es-AR')}`;
+// Importes siempre en valor absoluto: el signo lo pone la fila (ganado/pagado). Formato único de la app.
+const money = (n: number) => fmtMoney(Math.abs(n));
 
 const toDate = (ts: any): Date => {
   if (!ts) return new Date(0);
@@ -101,13 +103,13 @@ export function AccountStatement({
               <div className={cn('text-lg font-bold', cls)}>
                 {value < 0 ? `−${money(value)}` : money(value)}
               </div>
-              <div className="text-[10px] text-muted-foreground">{label}</div>
+              <div className="text-xs text-muted-foreground">{label}</div>
             </div>
           ))}
         </div>
 
         {capReached && (
-          <p className="text-[11px] text-warning">
+          <p className="text-xs text-warning">
             ⚠ Se cargó el máximo de pedidos de la ventana — los totales cubren esos
             movimientos, no todo el histórico.
           </p>
@@ -124,14 +126,14 @@ export function AccountStatement({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate">{m.label}</p>
-                {m.detail && <p className="text-[11px] text-muted-foreground truncate">{m.detail}</p>}
+                {m.detail && <p className="text-xs text-muted-foreground truncate">{m.detail}</p>}
               </div>
               <span className={cn('font-bold whitespace-nowrap tabular-nums',
                 m.tone === 'in' ? 'text-success' : m.tone === 'out' ? 'text-info' : 'text-muted-foreground')}>
                 {m.amount > 0 ? '+' : m.amount < 0 ? '−' : ''}{money(m.amount)}
               </span>
               {m.badge && (
-                <Badge variant="outline" className="text-[10px] text-muted-foreground shrink-0">{m.badge}</Badge>
+                <Badge variant="outline" className="text-xs text-muted-foreground shrink-0">{m.badge}</Badge>
               )}
               {m.href && (
                 <Link href={m.href} target="_blank" className="shrink-0">

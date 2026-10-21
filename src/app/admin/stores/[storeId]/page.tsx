@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import AdminAuthGuard from '../../admin-auth-guard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -303,11 +304,11 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                         <h1 className="text-2xl font-bold">{store.name}</h1>
-                        <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-[10px]">
+                        <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-xs">
                             {store.isApproved ? 'Aprobada' : 'No aprobada'}
                         </Badge>
                         {store.manuallyPaused && (
-                            <Badge variant="outline" className="text-[10px] border-warning/40 text-warning">Pausada</Badge>
+                            <Badge variant="outline" className="text-xs border-warning/40 text-warning">Pausada</Badge>
                         )}
                     </div>
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
@@ -360,13 +361,13 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                             <CardContent className="pt-3 pb-3">
                                 <Icon className={cn('h-4 w-4 mb-1', color)} />
                                 <div className={cn('text-xl font-bold', color)}>{value}</div>
-                                <div className="text-[11px] text-muted-foreground">{label}</div>
+                                <div className="text-xs text-muted-foreground">{label}</div>
                             </CardContent>
                         </Card>
                     ))}
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                    Calculado sobre los últimos {orders?.length ?? 0} pedidos cargados, no sobre todo el
+                <p className="mt-2 text-xs text-muted-foreground">
+                    Calculado sobre {orders?.length === 1 ? "el último pedido cargado" : `los últimos ${orders?.length ?? 0} pedidos cargados`}, no sobre todo el
                     histórico. El saldo real a pagar está en Finanzas.
                 </p>
             </div>
@@ -394,7 +395,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                     <CardContent className="space-y-2">
                         {storeClaims.map(c => (
                             <div key={c.id} className="flex items-center gap-2 text-sm rounded-lg border px-3 py-2">
-                                <Badge variant="outline" className={cn('text-[10px] shrink-0',
+                                <Badge variant="outline" className={cn('text-xs shrink-0',
                                     c.resolved
                                         ? (c.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success')
                                         : 'border-warning/40 text-warning')}>
@@ -446,7 +447,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                             </Button>
                         </div>
                         {isSupport && (
-                            <p className="text-[11px] text-muted-foreground">Editar el CBU requiere un admin con acceso completo.</p>
+                            <p className="text-xs text-muted-foreground">Editar el CBU requiere un admin con acceso completo.</p>
                         )}
                     </CardContent>
                 </Card>
@@ -514,9 +515,9 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                                             <tr key={o.id} className="hover:bg-muted/20 transition-colors">
                                                 <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(o.createdAt)}</td>
                                                 <td className="px-4 py-2.5 font-medium">{o.customerName}</td>
-                                                <td className="px-4 py-2.5 text-right font-bold">${o.total?.toLocaleString()}</td>
+                                                <td className="px-4 py-2.5 text-right font-bold">{money(o.total)}</td>
                                                 <td className="px-4 py-2.5">
-                                                    <Badge variant="outline" className={cn('text-[10px] uppercase', orderStatusBadgeClass[kind])}>
+                                                    <Badge variant="outline" className={cn('text-xs uppercase', orderStatusBadgeClass[kind])}>
                                                         {o.status}
                                                     </Badge>
                                                 </td>

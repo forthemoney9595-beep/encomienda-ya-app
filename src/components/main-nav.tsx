@@ -122,7 +122,7 @@ export function MainNav({
 
   const NavBadge = ({ count }: { count: number }) => (
     count > 0
-      ? <span className="ml-auto inline-flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold h-5 min-w-[20px] px-1.5">{count}</span>
+      ? <span className="ml-auto inline-flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-xs font-bold h-5 min-w-[20px] px-1.5">{count}</span>
       : null
   );
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -150,7 +151,7 @@ export default function DeliveryAnalyticsPage() {
             <Wallet className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${current.totalEarned.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{money(current.totalEarned)}</div>
             <div className="flex items-center gap-1.5 mt-1">
               <p className="text-xs text-muted-foreground">{PERIOD_LABELS[period]}</p>
               {hasPrev && <PctBadge current={current.totalEarned} prev={prev.totalEarned} />}
@@ -178,7 +179,7 @@ export default function DeliveryAnalyticsPage() {
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${current.avgEarning.toFixed(0)}</div>
+            <div className="text-2xl font-bold">{money(current.avgEarning)}</div>
             <div className="flex items-center gap-1.5 mt-1">
               <p className="text-xs text-muted-foreground">Por entrega</p>
               {hasPrev && <PctBadge current={current.avgEarning} prev={prev.avgEarning} />}
@@ -198,8 +199,8 @@ export default function DeliveryAnalyticsPage() {
               <BarChart data={dailyEarningsData}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} className="text-muted-foreground text-xs" />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} className="text-muted-foreground text-xs" />
-                <ChartTooltip content={<ChartTooltipContent formatter={(v: any) => `$${Number(v).toLocaleString()}`} />} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toLocaleString("es-AR", { maximumFractionDigits: 1 })}k` : `$${Math.round(v)}`)} allowDecimals={false} className="text-muted-foreground text-xs" />
+                <ChartTooltip content={<ChartTooltipContent formatter={(v: any) => `${money(Number(v))}`} />} />
                 <Bar dataKey="ganancias" fill="var(--color-ganancias)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartContainer>
@@ -247,7 +248,7 @@ export default function DeliveryAnalyticsPage() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <div className="font-bold text-success">+${Math.round(driverNetForOrder(order as any)).toLocaleString('es-AR')}</div>
-                  <Badge variant="outline" className={cn('text-[10px] uppercase',
+                  <Badge variant="outline" className={cn('text-xs uppercase',
                     order.status === 'Entregado' ? 'bg-success/15 text-success border-success/30' :
                     order.status === 'Cancelado' ? 'bg-destructive/15 text-destructive border-destructive/30' :
                     'bg-muted text-muted-foreground'
@@ -259,7 +260,7 @@ export default function DeliveryAnalyticsPage() {
             ))}
             {current.orders.length === 0 && (
               <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                <p>No hay movimientos en este período.</p>
+                <p>Acá van a aparecer tus entregas a medida que las completes.</p>
               </div>
             )}
           </div>

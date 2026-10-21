@@ -177,7 +177,7 @@ function OrderProgress({ status }: { status: any }) {
             </div>
             <div>
                 <Progress value={progressValue} className="h-2" />
-                <div className="mt-4 grid grid-cols-5 gap-2 text-center text-[10px] lg:text-xs">
+                <div className="mt-4 grid grid-cols-5 gap-2 text-center text-xs lg:text-xs">
                     {steps.map((stepInfo:any) => (
                         <div key={stepInfo.step} className={cn("flex flex-col items-center gap-1.5", currentStatusInfo.step >= stepInfo.step ? 'text-primary font-semibold' : 'text-muted-foreground')}>
                             <stepInfo.icon className="h-5 w-5" /><span>{stepInfo.label}</span>

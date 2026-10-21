@@ -2683,10 +2683,44 @@ ejecución" del informe:
 - **OJO CRLF:** varios archivos del repo tienen CRLF — un parche por string con `\n`
   no matchea. Normalizar a LF al leer y restaurar al escribir (los scripts del scratchpad
   de esta fase lo hacen).
-- **Pendiente de decisión:** Tanda 2 (formato de plata único, a11y en bloque,
-  rendimiento barato, validaciones menores), Next 16, Vercel Pro, y el cambio
-  `pushEnabled` (los tokens FCM de los 5 testers se borraron el 13/10; sin ese cambio,
-  al abrir la app se re-registran solos).
+**Tanda 2 ejecutada y desplegada (20/10)** — tabla por bloque en el informe:
+- **Plata, un solo formato:** `money()` de `format-money.ts` en los 59 sitios que quedaban
+  (21 archivos, incluidos mensajes de servidor que salían en en-US en Vercel); los
+  `const money` locales se fueron. **Regla: toda plata en UI o en mensajes pasa por
+  `money()`**; `pct-badge`/`ui/chart` son porcentajes, no plata.
+- **Accesibilidad:** tokens de contraste en `globals.css` (`--primary` 258 90% 62 %,
+  `--destructive` 0 72% 62 %, `--success-foreground` OSCURO en ambos temas → los badges
+  verdes llevan texto oscuro, no blanco); targets ≥ 36 px en controles de cantidad
+  (tienda pública, carrito, confirmar stock) y botones de solicitudes; `aria-label` en
+  campanita/⌘K/switches/checkboxes/íconos; `text-[10px]`/`[11px]` → `text-xs` en 38
+  archivos (**no volver a usar tamaños < 12 px en nada tocable**); menú lateral móvil con
+  botón de cerrar; sr-only de shadcn en castellano.
+- **Rendimiento barato:** home con `where('isApproved')`; aggregations con debounce 30 s;
+  `leaflet.css` una sola vez (desde `globals.css`, **no agregar `<link>` a unpkg**); mp3
+  local `public/sounds/notify.mp3` con `Audio` perezoso; fotos de producto lazy;
+  "Todo" de analíticas → "Último año" (365 d).
+- **Validaciones/UX:** precio > 0 y nombre obligatorio en productos; retiro deshabilitado
+  sin saldo + Confirmar deshabilitado hasta monto/CBU válidos; **`src/hooks/use-hydrated.ts`**
+  — los 5 formularios de auth deshabilitan el submit hasta hidratar y llevan
+  `method="post"` (CY-006: un submit nativo mandaba contraseña y DNI por la URL).
+- **Backend:** webhook MP responde 200 `ignored_unknown_order` ante orden inexistente (404
+  hacía reintentar a MP para siempre) y toma comprador/tienda del doc del pedido;
+  **`src/lib/mp-client.ts`** (`getMpClient()`, único cliente de MP, timeout 10 s) +
+  `maxDuration = 30` en webhook y checkout; `create` responde 400 (`OrderValidationError`)
+  para lo que el cliente mandó mal. Vencimiento de la preferencia de MP: NO se tocó
+  (decisión de producto pendiente).
+- **Verificado:** 7 suites e2e verdes (13+19+19+15+8+21+31), Playwright
+  `_pw-tanda2-visual.js` 24/24 (14 pantallas, 3 roles, 0 overflow tras el cambio global de
+  tamaños), contraste calculado (5,17 / 4,40 / 8,76), residuo 0. **A confirmar visual por
+  David:** badges verdes con texto oscuro y violeta un punto más profundo.
+- **OJO al editar CLAUDE.md por script:** nunca con `node -e "..."` en bash — los backticks
+  de los nombres de código se comen como sustitución de comandos (pasó en esta fase).
+  Escribir el bloque a un archivo y empalmarlo.
+- **Pendiente de decisión:** Tanda 3 (estructural: unificar las 2 capas de Firebase +
+  `persistentLocalCache`, `strictNullChecks` incremental, `composeOrderTotals` en money.ts,
+  acumuladores por cuenta para saldos/pasivo, emulador en CI), Next 16, Vercel Pro,
+  vencimiento de preferencia MP, y el cambio `pushEnabled` (los tokens FCM de los 5
+  testers se borraron el 13/10; sin ese cambio, al abrir la app se re-registran solos).
 
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso

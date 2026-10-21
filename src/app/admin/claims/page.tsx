@@ -8,6 +8,7 @@
 // últimas van por /api/claims/resolve (notifica + auditoría; cualquier nivel de admin).
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
+import { money } from '@/lib/format-money';
 import Link from 'next/link';
 import AdminAuthGuard from '../admin-auth-guard';
 import PageHeader from '@/components/page-header';
@@ -38,7 +39,6 @@ import {
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 25;
-const money = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`;
 
 const formatDate = (ts: any) => {
   if (!ts) return '—';
@@ -226,11 +226,11 @@ function AdminClaimsPage() {
                   : (claim.type === 'not_received' || claim.type === 'stuck_order' ? 'border-l-destructive' : 'border-l-warning'))}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="text-[10px] gap-1 border-warning/40 text-warning">
+                    <Badge variant="outline" className="text-xs gap-1 border-warning/40 text-warning">
                       <AlertTriangle className="h-3 w-3" /> {meta?.label || claim.type}
                     </Badge>
                     {claim.resolved && (
-                      <Badge variant="outline" className={cn('text-[10px]',
+                      <Badge variant="outline" className={cn('text-xs',
                         claim.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success')}>
                         {RESOLUTION_LABELS[claim.resolution || ''] || 'Resuelto'}
                       </Badge>

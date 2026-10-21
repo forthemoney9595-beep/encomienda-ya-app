@@ -11,6 +11,7 @@
 //      carpeta privada `licenses/{uid}` — el admin los ve por URL firmada de 5 minutos.
 
 import { useState } from 'react';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { DOC_FIELDS } from '@/lib/driver-docs';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -62,6 +63,7 @@ export default function SignupDeliveryPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
 
   // Paso 2: cuenta ya creada, faltan los documentos.
   const [createdUser, setCreatedUser] = useState<User | null>(null);
@@ -241,7 +243,7 @@ export default function SignupDeliveryPage() {
     <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center">
       <Card className="w-full max-w-sm">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} method="post" action="#">
             <CardHeader>
               <CardTitle className="text-2xl">Conviértete en Repartidor</CardTitle>
               <CardDescription>
@@ -400,7 +402,7 @@ export default function SignupDeliveryPage() {
               )}
             </CardContent>
             <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Button type="submit" className="w-full" disabled={!hydrated || isSubmitting}>
                 {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creando cuenta...</> : "Continuar → subir documentos"}
               </Button>
               <div className="mt-4 text-center text-sm">

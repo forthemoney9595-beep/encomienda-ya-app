@@ -146,7 +146,7 @@ function AdminIncidentsPage() {
               <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className={cn('text-[10px] gap-1',
+                    <Badge variant="outline" className={cn('text-xs gap-1',
                       inc.type === 'released' ? 'border-destructive/40 text-destructive' : 'border-warning/40 text-warning'
                     )}>
                       {inc.type === 'released' ? <XCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}

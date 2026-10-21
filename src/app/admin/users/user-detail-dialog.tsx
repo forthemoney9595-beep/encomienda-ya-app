@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { money } from '@/lib/format-money';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -73,12 +74,12 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
             { label: 'Pedidos', value: stats.total, icon: ShoppingBag, color: 'text-info' },
             { label: 'Entregados', value: stats.delivered, icon: ShoppingBag, color: 'text-success' },
             { label: 'Cancelados', value: stats.cancelled, icon: XCircle, color: 'text-destructive' },
-            { label: 'Gastado (neto, últ. 30)', value: `$${stats.spent.toLocaleString()}`, icon: DollarSign, color: 'text-primary' },
+            { label: 'Gastado (neto, últ. 30 pedidos)', value: `${money(stats.spent)}`, icon: DollarSign, color: 'text-primary' },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="rounded-lg border bg-muted/30 p-2.5">
               <Icon className={cn('h-3.5 w-3.5 mb-1', color)} />
               <div className={cn('text-lg font-bold', color)}>{value}</div>
-              <div className="text-[10px] text-muted-foreground">{label}</div>
+              <div className="text-xs text-muted-foreground">{label}</div>
             </div>
           ))}
         </div>
@@ -96,7 +97,7 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
             <div className="space-y-1.5">
               {claims.map(c => (
                 <div key={c.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                  <Badge variant="outline" className={cn('text-[10px] shrink-0',
+                  <Badge variant="outline" className={cn('text-xs shrink-0',
                     c.resolved
                       ? (c.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success')
                       : 'border-warning/40 text-warning')}>
@@ -131,13 +132,13 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
                     <span className="text-muted-foreground truncate">{(o as any).storeName || ''}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-bold">${(o.total || 0).toLocaleString()}</span>
+                    <span className="font-bold">{money((o.total || 0))}</span>
                     {o.refunded && (
-                      <Badge variant="outline" className="text-[10px] border-info/40 text-info">
-                        Reemb. ${Math.round(o.refundAmount || 0).toLocaleString()}
+                      <Badge variant="outline" className="text-xs border-info/40 text-info">
+                        Reemb. {money(Math.round(o.refundAmount || 0))}
                       </Badge>
                     )}
-                    <Badge variant="outline" className={cn('text-[10px] uppercase', orderStatusBadgeClass[kind])}>{o.status}</Badge>
+                    <Badge variant="outline" className={cn('text-xs uppercase', orderStatusBadgeClass[kind])}>{o.status}</Badge>
                     <Link href={`/orders/${o.id}`} target="_blank">
                       <Button size="sm" variant="ghost" className="h-6 w-6 p-0"><ExternalLink className="h-3 w-3" /></Button>
                     </Link>

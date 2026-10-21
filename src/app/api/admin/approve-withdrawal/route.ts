@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { money } from '@/lib/format-money';
 import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
     if (requestedAmount > approvableBalance + 1) {
       // Tolerancia de $1 para redondeos -- si el monto pedido supera el saldo real, se rechaza
       return NextResponse.json({
-        error: `El monto solicitado ($${requestedAmount.toLocaleString()}) supera el saldo real disponible ($${approvableBalance.toFixed(0)}). Revisá el saldo antes de aprobar.`,
+        error: `El monto solicitado (${money(requestedAmount)}) supera el saldo real disponible (${money(approvableBalance)}). Revisá el saldo antes de aprobar.`,
         saldoReal: approvableBalance,
         montoSolicitado: requestedAmount,
       }, { status: 400 });
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
       }
       if (e?.message === '__INSUFFICIENT_BALANCE__') {
         return NextResponse.json({
-          error: `El monto solicitado ($${requestedAmount.toLocaleString()}) supera el saldo real disponible ($${Number(e.freshApprovable).toFixed(0)}) — puede haber otro retiro de esta cuenta recién aprobado. Refrescá la lista.`,
+          error: `El monto solicitado (${money(requestedAmount)}) supera el saldo real disponible (${money(Number(e.freshApprovable))}) — puede haber otro retiro de esta cuenta recién aprobado. Refrescá la lista.`,
           saldoReal: e.freshApprovable,
           montoSolicitado: requestedAmount,
         }, { status: 400 });

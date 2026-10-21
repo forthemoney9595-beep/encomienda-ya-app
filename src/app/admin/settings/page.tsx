@@ -224,7 +224,7 @@ function AdminSettingsPage() {
               </Label>
               <p className="text-xs text-muted-foreground">Impide crear nuevos pedidos.</p>
             </div>
-            <Switch checked={localConfig.maintenanceMode}
+            <Switch aria-label="Modo mantenimiento" checked={localConfig.maintenanceMode}
               onCheckedChange={(checked) => setLocalConfig({ ...localConfig, maintenanceMode: checked })}
               className="data-[state=checked]:bg-destructive" />
           </div>

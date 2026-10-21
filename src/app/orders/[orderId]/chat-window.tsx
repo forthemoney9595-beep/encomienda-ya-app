@@ -196,7 +196,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                     )}
                 >
                     {!isMine && (
-                         <p className={cn("text-[10px] uppercase mb-1 flex items-center gap-1", roleColor)}>
+                         <p className={cn("text-xs uppercase mb-1 flex items-center gap-1", roleColor)}>
                             {message.senderRole === 'store' && <Store className="h-3 w-3"/>}
                             {message.senderRole === 'delivery' && <Bike className="h-3 w-3"/>}
                             {message.senderRole === 'buyer' && <User className="h-3 w-3"/>}
@@ -255,7 +255,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                             // Feedback mientras envía: sin esto, tocar una respuesta rápida
                             // no mostraba NADA y la gente la volvía a tocar (mensajes
                             // repetidos en la prueba).
-                            className={`cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors py-1 px-2 text-[10px] font-normal shrink-0 border-primary/20 ${isSending ? 'pointer-events-none opacity-50' : ''}`}
+                            className={`cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors py-1 px-2 text-xs font-normal shrink-0 border-primary/20 ${isSending ? 'pointer-events-none opacity-50' : ''}`}
                             onClick={() => handleSend(undefined, reply)}
                         >
                             {reply}

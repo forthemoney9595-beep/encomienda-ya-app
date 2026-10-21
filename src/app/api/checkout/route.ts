@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
-import MercadoPagoConfig, { Preference } from 'mercadopago';
+import { Preference } from "mercadopago";
+import { getMpClient } from "@/lib/mp-client";
 import { adminDb } from '@/lib/firebase-admin';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyAuthToken } from '@/lib/auth-server';
+
+export const maxDuration = 30; // ARQ-014: crear la preferencia en MP puede tardar
 
 export async function POST(request: Request) {
     const ip = getClientIp(request);
@@ -19,7 +22,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Error de configuración del servidor (Token)" }, { status: 500 });
     }
 
-    const client = new MercadoPagoConfig({ accessToken });
+    const client = getMpClient();
 
     try {
         const body = await request.json();

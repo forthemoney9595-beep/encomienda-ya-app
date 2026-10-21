@@ -277,8 +277,8 @@ function DriverProfilePage() {
             <CardContent className="pt-3 pb-3">
               <Icon className={cn('h-4 w-4 mb-1', color)} />
               <div className={cn('text-xl font-bold', color)}>{value}</div>
-              <div className="text-[11px] text-muted-foreground">{label}</div>
-              {hint && <div className="text-[10px] text-muted-foreground/70 mt-0.5">{hint}</div>}
+              <div className="text-xs text-muted-foreground">{label}</div>
+              {hint && <div className="text-xs text-muted-foreground/70 mt-0.5">{hint}</div>}
             </CardContent>
           </Card>
         ))}
@@ -321,7 +321,7 @@ function DriverProfilePage() {
               </Button>
             </div>
             {isSupport && (
-              <p className="text-[11px] text-muted-foreground">Editar el CBU requiere un admin con acceso completo.</p>
+              <p className="text-xs text-muted-foreground">Editar el CBU requiere un admin con acceso completo.</p>
             )}
           </CardContent>
         </Card>
@@ -389,7 +389,7 @@ function DriverProfilePage() {
                         {o.status === 'Entregado' ? `$${Math.round(driverNetForOrder(o as any)).toLocaleString('es-AR')}` : '—'}
                       </td>
                       <td className="px-4 py-2.5">
-                        <Badge variant="outline" className={cn('text-[10px] uppercase', orderStatusBadgeClass[kind])}>{o.status}</Badge>
+                        <Badge variant="outline" className={cn('text-xs uppercase', orderStatusBadgeClass[kind])}>{o.status}</Badge>
                       </td>
                       <td className="px-4 py-2.5">
                         <Link href={`/orders/${o.id}`} target="_blank">

@@ -275,11 +275,11 @@ function AdminStoresPage() {
                             </TableCell>
                             <TableCell>
                                 <div className="flex flex-col gap-1 items-start">
-                                    <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-[10px]">
+                                    <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-xs">
                                         {store.isApproved ? 'Aprobado' : 'Pendiente/Rechazado'}
                                     </Badge>
                                     {store.manuallyPaused && (
-                                        <Badge variant="outline" className="text-[10px] border-warning/40 text-warning gap-1">
+                                        <Badge variant="outline" className="text-xs border-warning/40 text-warning gap-1">
                                             <Pause className="h-3 w-3" /> Pausada
                                         </Badge>
                                     )}

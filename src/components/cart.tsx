@@ -57,18 +57,18 @@ export function Cart() {
                         <p className="font-semibold truncate">{item.name}</p>
                         <p className="text-sm text-muted-foreground">{money(item.price)}</p>
                         <div className="mt-2 flex items-center gap-2">
-                            <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                            <Button variant="outline" size="icon" className="h-9 w-9" aria-label={`Quitar uno de ${item.name}`} onClick={() => updateQuantity(item.id, item.quantity - 1)}>
                             <Minus className="h-3 w-3" />
                             </Button>
                             <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                            <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                            <Button variant="outline" size="icon" className="h-9 w-9" aria-label={`Agregar uno de ${item.name}`} onClick={() => updateQuantity(item.id, item.quantity + 1)}>
                             <Plus className="h-3 w-3" />
                             </Button>
                         </div>
                         </div>
                         <div className="text-right flex flex-col justify-between h-full">
                             <p className="font-bold text-sm">{money(item.price * item.quantity)}</p>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 self-end" onClick={() => removeFromCart(item.id)}>
+                            <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:bg-destructive/10 self-end" aria-label={`Sacar ${item.name} del carrito`} onClick={() => removeFromCart(item.id)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>

@@ -6,8 +6,10 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { usePathname } from 'next/navigation';
 
-// Sonido de notificación suave (puedes cambiar la URL por una tuya si prefieres)
-const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+// Sonido de notificación. PERF-011 (auditoría oct 2026): antes era un mp3 de 63 kB en mixkit.co
+// que se descargaba 2× en CADA página (StrictMode) para todos los roles, incluso en /login.
+// Ahora es local y el objeto Audio se crea recién al primer sonido.
+const NOTIFICATION_SOUND_URL = '/sounds/notify.mp3';
 
 export function ChatListener(): null {
   const { user, userProfile } = useAuth();
@@ -22,14 +24,11 @@ export function ChatListener(): null {
   const pathnameRef = useRef(pathname);
   useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
 
-  // Inicializar el objeto de audio una sola vez
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      audioRef.current = new Audio(NOTIFICATION_SOUND_URL);
-    }
-  }, []);
-
   const playSound = () => {
+    if (!audioRef.current && typeof window !== 'undefined') {
+      audioRef.current = new Audio(NOTIFICATION_SOUND_URL);
+      audioRef.current.preload = 'auto';
+    }
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       // El navegador puede bloquear el audio si no ha habido interacción previa del usuario — es esperable, no hace falta loggearlo

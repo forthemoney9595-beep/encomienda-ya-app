@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { money } from '@/lib/format-money';
 import { useSearchParams } from 'next/navigation';
 import AdminAuthGuard from '../admin-auth-guard';
 import PageHeader from '@/components/page-header';
@@ -248,13 +249,13 @@ function AdminOrdersPage() {
   const [approvingTest, setApprovingTest] = useState<string | null>(null);
   const handleApproveTestPayment = async (order: any) => {
     if (!user) return;
-    if (!confirm(`🧪 PAGO DE PRUEBA\n\n¿Marcar como PAGADO el pedido de ${order.customerName || 'cliente'} en ${order.storeName || 'la tienda'} por $${(order.total || 0).toLocaleString()}?\n\nEsto simula que MercadoPago aprobó el pago (no mueve plata real). El pedido pasa a "En preparación" y se notifica a la tienda y al cliente.`)) return;
+    if (!confirm(`🧪 PAGO DE PRUEBA\n\n¿Marcar como PAGADO el pedido de ${order.customerName || 'cliente'} en ${order.storeName || 'la tienda'} por ${money((order.total || 0))}?\n\nEsto simula que MercadoPago aprobó el pago (no mueve plata real). El pedido pasa a "En preparación" y se notifica a la tienda y al cliente.`)) return;
     setApprovingTest(order.id);
     try {
       const res = await authedFetch('/api/admin/approve-test-payment', user, { orderId: order.id });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
-      toast({ title: '🧪 Pago de prueba aprobado', description: `El pedido pasó a "En preparación" ($${(data.paidAmount || 0).toLocaleString()}).` });
+      toast({ title: '🧪 Pago de prueba aprobado', description: `El pedido pasó a "En preparación" (${money((data.paidAmount || 0))}).` });
       loadPage(pageStack.length > 0 ? pageStack[pageStack.length - 1] : null);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'No se pudo aprobar', description: e.message });
@@ -312,7 +313,7 @@ function AdminOrdersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
       // La auditoría la escribe la propia API (admin-audit-server), en la misma request.
-      toast({ title: 'Reembolso registrado', description: `$${amount.toLocaleString()} devueltos al comprador.` });
+      toast({ title: 'Reembolso registrado', description: `${money(amount)} devueltos al comprador.` });
       loadPage(pageStack.length > 0 ? pageStack[pageStack.length - 1] : null);
       setRefundOrder(null);
     } catch (e: any) {
@@ -449,15 +450,15 @@ function AdminOrdersPage() {
                         </Link>
                       ) : ((order as any).storeName || '—')}
                     </td>
-                    <td className="px-4 py-3 text-right font-bold">${order.total?.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-bold">{money(order.total)}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1 items-start">
-                        <Badge variant="outline" className={cn('text-[10px] uppercase', orderStatusBadgeClass[kind])}>
+                        <Badge variant="outline" className={cn('text-xs uppercase', orderStatusBadgeClass[kind])}>
                           {order.status}
                         </Badge>
                         {(order as any).refunded && (
-                          <Badge variant="outline" className="text-[10px] border-warning/40 text-warning">
-                            Reembolsado ${((order as any).refundAmount || 0).toLocaleString()}
+                          <Badge variant="outline" className="text-xs border-warning/40 text-warning">
+                            Reembolsado {money(((order as any).refundAmount || 0))}
                           </Badge>
                         )}
                         {/* Vínculo pedido ↔ discrepancia de pago: hasta ahora las anomalías
@@ -465,7 +466,7 @@ function AdminOrdersPage() {
                             pedido no había forma de saber que su plata estaba en revisión. */}
                         {(order as any).hasPaymentIssue && (
                           <Link href="/admin/payment-issues">
-                            <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive hover:bg-destructive/10">
+                            <Badge variant="outline" className="text-xs border-destructive/40 text-destructive hover:bg-destructive/10">
                               ⚠ Problema de pago
                             </Badge>
                           </Link>
@@ -540,7 +541,7 @@ function AdminOrdersPage() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="text-sm text-muted-foreground">
-              Pedido de <strong>{refundOrder?.customerName}</strong> · Total ${refundOrder?.total?.toLocaleString()}
+              Pedido de <strong>{refundOrder?.customerName}</strong> · Total {money(refundOrder?.total)}
             </div>
             <div className="space-y-1.5">
               <Label>Monto a reembolsar</Label>
@@ -557,7 +558,7 @@ function AdminOrdersPage() {
               <Input value={refundOperationRef} onChange={e => setRefundOperationRef(e.target.value)}
                 placeholder="El que te da MercadoPago al devolver" />
             </div>
-            <div className="rounded-lg bg-warning/10 border border-warning/30 p-2.5 text-[11px] text-foreground">
+            <div className="rounded-lg bg-warning/10 border border-warning/30 p-2.5 text-xs text-foreground">
               <strong>Hacé primero la devolución en MercadoPago</strong> y después registrala acá con
               su número de operación. Esto no mueve plata: descuenta el monto del saldo de la
               tienda y del repartidor, y le avisa al comprador que ya se le devolvió.

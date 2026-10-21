@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -34,6 +35,7 @@ export default function SignupBuyerPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -156,7 +158,7 @@ export default function SignupBuyerPage() {
     <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center">
       <Card className="w-full max-w-sm">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} method="post" action="#">
             <CardHeader>
               <CardTitle className="text-2xl">Creá tu cuenta</CardTitle>
               <CardDescription>
@@ -218,7 +220,7 @@ export default function SignupBuyerPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Button type="submit" className="w-full" disabled={!hydrated || isSubmitting}>
                 {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Creando cuenta...</> : "Crear Cuenta"}
               </Button>
 

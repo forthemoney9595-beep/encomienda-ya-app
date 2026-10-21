@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { money } from '@/lib/format-money';
 import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
@@ -240,7 +241,7 @@ export async function POST(request: Request) {
     }
     const notifTitle = hasChanges ? "⚠️ Pedido confirmado con cambios" : "✅ Stock Confirmado";
     const notifBody = hasChanges
-      ? `La tienda ${changeParts.join(" y ")}. Nuevo total: $${newTotal.toFixed(0)}. Ya puedes pagar.`
+      ? `La tienda ${changeParts.join(" y ")}. Nuevo total: ${money(newTotal)}. Ya puedes pagar.`
       : "Puedes proceder al pago.";
 
     // ARQ-005: campanita + push por el único camino (notifyUser), que además limpia tokens muertos.

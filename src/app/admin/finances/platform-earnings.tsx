@@ -16,6 +16,7 @@
 // - getDocs one-shot, no listener: es una vista de análisis, no un tablero en vivo
 
 import { useEffect, useMemo, useState } from 'react';
+import { money } from '@/lib/format-money';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -35,7 +36,6 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
-const money = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`;
 
 type EarningsPeriod = Exclude<Period, 'all'>;
 const PERIODS: EarningsPeriod[] = ['7d', '30d', 'month'];
@@ -254,22 +254,22 @@ export function PlatformEarnings() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-lg border bg-card p-3">
                 <div className="text-2xl font-bold text-primary">{money(current.platform)}</div>
-                <div className="text-[11px] text-muted-foreground">Ganancia total</div>
+                <div className="text-xs text-muted-foreground">Ganancia total</div>
                 <PctBadge current={current.platform} prev={previous.platform} />
               </div>
               <div className="rounded-lg border bg-card p-3">
                 <div className="text-2xl font-bold text-success">{money(current.serviceFees)}</div>
-                <div className="text-[11px] text-muted-foreground">Tarifas de servicio</div>
+                <div className="text-xs text-muted-foreground">Tarifas de servicio</div>
                 <PctBadge current={current.serviceFees} prev={previous.serviceFees} />
               </div>
               <div className="rounded-lg border bg-card p-3">
                 <div className="text-2xl font-bold text-info">{money(current.commissions)}</div>
-                <div className="text-[11px] text-muted-foreground">Comisiones a tiendas</div>
+                <div className="text-xs text-muted-foreground">Comisiones a tiendas</div>
                 <PctBadge current={current.commissions} prev={previous.commissions} />
               </div>
               <div className="rounded-lg border bg-card p-3">
                 <div className="text-2xl font-bold">{current.orders}</div>
-                <div className="text-[11px] text-muted-foreground">Pedidos entregados</div>
+                <div className="text-xs text-muted-foreground">Pedidos entregados</div>
                 <PctBadge current={current.orders} prev={previous.orders} />
               </div>
             </div>
@@ -288,7 +288,7 @@ export function PlatformEarnings() {
         <div className="pt-2 space-y-2">
           <h4 className="text-sm font-semibold flex items-center gap-1.5">
             <CalendarRange className="h-3.5 w-3.5 text-primary" /> Historial mensual
-            <span className="text-[11px] font-normal text-muted-foreground">— tocá un mes para ver sus transacciones</span>
+            <span className="text-xs font-normal text-muted-foreground">— tocá un mes para ver sus transacciones</span>
           </h4>
           {monthly.length === 0 ? (
             <p className="text-xs text-muted-foreground border-2 border-dashed rounded-lg p-3 text-center">
@@ -344,7 +344,7 @@ function MonthRows({ m, prevMonth, isOpen, txs, txLoading, onToggle, fmtDate }: 
           <span className="flex items-center gap-1.5">
             {isOpen ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
             {format(new Date(m.year, m.month - 1, 1), 'MMMM yyyy', { locale: es })}
-            {m.current && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">en curso</Badge>}
+            {m.current && <Badge variant="outline" className="text-xs border-primary/40 text-primary">en curso</Badge>}
           </span>
         </td>
         <td className="px-3 py-2 text-right tabular-nums">{m.orders}</td>
@@ -357,7 +357,7 @@ function MonthRows({ m, prevMonth, isOpen, txs, txLoading, onToggle, fmtDate }: 
                 mismo engaño de días parciales vs mes entero. Su comparación justa está en
                 el filtro "Este mes" de arriba. */}
             {m.current
-              ? <span className="text-[11px] text-muted-foreground">ver &quot;Este mes&quot; ↑</span>
+              ? <span className="text-xs text-muted-foreground">ver &quot;Este mes&quot; ↑</span>
               : prevMonth
                 ? <PctBadge current={m.platform} prev={prevMonth.platform} />
                 : <span className="text-xs text-muted-foreground">—</span>}

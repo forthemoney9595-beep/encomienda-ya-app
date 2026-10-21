@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import { money } from '@/lib/format-money';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/lib/firebase';
 import { doc, collection, query, orderBy, where, limit } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
@@ -579,7 +580,7 @@ export default function StorePublicPage() {
                                   <Icon className={cn('h-5 w-5', isActive ? '' : style.text)} />
                               </div>
                               <span className={cn(
-                                'text-[11px] font-medium whitespace-nowrap',
+                                'text-xs font-medium whitespace-nowrap',
                                 isActive ? 'text-foreground' : 'text-muted-foreground',
                               )}>{formatCategoryLabel(category)}</span>
                           </button>
@@ -798,7 +799,7 @@ export default function StorePublicPage() {
                 <ShoppingBag className="h-5 w-5" />
                 {totalItems} {totalItems === 1 ? 'producto' : 'productos'}
             </span>
-            <span className="font-bold">Ver carrito · ${totalPrice.toLocaleString()}</span>
+            <span className="font-bold">Ver carrito · {money(totalPrice)}</span>
         </button>
     )}
     </>
@@ -838,23 +839,23 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
             <button type="button" onClick={() => onOpenDetail(product)} className="text-left">
                 <div className="relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden">
                     {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
+                        <img loading="lazy" decoding="async" src={product.imageUrl} alt={product.name} className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
                     ) : (
                         <Package className="h-10 w-10 text-muted-foreground/50" />
                     )}
                     {isFeatured && (
-                        <span className="absolute top-2 right-2 bg-warning text-warning-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                        <span className="absolute top-2 right-2 bg-warning text-warning-foreground text-xs font-bold px-2 py-1 rounded-full shadow-sm">
                             POPULAR
                         </span>
                     )}
                     {!outOfStock && product.stock != null && product.stock <= 3 && (
-                        <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                        <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1 rounded-full shadow-sm">
                             Quedan {product.stock}
                         </span>
                     )}
                     {/* Descuento en violeta de marca (Rediseño 19/8): el verde queda para éxito/abierto */}
                     {!!product.discountPercent && (
-                        <span className="absolute bottom-2 left-2 bg-brand-gradient text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
+                        <span className="absolute bottom-2 left-2 bg-brand-gradient text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm">
                             -{product.discountPercent}%
                         </span>
                     )}
@@ -866,7 +867,7 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
                             {!!product.discountPercent && (
                                 <span className="text-xs text-muted-foreground line-through">${product.price}</span>
                             )}
-                            <span className="font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
+                            <span className="font-bold text-foreground">{money(effectivePrice(product))}</span>
                         </span>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
@@ -894,9 +895,9 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
                     {!!product.discountPercent && (
                         <span className="text-xs text-muted-foreground line-through">${product.price}</span>
                     )}
-                    <span className="font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
+                    <span className="font-bold text-foreground">{money(effectivePrice(product))}</span>
                     {!!product.discountPercent && (
-                        <span className="rounded-full bg-brand-gradient px-1.5 py-0.5 text-[10px] font-bold text-white">-{product.discountPercent}%</span>
+                        <span className="rounded-full bg-brand-gradient px-1.5 py-0.5 text-xs font-bold text-white">-{product.discountPercent}%</span>
                     )}
                 </p>
                 {outOfStock ? (
@@ -908,7 +909,7 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
             <div className="relative h-24 w-24 shrink-0">
                 <button type="button" onClick={() => onOpenDetail(product)} className="h-24 w-24 rounded-xl bg-muted border overflow-hidden flex items-center justify-center">
                     {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                        <img loading="lazy" decoding="async" src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
                         <Package className="h-8 w-8 text-muted-foreground/50" />
                     )}
@@ -939,6 +940,8 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                         <div className="relative -mx-6 -mt-6 h-64 w-[calc(100%+3rem)] bg-muted/60 flex items-center justify-center overflow-hidden rounded-t-lg">
                             {product.imageUrl ? (
                                 <img
+                                    loading="lazy"
+                                    decoding="async"
                                     src={product.imageUrl}
                                     alt={product.name}
                                     className="h-full w-full object-contain cursor-zoom-in"
@@ -975,7 +978,7 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                                 {!!product.discountPercent && (
                                     <span className="text-sm text-muted-foreground line-through">${product.price}</span>
                                 )}
-                                <span className="text-2xl font-bold text-foreground">${effectivePrice(product).toFixed(0)}</span>
+                                <span className="text-2xl font-bold text-foreground">{money(effectivePrice(product))}</span>
                             </span>
                             {!outOfStock && product.stock != null && product.stock <= 3 && (
                                 <span className="text-xs font-medium text-destructive">Quedan {product.stock}</span>
@@ -1014,17 +1017,18 @@ function QuantityControl({ product, onAdd, isDisabled, variant = 'full', maxQuan
                 <button
                     onClick={() => onAdd(product)}
                     disabled={isDisabled}
-                    className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md disabled:opacity-50"
+                    aria-label={`Agregar ${product.name}`}
+                    className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md disabled:opacity-50"
                 >
                     <Plus className="h-4 w-4" />
                 </button>
             );
         }
         return (
-            <div className="flex items-center gap-1 bg-primary text-primary-foreground rounded-full shadow-md px-1 h-7">
-                <button onClick={dec} disabled={isDisabled} className="h-5 w-5 flex items-center justify-center"><Minus className="h-3.5 w-3.5" /></button>
+            <div className="flex items-center gap-0.5 bg-primary text-primary-foreground rounded-full shadow-md px-1 h-9">
+                <button onClick={dec} disabled={isDisabled} aria-label={`Quitar uno de ${product.name}`} className="h-7 w-7 flex items-center justify-center"><Minus className="h-3.5 w-3.5" /></button>
                 <span className="text-xs font-bold w-3 text-center">{quantity}</span>
-                <button onClick={inc} disabled={isDisabled || atMax} className="h-5 w-5 flex items-center justify-center disabled:opacity-50"><Plus className="h-3.5 w-3.5" /></button>
+                <button onClick={inc} disabled={isDisabled || atMax} aria-label={`Agregar uno de ${product.name}`} className="h-7 w-7 flex items-center justify-center disabled:opacity-50"><Plus className="h-3.5 w-3.5" /></button>
             </div>
         );
     }

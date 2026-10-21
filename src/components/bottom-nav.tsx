@@ -32,7 +32,7 @@ export function BottomNav() {
           href={tab.href}
           aria-current={tab.active ? 'page' : undefined}
           className={cn(
-            'relative flex flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors',
+            'relative flex flex-1 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors',
             tab.active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
           )}
         >
@@ -55,7 +55,7 @@ export function BottomNav() {
       <button
         type="button"
         onClick={() => setCartSheetOpen(true)}
-        className="relative flex flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="relative flex flex-1 flex-col items-center justify-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <span className="relative">
           <ShoppingCart className="h-5 w-5" />

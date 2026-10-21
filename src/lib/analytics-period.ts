@@ -10,12 +10,14 @@ export const PERIOD_LABELS: Record<Period, string> = {
   '7d': 'Últimos 7 días',
   '30d': 'Últimos 30 días',
   'month': 'Este mes',
-  'all': 'Todo',
+  'all': 'Último año',
 };
 
 export function getPeriodBounds(period: Period): { from: Date | null; prevFrom: Date | null; prevTo: Date | null } {
   const now = new Date();
-  if (period === 'all') return { from: null, prevFrom: null, prevTo: null };
+  // PERF-018: 'all' sin techo bajaba TODO el historial de la cuenta (la Fase Z lo quitó del
+  // admin, quedó acá). Ahora es 'Último año': 365 días, sin comparación contra el anterior.
+  if (period === 'all') return { from: subDays(now, 365), prevFrom: null, prevTo: null };
   if (period === '7d') {
     return { from: subDays(now, 7), prevFrom: subDays(now, 14), prevTo: subDays(now, 7) };
   }

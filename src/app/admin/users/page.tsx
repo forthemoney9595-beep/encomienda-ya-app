@@ -421,21 +421,21 @@ function AdminUsersPage() {
                                         <div className="text-xs text-muted-foreground">{user.email}</div>
                                         {/* Estado del mail como badge propio, bien visible (punto 1) */}
                                         {emailVerified[user.id] === true && (
-                                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-medium">
+                                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-xs font-medium">
                                                 ✉️ Mail verificado
                                             </span>
                                         )}
                                         {emailVerified[user.id] === false && (
-                                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 text-[10px] font-medium">
+                                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 text-xs font-medium">
                                                 ⚠️ Mail sin verificar
                                             </span>
                                         )}
                                         {/* Info específica del rol, para distinguir de un vistazo */}
                                         {user.phoneNumber && (user.role === 'buyer' || user.role === 'store') && (
-                                            <div className="text-[11px] text-muted-foreground">📞 {user.phoneNumber}</div>
+                                            <div className="text-xs text-muted-foreground">📞 {user.phoneNumber}</div>
                                         )}
                                         {user.role === 'delivery' && (
-                                            <div className="mt-0.5 flex items-center gap-2 text-[11px]">
+                                            <div className="mt-0.5 flex items-center gap-2 text-xs">
                                                 <span className={cn('inline-flex items-center gap-1', user.isOnline !== false ? 'text-success' : 'text-muted-foreground')}>
                                                     <span className={cn('h-1.5 w-1.5 rounded-full', user.isOnline !== false ? 'bg-success' : 'bg-muted-foreground')} />
                                                     {user.isOnline !== false ? 'Disponible' : 'No disponible'}
@@ -470,7 +470,7 @@ function AdminUsersPage() {
                                             {user.role === 'buyer' ? 'Cliente' : user.role === 'store' ? 'Tienda' : user.role === 'delivery' ? 'Repartidor' : 'Admin'}
                                         </Badge>
                                         {user.role === 'admin' && (
-                                            <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border">
+                                            <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border">
                                                 {user.adminLevel === 'support' ? 'Soporte' : 'Completo'}
                                             </Badge>
                                         )}
@@ -478,7 +478,7 @@ function AdminUsersPage() {
                                 </TableCell>
                                 <TableCell>
                                     {user.role === 'store' || user.role === 'delivery' ? (
-                                        <Badge variant={user.isApproved ? 'default' : 'secondary'} className="text-[10px]">
+                                        <Badge variant={user.isApproved ? 'default' : 'secondary'} className="text-xs">
                                             {user.isApproved ? 'Aprobado' : 'Pendiente'}
                                         </Badge>
                                     ) : (
@@ -587,7 +587,7 @@ function AdminUsersPage() {
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                                     {debouncedSearch
-                                        ? <>No se encontraron usuarios con el email &quot;{debouncedSearch}&quot;.</>
+                                        ? <>No se encontraron usuarios para &quot;{debouncedSearch}&quot; (busca por nombre, email, teléfono o DNI).</>
                                         : 'No hay usuarios para mostrar.'}
                                 </TableCell>
                             </TableRow>

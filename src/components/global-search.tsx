@@ -524,6 +524,7 @@ export function GlobalSearchTrigger({ onClick, className }: { onClick: () => voi
     <button
       type="button"
       onClick={onClick}
+      aria-label="Buscar"
       className={cn(
         'flex items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-card hover:text-foreground',
         className,
@@ -531,7 +532,7 @@ export function GlobalSearchTrigger({ onClick, className }: { onClick: () => voi
     >
       <Search className="h-4 w-4" />
       <span className="hidden sm:inline">{placeholder}</span>
-      <kbd className="ml-auto hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:inline">
+      <kbd className="ml-auto hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs sm:inline">
         ⌘K
       </kbd>
     </button>

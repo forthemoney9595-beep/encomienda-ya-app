@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -199,11 +200,11 @@ export default function StoreWalletPage() {
           </CardHeader>
           <CardContent>
               <div className="text-4xl font-bold text-foreground mb-4">
-                  ${financialSummary.availableBalance.toLocaleString()}
+                  {money(financialSummary.availableBalance)}
               </div>
               <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
                   <DialogTrigger asChild>
-                      <Button className="shadow-sm">Solicitar Retiro</Button>
+                      <Button className="shadow-sm" disabled={financialSummary.availableBalance < 1} title={financialSummary.availableBalance < 1 ? "Todavía no tenés saldo para retirar" : undefined}>Solicitar Retiro</Button>
                   </DialogTrigger>
                   <DialogContent>
                       <DialogHeader>
@@ -212,17 +213,17 @@ export default function StoreWalletPage() {
                       </DialogHeader>
                       <div className="space-y-4 py-2">
                           <div className="space-y-2">
-                              <Label>Monto</Label>
-                              <Input type="number" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} />
-                              <p className="text-xs text-muted-foreground">Disponible: ${financialSummary.availableBalance}</p>
+                              <Label htmlFor="withdraw-amount">Monto</Label>
+                              <Input id="withdraw-amount" type="number" inputMode="numeric" min={1} max={Math.floor(financialSummary.availableBalance)} required value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} />
+                              <p className="text-xs text-muted-foreground">Disponible: {money(financialSummary.availableBalance)}</p>
                           </div>
                           <div className="space-y-2">
-                              <Label>CBU / Alias</Label>
-                              <Input value={cbu} onChange={(e) => setCbu(e.target.value)} placeholder="Ej: mi.tienda.mp" />
+                              <Label htmlFor="withdraw-cbu">CBU / Alias</Label>
+                              <Input id="withdraw-cbu" value={cbu} onChange={(e) => setCbu(e.target.value)} placeholder="Ej: mi.tienda.mp" />
                           </div>
                       </div>
                       <DialogFooter>
-                          <Button onClick={handleRequestWithdrawal} disabled={isSubmitting}>Confirmar</Button>
+                          <Button onClick={handleRequestWithdrawal} disabled={isSubmitting || !(Number(withdrawAmount) > 0) || Number(withdrawAmount) > financialSummary.availableBalance || cbu.trim().length < 5}>Confirmar</Button>
                       </DialogFooter>
                   </DialogContent>
               </Dialog>
@@ -232,11 +233,11 @@ export default function StoreWalletPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ventas Totales</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold text-success">+${financialSummary.totalSalesRevenue.toLocaleString()}</div></CardContent>
+            <CardContent><div className="text-2xl font-bold text-success">+{money(financialSummary.totalSalesRevenue)}</div></CardContent>
         </Card>
         <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Retirado</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold text-muted-foreground">-${financialSummary.totalWithdrawn.toLocaleString()}</div></CardContent>
+            <CardContent><div className="text-2xl font-bold text-muted-foreground">-{money(financialSummary.totalWithdrawn)}</div></CardContent>
         </Card>
       </div>
 
@@ -254,7 +255,7 @@ export default function StoreWalletPage() {
                               <div className="flex justify-between items-center gap-2">
                                   <span className="flex items-center gap-2">
                                       ${(w.amount || 0).toLocaleString('es-AR')} - {formatDate(w.createdAt)}
-                                      {w.source === 'auto' && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>}
+                                      {w.source === 'auto' && <Badge variant="outline" className="text-xs border-primary/40 text-primary">Automático</Badge>}
                                   </span>
                                   <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'secondary'}>
                                       {w.status === 'approved' ? 'Pagado' : w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}

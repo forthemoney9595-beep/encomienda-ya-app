@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { money } from '@/lib/format-money';
 import { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -226,7 +227,7 @@ export function FinanceView() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al aprobar');
-            toast({ title: 'Pago registrado', description: `$${data.amountApproved?.toLocaleString()} descontados del saldo.` });
+            toast({ title: 'Pago registrado', description: `${money(data.amountApproved)} descontados del saldo.` });
             // El registro de auditoría lo escribe la propia API (admin-audit-server), en la
             // misma request que mueve la plata — antes se hacía acá y podía perderse.
             setApproveTarget(null);
@@ -304,7 +305,7 @@ export function FinanceView() {
                                 <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
                                 <span className={cn('text-sm font-semibold', active && 'text-primary')}>{label}</span>
                             </div>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
                         </button>
                     );
                 })}
@@ -318,7 +319,7 @@ export function FinanceView() {
                         <Clock className="h-4 w-4 text-warning" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-warning">${metrics.pending.toLocaleString()}</div>
+                        <div className="text-2xl font-bold text-warning">{money(metrics.pending)}</div>
                         <p className="text-xs text-muted-foreground">{metrics.pendingCount} solicitud{metrics.pendingCount !== 1 ? 'es' : ''}</p>
                     </CardContent>
                 </Card>
@@ -328,7 +329,7 @@ export function FinanceView() {
                         <TrendingUp className="h-4 w-4 text-success" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-success">${metrics.paid.toLocaleString()}</div>
+                        <div className="text-2xl font-bold text-success">{money(metrics.paid)}</div>
                         <p className="text-xs text-muted-foreground">Histórico acumulado</p>
                     </CardContent>
                 </Card>
@@ -338,7 +339,7 @@ export function FinanceView() {
                         <Ban className="h-4 w-4 text-destructive" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-destructive">${metrics.rejected.toLocaleString()}</div>
+                        <div className="text-2xl font-bold text-destructive">{money(metrics.rejected)}</div>
                         <p className="text-xs text-muted-foreground">Volvió al saldo del usuario</p>
                     </CardContent>
                 </Card>
@@ -369,7 +370,7 @@ export function FinanceView() {
                                         : <Wallet className="h-3.5 w-3.5" />}
                                     Calcular lo que se debe
                                 </Button>
-                                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                <p className="mt-1.5 text-xs text-muted-foreground">
                                     Incluye el saldo que todavía nadie solicitó.
                                 </p>
                             </>
@@ -418,7 +419,7 @@ export function FinanceView() {
                                         </span>
                                     </div>
                                 ))}
-                                <p className="text-[11px] text-muted-foreground">
+                                <p className="text-xs text-muted-foreground">
                                     Suele pasar al reembolsar un pedido ya liquidado (o por retiros de datos de
                                     prueba sin ventas que los respalden). No se le vuelve a pagar hasta que sus
                                     ventas futuras absorban la deuda. Tocá el nombre para ver su estado de cuenta.
@@ -433,7 +434,7 @@ export function FinanceView() {
                             <div key={`${r.role}-${r.id}`} className="flex items-center justify-between gap-3 text-sm border-b border-border/40 pb-2 last:border-0 last:pb-0">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={cn('text-[10px] uppercase shrink-0',
+                                        <Badge variant="outline" className={cn('text-xs uppercase shrink-0',
                                             r.role === 'store' ? 'border-info/40 text-info' : 'border-primary/40 text-primary')}>
                                             {r.role === 'store' ? 'Tienda' : 'Repartidor'}
                                         </Badge>
@@ -446,14 +447,14 @@ export function FinanceView() {
                                             {r.name}
                                         </Link>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    <p className="text-xs text-muted-foreground mt-0.5">
                                         ganó ${r.earned?.toLocaleString('es-AR')} · ya cobró ${r.paid?.toLocaleString('es-AR')}
                                         {r.pending > 0 && <> · <span className="text-warning">${Math.round(r.pending).toLocaleString('es-AR')} solicitados esperando aprobación</span></>}
                                     </p>
                                 </div>
                                 <div className="text-right shrink-0">
                                     <div className="font-bold">${r.owed.toLocaleString('es-AR')}</div>
-                                    <div className="text-[10px] text-muted-foreground">se le debe</div>
+                                    <div className="text-xs text-muted-foreground">se le debe</div>
                                 </div>
                             </div>
                         ))}
@@ -542,20 +543,20 @@ export function FinanceView() {
                                     </TableCell>
                                     <TableCell className="font-medium">{w.userName}</TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className={cn('text-[10px] uppercase',
+                                        <Badge variant="outline" className={cn('text-xs uppercase',
                                             w.userRole === 'store' ? 'border-info/40 text-info' : 'border-primary/40 text-primary'
                                         )}>
                                             {w.userRole === 'store' ? 'Tienda' : 'Repartidor'}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="font-bold">${(w.amount || 0).toLocaleString()}</TableCell>
+                                    <TableCell className="font-bold">{money((w.amount || 0))}</TableCell>
                                     <TableCell className="font-mono text-xs max-w-[140px] truncate" title={w.cbu}>
                                         {w.cbu || '—'}
                                     </TableCell>
                                     <TableCell>
                                         {w.source === 'auto'
-                                            ? <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>
-                                            : <Badge variant="outline" className="text-[10px] text-muted-foreground">Manual</Badge>
+                                            ? <Badge variant="outline" className="text-xs border-primary/40 text-primary">Automático</Badge>
+                                            : <Badge variant="outline" className="text-xs text-muted-foreground">Manual</Badge>
                                         }
                                     </TableCell>
                                     <TableCell>
@@ -566,12 +567,12 @@ export function FinanceView() {
                                             {w.status === 'pending' ? 'Pendiente' : w.status === 'approved' ? 'Pagado' : 'Rechazado'}
                                         </Badge>
                                         {w.status === 'rejected' && w.rejectionReason && (
-                                            <p className="text-[11px] text-muted-foreground mt-1 max-w-[160px] line-clamp-2">{w.rejectionReason}</p>
+                                            <p className="text-xs text-muted-foreground mt-1 max-w-[160px] line-clamp-2">{w.rejectionReason}</p>
                                         )}
                                         {/* Comprobante de la transferencia real: es lo que permite
                                             rastrear el pago si después reclaman que no llegó. */}
                                         {w.status === 'approved' && w.operationRef && (
-                                            <p className="mt-1 font-mono text-[10px] text-muted-foreground" title="Número de operación">
+                                            <p className="mt-1 font-mono text-xs text-muted-foreground" title="Número de operación">
                                                 op {w.operationRef}
                                             </p>
                                         )}

@@ -219,10 +219,10 @@ function AdminCommunicationsPage() {
               <div className="min-w-0 space-y-0.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium truncate">{h.title}</span>
-                  <span className="text-[10px] rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{describeTarget(h.target)}</span>
+                  <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{describeTarget(h.target)}</span>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2">{h.body}</p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {h.createdAt?.toDate ? format(h.createdAt.toDate(), "d MMM yyyy HH:mm", { locale: es }) : '—'}
                   {' · '}{h.notified ?? 0} destinatario{h.notified === 1 ? '' : 's'}
                   {typeof h.pushSent === 'number' ? ` · ${h.pushSent} push` : ''}

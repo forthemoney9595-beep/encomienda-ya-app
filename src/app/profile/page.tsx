@@ -570,7 +570,7 @@ export default function ProfilePage() {
                                                     );
                                                 })}
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground">
+                                            <p className="text-xs text-muted-foreground">
                                                 💡 La selfie sirve para confirmar que el documento es tuyo. Sostenelo junto a tu cara.
                                             </p>
                                         </div>

@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, CollectionReference } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, CollectionReference, query, where } from 'firebase/firestore';
 import { normalizeSchedule, getStoreOpenStatus } from '@/lib/store-hours';
 import { ShoppingBag, Search, Filter, Heart, Zap, ArrowRight, type LucideIcon } from 'lucide-react';
 import { StoreCard, type StoreCardStore } from '@/components/store-card';
@@ -108,11 +108,11 @@ const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, coun
           )}>
             <Icon className={cn('h-6 w-6', isActive ? '' : style.text)} />
           </div>
-          <span className={cn('text-[11px] font-medium whitespace-nowrap', isActive ? 'text-foreground' : 'text-muted-foreground')}>
+          <span className={cn('text-xs font-medium whitespace-nowrap', isActive ? 'text-foreground' : 'text-muted-foreground')}>
             {formatCategoryLabel(cat)}
           </span>
           {counts[cat] !== undefined && (
-            <span className="text-[10px] leading-none text-muted-foreground/70">{counts[cat]}</span>
+            <span className="text-xs leading-none text-muted-foreground/70">{counts[cat]}</span>
           )}
         </button>
       );
@@ -248,7 +248,8 @@ function HomeContent() {
 
   const storesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return collection(firestore, 'stores') as CollectionReference<Store>;
+    // PERF-007: antes bajaba la colección ENTERA y filtraba en memoria.
+    return query(collection(firestore, 'stores'), where('isApproved', '==', true)) as unknown as CollectionReference<Store>;
   }, [firestore]);
 
   const { data: rawStores, isLoading: storesLoading } = useCollection<Store>(storesQuery);

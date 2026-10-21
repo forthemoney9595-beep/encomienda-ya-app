@@ -37,7 +37,7 @@ export function DeliveryOnlineToggle({ className }: { className?: string }) {
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 rounded-full ${isOnline ? 'bg-success' : 'bg-muted-foreground'}`} />
         <span className="text-sm font-medium">{isOnline ? 'Disponible' : 'No disponible'}</span>
-        <Switch checked={isOnline} onCheckedChange={handleToggle} />
+        <Switch aria-label={isOnline ? "Disponible para repartir" : "No disponible"} checked={isOnline} onCheckedChange={handleToggle} />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
@@ -134,7 +135,7 @@ export default function DeliveryDashboardPage() {
         {/* Tanda B: enlazaba a /orders?tab=active — no existe pestaña de entregados en el
             panel; el historial de entregas vive en las analíticas. */}
         <StatCard label="Entregados hoy" value={stats.deliveredTodayCount} icon={Truck} tone="muted" href="/delivery/analytics" />
-        <StatCard label="Ganancias de hoy" value={`$${stats.earningsToday.toLocaleString()}`} icon={Wallet} tone="success" href="/delivery/earnings" />
+        <StatCard label="Ganancias de hoy" value={`${money(stats.earningsToday)}`} icon={Wallet} tone="success" href="/delivery/earnings" />
       </div>
 
       {/* Rating */}

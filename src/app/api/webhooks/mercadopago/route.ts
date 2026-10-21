@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { notifyUser } from '@/lib/notify-server';
-import MercadoPagoConfig, { Payment } from "mercadopago";
+import { Payment } from "mercadopago";
+import { getMpClient } from "@/lib/mp-client";
 import { createHmac } from "crypto";
 import * as Sentry from "@sentry/nextjs";
 import { adminDb } from '@/lib/firebase-admin';
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { broadcastOrderToDrivers } from "@/lib/driver-broadcast";
 
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN!,
-});
 
 function verifyMpSignature(request: Request, rawBody: string, url: URL): boolean {
   const secret = process.env.MP_WEBHOOK_SECRET;
@@ -44,6 +42,9 @@ function verifyMpSignature(request: Request, rawBody: string, url: URL): boolean
 
   return expectedHash === v1;
 }
+
+// ARQ-014: el webhook re-consulta a MP y escribe en transacción; 10 s por defecto es poco margen.
+export const maxDuration = 30;
 
 export async function POST(request: Request) {
   // Sin limite de pedidos por minuto esta ruta podia ser bombardeada con IDs
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
     }
 
     // 1. Validar Pago en MercadoPago
-    const payment = new Payment(client);
+    const payment = new Payment(getMpClient());
     const paymentData = await payment.get({ id: paymentId });
 
     // 2. Extraer Metadata (se necesita también en las ramas de anomalía de abajo)
@@ -91,9 +92,9 @@ export async function POST(request: Request) {
     // antes `metadata.buyer_id` tiraba TypeError → 500 → MP reintenta el webhook
     // indefinidamente. Sin metadata u order_id: 200 con "ignorado" para que MP lo suelte.
     const metadata = paymentData.metadata || {};
-    const buyerId = metadata.buyer_id;
-    const storeId = metadata.store_id;
-    const storeOwnerId = metadata.store_owner_id;
+    let buyerId = metadata.buyer_id;
+    let storeId = metadata.store_id;
+    let storeOwnerId = metadata.store_owner_id;
     const orderRefId = metadata.order_id;
 
     if (!orderRefId) return NextResponse.json({ status: "ignored_no_order_metadata" });
@@ -103,10 +104,18 @@ export async function POST(request: Request) {
 
     const existingOrder = await ordersCollection.doc(orderRefId).get();
     if (!existingOrder.exists) {
-      console.error(`❌ [Webhook] Orden ${orderRefId} no encontrada — no se puede procesar el pago.`);
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 });
+      // ARQ-013: un 404 hace que MercadoPago REINTENTE el webhook indefinidamente. La orden
+      // no va a aparecer por reintentar: se responde 200 "ignorado" y queda en Sentry.
+      console.error(`❌ [Webhook] Orden ${orderRefId} no encontrada — pago ${paymentId} ignorado.`);
+      Sentry.captureMessage(`Webhook MP: orden ${orderRefId} inexistente para el pago ${paymentId}`, { level: "warning" });
+      return NextResponse.json({ status: "ignored_unknown_order" });
     }
     const existingData = existingOrder.data()!;
+    // ARQ-018: las identidades salen del PEDIDO real, no de la metadata que viajó por MP (la
+    // metadata la armó /api/checkout, pero la fuente de verdad es el doc de la orden).
+    buyerId = existingData.userId || buyerId;
+    storeId = existingData.storeId || storeId;
+    storeOwnerId = existingData.storeOwnerId || storeOwnerId;
 
     // Deja el problema anotado para revisión manual Y marca la orden, para que se pueda
     // ver desde el propio pedido y no solo desde la lista de discrepancias.

@@ -6,6 +6,7 @@
 // todos los usuarios anónimos. Para probar roles se ingresan las credenciales a mano.
 
 import { useState, useEffect } from 'react';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -31,6 +32,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
 
   const router = useRouter();
   const { toast } = useToast();
@@ -112,7 +114,7 @@ export default function LoginPage() {
               Tu sesión venció o se cerró. Volvé a iniciar sesión para continuar.
             </div>
           )}
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} method="post" action="#" className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Correo Electrónico</Label>
               <div className="relative">
@@ -152,7 +154,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button id="login-button" type="submit" className="w-full" disabled={isSubmitting}>
+            <Button id="login-button" type="submit" className="w-full" disabled={!hydrated || isSubmitting}>
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
               Iniciar Sesión
             </Button>

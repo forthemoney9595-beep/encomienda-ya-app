@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { money } from '@/lib/format-money';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
 import type { Order, OrderStatus } from '@/lib/order-service';
@@ -376,6 +377,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                     <label key={item.id} className="flex items-center justify-between gap-2 text-sm cursor-pointer">
                         <span className="flex items-center gap-2">
                             <Checkbox
+                                aria-label={`Incluir ${item.name}`}
                                 checked={!uncheckedIds.has(item.id)}
                                 onCheckedChange={() => toggleStockItem(item.id)}
                             />
@@ -384,12 +386,12 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                             </span>
                             {item.quantity > 1 && !uncheckedIds.has(item.id) && (
                                 <span className="flex items-center gap-1 shrink-0">
-                                    <Button type="button" variant="outline" size="icon" className="h-5 w-5 text-xs" disabled={prepQty <= 1} onClick={(e) => { e.preventDefault(); bumpQty(item.id, -1, item.quantity); }}>−</Button>
-                                    <Button type="button" variant="outline" size="icon" className="h-5 w-5 text-xs" disabled={prepQty >= item.quantity} onClick={(e) => { e.preventDefault(); bumpQty(item.id, +1, item.quantity); }}>+</Button>
+                                    <Button type="button" variant="outline" size="icon" className="h-7 w-7 text-xs" aria-label={`Restar uno a ${item.name}`} disabled={prepQty <= 1} onClick={(e) => { e.preventDefault(); bumpQty(item.id, -1, item.quantity); }}>−</Button>
+                                    <Button type="button" variant="outline" size="icon" className="h-7 w-7 text-xs" aria-label={`Sumar uno a ${item.name}`} disabled={prepQty >= item.quantity} onClick={(e) => { e.preventDefault(); bumpQty(item.id, +1, item.quantity); }}>+</Button>
                                 </span>
                             )}
                         </span>
-                        <span className="text-muted-foreground">${(item.price * prepQty).toFixed(0)}</span>
+                        <span className="text-muted-foreground">{money((item.price * prepQty))}</span>
                     </label>
                     );
                 })}

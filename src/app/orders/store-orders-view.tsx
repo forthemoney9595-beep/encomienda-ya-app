@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/context/auth-context';
+import { money } from '@/lib/format-money';
 import { useFirestore, useCollection, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp, orderBy, limit, startAfter, getDocs, type QueryDocumentSnapshot } from 'firebase/firestore';
 import PageHeader from '@/components/page-header';
@@ -225,7 +226,7 @@ export default function StoreOrdersView() {
         <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="pending" className="relative">
              Nuevos
-             {pendingOrders.length > 0 && <span className="ml-2 bg-destructive text-destructive-foreground text-[10px] px-1.5 py-0.5 rounded-full">{pendingOrders.length}</span>}
+             {pendingOrders.length > 0 && <span className="ml-2 bg-destructive text-destructive-foreground text-xs px-1.5 py-0.5 rounded-full">{pendingOrders.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="active">En Curso ({activeOrders.length})</TabsTrigger>
           <TabsTrigger value="history">Historial</TabsTrigger>
@@ -431,6 +432,7 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                             <span className="font-medium text-foreground flex items-center gap-2">
                                 {selectable && (
                                     <Checkbox
+                                        aria-label={`Incluir ${item.title || item.name}`}
                                         checked={!uncheckedIds.has(item.id)}
                                         onCheckedChange={() => toggleItem(item.id)}
                                     />
@@ -441,12 +443,12 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                                 {/* Reducir cantidad: "tengo 2 de las 4" sin sacar el renglón */}
                                 {selectable && item.quantity > 1 && !uncheckedIds.has(item.id) && (
                                     <span className="flex items-center gap-1 shrink-0">
-                                        <Button type="button" variant="outline" size="icon" className="h-5 w-5 text-xs" disabled={prepQty <= 1} onClick={() => bumpQty(item.id, -1, item.quantity)}>−</Button>
-                                        <Button type="button" variant="outline" size="icon" className="h-5 w-5 text-xs" disabled={prepQty >= item.quantity} onClick={() => bumpQty(item.id, +1, item.quantity)}>+</Button>
+                                        <Button type="button" variant="outline" size="icon" className="h-7 w-7 text-xs" aria-label={`Restar uno a ${item.title || item.name}`} disabled={prepQty <= 1} onClick={() => bumpQty(item.id, -1, item.quantity)}>−</Button>
+                                        <Button type="button" variant="outline" size="icon" className="h-7 w-7 text-xs" aria-label={`Sumar uno a ${item.title || item.name}`} disabled={prepQty >= item.quantity} onClick={() => bumpQty(item.id, +1, item.quantity)}>+</Button>
                                     </span>
                                 )}
                             </span>
-                            <span className="text-muted-foreground">${(item.price * prepQty).toLocaleString()}</span>
+                            <span className="text-muted-foreground">{money((item.price * prepQty))}</span>
                         </div>
                         );
                     })}

@@ -207,7 +207,7 @@ function AdminReviewsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Stars rating={review.rating} />
                     <span className="text-xs font-semibold">{review.rating}/5</span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-xs">
                       {review.storeName || review.storeId?.slice(0,8) || 'Tienda'}
                     </Badge>
                     <span className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</span>

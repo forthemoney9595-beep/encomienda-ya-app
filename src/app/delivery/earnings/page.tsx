@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -192,12 +193,12 @@ export default function DeliveryEarningsPage() {
           </CardHeader>
           <CardContent>
               <div className="text-4xl font-bold text-foreground mb-4">
-                  ${financialSummary.availableBalance.toLocaleString()}
+                  {money(financialSummary.availableBalance)}
               </div>
 
               <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
                   <DialogTrigger asChild>
-                      <Button className="w-full sm:w-auto font-bold shadow-sm">
+                      <Button disabled={financialSummary.availableBalance < 1} className="w-full sm:w-auto font-bold shadow-sm">
                           Solicitar Retiro
                       </Button>
                   </DialogTrigger>
@@ -210,22 +211,28 @@ export default function DeliveryEarningsPage() {
                       </DialogHeader>
                       <div className="space-y-4 py-2">
                           <div className="space-y-2">
-                              <Label>Monto a retirar</Label>
+                              <Label htmlFor="withdraw-amount">Monto a retirar</Label>
                               <div className="relative">
                                   <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
                                   <Input 
+                                      id="withdraw-amount"
                                       type="number" 
-                                      placeholder="0.00" 
+                                      inputMode="numeric"
+                                      min={1}
+                                      max={Math.floor(financialSummary.availableBalance)}
+                                      required
+                                      placeholder="0" 
                                       className="pl-7 font-bold text-lg"
                                       value={withdrawAmount}
                                       onChange={(e) => setWithdrawAmount(e.target.value)}
                                   />
                               </div>
-                              <p className="text-xs text-muted-foreground">Máximo disponible: ${financialSummary.availableBalance}</p>
+                              <p className="text-xs text-muted-foreground">Máximo disponible: {money(financialSummary.availableBalance)}</p>
                           </div>
                           <div className="space-y-2">
-                              <Label>CBU, CVU o Alias</Label>
+                              <Label htmlFor="withdraw-cbu">CBU, CVU o Alias</Label>
                               <Input 
+                                  id="withdraw-cbu"
                                   placeholder="Ej: mi.alias.mp" 
                                   value={cbu}
                                   onChange={(e) => setCbu(e.target.value)}
@@ -234,7 +241,7 @@ export default function DeliveryEarningsPage() {
                       </div>
                       <DialogFooter>
                           <Button variant="outline" onClick={() => setIsWithdrawOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                          <Button onClick={handleRequestWithdrawal} disabled={isSubmitting}>
+                          <Button onClick={handleRequestWithdrawal} disabled={isSubmitting || !(Number(withdrawAmount) > 0) || Number(withdrawAmount) > financialSummary.availableBalance || cbu.trim().length < 5}>
                               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirmar
                           </Button>
                       </DialogFooter>
@@ -252,7 +259,7 @@ export default function DeliveryEarningsPage() {
                 </CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">${financialSummary.totalEarned.toLocaleString()}</div>
+                <div className="text-2xl font-bold">{money(financialSummary.totalEarned)}</div>
             </CardContent>
         </Card>
         <Card>
@@ -262,7 +269,7 @@ export default function DeliveryEarningsPage() {
                 </CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold text-muted-foreground">${financialSummary.totalWithdrawn.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-muted-foreground">{money(financialSummary.totalWithdrawn)}</div>
             </CardContent>
         </Card>
       </div>
@@ -292,7 +299,7 @@ export default function DeliveryEarningsPage() {
                                       <div>
                                           <div className="flex items-center gap-2">
                                               <p className="font-bold">${(w.amount || 0).toLocaleString('es-AR')}</p>
-                                              {w.source === 'auto' && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">Automático</Badge>}
+                                              {w.source === 'auto' && <Badge variant="outline" className="text-xs border-primary/40 text-primary">Automático</Badge>}
                                           </div>
                                           <p className="text-xs text-muted-foreground">{formatDate(w.createdAt)}</p>
                                       </div>
@@ -343,7 +350,7 @@ export default function DeliveryEarningsPage() {
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                         <span className="font-bold text-sm">{order.storeName}</span>
-                                        <span className="text-[10px] text-muted-foreground">{formatDate(order.createdAt)}</span>
+                                        <span className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                         <CreditCard className="h-3 w-3" /> Pago Digital
@@ -356,7 +363,7 @@ export default function DeliveryEarningsPage() {
                                         +${Math.round(driverNetForOrder(order as any)).toLocaleString('es-AR')}
                                     </span>
                                     {(order as any).refunded && (
-                                        <span className="block text-[10px] text-info">reembolso aplicado</span>
+                                        <span className="block text-xs text-info">reembolso aplicado</span>
                                     )}
                                 </div>
                             </div>

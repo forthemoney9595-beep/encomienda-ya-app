@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { sendPasswordResetEmail, getAuth } from 'firebase/auth';
 import { app } from '@/lib/firebase';
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import Link from 'next/link';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
+  const hydrated = useHydrated();
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const { toast } = useToast();
@@ -71,7 +73,7 @@ export default function ForgotPasswordPage() {
                 </Button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} method="post" action="#" className="space-y-4">
                 <div className="space-y-2">
                 <Label htmlFor="email">Correo Electrónico</Label>
                 <div className="relative">
@@ -87,7 +89,7 @@ export default function ForgotPasswordPage() {
                     />
                 </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={!hydrated || isLoading}>
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Enviar Enlace de Recuperación"}
                 </Button>
             </form>

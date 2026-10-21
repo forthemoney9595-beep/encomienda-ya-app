@@ -221,10 +221,10 @@ export function Notifications() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative" aria-label={unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : "Notificaciones"}>
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-600 text-[10px] text-white font-bold animate-pulse">
+            <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-600 text-xs text-white font-bold animate-pulse">
                 {unreadCount}
             </span>
           )}
@@ -235,7 +235,7 @@ export function Notifications() {
             <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold">Notificaciones</span>
                 <div className="flex items-center gap-2">
-                    {unreadCount > 0 && <Badge variant="secondary" className="text-[10px] h-5">{unreadCount} nuevas</Badge>}
+                    {unreadCount > 0 && <Badge variant="secondary" className="text-xs h-5">{unreadCount} nuevas</Badge>}
                     {localNotifications.length > 0 && (
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500" onClick={handleClearAll} title="Borrar todas">
                             <Trash2 className="h-4 w-4" />
@@ -257,7 +257,7 @@ export function Notifications() {
                 </Button>
             )}
             {permissionStatus === 'granted' && registrationError && (
-                <div className="w-full mt-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px] leading-snug text-warning">
+                <div className="w-full mt-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-xs leading-snug text-warning">
                     ⚠️ Permiso OK, pero el registro del dispositivo falla: {registrationError}
                 </div>
             )}
@@ -301,7 +301,7 @@ export function Notifications() {
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">
                       {notif.body || notif.message}
                     </p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1 first-letter:uppercase">
+                    <p className="text-xs text-muted-foreground/60 mt-1 first-letter:uppercase">
                       {getTimeAgo(notif.createdAt)}
                     </p>
                   </div>

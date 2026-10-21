@@ -16,6 +16,8 @@ const DEFAULT_DELIVERY_FEE = 2000;
 // Métodos de pago aceptados. A propósito NO incluye 'Efectivo': ver el chequeo más abajo.
 const ALLOWED_PAYMENT_METHODS = ['mercadopago'];
 
+class OrderValidationError extends Error { status = 400; }
+
 export async function POST(request: Request) {
   const ip = getClientIp(request);
   const { allowed } = checkRateLimit(ip, 'orders:create', 5, 60_000);
@@ -243,7 +245,7 @@ export async function POST(request: Request) {
             const quantity = Number(rawQty);
 
             if (!itemId || !Number.isInteger(quantity) || quantity <= 0) {
-                throw new Error(`Item inválido: ${itemId}`);
+                throw new OrderValidationError(`Item inválido: ${itemId}`);
             }
 
             // Intentar en subcolección 'products' y luego 'items' por compatibilidad
@@ -255,7 +257,7 @@ export async function POST(request: Request) {
             }
 
             if (!productSnap.exists) {
-                throw new Error(`Producto no encontrado: ${itemId}`);
+                throw new OrderValidationError(`Producto no encontrado: ${itemId}`);
             }
 
             const productData = productSnap.data()!;
@@ -264,12 +266,12 @@ export async function POST(request: Request) {
             // pero la API los aceptaba igual — la tienda recibía pedidos de cosas que marcó
             // agotadas y los rechazaba a mano. `available` ausente = disponible (compat).
             if (productData.available === false) {
-                throw new Error(`"${title}" no está disponible en este momento.`);
+                throw new OrderValidationError(`"${title}" no está disponible en este momento.`);
             }
             const catalogPrice = Number(productData.price ?? productData.unit_price ?? 0);
 
             if (catalogPrice <= 0 || isNaN(catalogPrice)) {
-                throw new Error(`Error de datos: El producto "${title}" tiene precio 0.`);
+                throw new OrderValidationError(`Error de datos: El producto "${title}" tiene precio 0.`);
             }
 
             // Descuento opcional (0-90%): se aplica acá al precio real, nunca se confía en
@@ -282,7 +284,7 @@ export async function POST(request: Request) {
             if (productData.stock != null) {
                 const currentStock = Number(productData.stock);
                 if (currentStock < quantity) {
-                    throw new Error(`"${title}" no tiene suficiente stock (quedan ${currentStock}).`);
+                    throw new OrderValidationError(`"${title}" no tiene suficiente stock (quedan ${currentStock}).`);
                 }
                 stockUpdates.push({ ref: productRef, newStock: currentStock - quantity });
             }
@@ -292,7 +294,7 @@ export async function POST(request: Request) {
         }
 
         if (calculatedSubtotal <= 0) {
-            throw new Error("El subtotal del pedido es 0.");
+            throw new OrderValidationError("El subtotal del pedido es 0.");
         }
 
         // 3. Cálculos Finales
@@ -417,6 +419,11 @@ export async function POST(request: Request) {
   } catch (error: any) {
     // Carrera de idempotencia ganada por otra request (BUG-200): no es un error, es el
     // duplicado que justamente queremos evitar. Devolvemos el pedido que sí se creó.
+    // CY-005: lo que el cliente mandó mal (producto inexistente, sin stock, no disponible) es
+    // un 400 con el mensaje, no un 500 (ruido en Sentry y clientes que reintentan).
+    if (error instanceof OrderValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (error?.message === "__DUPLICATE_ORDER__") {
       console.log(`ℹ️ [API Segura] Pedido duplicado detectado (carrera en tx): ${error.duplicateOrderId}`);
       return NextResponse.json({ orderId: error.duplicateOrderId, total: error.duplicateTotal, duplicate: true });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { money } from '@/lib/format-money';
 import Link from 'next/link';
 import AdminAuthGuard from '../admin-auth-guard';
 import PageHeader from '@/components/page-header';
@@ -200,26 +201,26 @@ function AdminPaymentIssuesPage() {
               <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive gap-1">
+                    <Badge variant="outline" className="text-xs border-destructive/40 text-destructive gap-1">
                       <AlertCircle className="h-3 w-3" /> {REASON_LABELS[m.reason] || m.reason}
                     </Badge>
                     <span className="text-xs text-muted-foreground">{formatDate(m.createdAt)}</span>
                   </div>
                   <p className="text-sm">
                     {m.reason === 'amount_mismatch' ? (
-                      <>Pagado <strong>${m.paidAmount?.toLocaleString()}</strong> vs. orden <strong>${m.orderTotal?.toLocaleString()}</strong></>
+                      <>Pagado <strong>{money(m.paidAmount)}</strong> vs. orden <strong>{money(m.orderTotal)}</strong></>
                     ) : m.reason === 'unexpected_order_status' ? (
                       <>Pago recibido con la orden en estado <strong>&quot;{m.orderStatus}&quot;</strong> (esperaba &quot;Pendiente de Pago&quot;)</>
                     ) : m.reason === 'duplicate_payment' ? (
-                      <>Se cobró <strong>${m.paidAmount?.toLocaleString()}</strong> de nuevo sobre un pedido ya pagado</>
+                      <>Se cobró <strong>{money(m.paidAmount)}</strong> de nuevo sobre un pedido ya pagado</>
                     ) : m.reason === 'payment_reversed' ? (
-                      <>MercadoPago revirtió <strong>${m.paidAmount?.toLocaleString()}</strong> (estado: {m.mpStatus})</>
+                      <>MercadoPago revirtió <strong>{money(m.paidAmount)}</strong> (estado: {m.mpStatus})</>
                     ) : m.reason === 'cancelled_after_payment' ? (
-                      <>Se canceló con <strong>${m.paidAmount?.toLocaleString()}</strong> ya cobrados (canceló: {m.cancelledBy})</>
+                      <>Se canceló con <strong>{money(m.paidAmount)}</strong> ya cobrados (canceló: {m.cancelledBy})</>
                     ) : m.reason === 'reconcile_mismatch' ? (
                       <>La orden figura pagada pero MP dice <strong>&quot;{m.mpStatus}&quot;</strong> para ese pago</>
                     ) : m.reason === 'orphan_payment' ? (
-                      <>Entraron <strong>${m.paidAmount?.toLocaleString()}</strong> en MP para un pedido que no existe</>
+                      <>Entraron <strong>{money(m.paidAmount)}</strong> en MP para un pedido que no existe</>
                     ) : (
                       <>Revisar manualmente</>
                     )}
@@ -236,7 +237,7 @@ function AdminPaymentIssuesPage() {
                   {/* En la pestaña de resueltos, quién y cuándo lo resolvió (el dato ya se
                       guardaba pero no se mostraba en ningún lado). */}
                   {m.resolved && (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Resuelto {m.resolvedAt ? formatDate(m.resolvedAt) : ''}{m.resolvedBy ? ` · por ${String(m.resolvedBy).slice(0, 8)}…` : ''}
                     </p>
                   )}

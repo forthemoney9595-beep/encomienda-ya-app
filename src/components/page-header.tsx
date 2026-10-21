@@ -22,12 +22,12 @@ const PageHeader = ({ title, description, children }: PageHeaderProps) => {
     <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-3 mb-4 md:mb-0">
         {canGoBack && isMobile && (
-          <Button variant="outline" size="icon" onClick={() => router.back()}>
+          <Button variant="outline" size="icon" className="shrink-0" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
             <span className="sr-only">Volver</span>
           </Button>
         )}
-        <div>
+        <div className="min-w-0">
           <h1 className="font-headline text-3xl font-bold tracking-tight text-foreground">
             {title}
           </h1>

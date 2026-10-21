@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
@@ -311,10 +312,22 @@ export default function ProductManagementPage() {
       }
     }
 
+    // FE-R-004: el catálogo es la fuente de verdad del precio en /api/orders/create — un 0 o
+    // negativo acá termina en un subtotal inválido y una preferencia de MP rota.
+    const priceNum = Number(formData.price);
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
+      toast({ variant: 'destructive', title: 'Precio inválido', description: 'Tiene que ser mayor a $0.' });
+      return;
+    }
+    if (!formData.name.trim()) {
+      toast({ variant: 'destructive', title: 'Falta el nombre', description: 'Escribí el nombre del producto.' });
+      return;
+    }
+
     setIsLoadingAction(true);
     try {
       const productData: any = {
-        name: formData.name,
+        name: formData.name.trim(),
         description: formData.description,
         price: parseFloat(formData.price),
         category: formData.category,
@@ -486,7 +499,7 @@ export default function ProductManagementPage() {
       {filteredProducts.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox checked={allVisibleSelected} onCheckedChange={toggleSelectAllVisible} />
+            <Checkbox aria-label="Seleccionar todos los productos visibles" checked={allVisibleSelected} onCheckedChange={toggleSelectAllVisible} />
             Seleccionar todos
           </label>
           {selectedIds.size > 0 ? (
@@ -528,6 +541,7 @@ export default function ProductManagementPage() {
               <div className="relative h-48 w-full bg-muted flex items-center justify-center overflow-hidden">
                 <div className="absolute top-2 left-2 z-10">
                   <Checkbox
+                    aria-label={`Seleccionar ${product.name}`}
                     checked={selectedIds.has(product.id)}
                     onCheckedChange={() => toggleSelect(product.id)}
                     className="bg-background/80 border-2 shadow-sm"
@@ -579,10 +593,10 @@ export default function ProductManagementPage() {
                   </CardTitle>
                   <span className="flex flex-col items-end">
                     {!!product.discountPercent && (
-                        <span className="text-xs text-muted-foreground line-through">${(product.price || 0).toFixed(2)}</span>
+                        <span className="text-xs text-muted-foreground line-through">{money((product.price || 0))}</span>
                     )}
                     <span className="font-bold text-foreground">
-                        ${(product.discountPercent ? (product.price || 0) * (1 - product.discountPercent / 100) : (product.price || 0)).toFixed(2)}
+                        {money((product.discountPercent ? (product.price || 0) * (1 - product.discountPercent / 100) : (product.price || 0)))}
                     </span>
                   </span>
                 </div>
@@ -620,7 +634,7 @@ export default function ProductManagementPage() {
                     <Button variant="outline" size="sm" onClick={() => openDialog(product)}>
                     <Pencil className="mr-2 h-3 w-3" /> Editar
                     </Button>
-                    <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDelete(product)}>
+                    <Button variant="destructive" size="icon" className="h-9 w-9" aria-label={`Eliminar ${product.name}`} onClick={() => handleDelete(product)}>
                     <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>
@@ -678,7 +692,8 @@ export default function ProductManagementPage() {
                 <Input 
                     id="price" 
                     type="number" 
-                    step="0.01" 
+                    min={1}
+                    step="1" 
                     value={formData.price} 
                     onChange={(e) => setFormData({...formData, price: e.target.value})} 
                     required 

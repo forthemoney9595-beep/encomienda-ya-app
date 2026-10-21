@@ -151,7 +151,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
                         <FormControl>
                             <Input type="number" min="0" max="100" step="0.1" {...field} />
                         </FormControl>
-                        <FormDescription className="text-[10px]">
+                        <FormDescription className="text-xs">
                            Lo que retiene la app. En 0 = usa la comisión por defecto de la
                            plataforma (Configuración) — no significa &quot;gratis&quot;.
                         </FormDescription>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useEffect } from 'react';
+import { money } from '@/lib/format-money';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -165,7 +166,7 @@ export default function FavoritesPage() {
                                         <Heart className="h-5 w-5 fill-primary text-primary" />
                                     </button>
 
-                                    <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
+                                    <span className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
                                         {store.category || 'General'}
                                     </span>
                                 </div>
@@ -244,7 +245,7 @@ export default function FavoritesPage() {
                                     <p className="text-xs text-muted-foreground line-clamp-1">{product.storeName}</p>
                                 </CardHeader>
                                 <CardContent className="p-4 pt-0">
-                                    <span className="font-bold text-foreground">${(product.price || 0).toFixed(0)}</span>
+                                    <span className="font-bold text-foreground">{money((product.price || 0))}</span>
                                 </CardContent>
                             </Card>
                         </Link>

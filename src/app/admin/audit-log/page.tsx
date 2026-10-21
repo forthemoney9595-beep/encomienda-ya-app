@@ -204,7 +204,7 @@ function AdminAuditLogPage() {
                     <tr key={entry.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(entry.createdAt)}</td>
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className={cn('text-[10px]', meta?.color ?? 'bg-muted text-muted-foreground')}>
+                        <Badge variant="outline" className={cn('text-xs', meta?.color ?? 'bg-muted text-muted-foreground')}>
                           {meta?.label ?? entry.action}
                         </Badge>
                       </td>

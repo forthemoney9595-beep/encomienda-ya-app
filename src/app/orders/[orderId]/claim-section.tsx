@@ -10,6 +10,7 @@
 // La validación real (ventana, foto, dueño, montos) es server-side en /api/claims/create.
 
 import { useEffect, useMemo, useState } from 'react';
+import { money } from '@/lib/format-money';
 import { useAuth } from '@/context/auth-context';
 import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -39,7 +40,6 @@ import { ImageUpload } from '@/components/image-upload';
 import { AlertTriangle, CheckCircle2, Clock3, Loader2, MessageSquareWarning, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const money = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`;
 
 export function ClaimSection({ order }: { order: Order }) {
   const { user } = useAuth();
@@ -160,7 +160,7 @@ export function ClaimSection({ order }: { order: Order }) {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <MessageSquareWarning className="h-4 w-4" /> Tu reclamo
-              <Badge variant="outline" className="ml-auto text-[10px]">
+              <Badge variant="outline" className="ml-auto text-xs">
                 {CLAIM_TYPES[claim.type]?.label || claim.type}
               </Badge>
             </CardTitle>

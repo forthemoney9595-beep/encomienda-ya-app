@@ -400,7 +400,7 @@ export default function EditStorePage() {
                     <span className="text-success flex items-center gap-1 font-medium">
                         <MapPin className="h-3 w-3"/> Mapa configurado correctamente
                     </span>
-                    <span className="text-muted-foreground text-[10px]">
+                    <span className="text-muted-foreground text-xs">
                         Lat: {coords.latitude.toFixed(4)}, Lng: {coords.longitude.toFixed(4)}
                     </span>
                 </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -185,7 +186,7 @@ export default function StoreAnalyticsPage() {
             <ShoppingBag className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${current.totalRevenue.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{money(current.totalRevenue)}</div>
             <div className="flex items-center gap-1.5 mt-1">
                 <p className="text-xs text-muted-foreground">{PERIOD_LABELS[period]}</p>
                 {hasPrev && <PctBadge current={current.totalRevenue} prev={prev.totalRevenue} />}
@@ -193,7 +194,7 @@ export default function StoreAnalyticsPage() {
             {/* Es el total BRUTO que pagó el cliente: incluye el envío (va al repartidor) y
                 la tarifa de servicio + comisión (van a la plataforma). Sin esta aclaración se
                 leía como "lo que voy a cobrar" y no coincidía con la billetera. */}
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               Bruto: incluye envío y comisiones.{' '}
               <Link href="/my-store/wallet" className="text-primary underline underline-offset-2">
                 Ver lo que cobrás
@@ -261,8 +262,8 @@ export default function StoreAnalyticsPage() {
               <BarChart data={dailySalesData}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} className="text-muted-foreground text-xs" />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} className="text-muted-foreground text-xs" />
-                <ChartTooltip content={<ChartTooltipContent formatter={(v: any) => `$${Number(v).toLocaleString()}`} />} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toLocaleString("es-AR", { maximumFractionDigits: 1 })}k` : `$${Math.round(v)}`)} allowDecimals={false} className="text-muted-foreground text-xs" />
+                <ChartTooltip content={<ChartTooltipContent formatter={(v: any) => `${money(Number(v))}`} />} />
                 <Bar dataKey="ventas" fill="var(--color-ventas)" radius={[4,4,0,0]} />
               </BarChart>
             </ChartContainer>
@@ -291,7 +292,7 @@ export default function StoreAnalyticsPage() {
                     <div key={p.name} className="space-y-1">
                       <div className="flex justify-between text-sm">
                         <span className="font-medium line-clamp-1">{i + 1}. {p.name}</span>
-                        <span className="text-muted-foreground shrink-0 ml-2">{p.units} un. · ${p.revenue.toLocaleString()}</span>
+                        <span className="text-muted-foreground shrink-0 ml-2">{p.units} un. · {money(p.revenue)}</span>
                       </div>
                       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                         <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
@@ -355,9 +356,9 @@ export default function StoreAnalyticsPage() {
                             con +; el resto en gris y sin signo. */}
                         <div className={cn('font-bold',
                             order.status === 'Entregado' ? 'text-success' : 'text-muted-foreground')}>
-                            {order.status === 'Entregado' ? '+' : ''}${order.total.toLocaleString()}
+                            {order.status === 'Entregado' ? '+' : ''}{money(order.total)}
                         </div>
-                        <Badge variant="outline" className={cn('text-[10px] uppercase',
+                        <Badge variant="outline" className={cn('text-xs uppercase',
                             order.status === 'Entregado' ? 'bg-success/15 text-success border-success/30' :
                             order.status === 'Rechazado' ? 'bg-destructive/15 text-destructive border-destructive/30' :
                             'bg-muted text-muted-foreground'
@@ -369,7 +370,7 @@ export default function StoreAnalyticsPage() {
             ))}
             {current.orders.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                    <p>No hay movimientos en este período.</p>
+                    <p>Acá van a aparecer tus ventas a medida que entren pedidos.</p>
                 </div>
             )}
           </div>

@@ -212,15 +212,15 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                                 { label: 'Seguro vigente', has: !!(selectedDriver as any)?.vehicleInsuranceUrl, url: (licenseUrls as any).vehicleInsuranceUrl },
                             ]).map(({ label, has, url }) => (
                                 <div key={label} className="space-y-1">
-                                    <p className="text-[10px] text-muted-foreground text-center">{label}</p>
+                                    <p className="text-xs text-muted-foreground text-center">{label}</p>
                                     {!has ? (
-                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-destructive text-center px-1">Falta</div>
+                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-xs text-destructive text-center px-1">Falta</div>
                                     ) : url ? (
                                         <a href={url} target="_blank" rel="noreferrer" className="block relative h-24 rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition">
                                             <img src={url} alt={label} className="h-full w-full object-cover" />
                                         </a>
                                     ) : (
-                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-[10px] text-muted-foreground text-center px-1">
+                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-xs text-muted-foreground text-center px-1">
                                             {loadingLicenses ? 'Cargando...' : 'Error'}
                                         </div>
                                     )}
