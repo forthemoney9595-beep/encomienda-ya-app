@@ -748,7 +748,7 @@ export default function StorePublicPage() {
       {relatedStores.length > 0 && (
         <div className="mb-10 px-4 sm:px-0">
           <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
-            <StoreIcon className="h-5 w-5 text-primary" /> Más de {formatCategoryLabel(storeCategory)}
+            <StoreIcon className="h-5 w-5 text-primary" /> Más de {formatCategoryLabel(storeCategory ?? '')}
           </h2>
           <div className="min-w-0">
             <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">

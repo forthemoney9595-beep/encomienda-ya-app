@@ -25,10 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFirestore } from '@/lib/firebase';
 import { collection, query, where, orderBy, getDocs, getDoc, doc, limit, Timestamp } from 'firebase/firestore';
-import {
-  platformNetForOrder, storeNetForOrder, driverNetForOrder, refundRatio,
-  isPlatformCollected, FALLBACK_COMMISSION, type MoneyOrder,
-} from '@/lib/money';
+import { platformNetForOrder, storeNetForOrder, driverNetForOrder, refundRatio, isPlatformCollected, FALLBACK_COMMISSION, type MoneyOrder, platformBreakdownForOrder } from "@/lib/money";
 import { getPeriodBounds, PERIOD_LABELS, type Period } from '@/lib/analytics-period';
 import { PctBadge } from '@/components/pct-badge';
 import { Landmark, CalendarRange, ChevronDown, ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
@@ -60,11 +57,11 @@ interface Bucket {
 const emptyBucket = (): Bucket => ({ platform: 0, serviceFees: 0, commissions: 0, toStores: 0, toDrivers: 0, orders: 0 });
 
 function addToBucket(b: Bucket, o: MoneyOrder, fallbackRate: number) {
-  const platform = platformNetForOrder(o, fallbackRate);
-  const serviceFee = isPlatformCollected(o) ? (Number(o.serviceFee) || 0) * (1 - refundRatio(o)) : 0;
-  b.platform += platform;
-  b.serviceFees += serviceFee;
-  b.commissions += Math.max(0, platform - serviceFee);
+  // ARQ-009: desglose desde money.ts (antes recompuesto acá a mano).
+  const pb = platformBreakdownForOrder(o, fallbackRate);
+  b.platform += pb.total;
+  b.serviceFees += pb.serviceFee;
+  b.commissions += pb.commission;
   b.toStores += storeNetForOrder(o, fallbackRate);
   b.toDrivers += driverNetForOrder(o);
   b.orders += 1;

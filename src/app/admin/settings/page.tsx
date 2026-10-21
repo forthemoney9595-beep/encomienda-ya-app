@@ -45,7 +45,7 @@ function AdminSettingsPage() {
   const configReady = !configLoading && configData !== undefined;
 
   useEffect(() => {
-    if (configData) setLocalConfig({ serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, settlementDayOfWeek: 5, maintenanceMode: false, claimWindowHours: 24, ...configData });
+    if (configData) setLocalConfig({ ...CONFIG_DEFAULTS, ...configData });
   }, [configData]);
 
   const handleSave = async () => {
@@ -264,6 +264,10 @@ function findConfigError(cfg: Record<string, unknown>): string | null {
   }
   return null;
 }
+
+// Defaults para campos que el doc todavía no tiene (ARQ-002: como objeto, no como claves sueltas
+// antes del spread — con strictNullChecks TS marcaba las claves como pisadas).
+const CONFIG_DEFAULTS = { serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, settlementDayOfWeek: 5, maintenanceMode: false, claimWindowHours: 24 };
 
 export default function AdminSettingsPageGuarded() {
   return <AdminAuthGuard requireFullAdmin><AdminSettingsPage /></AdminAuthGuard>;

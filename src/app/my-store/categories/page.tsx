@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import PageHeader from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -35,11 +36,8 @@ export default function StoreCategoriesPage() {
   const categories = useMemo(() => store?.productCategories || [], [store]);
   const isLoading = authLoading || storeLoading;
 
-  useEffect(() => {
-    if (!isLoading && (!user || userProfile?.role !== 'store' || !userProfile?.storeId)) {
-      router.push('/');
-    }
-  }, [userProfile, isLoading, router]);
+  // ARQ-010: guard único (exige tienda asociada, como antes).
+  useRequireRole('store', { requireStoreId: true });
 
   const handleSaveCategory = async (oldCategory: string | null, newCategory: string) => {
     if (!storeRef || !store) return;

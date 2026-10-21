@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { composeOrderTotals, PLATFORM_DEFAULTS } from "@/lib/money";
 import { money } from '@/lib/format-money';
 import * as Sentry from "@sentry/nextjs";
 import { adminDb } from "@/lib/firebase-admin";
@@ -8,9 +9,6 @@ import { verifyAuthToken, verifyStoreOwnership } from "@/lib/auth-server";
 import { zeroStockForItems } from "@/lib/stock-service";
 import { notifyUser } from "@/lib/notify-server";
 
-// Fallback si config/platform.deliveryFee no está configurado (mismo default que
-// /api/orders/create).
-const DEFAULT_DELIVERY_FEE = 2000;
 
 // Reemplaza al "Tengo Stock" todo-o-nada: la tienda puede confirmar el pedido sacando
 // ítems puntuales sin stock.
@@ -88,13 +86,13 @@ export async function POST(request: Request) {
 
     const platformConfigSnap = await adminDb.collection("config").doc("platform").get();
     const platformConfig = platformConfigSnap.data() || {};
-    const serviceFeePercent = platformConfig.serviceFee ?? 5;
+    const serviceFeePercent = platformConfig.serviceFee ?? PLATFORM_DEFAULTS.serviceFeePercent;
     // El envío sale de config (o del que ya tenía la orden), NO de una constante. Antes
     // estaba hardcodeado en 2000 mientras `create` lo leía de config: si el admin cambiaba
     // la tarifa, el `total` se recalculaba con 2000 pero el campo `deliveryFee` quedaba con
     // el valor de config -> `subtotal + deliveryFee + serviceFee != total`, el checkout
     // cobraba un monto distinto y el webhook lo marcaba como discrepancia (pago trabado).
-    const deliveryFee = Number(orderData.deliveryFee ?? platformConfig.deliveryFee ?? DEFAULT_DELIVERY_FEE);
+    const deliveryFee = Number(orderData.deliveryFee ?? platformConfig.deliveryFee ?? PLATFORM_DEFAULTS.deliveryFee);
 
     // 🔒 Precio de cada ítem = el CONGELADO en el pedido (lo que el comprador aceptó), NO el
     // del catálogo actual — ver el detalle de BUG-103 dentro del loop. Solo se valida contra
@@ -157,9 +155,16 @@ export async function POST(request: Request) {
       pricedItems.push({ ...it, price, quantity, title: p.name || p.title || it.title || 'Producto' });
     }
 
-    const newSubtotal = pricedItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
-    const newServiceFee = (newSubtotal * serviceFeePercent) / 100;
-    const newTotal = newSubtotal + deliveryFee + newServiceFee;
+    // ARQ-008: misma fórmula que create (money.ts) — antes estaba escrita aparte acá.
+    const totals = composeOrderTotals({
+      subtotal: pricedItems.reduce((sum, it) => sum + it.price * it.quantity, 0),
+      deliveryFee,
+      serviceFeePercent,
+      commissionRate: typeof orderData.commissionRate === "number" ? orderData.commissionRate : 0,
+    });
+    const newSubtotal = totals.subtotal;
+    const newServiceFee = totals.serviceFee;
+    const newTotal = totals.total;
 
     // 🔒 ARQ-006 / BUG-202 (auditoría oct 2026): la escritura va en una TRANSACCIÓN que
     // re-lee el pedido y vuelve a exigir 'Pendiente de Confirmación'. Antes era un
@@ -188,7 +193,7 @@ export async function POST(request: Request) {
           // desglose del dashboard admin lo suma tal cual (Fase PP, N7). Las fórmulas de
           // pago no lo usan (recalculan desde subtotal), por eso nunca pagó mal.
           ...(typeof orderData.commissionRate === 'number'
-            ? { commissionAmount: newSubtotal * orderData.commissionRate / 100 }
+            ? { commissionAmount: totals.commissionAmount }
             : {}),
           ...(removedItems.length > 0 ? { removedItems } : {}),
           ...(adjustedItems.length > 0 ? { adjustedItems } : {}),

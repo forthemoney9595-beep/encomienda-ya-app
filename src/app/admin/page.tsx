@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { storeBaseAmount, commissionForOrder, refundRatio, isPlatformCollected, driverNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
+import { storeBaseAmount, commissionForOrder, refundRatio, isPlatformCollected, driverNetForOrder, FALLBACK_COMMISSION, platformBreakdownForOrder } from "@/lib/money";
 import { useAggregate, useCountFromServer } from '@/lib/firebase-aggregate';
 import type { Order as OrderType } from '@/lib/order-service';
 import type { Store as StoreType } from '@/lib/placeholder-data';
@@ -478,18 +478,13 @@ function AdminDashboard() {
       // aparecían con comisión $0 mientras el servidor sí les cobraba el default.
       const storeRate = (store as any)?.commissionRate;
       const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : defaultCommission;
-      // Misma base que el reparto real: el valor de los productos, sin la tarifa de servicio.
-      const base = storeBaseAmount(o as any);
-      const commRate = commissionForOrder(o as any, fallbackRate);
       if (!map[sid]) map[sid] = { name, revenue: 0, delivered: 0, cancelled: 0, commission: 0, rating: 0, ratingCount: 0 };
       map[sid].revenue += o.total || 0;
       map[sid].delivered += 1;
       // Comisión NETA (Fase PP, N13): con reembolsos descontados y sin efectivo — misma
       // regla que platformNetForOrder; antes esta tabla y la tarjeta de Finanzas del
       // mismo período daban distinto.
-      map[sid].commission += isPlatformCollected(o as any)
-        ? (base * commRate / 100) * (1 - refundRatio(o as any))
-        : 0;
+      map[sid].commission += platformBreakdownForOrder(o as any, fallbackRate).commission; // ARQ-009
     });
     cancelled.forEach(o => {
       const sid = o.storeId || '';

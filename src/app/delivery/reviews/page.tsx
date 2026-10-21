@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
@@ -26,19 +27,16 @@ export default function DeliveryReviewsPage() {
   const firestore = useFirestore();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'delivery')) {
-      router.push('/');
-    }
-  }, [authLoading, user, userProfile, router]);
+  // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
+  const { ready } = useRequireRole('delivery');
 
-  const driverRef = useMemoFirebase(() => (firestore && user ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
+  const driverRef = useMemoFirebase(() => (firestore && user && ready ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
   const { data: driver } = useDoc<{ rating?: number; ratingCount?: number }>(driverRef);
 
   const reviewsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !ready) return null;
     return query(collection(firestore, 'deliveryReviews'), where('driverId', '==', user.uid), orderBy('createdAt', 'desc'));
-  }, [firestore, user]);
+  }, [firestore, user, ready]);
 
   const { data: reviews, isLoading } = useCollection<DeliveryReview>(reviewsQuery);
 

@@ -1,9 +1,6 @@
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
-import {
-  platformNetForOrder, storeNetForOrder, driverNetForOrder,
-  refundRatio, isPlatformCollected, FALLBACK_COMMISSION, type MoneyOrder,
-} from "@/lib/money";
+import { platformNetForOrder, storeNetForOrder, driverNetForOrder, refundRatio, isPlatformCollected, FALLBACK_COMMISSION, type MoneyOrder, platformBreakdownForOrder } from "@/lib/money";
 import * as Sentry from "@sentry/nextjs";
 
 // Cierres mensuales de la plataforma (Fase OO ter) — colección `platform_monthly`, un
@@ -58,11 +55,10 @@ async function computeMonth(start: Date, end: Date, fallbackRate: number): Promi
   const b: MonthBucket = { platform: 0, serviceFees: 0, commissions: 0, toStores: 0, toDrivers: 0, revenue: 0, orders: 0 };
   for (const d of snap.docs) {
     const o = d.data() as MoneyOrder;
-    const platform = platformNetForOrder(o, fallbackRate);
-    const serviceFee = isPlatformCollected(o) ? (Number(o.serviceFee) || 0) * (1 - refundRatio(o)) : 0;
-    b.platform += platform;
-    b.serviceFees += serviceFee;
-    b.commissions += Math.max(0, platform - serviceFee);
+    const pb = platformBreakdownForOrder(o, fallbackRate); // ARQ-009: desglose único (money.ts)
+    b.platform += pb.total;
+    b.serviceFees += pb.serviceFee;
+    b.commissions += pb.commission;
     b.toStores += storeNetForOrder(o, fallbackRate);
     b.toDrivers += driverNetForOrder(o);
     b.revenue += (Number(o.total) || 0);

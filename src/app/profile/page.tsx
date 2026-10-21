@@ -346,7 +346,7 @@ export default function ProfilePage() {
                                         <div className="space-y-1">
                                             <Label className="text-xs text-muted-foreground">Fecha de Registro</Label>
                                             <div className="text-sm bg-muted p-2 rounded">
-                                                {user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : '-'}
+                                                {user?.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : '-'}
                                             </div>
                                         </div>
                                     </div>

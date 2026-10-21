@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
@@ -60,11 +61,8 @@ export default function DeliveryAnalyticsPage() {
   const router = useRouter();
   const [period, setPeriod] = useState<Period>('30d');
 
-  useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'delivery')) {
-      router.push('/');
-    }
-  }, [authLoading, user, userProfile, router]);
+  // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
+  const { ready } = useRequireRole('delivery');
 
   const { from, prevFrom, prevTo } = useMemo(() => getPeriodBounds(period), [period]);
 
@@ -74,7 +72,7 @@ export default function DeliveryAnalyticsPage() {
   // un pedido creado antes del corte y entregado dentro del período no se bajaba y
   // faltaba plata. El margen de 7 días cubre cualquier pedido "a caballo" realista.
   const analyticsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !ready) return null;
     if (prevFrom) {
       const buffered = new Date(prevFrom.getTime() - 7 * 86_400_000);
       return query(collection(firestore, 'orders'),

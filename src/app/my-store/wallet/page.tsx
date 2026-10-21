@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
@@ -57,11 +58,8 @@ export default function StoreWalletPage() {
   // 1. Validar Rol — en un useEffect (Tanda A de la auditoría): antes el router.push
   // corría DURANTE el render (efecto secundario en render, warning de React y
   // comportamiento errático en re-renders).
-  useEffect(() => {
-      if (!authLoading && userProfile && userProfile.role !== 'store') {
-          router.push('/');
-      }
-  }, [authLoading, userProfile, router]);
+  // ARQ-010: guard único.
+  useRequireRole('store');
 
   // 2. BUSCAR LA TIENDA DE ESTE USUARIO (CORRECCIÓN)
   // En lugar de buscar por ID directo, buscamos donde ownerId sea igual al usuario actual

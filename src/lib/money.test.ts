@@ -95,3 +95,63 @@ describe('money.ts — robustez ante datos parciales', () => {
     expect(platformNetForOrder({}, 10)).toBe(0);
   });
 });
+
+// ARQ-008 (auditoría oct 2026): la composición del total vive en money.ts y la comparten
+// /api/orders/create y /api/orders/confirm-stock.
+import { composeOrderTotals, PLATFORM_DEFAULTS } from './money';
+
+describe('composeOrderTotals — una sola fórmula del total', () => {
+  it('total = subtotal + envío + tarifa(%) y la comisión se congela sobre el subtotal', () => {
+    const t = composeOrderTotals({ subtotal: 10000, deliveryFee: 2000, serviceFeePercent: 5, commissionRate: 10 });
+    expect(t.serviceFee).toBe(500);
+    expect(t.total).toBe(12500);
+    expect(t.commissionAmount).toBe(1000);
+    expect(t.total).toBe(t.subtotal + t.deliveryFee + t.serviceFee);
+  });
+  it('coincide con el pedido de referencia del módulo (REF) y con las funciones de reparto', () => {
+    const t = composeOrderTotals({ subtotal: REF.subtotal!, deliveryFee: REF.deliveryFee!, serviceFeePercent: 5, commissionRate: REF.commissionRate! });
+    expect(t.total).toBe(REF.total);
+    expect(t.serviceFee).toBe(REF.serviceFee);
+    // commissionForOrder devuelve la TASA (%); el monto es subtotal × tasa / 100.
+    expect(t.commissionAmount).toBe((REF.subtotal! * commissionForOrder(REF, FALLBACK_COMMISSION)) / 100);
+  });
+  it('sacar ítems en confirm-stock solo puede BAJAR el total (subtotal menor, mismo envío)', () => {
+    const antes = composeOrderTotals({ subtotal: 11550, deliveryFee: 2100, serviceFeePercent: 5, commissionRate: 10 });
+    const despues = composeOrderTotals({ subtotal: 5500, deliveryFee: 2100, serviceFeePercent: 5, commissionRate: 10 });
+    expect(despues.total).toBeLessThan(antes.total);
+    expect(despues.deliveryFee).toBe(antes.deliveryFee);
+    expect(despues.commissionAmount).toBe(550);
+  });
+  it('tolera basura: negativos y NaN se tratan como 0, nunca un total negativo', () => {
+    const t = composeOrderTotals({ subtotal: -5, deliveryFee: NaN as any, serviceFeePercent: -1, commissionRate: undefined as any });
+    expect(t.total).toBe(0);
+    expect(t.commissionAmount).toBe(0);
+  });
+  it('los defaults de la plataforma son los históricos ($2.000 envío, 5 %, comisión 10 %)', () => {
+    expect(PLATFORM_DEFAULTS.deliveryFee).toBe(2000);
+    expect(PLATFORM_DEFAULTS.serviceFeePercent).toBe(5);
+    expect(PLATFORM_DEFAULTS.commissionRate).toBe(FALLBACK_COMMISSION);
+  });
+});
+
+// ARQ-009: el desglose de la ganancia de la plataforma (tarifa + comisión) tiene una sola fuente.
+import { platformBreakdownForOrder } from './money';
+
+describe('platformBreakdownForOrder — desglose único de lo que gana la app', () => {
+  it('tarifa + comisión = platformNetForOrder, y con el pedido de referencia da $500 + $1.000', () => {
+    const b = platformBreakdownForOrder(REF, FALLBACK_COMMISSION);
+    expect(b.serviceFee).toBe(500);
+    expect(b.commission).toBe(1000);
+    expect(b.total).toBe(platformNetForOrder(REF, FALLBACK_COMMISSION));
+  });
+  it('un reembolso del 50 % descuenta la mitad de las DOS partes', () => {
+    const half = { ...REF, refunded: true, refundAmount: REF.total! / 2 };
+    const b = platformBreakdownForOrder(half, FALLBACK_COMMISSION);
+    expect(b.serviceFee).toBeCloseTo(250);
+    expect(b.commission).toBeCloseTo(500);
+  });
+  it('en efectivo la plataforma no cobró nada: todo 0', () => {
+    const b = platformBreakdownForOrder({ ...REF, paymentMethod: 'Efectivo' }, FALLBACK_COMMISSION);
+    expect(b).toEqual({ serviceFee: 0, commission: 0, total: 0 });
+  });
+});

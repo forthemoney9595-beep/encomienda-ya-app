@@ -2716,11 +2716,37 @@ ejecución" del informe:
 - **OJO al editar CLAUDE.md por script:** nunca con `node -e "..."` en bash — los backticks
   de los nombres de código se comen como sustitución de comandos (pasó en esta fase).
   Escribir el bloque a un archivo y empalmarlo.
-- **Pendiente de decisión:** Tanda 3 (estructural: unificar las 2 capas de Firebase +
-  `persistentLocalCache`, `strictNullChecks` incremental, `composeOrderTotals` en money.ts,
-  acumuladores por cuenta para saldos/pasivo, emulador en CI), Next 16, Vercel Pro,
-  vencimiento de preferencia MP, y el cambio `pushEnabled` (los tokens FCM de los 5
-  testers se borraron el 13/10; sin ese cambio, al abrir la app se re-registran solos).
+**Tanda 3 ejecutada y desplegada (20/10)** — 4 sub-proyectos, tabla en el informe:
+- **3.1 Una sola capa de Firebase (ARQ-001/PERF-008/PERF-012):** `src/firebase/*` y
+  `FirebaseErrorListener` ELIMINADOS; `src/lib/firebase.ts` es la única inicialización.
+  **Regla: nada importa de `@/firebase` (no existe más).** `useCollection`/`useDoc` exponen
+  `error` y reportan a Sentry sin re-lanzar; `data` arranca `[]`/`null`, nunca undefined.
+  Firestore con `persistentLocalCache` multi-pestaña (los listeners reanudan con resume
+  token — si alguna vez hace falta forzar una relectura, `clearIndexedDbPersistence`); Auth
+  con `initializeAuth` SIN popupRedirectResolver (**todo `signInWithPopup` nuevo debe
+  pasar `browserPopupRedirectResolver` como 3er argumento** o falla). Cerró el "INTERNAL
+  ASSERTION FAILED" de /favorites.
+- **3.2 Guard de rol único (ARQ-010):** `src/hooks/use-require-role.ts` →
+  `const { ready } = useRequireRole('store' | 'delivery', { requireStoreId })`. **Regla: las
+  consultas de una página con rol se arman `ready ? query : null`** (si no, corren antes
+  del redirect y llenan Sentry de permission-denied). 11 páginas migradas.
+- **3.3 `strictNullChecks: true` en `tsconfig.json`** (ARQ-002): solo había 6 errores en
+  todo `src`. El compilador ahora vigila los campos opcionales — no volver a apagarlo ni a
+  esconder nulls con `as any`.
+- **3.4 Fórmulas únicas en `money.ts` (ARQ-008/009):** `PLATFORM_DEFAULTS`,
+  `composeOrderTotals()` (la usan `create` y `confirm-stock`) y
+  `platformBreakdownForOrder()` (dashboard, ficha de tienda, Ganancias, cierres mensuales);
+  `platformNetForOrder` = su `total`. 48 tests. `_audit-money.js` sigue cuadrando al peso.
+- **Verificado:** Playwright `_pw-firebase-unify.js` 12/12 y `_pw-require-role.js` 11/11,
+  e2e stock/adjust-qty/confirm-vs-cancel/pin verdes, Vitest 48/48, lint 0, build OK.
+- **Dejado a propósito (no son deuda olvidada):** ARQ-011 (tipo `Order` único) y ARQ-012
+  (`loadOrderForActor`) sin bug asociado; **PERF-005/006 acumuladores de saldo = decisión
+  de diseño con David** (cambia la fuente de verdad del dinero); **emulador + rules tests
+  en CI exige Java** (no está en esta PC: no se sube al CI lo que no se puede verificar).
+- **Pendiente de decisión:** acumuladores de saldo (PERF-005/006), Next 16, Vercel Pro,
+  vencimiento de preferencia MP, emulador en CI (instalar Java), y el cambio
+  `pushEnabled` (los tokens FCM de los 5 testers se borraron el 13/10; sin ese cambio, al
+  abrir la app se re-registran solos).
 
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
@@ -62,35 +63,32 @@ export default function DeliveryEarningsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 1. Seguridad: Redirigir si no es repartidor
-  useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'delivery')) {
-      router.push('/');
-    }
-  }, [authLoading, user, userProfile, router]);
+  // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
+  const { ready } = useRequireRole('delivery');
 
   // 2. Traer TODAS las órdenes entregadas (INGRESOS)
   const earningsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
+    if (!firestore || !user?.uid || !ready) return null;
     return query(
       collection(firestore, 'orders'),
       where('deliveryPersonId', '==', user.uid),
       where('status', '==', 'Entregado'),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user?.uid]);
+  }, [firestore, user?.uid, ready]);
 
   const { data: orders, isLoading: ordersLoading } = useCollection<Order>(earningsQuery);
 
   // 3. Traer TODOS los retiros (EGRESOS)
   const withdrawalsQuery = useMemoFirebase(() => {
-      if (!firestore || !user?.uid) return null;
+      if (!firestore || !user?.uid || !ready) return null;
       return query(
           collection(firestore, 'withdrawals'),
           where('userId', '==', user.uid),
           where('userRole', '==', 'delivery'),
           orderBy('createdAt', 'desc')
       );
-  }, [firestore, user?.uid]);
+  }, [firestore, user?.uid, ready]);
 
   const { data: withdrawals, isLoading: withdrawalsLoading } = useCollection<any>(withdrawalsQuery);
 

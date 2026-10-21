@@ -98,7 +98,7 @@ export function StoreCard({
 
             {/* Rubro coloreado por familia + tiempo estimado */}
             <p className="line-clamp-1 text-xs sm:text-[13px]">
-              <span className={cn('font-bold', catStyle.text)}>{formatCategoryLabel(store.category) || 'General'}</span>
+              <span className={cn('font-bold', catStyle.text)}>{formatCategoryLabel(store.category ?? '') || 'General'}</span>
               <span className="text-muted-foreground"> · Llega en {store.deliveryTime || '30-45 min'}</span>
             </p>
 

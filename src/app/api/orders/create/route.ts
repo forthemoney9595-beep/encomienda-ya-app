@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { composeOrderTotals, PLATFORM_DEFAULTS } from "@/lib/money";
 import { notifyUser } from '@/lib/notify-server';
 import * as Sentry from "@sentry/nextjs";
 import { adminDb } from '@/lib/firebase-admin';
@@ -11,7 +12,6 @@ import { deliveryDistanceMeters, computeDeliveryFee, isBeyondDeliveryLimit } fro
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 // Valor fallback si config/platform.deliveryFee no está configurado en Firestore
-const DEFAULT_DELIVERY_FEE = 2000;
 
 // Métodos de pago aceptados. A propósito NO incluye 'Efectivo': ver el chequeo más abajo.
 const ALLOWED_PAYMENT_METHODS = ['mercadopago'];
@@ -161,7 +161,7 @@ export async function POST(request: Request) {
     const platformConfigSnap = await adminDb.collection("config").doc("platform").get();
     const platformConfig = platformConfigSnap.data() || {};
     // Usar 5% como default si no está configurado en Firestore (coherente con el cliente)
-    const serviceFeePercent = platformConfig.serviceFee ?? 5;
+    const serviceFeePercent = platformConfig.serviceFee ?? PLATFORM_DEFAULTS.serviceFeePercent;
 
     // Comisión vigente para ESTA tienda en ESTE momento (la propia, o la global si no tiene
     // una cargada). Se guarda en el pedido para que el saldo no cambie retroactivamente si
@@ -186,7 +186,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const shippingCost: number = computeDeliveryFee(deliveryDistM, platformConfig, DEFAULT_DELIVERY_FEE);
+    const shippingCost: number = computeDeliveryFee(deliveryDistM, platformConfig, PLATFORM_DEFAULTS.deliveryFee);
 
     // Buscamos el ID del dueño para notificarle
     const ownerId = storeData?.ownerId || storeData?.userId;
@@ -213,6 +213,7 @@ export async function POST(request: Request) {
     let shippingCostVar = shippingCost; // uso la const del config leída arriba
     let serviceFeeAmount = 0;
     let finalTotal = 0;
+    let commissionAmountAtOrder = 0;
     const verifiedItems: { id: string; title: string; price: number; quantity: number }[] = [];
 
     await adminDb.runTransaction(async (tx) => {
@@ -297,10 +298,12 @@ export async function POST(request: Request) {
             throw new OrderValidationError("El subtotal del pedido es 0.");
         }
 
-        // 3. Cálculos Finales
+        // 3. Cálculos Finales — ARQ-008: la fórmula vive en money.ts (compartida con confirm-stock).
         shippingCostVar = shippingCost;
-        serviceFeeAmount = (calculatedSubtotal * serviceFeePercent) / 100;
-        finalTotal = calculatedSubtotal + shippingCostVar + serviceFeeAmount;
+        const totals = composeOrderTotals({ subtotal: calculatedSubtotal, deliveryFee: shippingCost, serviceFeePercent, commissionRate: commissionRateAtOrder });
+        serviceFeeAmount = totals.serviceFee;
+        finalTotal = totals.total;
+        commissionAmountAtOrder = totals.commissionAmount;
 
         // Pasada 2: escrituras — descontar stock y crear la orden.
         for (const { ref, newStock } of stockUpdates) {
@@ -345,7 +348,7 @@ export async function POST(request: Request) {
             // Monto de la comisión, para poder sumarlo server-side (aggregation) sin tener
             // que bajar los pedidos y recalcular con la tasa de cada tienda. Es lo que le
             // permite al dashboard mostrar el margen REAL de la plataforma.
-            commissionAmount: calculatedSubtotal * (commissionRateAtOrder / 100),
+            commissionAmount: commissionAmountAtOrder,
 
             paymentMethod: paymentMethod || "mercadopago",
             paymentStatus: "pending_payment",

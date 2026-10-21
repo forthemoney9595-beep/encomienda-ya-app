@@ -33,6 +33,45 @@ export type MoneyOrder = {
 export const FALLBACK_COMMISSION = 10;
 
 /**
+ * Defaults de la plataforma cuando `config/platform` no tiene el campo. ARQ-008 (auditoría
+ * oct 2026): estaban duplicados en `create` y `confirm-stock` (`DEFAULT_DELIVERY_FEE = 2000`
+ * y `serviceFee ?? 5` ×2) — un cambio en uno descuadraba el otro.
+ */
+export const PLATFORM_DEFAULTS = {
+  serviceFeePercent: 5,
+  deliveryFee: 2000,
+  commissionRate: FALLBACK_COMMISSION,
+} as const;
+
+/**
+ * Composición del TOTAL de un pedido — la ÚNICA fórmula. La usan `/api/orders/create` (al
+ * nacer el pedido) y `/api/orders/confirm-stock` (al sacar/ajustar ítems); antes cada una
+ * la tenía escrita aparte y `commissionAmount` se recalculaba a mano.
+ *   total = subtotal + deliveryFee + serviceFee(subtotal × %)
+ *   commissionAmount = subtotal × commissionRate %   (congelada en el pedido)
+ */
+export function composeOrderTotals(input: {
+  subtotal: number;
+  deliveryFee: number;
+  serviceFeePercent: number;
+  commissionRate: number;
+}): { subtotal: number; deliveryFee: number; serviceFee: number; total: number; commissionRate: number; commissionAmount: number } {
+  const subtotal = Math.max(0, Number(input.subtotal) || 0);
+  const deliveryFee = Math.max(0, Number(input.deliveryFee) || 0);
+  const serviceFeePercent = Math.max(0, Number(input.serviceFeePercent) || 0);
+  const commissionRate = Math.max(0, Number(input.commissionRate) || 0);
+  const serviceFee = (subtotal * serviceFeePercent) / 100;
+  return {
+    subtotal,
+    deliveryFee,
+    serviceFee,
+    total: subtotal + deliveryFee + serviceFee,
+    commissionRate,
+    commissionAmount: (subtotal * commissionRate) / 100,
+  };
+}
+
+/**
  * ¿La plataforma cobró esta plata? En efectivo el repartidor cobra el total EN MANO, así
  * que ese dinero nunca entró y no se le puede acreditar a nadie. Hoy la app es solo
  * digital; esto protege pedidos históricos.
@@ -80,9 +119,20 @@ export function driverNetForOrder(o: MoneyOrder): number {
 
 /** Lo que retiene la PLATAFORMA: tarifa de servicio + comisión de la tienda. */
 export function platformNetForOrder(o: MoneyOrder, fallbackRate: number): number {
-  if (!isPlatformCollected(o)) return 0;
-  const base = storeBaseAmount(o);
-  const rate = commissionForOrder(o, fallbackRate);
-  const bruto = (Number(o.serviceFee) || 0) + base * (rate / 100);
-  return bruto * (1 - refundRatio(o));
+  return platformBreakdownForOrder(o, fallbackRate).total;
+}
+
+/**
+ * Lo que gana la plataforma en un pedido, DESGLOSADO: tarifa de servicio + comisión a la
+ * tienda, ambas netas de reembolsos y 0 si fue en efectivo. ARQ-009 (auditoría oct 2026):
+ * este desglose estaba recompuesto a mano en 4 lugares (dashboard admin, ficha de tienda,
+ * Ganancias de Finanzas y los cierres mensuales) — ahora todos leen de acá, y
+ * `platformNetForOrder` es simplemente `total`.
+ */
+export function platformBreakdownForOrder(o: MoneyOrder, fallbackRate: number): { serviceFee: number; commission: number; total: number } {
+  if (!isPlatformCollected(o)) return { serviceFee: 0, commission: 0, total: 0 };
+  const keep = 1 - refundRatio(o);
+  const serviceFee = (Number(o.serviceFee) || 0) * keep;
+  const commission = storeBaseAmount(o) * (commissionForOrder(o, fallbackRate) / 100) * keep;
+  return { serviceFee, commission, total: serviceFee + commission };
 }

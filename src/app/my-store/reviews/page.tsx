@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
@@ -84,21 +85,18 @@ export default function StoreReviewsPage() {
   const firestore = useFirestore();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'store')) {
-      router.push('/');
-    }
-  }, [authLoading, user, userProfile, router]);
+  // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
+  const { ready } = useRequireRole('store');
 
   const storeId = userProfile?.storeId;
 
-  const storeRef = useMemoFirebase(() => (firestore && storeId ? doc(firestore, 'stores', storeId) : null), [firestore, storeId]);
+  const storeRef = useMemoFirebase(() => (firestore && storeId && ready ? doc(firestore, 'stores', storeId) : null), [firestore, storeId]);
   const { data: store } = useDoc<{ rating?: number; ratingCount?: number }>(storeRef);
 
   const reviewsQuery = useMemoFirebase(() => {
-    if (!firestore || !storeId) return null;
+    if (!firestore || !storeId || !ready) return null;
     return query(collection(firestore, 'reviews'), where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
-  }, [firestore, storeId]);
+  }, [firestore, storeId, ready]);
 
   const { data: reviews, isLoading } = useCollection<Review>(reviewsQuery);
 

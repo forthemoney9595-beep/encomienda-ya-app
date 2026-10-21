@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
@@ -49,16 +50,13 @@ export default function StoreAnalyticsPage() {
   const router = useRouter();
   const [period, setPeriod] = useState<Period>('30d');
 
-  useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'store')) {
-      router.push('/');
-    }
-  }, [authLoading, user, userProfile, router]);
+  // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
+  const { ready } = useRequireRole('store');
 
   const storeQuery = useMemoFirebase(() => {
-      if (!firestore || !user?.uid) return null;
+      if (!firestore || !user?.uid || !ready) return null;
       return query(collection(firestore, 'stores'), where('ownerId', '==', user.uid));
-  }, [firestore, user?.uid]);
+  }, [firestore, user?.uid, ready]);
 
   const { data: userStores, isLoading: storeLoading } = useCollection<any>(storeQuery);
   const myStore = userStores && userStores.length > 0 ? userStores[0] : null;
@@ -69,7 +67,7 @@ export default function StoreAnalyticsPage() {
   // Para poder comparar con el período anterior, la consulta arranca desde prevFrom
   // (no desde from). Eso permite calcular ambos períodos con un solo listener.
   const analyticsQuery = useMemoFirebase(() => {
-    if (!firestore || !storeId) return null;
+    if (!firestore || !storeId || !ready) return null;
     const base = [
         collection(firestore, 'orders'),
         where('storeId', '==', storeId),

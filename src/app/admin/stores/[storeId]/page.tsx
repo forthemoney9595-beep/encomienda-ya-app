@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
-import { storeBaseAmount, commissionForOrder, storeNetForOrder, refundRatio, isPlatformCollected, FALLBACK_COMMISSION } from '@/lib/money';
+import { storeBaseAmount, commissionForOrder, storeNetForOrder, refundRatio, isPlatformCollected, FALLBACK_COMMISSION, platformBreakdownForOrder } from "@/lib/money";
 import { AccountStatement, type StatementMovement } from '@/components/account-statement';
 import { setAccountApproval } from '@/lib/approval-service';
 import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
@@ -142,10 +142,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
         // servicio, y con la comisión congelada del pedido si la tiene.
         // Neta (Fase PP, N13): reembolsos descontados, efectivo excluido — misma regla
         // que la tarjeta de Ganancias de Finanzas.
-        const commission = delivered.reduce(
-            (s, o) => s + (isPlatformCollected(o as any)
-                ? storeBaseAmount(o as any) * commissionForOrder(o as any, fallbackRate) / 100 * (1 - refundRatio(o as any))
-                : 0), 0);
+        const commission = delivered.reduce((s, o) => s + platformBreakdownForOrder(o as any, fallbackRate).commission, 0); // ARQ-009
         return {
             revenue,
             delivered: delivered.length,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -22,24 +23,21 @@ export default function DeliveryDashboardPage() {
   const firestore = useFirestore();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'delivery')) {
-      router.push('/');
-    }
-  }, [authLoading, user, userProfile, router]);
+  // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
+  const { ready } = useRequireRole('delivery');
 
   const isApprovedDriver = (userProfile as any)?.isApproved === true;
 
   // Mismas 2 queries que delivery-orders-view.tsx (panel operativo) -- ver por qué el
   // rango de estados tiene que coincidir exacto con firestore.rules en ese archivo.
   const availableQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !ready) return null; // ARQ-010: ESTA era la consulta que corría para un comprador (pool → permission-denied)
     return query(
       collection(firestore, 'orders'),
       where('deliveryPersonId', '==', null),
       where('status', 'in', ['En preparación', 'Listo para recoger'])
     );
-  }, [firestore]);
+  }, [firestore, ready]);
   const { data: availableOrders } = useCollection<any>(availableQuery);
 
   // 🚨 PERF-001 (auditoría oct 2026): antes UNA query con todo el historial del
@@ -48,17 +46,17 @@ export default function DeliveryDashboardPage() {
   // "hoy" se decide en memoria por `deliveredAt` sobre ese set chico — un pedido tomado
   // ayer y entregado hoy cuenta para hoy (mismo buffer que /delivery/analytics, N9).
   const myActiveQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !ready) return null;
     return query(
       collection(firestore, 'orders'),
       where('deliveryPersonId', '==', user.uid),
       where('status', 'in', DRIVER_ACTIVE_STATUSES)
     );
-  }, [firestore, user]);
+  }, [firestore, user, ready]);
   const { data: activeOrders, isLoading: ordersLoading } = useCollection<any>(myActiveQuery);
 
   const recentDeliveredQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !ready) return null;
     const since = new Date();
     since.setDate(since.getDate() - 7);
     since.setHours(0, 0, 0, 0);
@@ -69,7 +67,7 @@ export default function DeliveryDashboardPage() {
       where('createdAt', '>=', Timestamp.fromDate(since)),
       orderBy('createdAt', 'desc') // usa el índice (deliveryPersonId, status, createdAt DESC); sin orderBy pediría el ASC
     );
-  }, [firestore, user]);
+  }, [firestore, user, ready]);
   const { data: recentDelivered } = useCollection<any>(recentDeliveredQuery);
 
   const stats = useMemo(() => {

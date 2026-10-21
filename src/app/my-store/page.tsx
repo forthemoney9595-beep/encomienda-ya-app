@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -33,16 +34,13 @@ export default function StoreDashboardPage() {
 
   const storeId = userProfile?.storeId;
 
-  useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'store')) {
-      router.push('/');
-    }
-  }, [authLoading, user, userProfile, router]);
+  // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
+  const { ready } = useRequireRole('store');
 
   // --- Tienda ---
   const storeRef = useMemoFirebase(
-    () => (firestore && storeId ? doc(firestore, 'stores', storeId) : null),
-    [firestore, storeId]
+    () => (firestore && storeId && ready ? doc(firestore, 'stores', storeId) : null),
+    [firestore, storeId, ready]
   );
   const { data: store, isLoading: storeLoading } = useDoc<any>(storeRef);
 
@@ -54,29 +52,29 @@ export default function StoreDashboardPage() {
     () => (firestore && storeId
       ? query(collection(firestore, 'orders'), where('storeId', '==', storeId), where('status', 'in', STORE_LIVE_STATUSES))
       : null),
-    [firestore, storeId]
+    [firestore, storeId, ready]
   );
   const { data: liveOrders } = useCollection<any>(liveQuery);
   const todayQuery = useMemoFirebase(
     () => {
-      if (!firestore || !storeId) return null;
+      if (!firestore || !storeId || !ready) return null;
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
       return query(collection(firestore, 'orders'), where('storeId', '==', storeId), where('createdAt', '>=', Timestamp.fromDate(startOfToday)), orderBy('createdAt', 'desc')); // índice (storeId, createdAt DESC)
     },
-    [firestore, storeId]
+    [firestore, storeId, ready]
   );
   const { data: todayOrders } = useCollection<any>(todayQuery);
 
   // --- Productos (items + legacy 'products') para el aviso de stock bajo ---
   const itemsQuery = useMemoFirebase(
-    () => (firestore && storeId ? query(collection(firestore, 'stores', storeId, 'items')) : null),
-    [firestore, storeId]
+    () => (firestore && storeId && ready ? query(collection(firestore, 'stores', storeId, 'items')) : null),
+    [firestore, storeId, ready]
   );
   const { data: items } = useCollection<any>(itemsQuery);
   const legacyQuery = useMemoFirebase(
-    () => (firestore && storeId ? query(collection(firestore, 'stores', storeId, 'products')) : null),
-    [firestore, storeId]
+    () => (firestore && storeId && ready ? query(collection(firestore, 'stores', storeId, 'products')) : null),
+    [firestore, storeId, ready]
   );
   const { data: legacyItems } = useCollection<any>(legacyQuery);
 

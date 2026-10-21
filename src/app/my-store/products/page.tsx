@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -94,11 +95,8 @@ export default function ProductManagementPage() {
     discountPercent: ''
   });
 
-  useEffect(() => {
-    if (!authLoading && (!user || userProfile?.role !== 'store')) {
-      router.push('/');
-    }
-  }, [authLoading, user, userProfile, router]);
+  // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
+  const { ready } = useRequireRole('store');
 
   // Lógica de Carga (Trae TODO sin filtros) — escuchamos 'items' (actual) y 'products'
   // (legacy) por separado y los combinamos, así no se "pierden" productos de tiendas
@@ -146,7 +144,7 @@ export default function ProductManagementPage() {
     });
 
     return () => { unsubItems(); unsubProducts(); };
-  }, [firestore, userProfile?.storeId]);
+  }, [firestore, userProfile?.storeId, ready]);
 
   // Categorías del dueño (en vivo, así si las edita en /my-store/categories se refleja acá).
   // Aprovecho la misma suscripción para leer el maxDiscountPercent actual de la tienda.
@@ -159,7 +157,7 @@ export default function ProductManagementPage() {
       setStoreMaxDiscount(data?.maxDiscountPercent || 0);
     }, () => setStoreCategories([]));
     return () => unsub();
-  }, [firestore, userProfile?.storeId]);
+  }, [firestore, userProfile?.storeId, ready]);
 
   // Mantiene stores/{id}.maxDiscountPercent = el mayor descuento entre productos que hoy se
   // pueden comprar (disponibles y con stock). El panel de productos es el único lugar donde
