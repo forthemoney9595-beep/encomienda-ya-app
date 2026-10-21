@@ -29,3 +29,24 @@ jobs:
         run: npm run lint
       - name: Tests unitarios
         run: npm run test
+
+  # Tests de REGLAS de Firestore contra el emulador (ARQ-026, auditoría oct 2026): cargan el
+  # firestore.rules del repo y prueban ataque + regresión ANTES de desplegar. El emulador exige
+  # Java 21 (firebase-tools 15.x). Es un job aparte para que un fallo del emulador no tape el
+  # resultado del typecheck/lint/unitarios.
+  reglas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Tests de reglas (emulador)
+        run: npm run test:rules

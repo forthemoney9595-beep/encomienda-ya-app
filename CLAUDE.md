@@ -2748,6 +2748,47 @@ ejecución" del informe:
   `pushEnabled` (los tokens FCM de los 5 testers se borraron el 13/10; sin ese cambio, al
   abrir la app se re-registran solos).
 
+## Equipo de agentes, skills y emulador (oct 2026)
+Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
+lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:
+- **Agentes de proyecto** (`.claude/agents/*.md`, se invocan con "usá el agente X"):
+  `marketing-tinogasta` (lanzamiento, captación de tiendas/repartidores, copys, Play Store,
+  SEO local; usa las skills `marketing:*`), `analista-datos` (KPIs, consultas Admin SDK
+  SOLO lectura, tableros; `data:*`), `constructor-features` (features de punta a punta
+  respetando money.ts/reglas/consultas acotadas/notifyUser, con e2e), `qa-verificador`
+  (corre la batería real y reporta con evidencia) y `disenador-ui` (UI/UX móvil-first,
+  tokens y familias de color, WCAG AA, `design:*`, verifica a 430 px). Cada uno lee
+  CLAUDE.md y la bóveda antes de actuar.
+- **Skills del proyecto** (`.claude/skills/`): `/verificar` (pre-push), **`/e2e`**
+  (`money|rules|ui|all`: toda la batería real con residuo cero) y **`/lanzamiento`**
+  (checklist ejecutable por bloque: `mp`, `desmontaje`, `operacion`, `play`, `marketing`,
+  `final`).
+- **Tests de reglas de Firestore en el emulador** (ARQ-026/TEST-002):
+  `tests/rules/firestore.rules.test.ts` carga el `firestore.rules` del REPO (prueba lo que
+  se va a desplegar antes de desplegarlo) con `@firebase/rules-unit-testing`; se corre con
+  `npm run test:rules` (`firebase emulators:exec`, config aparte `vitest.rules.config.ts`;
+  se saltea solo en `npm run test`). **Exige Java 21** (firebase-tools 15 ya no acepta
+  17): instalado con winget (`EclipseAdoptium.Temurin.21.JDK`); en esta PC hay que
+  exportar `JAVA_HOME`/`PATH` apuntando a `C:\Program Files\Eclipse Adoptium\jdk-21…` en
+  la shell de bash. En CI es el job `reglas` con `actions/setup-java` 21. Primer caso:
+  ARQ-003 + PERF-004 + gate de aprobación + comprador no toca plata + retiros directos
+  bloqueados. **Cada endurecimiento nuevo de reglas agrega su caso acá** (ataque +
+  regresión), además del `_attack-*.js` contra producción.
+- El emulador usa **`firebase.emulator.json`** (config aparte: el `firebase.json` principal
+  tiene `hosting.frameworksBackend` y `emulators:exec` intentaba emular el framework web).
+- **Plugins de Claude Code instalados (scope user, 20/10)** con el CLI empaquetado en la
+  extensión (`…\.vscode\extensions\anthropic.claude-code-*\resources\native-binary\claude.exe`
+  — `claude` no está en el PATH de bash): del directorio oficial `feature-dev`
+  (flujo de features con agentes de exploración/arquitectura/QA), `frontend-design`,
+  `context7` (docs al día de Next/Firebase/MP vía MCP), `pr-review-toolkit`,
+  `claude-security`, `commit-commands`, `superpowers` (el más usado del directorio: TDD,
+  debugging, patrones), `sentry`; y **`mercadopago`** desde su marketplace oficial
+  (`mercadopago/mercadopago-claude-marketplace`: wizard de Checkout Pro, webhooks, pruebas —
+  usarlo en el bloque MP pre-lanzamiento). Ya estaban sincronizados desde claude.ai:
+  `marketing`, `design`, `data`, `sales`, `productivity`, `figma`, `postiz`. Se descartaron
+  a propósito los no revisados por Anthropic/partner (ux-ui-audit, design-skills, Obsidian
+  Notes): lo que aportan ya lo cubren `design:*` + los scripts Playwright propios.
+
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso
 particular.** Vale para todo lo existente (retiros, reembolsos) y para todo lo futuro —
