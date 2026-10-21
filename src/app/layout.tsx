@@ -6,6 +6,7 @@ import { AuthProvider } from '@/context/auth-context';
 // ✅ CORRECCIÓN FINAL: Importación de ChatListener desde '@/components/'
 import { ChatListener } from '@/components/chat-listener'; 
 import { AppContent } from './app-content';
+import { Analytics } from '@vercel/analytics/next';
 
 // 🚀 METADATOS OPTIMIZADOS PARA SEO Y REDES SOCIALES
 export const metadata: Metadata = {
@@ -88,6 +89,7 @@ export default function RootLayout({
             </CartProvider>
           </AuthProvider>
         <Toaster />
+        <Analytics />
       </body>
     </html>
   );
