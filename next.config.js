@@ -23,9 +23,6 @@ const nextConfig = {
   async headers() {
     return [{ source: '/:path*', headers: SECURITY_HEADERS }];
   },
-  experimental: {
-    instrumentationHook: true,
-  },
   images: {
     remotePatterns: [
       {

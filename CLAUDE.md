@@ -2748,6 +2748,70 @@ ejecución" del informe:
   `pushEnabled` (los tokens FCM de los 5 testers se borraron el 13/10; sin ese cambio, al
   abrir la app se re-registran solos).
 
+## Fase WW (oct 2026): Next 16 + React 19 — migración en rama `next-16`
+Decisión del bloque 1 del plan de lanzamiento ("sí, en rama aparte con todos los e2e, antes
+del bloque MP"). Salto 14.2.35 → **16.4.2** (dos mayores) + React 18.3 → **19.3**, ejecutado
+el 21/10 en la rama `next-16` y verificado con la batería completa (`/e2e all`) ANTES de
+mezclar. Superficie real del cambio: chica, y ninguna regla ni ruta de API cambió.
+- **Dependencias:** `next@16`, `react`/`react-dom@19`, `@types/react*@19`, `eslint@9` +
+  `eslint-config-next@16`, `react-leaflet@5` (+ `@react-leaflet/core@3`, exige React 19),
+  `cmdk@1.1.1`. **`react-day-picker` y `components/ui/calendar.tsx` eliminados**: nadie los
+  importaba y v8 bloquea React 19 por peer dep. Sentry 10.69, recharts 2.15, Radix y
+  Firebase ya eran compatibles (el SDK `firebase` NO cambió de versión en el lockfile).
+- **Código:** un solo archivo con `params` de la forma vieja
+  (`admin/stores/[storeId]/page.tsx`, codemod `next-async-request-api`: `params` es
+  `Promise` y se desenvuelve con `use()`). `next.config.js` sin
+  `experimental.instrumentationHook` (en 16 es default y la clave ya no existe).
+  `tsconfig.json` reescrito por Next (`jsx: react-jsx`, `.next/dev/types`) y `AGENTS.md`
+  generado por `next dev` en cada arranque — ambos se commitean, es lo que Next espera.
+- **`next lint` ya no existe en 16.** `npm run lint` = `eslint src` con `eslint.config.mjs`
+  (config plana de ESLint 9, misma base `core-web-vitals`). El codemod oficial
+  `next-lint-to-eslint-cli` crasheó; se migró a mano. Las **reglas del React Compiler**
+  (`eslint-plugin-react-hooks` 7: `set-state-in-effect`, `static-components`, `purity`,
+  `immutability`…) dieron 64 errores en código que funciona — quedaron en **warning** a
+  propósito (82 warnings, 0 errores) para no mezclar la migración con un refactor; son
+  señales reales (componentes definidos dentro del render en `admin/page.tsx`, `Date.now()`
+  en render) para una pasada dedicada. No bajarlas a `off`. `/verificar` y el CI ya usan
+  `npm run lint`.
+- **Build:** Turbopack por defecto, compila en ~3 s, cero avisos; `next build` ya NO corre
+  el lint (por eso el CI lo corre aparte). Dev server listo en 1,1 s.
+- **Verificado (dev server Next 16 + Firestore real):** typecheck 0 · lint 0 errores ·
+  Vitest 48/48 · reglas en emulador 14/14 · e2e stock 13/13, adjust-qty 19/19,
+  confirm-vs-cancel 19/19, pin 15/15, payout 21/21, claims 31/31, concurrency 12/12,
+  notif-chat 8/8 · `_audit-money` CUADRA ($120.960; pasivo $72.858) ·
+  `_attack-order-state` 14/14 · `_attack-money` 10/10 bloqueados · Playwright tanda2-visual
+  24/24 (14 pantallas, 3 roles, 0 overflow), firebase-unify 12/12, require-role 11/11,
+  settings-ranges 9/9, tanda1-ui 9/10 · residuo cero (verificado contra línea base).
+- **Lo que NO es de Next 16 (encontrado en el camino, anotado):**
+  - `_e2e-pool-privacy` 9/10: el repartidor ASIGNADO no puede leer `order_private` desde la
+    MISMA instancia del SDK de cliente que ya recibió un permission-denied sobre ese doc
+    antes de tomar el pedido; una instancia nueva (misma cuenta, mismo doc) lee bien, y el
+    ground truth muestra que `/api/orders/take` espejó `deliveryPersonId` correctamente.
+    El SDK `firebase` es idéntico en main → pre-existente, no del salto. Impacto real:
+    el panel del repartidor solo lee `order_private` de pedidos YA asignados (no lo sufre);
+    la página de detalle lee antes de tomar y su efecto no se re-ejecuta tras tomar → quien
+    toma desde el detalle no ve la dirección hasta recargar. Pendiente de una pasada propia
+    (re-leer `order_private` al cambiar `deliveryPersonId`, y si persiste, sonda del SDK).
+  - `tanda1-ui` 9/10: el optimizador de imágenes devuelve 400 a `placehold.co` porque sirve
+    **SVG** (`dangerouslyAllowSVG` apagado, misma política que en 14). Solo afecta
+    imágenes de seed; `StoreImage` cae al degradé. Las fotos reales (JPEG en Storage) no.
+  - `_attack-roles`: sin pedidos libres en la base para intentar el robo → "a confirmar"
+    (el gate está cubierto por el emulador). `_attack-money`/`_attack-roles` traían la
+    contraseña vieja del seed por defecto: pasar `password` como 3er argumento.
+  - Scripts Playwright con selectores por tamaño (`button.h-7.w-7`) quedaron viejos tras la
+    Tanda 2 (targets ≥36 px) y la hamburguesa ahora también mide `h-9 w-9`: el selector del
+    "+" de producto es `button.h-9.w-9.rounded-full.bg-primary`.
+- **`npm audit`:** de 45 a 35 con `npm audit fix` (sin mayores); las 35 restantes son
+  dev-only o Firebase/MP detrás de un mayor, como antes. Los 2 "críticos" son `vitest` 2
+  (runner de tests, no llega a producción); subir a Vitest 5 es otra tarea.
+- **OJO al editar archivos por Bash en este entorno:** un heredoc con backticks adentro
+  (markdown con código) rompe el parseo del comando entero ("unexpected EOF while looking
+  for matching `'`") aunque el delimitador vaya entre comillas. Para bloques de markdown o
+  JS con backticks, escribir el archivo con la herramienta Write y empalmar con `node`.
+- **Pendiente de David:** mezclar `next-16` a `main` (= deploy a producción). La rama se
+  pushea para que Vercel genere el preview; el merge es decisión suya con la evidencia de
+  arriba. Vercel necesita Node ≥ 20.9 (el CI corre con 20; Vercel por defecto 22).
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

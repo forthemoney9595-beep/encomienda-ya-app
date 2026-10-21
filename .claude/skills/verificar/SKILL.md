@@ -12,7 +12,7 @@ Vercel trata sus errores como fatales.
 ## Pasos (en orden; al primer fallo, parar y reportar)
 
 1. **Typecheck** — `npx tsc --noEmit` → exit 0, sin errores.
-2. **Lint** — `npx next lint` → contar líneas con "Error:" → debe ser **0**.
+2. **Lint** — `npm run lint` (ESLint 9 sobre `src`; `next lint` ya no existe en Next 16) → contar líneas con "Error:" → debe ser **0**.
    (Los *warnings* no frenan el deploy — `no-img-element`, `exhaustive-deps` son
    conocidos y aceptados. Los *Error* sí lo frenan.)
 3. **Tests unitarios** — `npm run test` (Vitest) → todos verdes. Son las funciones puras

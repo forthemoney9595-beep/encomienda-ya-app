@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, use } from 'react';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import AdminAuthGuard from '../../admin-auth-guard';
@@ -538,6 +538,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     );
 }
 
-export default function AdminStoreDetailPageGuarded({ params }: { params: { storeId: string } }) {
+export default function AdminStoreDetailPageGuarded(props: { params: Promise<{ storeId: string }> }) {
+    const params = use(props.params);
     return <AdminAuthGuard><AdminStoreDetailPage params={params} /></AdminAuthGuard>;
 }
