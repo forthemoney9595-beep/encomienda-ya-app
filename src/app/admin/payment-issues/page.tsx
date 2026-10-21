@@ -19,30 +19,11 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Loader2, AlertCircle, CheckCircle2, ExternalLink, RefreshCw, ScanSearch } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { REASON_LABELS, REASON_HINTS } from '@/lib/payment-issues';
 
-const REASON_LABELS: Record<string, string> = {
-  amount_mismatch: 'Monto no coincide',
-  unexpected_order_status: 'Estado de orden inesperado',
-  // Anomalías que antes no dejaban ningún registro (ver webhook y /api/orders/cancel).
-  payment_reversed: 'Pago revertido en MercadoPago',
-  duplicate_payment: 'Doble pago del mismo pedido',
-  cancelled_after_payment: 'Cancelado con el pago hecho',
-  // Detectadas por la conciliación (src/lib/reconcile-mp.ts, Fase NN bis).
-  reconcile_mismatch: 'MP no confirma este pago',
-  orphan_payment: 'Pago sin pedido',
-};
-
-// Qué tiene que hacer el admin con cada tipo. Sin esto, "marcar resuelto" es un botón que
-// hace desaparecer una alerta de plata sin que quede claro qué acción correspondía.
-const REASON_HINTS: Record<string, string> = {
-  amount_mismatch: 'Verificá en MercadoPago cuánto entró realmente y ajustá o reembolsá la diferencia.',
-  unexpected_order_status: 'El pago llegó tarde. Decidí si reactivás el pedido o devolvés la plata.',
-  payment_reversed: 'MercadoPago devolvió o retuvo esta plata. Si el pedido se entregó, es una pérdida a registrar.',
-  duplicate_payment: 'El comprador pagó dos veces. Hay que devolverle uno de los dos pagos.',
-  cancelled_after_payment: 'El pedido se canceló con la plata ya cobrada: corresponde reembolsar al comprador.',
-  reconcile_mismatch: 'La orden figura pagada acá pero MP no muestra ese pago como aprobado. Verificá el pago en el panel de MP antes de entregar o liquidar.',
-  orphan_payment: 'Entró plata en MP con una referencia de pedido que no existe en el sistema. Buscá el pago en MP y devolvelo si no corresponde.',
-};
+// REASON_LABELS / REASON_HINTS viven en src/lib/payment-issues.ts (compartidos con la
+// Bandeja y el Resumen del panel, Tanda T1) — antes el dashboard tenía su propio mapeo de 2
+// entradas y rotulaba mal 5 de los 7 motivos.
 
 const formatDate = (ts: any) => {
   if (!ts) return '—';

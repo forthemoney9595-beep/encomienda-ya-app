@@ -171,12 +171,22 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
 
     const isLoginPage = pathname.startsWith('/login') || pathname.startsWith('/signup') || pathname.startsWith('/forgot-password');
     const isLandingPage = pathname === '/';
+    // Panel admin (Tanda T1, oct 2026): tiene su PROPIO shell (src/components/admin/admin-shell.tsx,
+    // montado por app/admin/layout.tsx). Acá se devuelve el contenido pelado: antes el admin
+    // heredaba el header del comprador con el carrito y el buscador de tiendas, y a 430 px el
+    // avatar del footer del sidebar quedaba flotando sobre el contenido (bug visible en la
+    // captura antes-430-finanzas.png del diseño). El SidebarProvider de arriba se mantiene
+    // porque PageHeader (usado por las páginas admin todavía no migradas) llama useSidebar().
+    const isAdminArea = pathname === '/admin' || pathname.startsWith('/admin/');
 
     // Login/registro/recuperar: pantalla completa SIN el shell de la app. El botón de
     // menú (hamburguesa) no tiene sentido ahí — un invitado no tiene menú, y tocarlo
     // abría un panel vacío negro (falla reportada en la prueba del APK, 15/8).
     if (isLoginPage) {
         return <main className="flex-1">{children}</main>;
+    }
+    if (isAdminArea) {
+        return <>{children}</>;
     }
 
     // Opción A (ago 2026): el invitado en la home ya NO ve una landing suelta — ve la

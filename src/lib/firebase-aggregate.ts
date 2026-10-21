@@ -20,19 +20,23 @@ import * as Sentry from '@sentry/nextjs';
 // cuando la pestaña/ventana vuelve a tomar foco (refreshOnFocus) — así los totales se sienten
 // "vivos" sin mantener un listener permanente.
 
-type AggregateOptions = { refreshOnFocus?: boolean };
+// focusIntervalMs (Tanda T1 del panel admin): mínimo entre dos refrescos por foco. Default
+// 30 s; los totales HISTÓRICOS del Resumen admin lo suben a 5 min (escanean toda la
+// colección de entregados y cambian poco).
+type AggregateOptions = { refreshOnFocus?: boolean; focusIntervalMs?: number };
 
 // Suscribe focus/visibilitychange para re-correr `run` al volver a la pestaña (si enabled).
-function useFocusRefresh(run: () => void, enabled: boolean) {
+function useFocusRefresh(run: () => void, enabled: boolean, minIntervalMs = 30_000) {
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;
     // PERF-009: focus + visibilitychange disparan juntos (2× la misma consulta) y cada
-    // alt-tab re-escaneaba el historial. Como mucho una vez cada 30 s.
-    let last = 0;
+    // alt-tab re-escaneaba el historial. Como mucho una vez cada `minIntervalMs`.
+    // `last` arranca en "ahora": el primer run lo hace el efecto de montaje, no el foco.
+    let last = Date.now();
     const onFocus = () => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
-      if (now - last < 30_000) return;
+      if (now - last < minIntervalMs) return;
       last = now;
       run();
     };
@@ -42,7 +46,7 @@ function useFocusRefresh(run: () => void, enabled: boolean) {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [run, enabled]);
+  }, [run, enabled, minIntervalMs]);
 }
 
 type AggregateData<T extends AggregateSpec> = {
@@ -97,7 +101,7 @@ export function useAggregate<T extends AggregateSpec>(
     run();
   }, [run]);
 
-  useFocusRefresh(run, !!opts.refreshOnFocus);
+  useFocusRefresh(run, !!opts.refreshOnFocus, opts.focusIntervalMs);
 
   return { data, isLoading, error, refresh: run };
 }
@@ -140,7 +144,7 @@ export function useCountFromServer(
     run();
   }, [run]);
 
-  useFocusRefresh(run, !!opts.refreshOnFocus);
+  useFocusRefresh(run, !!opts.refreshOnFocus, opts.focusIntervalMs);
 
   return { count, isLoading, error, refresh: run };
 }

@@ -2812,6 +2812,118 @@ mezclar. Superficie real del cambio: chica, y ninguna regla ni ruta de API cambi
   pushea para que Vercel genere el preview; el merge es decisión suya con la evidencia de
   arriba. Vercel necesita Node ≥ 20.9 (el CI corre con 20; Vercel por defecto 22).
 
+## Fase XX (oct 2026): panel admin profesional — Tanda T1 (shell + Bandeja + Resumen + Pedidos)
+Pedido de David: "organizar los menús de administración a menús profesionales que realmente
+puedan llevar el control de un sistema de este tipo, calculando el tráfico". Diseño aprobado
+en la bóveda ([[Panel admin profesional (21-10)]]; spec, inventario, modelo de tráfico y
+`mock.html` en el scratchpad de esa sesión). Rama `admin-pro` sobre Next 16. Esta tanda
+es la primera de cinco (T2 Finanzas · T3 fichas · T4 Confianza/listas · T5 Sistema/Avisos/⌘K).
+**Las páginas viejas siguen funcionando con sus mismas rutas dentro del shell nuevo** hasta
+que su tanda las migre.
+
+**Shell (`src/components/admin/admin-shell.tsx`, montado UNA vez por `app/admin/layout.tsx`
+junto con `AdminAuthGuard`):** sidebar de 240 px colapsable a 64 (localStorage
+`admin-sidebar`, tooltips al colapsar), menú FINAL de 6 secciones y 17 rutas en
+`src/lib/admin-nav.ts` (ÚNICA fuente: sidebar, drawer, barra inferior, migas; lo que un
+'support' no puede hacer NO se muestra — `isFullAdmin` de `useAuth` es el único chequeo),
+topbar sticky con migas + ⌘K + chip "En vivo"/"Mantenimiento" (lee `config/platform`,
+pulsa solo en páginas con listener) + campanita + avatar con nivel y menú (perfil, tema,
+salir). A < 1024 px: drawer (`Sheet`) y **barra inferior de 5** (Resumen · Bandeja · Pedidos ·
+Finanzas | Reclamos para support · Más). `app-content.tsx` devuelve `children` pelado bajo
+`/admin` — se fue el header del comprador con el carrito y el avatar del footer que a 430 px
+flotaba sobre el contenido (bug de `antes-430-finanzas.png`). OJO: el `SidebarProvider` del
+shell viejo se mantiene arriba porque `PageHeader` (páginas admin sin migrar) llama
+`useSidebar()` y lanza sin contexto.
+
+**Tokens (`globals.css`, `tailwind.config.ts`):** superficie `[data-surface="admin"]` con
+`--radius: 0.625rem`, `--admin-chrome`/`--admin-row-hover` (`bg-admin-chrome`,
+`hover:bg-admin-row-hover`), `--destructive` un punto más profundo, y los tokens de TINTA
+`--{success,warning,info,destructive,primary}-ink` + `--cat-food-ink` → clases
+`text-success-ink`, etc. **Regla del admin: texto coloreado sobre card/soft =
+`text-{token}-ink`; relleno sólido = `bg-{token} text-{token}-foreground`.** Los `-ink`
+existen SOLO bajo la superficie admin (no se tocó la app del comprador).
+
+**Sistema de componentes (`src/components/admin/`):** `AdminPage` (título/subtítulo/acciones/
+KPIs/FilterBar sticky; publica migas y "en vivo" por `admin-chrome.tsx`), `KpiCard`+`KpiRow`
+(`value: null` → "…" con `aria-busy`, NUNCA $0 falso; `error` → "No se pudo calcular ·
+reintentar"; `staleAt`), `DataTable` + `usePagedQuery` (cursor Anterior/Siguiente, total por
+`getCountFromServer` del mismo filtro, `failed-precondition` traducido, tarjetas en < 768 px,
+menú ⋯ por fila, **CSV de TODO lo filtrado recorriendo el cursor** con tope 5.000 y aviso),
+`FilterBar` (chips con conteo real, selects, rango, búsqueda con ACLARACIÓN DE ALCANCE
+obligatoria; en celular los selects van a un Sheet "Filtros (N)"), `StatusBadge` (único
+mapeo por `kind`; pedidos vía `getOrderStatusKind`) + `CountPill`, `InboxList` (gravedad →
+grupo → más viejo primero; error POR FUENTE sin esconder el resto), `EntityLink` (tooltip con
+ID + copiar; `quick` abre `UserDetailDialog`), `ConfirmDialog`/`useConfirm` (reemplaza
+`confirm()`/`prompt()`: campos, `requireText`, `onConfirm` async con error en el diálogo),
+`RefundDialog` único, `Timeline`, `EmptyState`, `ErrorState`, `useAdminCounts` (contexto:
+≤ 7 `count()` — reclamos/discrepancias/incidentes abiertos, tiendas y repartidores
+`Pendiente`, retiros pending solo full — refresca al montar, foco con debounce 30 s, cada
+5 min visible y `counts.refresh()` tras cada acción), `useInboxItems` (los listeners de la
+Bandeja + trabados con reloj de 60 s). Helpers puros nuevos: `src/lib/format-date.ts`
+(`fmtDate` 'short|long|time|date|relative' es-AR en HORA ARGENTINA, `fmtElapsed`,
+`startOfDayArgentina`), `src/lib/order-stuck.ts` (`computeStuckOrders`, umbrales),
+`src/lib/payment-issues.ts` (`REASON_LABELS/HINTS` compartidos — el dashboard rotulaba mal
+5 de 7 motivos), `src/lib/admin-nav.ts`. `firebase-aggregate.ts` ganó `focusIntervalMs`.
+
+**Pantallas:**
+- **`/admin/inbox` Bandeja (NUEVA):** listeners sobre los sets ABIERTOS (`resolved == false`
+  en `claims`/`payment_mismatches`/`driver_incidents`, `users isApproved==false &&
+  status=='Pendiente'`, `withdrawals pending` si full, cada uno `limit(200)` con aviso si el
+  count real lo supera) + trabados desde el listener de activos. Chips con el count real.
+  Acciones sin salir: aprobar/rechazar (`setAccountApproval`), resolver incidente y
+  discrepancia con nota obligatoria (`updateDoc` que la regla permite + `logAdminAction`);
+  reclamos y retiros enlazan a su pantalla (T4/T2). Verificado en producción con script de
+  solo lectura: **0 docs sin el campo `resolved`** → no hizo falta fallback legacy.
+- **`/admin` Resumen:** SIN el listener de 30 días. KPIs de hoy por aggregation con rango en
+  hora Argentina (pedidos/entregados/cancelados hoy, ganancia bruta hoy =
+  `sum(serviceFee)+sum(commissionAmount)` en DOS aggregations, trabados, repartidores online
+  = aprobados − `isOnline==false`, reclamos/100 pedidos 7 d, pasivo → link a Finanzas),
+  pipeline de 6 nodos + capacidad de la red por counts, bandeja resumida (top 5), tendencia
+  interina de pedidos por día (7 counts), recientes (10) y totales históricos al final con
+  desglose colapsado (foco cada 5 min). Las tablas por tienda/repartidor del período se
+  reponen con `platform_daily` en T2.
+- **`/admin/orders`:** filtros server-side estado · fecha · tienda · repartidor · pago
+  (tienda/repartidor excluyentes; pago no se combina con ellos — sin índice, la UI lo
+  deshabilita y lo dice), chips con count del filtro, KPIs del filtro (Facturado bruto solo
+  sin filtro de entidad), ID exacto en toda la base, columna Repartidor, CSV completo, menú
+  ⋯ (ficha, ver como cliente, 🧪 aprobar pago de prueba —sigue existiendo—, reembolso,
+  cancelar con `ConfirmDialog`).
+- **`/admin/orders/[orderId]` ficha (NUEVA):** timeline (creado/pagado/tomado/retirado/
+  entregado con PIN ✓/✗/cancelado/rechazado/reembolso), ítems con ajustes, entrega desde
+  `order_private` (fallback al doc legacy), plata con reparto de `money.ts`, reclamo,
+  discrepancias, incidentes, reembolsos y chat solo lectura (`ChatWindow`). ≈ 10 lecturas.
+- **Rutas nuevas del menú con versión mínima** para que no haya 404 hasta su tanda:
+  `/admin/finances/payouts` (= `FinanceView`), `/admin/finances/refunds` (DataTable de
+  `refunds`, solo lectura), `/admin/system` (mantenimiento, última conciliación,
+  liquidación, versión).
+
+**Índices nuevos desplegados** (`firestore.indexes.json`, 29 → 36): `claims`/
+`payment_mismatches`/`driver_incidents (resolved, createdAt↓)`, `orders (paymentStatus,
+status, createdAt↓)`, `orders (status, createdAt↑, total)`, `(status, createdAt↑,
+serviceFee)`, `(status, createdAt↑, commissionAmount)`. Regla confirmada: una aggregation
+con rango + `sum(campo)` exige índice (filtro, rango, campo); el DESC existente no sirve.
+
+**Verificado:** typecheck 0 · lint 0 errores (12 warnings nuevos, todos del React Compiler,
+misma familia que los 67 existentes) · Vitest 55/55 (7 nuevos: `format-date`,
+`order-stuck`) · build OK · `_pw-admin-t1.js` (gitignored; un login, 1440 y 430 en la misma
+sesión, ground truth por Admin SDK de solo lectura, residuo cero) **82/82**: shell, 17 rutas,
+colapso persistido, 7 badges = counts reales, KPIs sin "$0" falso ni error de índice,
+Bandeja ordenada por gravedad, Pedidos filtrando por tienda y repartidor con total = Admin
+SDK y CSV con todas las filas, ficha, 4 páginas viejas + 3 nuevas dentro del shell, 0
+overflow a 430 en 6 rutas, drawer/bottom nav, 0 pageerror. Capturas en
+`scratchpad/admin-t1/`. **A confirmar con datos:** la base tiene 0 abiertos y 0 activos, así
+que la Bandeja/badges se verificaron con 0 = 0 y el orden por severidad sin ítems reales;
+el camino "KPI con error de índice" y los targets de la Bandeja con acciones se ejercen
+recién cuando haya pendientes.
+
+**Desviaciones de la spec, a propósito:** pasivo del Resumen = link (no se toca
+`/api/admin/liability` en esta tanda); tiempo confirmación→entrega y neto por día esperan
+`platform_daily` (T2); "Re-avisar repartidores" no está en la ficha (`notify-drivers` exige
+ser dueño de la tienda); el chip de la topbar linkea a `/admin/system` mínimo; `main-nav.tsx`
+quedó intacto (el admin ya no lo usa; sus dos listeners solo corren si un admin navega la
+app como cliente). Los `AdminAuthGuard` por página se dejaron (redundantes e inofensivos;
+los `requireFullAdmin` siguen gateando).
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

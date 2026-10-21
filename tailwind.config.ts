@@ -32,6 +32,7 @@ export default {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
+          ink: 'hsl(var(--primary-ink))', // texto sobre card/soft (solo bajo [data-surface=admin])
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',
@@ -48,18 +49,22 @@ export default {
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
+          ink: 'hsl(var(--destructive-ink))', // texto sobre card/soft (solo bajo [data-surface=admin])
         },
         success: {
           DEFAULT: 'hsl(var(--success))',
           foreground: 'hsl(var(--success-foreground))',
+          ink: 'hsl(var(--success-ink))', // texto sobre card/soft (solo bajo [data-surface=admin])
         },
         info: {
           DEFAULT: 'hsl(var(--info))',
           foreground: 'hsl(var(--info-foreground))',
+          ink: 'hsl(var(--info-ink))', // texto sobre card/soft (solo bajo [data-surface=admin])
         },
         warning: {
           DEFAULT: 'hsl(var(--warning))',
           foreground: 'hsl(var(--warning-foreground))',
+          ink: 'hsl(var(--warning-ink))', // texto sobre card/soft (solo bajo [data-surface=admin])
         },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -84,6 +89,12 @@ export default {
           cloth: 'hsl(var(--cat-cloth))',
           home: 'hsl(var(--cat-home))',
           other: 'hsl(var(--cat-other))',
+          'food-ink': 'hsl(var(--cat-food-ink))',
+        },
+        // Cromo del panel admin (sidebar/topbar y hover de filas). Ver globals.css.
+        admin: {
+          chrome: 'hsl(var(--admin-chrome))',
+          'row-hover': 'hsl(var(--admin-row-hover))',
         },
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar-background))',

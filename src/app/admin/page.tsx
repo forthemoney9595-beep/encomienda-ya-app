@@ -1,1181 +1,375 @@
 'use client';
 
-import PageHeader from '@/components/page-header';
-import { money } from '@/lib/format-money';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, DollarSign, PackageCheck, Store as StoreIcon, Bike, AlertTriangle, CheckCircle2, Pause, Download, RefreshCw, Clock, CreditCard, ChefHat, Truck, ChevronRight, MessageSquareWarning } from 'lucide-react';
-import { CLAIM_TYPES, type ClaimType } from '@/lib/claim-types';
-import { setAccountApproval } from '@/lib/approval-service';
-import { downloadCsv } from '@/lib/csv-export';
-import { PendingList } from './pending-list';
-import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { storeBaseAmount, commissionForOrder, refundRatio, isPlatformCollected, driverNetForOrder, FALLBACK_COMMISSION, platformBreakdownForOrder } from "@/lib/money";
-import { useAggregate, useCountFromServer } from '@/lib/firebase-aggregate';
-import type { Order as OrderType } from '@/lib/order-service';
-import type { Store as StoreType } from '@/lib/placeholder-data';
-import { collection, query, where, doc, orderBy, limit, sum, count, CollectionReference, Timestamp } from 'firebase/firestore';
-import { BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Legend, Cell } from 'recharts';
-import { subDays, format, startOfDay, startOfMonth } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import AdminAuthGuard from './admin-auth-guard';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
+import { collection, count, getCountFromServer, limit, orderBy, query, sum, Timestamp, where, type Query } from 'firebase/firestore';
+import {
+  Bike, CheckCircle2, ChefHat, ChevronDown, Clock, CreditCard, Inbox, PackageCheck, Pause, RefreshCw, Store as StoreIcon, Truck, AlertTriangle,
+} from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { db, useCollection, useMemoFirebase } from '@/lib/firebase';
+import { useAggregate, useCountFromServer } from '@/lib/firebase-aggregate';
+import { money } from '@/lib/format-money';
+import { fmtDate, fmtElapsed, startOfDayArgentina, weekdayShort } from '@/lib/format-date';
+import { ADMIN_ACTIVE_STATUSES } from '@/lib/order-stuck';
+import type { Order } from '@/lib/order-service';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { AdminPage } from '@/components/admin/admin-page';
+import { KpiCard, KpiRow } from '@/components/admin/kpi-card';
+import { InboxList } from '@/components/admin/inbox-list';
+import { useInboxItems } from '@/components/admin/use-inbox';
+import { useAdminCounts } from '@/components/admin/use-admin-counts';
+import { StatusBadge } from '@/components/admin/status-badge';
+import { EntityLink } from '@/components/admin/entity-link';
+import { ErrorState } from '@/components/admin/error-state';
 
-const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
-
-// Etapas del flujo del pedido EN ORDEN. Se dibujan como un pipeline conectado (ver el
-// render más abajo) en vez de tarjetas sueltas: así se lee el RECORRIDO del pedido y en
-// qué punto se está acumulando la cola.
-// El color progresa según de quién depende: gris (el sistema espera) → ámbar (la pelota la
-// tiene la tienda) → azul (ya está en la calle). Es la misma escala semántica que usa el
-// resto de la app en order-status.ts.
+/* Etapas del flujo EN ORDEN. El color progresa según de quién depende: gris (el sistema
+   espera) → ámbar (la pelota la tiene la tienda) → azul (ya está en la calle). */
 const PIPELINE_STAGES = [
-  { status: 'Pendiente de Confirmación', label: 'Esperando tienda',  who: 'la tienda debe confirmar',        icon: Clock,        dot: 'bg-muted-foreground/40', ring: 'ring-muted-foreground/20', text: 'text-muted-foreground', tint: 'bg-muted/30' },
-  { status: 'Pendiente de Pago',         label: 'Esperando pago',    who: 'el cliente debe pagar',           icon: CreditCard,   dot: 'bg-warning',             ring: 'ring-warning/30',          text: 'text-warning',          tint: 'bg-warning/10' },
-  { status: 'En preparación',            label: 'Preparando',        who: 'la tienda está cocinando',        icon: ChefHat,      dot: 'bg-warning',             ring: 'ring-warning/30',          text: 'text-warning',          tint: 'bg-warning/10' },
-  { status: 'Listo para recoger',        label: 'Listo para retiro', who: 'falta que lo tome un repartidor', icon: PackageCheck, dot: 'bg-warning',             ring: 'ring-warning/30',          text: 'text-warning',          tint: 'bg-warning/10' },
-  { status: 'En camino',                 label: 'Yendo a la tienda', who: 'el repartidor va a retirar',      icon: Bike,         dot: 'bg-info',                ring: 'ring-info/30',             text: 'text-info',             tint: 'bg-info/10' },
-  { status: 'En reparto',                label: 'Yendo al cliente',  who: 'el repartidor va a entregar',     icon: Truck,        dot: 'bg-info',                ring: 'ring-info/30',             text: 'text-info',             tint: 'bg-info/10' },
+  { status: 'Pendiente de Confirmación', label: 'Sin confirmar',   who: 'la tienda debe confirmar',        icon: Clock,        ink: 'text-warning-ink', soft: 'bg-warning/10 border-warning/60' },
+  { status: 'Pendiente de Pago',         label: 'Sin pagar',       who: 'el cliente debe pagar',           icon: CreditCard,   ink: 'text-muted-foreground', soft: 'bg-muted/40 border-border' },
+  { status: 'En preparación',            label: 'En preparación',  who: 'en la tienda',                    icon: ChefHat,      ink: 'text-warning-ink', soft: 'bg-warning/10 border-warning/60' },
+  { status: 'Listo para recoger',        label: 'Listo',           who: 'falta que lo tome un repartidor', icon: PackageCheck, ink: 'text-warning-ink', soft: 'bg-warning/10 border-warning/60' },
+  { status: 'En camino',                 label: 'En camino',       who: 'yendo a la tienda',               icon: Bike,         ink: 'text-info-ink',    soft: 'bg-info/10 border-info/60' },
+  { status: 'En reparto',                label: 'En reparto',      who: 'yendo al cliente',                icon: Truck,        ink: 'text-info-ink',    soft: 'bg-info/10 border-info/60' },
 ] as const;
 
-// Dónde está físicamente el pedido en cada tramo del pipeline (se rotula debajo).
-const PIPELINE_ZONES = [
-  { label: 'en la tienda', from: 0, to: 3 },
-  { label: 'en la calle',  from: 4, to: 5 },
-] as const;
-
-// Cuántas alertas se listan antes de resumir el resto. Con volumen real la lista completa
-// se volvía una pared inmanejable (44 filas empujando todo el dashboard).
-const ALERT_PREVIEW = 6;
-
-// Tipos de alerta que se unifican en el panel "Requiere tu atención". Antes cada uno era
-// un bloque aparte con su propio marco de color, apilados: tres cajas rojas/ámbar
-// compitiendo por la atención y empujando el resto del dashboard fuera de pantalla.
-type AlertKind = 'stuck' | 'payment' | 'incident' | 'claim';
-const ALERT_KINDS: { k: AlertKind; label: string; icon: any; href: string }[] = [
-  { k: 'stuck',    label: 'Pedidos trabados', icon: Clock,                href: '/admin/orders' },
-  { k: 'payment',  label: 'Pagos',            icon: DollarSign,           href: '/admin/payment-issues' },
-  { k: 'incident', label: 'Repartidores',     icon: Bike,                 href: '/admin/incidents' },
-  { k: 'claim',    label: 'Reclamos',         icon: MessageSquareWarning, href: '/admin/claims' },
-];
+const HISTORIC_FOCUS_MS = 5 * 60_000;
 
 /**
- * Formato de moneda argentino: separador de miles con PUNTO ($1.953.560). Antes se usaba
- * `toFixed(2)`, que imprime "$1953560.00" — ilegible de un vistazo y además con el punto
- * en el lugar equivocado para la convención local. Sin decimales: son pesos, los centavos
- * no aportan nada en un total de plataforma.
+ * Resumen (dashboard) — Tanda T1. SIN el listener de "pedidos de los últimos 30 días" (600 ·
+ * 4.500 · 22.500 lecturas por carga según el modelo de tráfico): todo lo de "hoy" sale de
+ * aggregations con rango (índices (status, createdAt, campo)) y lo "en vivo" del set chico de
+ * activos. Las analíticas por tienda/repartidor y la tendencia de neto llegan con los cierres
+ * diarios (`platform_daily`, T2) — acá queda una tendencia interina de pedidos por día (7 counts).
  */
+export default function AdminResumenPage() {
+  const { isAdmin, isFullAdmin } = useAuth();
+  const counts = useAdminCounts();
+  const inbox = useInboxItems();
+  const active = inbox.raw.activeOrders;
+  const now = inbox.now;
 
-/**
- * "hace X" legible a cualquier escala. Antes solo formateaba horas y minutos, así que un
- * pedido trabado de hace 3 meses mostraba "hace 2261h 14m" — técnicamente correcto e
- * inútil de leer. Se hizo evidente al cargar datos de prueba con fechas viejas.
- */
-function formatElapsed(hours: number): string {
-  if (hours < 1) return `${Math.round(hours * 60)}m`;
-  if (hours < 48) {
-    const h = Math.floor(hours);
-    const m = Math.round((hours - h) * 60);
-    return `${h}h${m > 0 ? ` ${m}m` : ''}`;
-  }
-  const days = Math.floor(hours / 24);
-  if (days < 30) {
-    const restHours = Math.floor(hours - days * 24);
-    return `${days} día${days === 1 ? '' : 's'}${restHours > 0 ? ` ${restHours}h` : ''}`;
-  }
-  const months = Math.floor(days / 30);
-  const restDays = days - months * 30;
-  return `${months} mes${months === 1 ? '' : 'es'}${restDays > 0 ? ` ${restDays}d` : ''}`;
-}
+  // "Hoy" en hora ARGENTINA, estable durante el día (no cambia con cada tick del reloj).
+  const dayKey = fmtDate(now, 'date');
+  const todayStart = useMemo(() => startOfDayArgentina(new Date(now)), [dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sevenDaysAgo = useMemo(() => startOfDayArgentina(new Date(now), -6), [dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tsToday = useMemo(() => Timestamp.fromDate(todayStart), [todayStart]);
+  const ts7d = useMemo(() => Timestamp.fromDate(sevenDaysAgo), [sevenDaysAgo]);
 
-// Estados "activos": pedidos en curso ahora. Set chico por naturaleza -> se escucha en vivo.
-const ACTIVE_STATUSES = [
-  'Pendiente de Confirmación',
-  'Pendiente de Pago',
-  'En preparación',
-  'Listo para recoger',
-  'En camino',
-  'En reparto',
-];
+  const ordersCol = useMemo(() => collection(db, 'orders'), []);
+  const q = (b: () => Query) => (isAdmin ? b() : null);
 
-// Umbrales en horas: cuánto tiempo puede estar un pedido en cada estado antes de alertar.
-const STUCK_THRESHOLDS_H: Record<string, number> = {
-  'Pendiente de Confirmación': 1,   // la tienda debería confirmar en ≤1h
-  'Pendiente de Pago':         2,   // el cliente debería pagar en ≤2h
-  'En preparación':            3,   // la tienda debería tenerlo listo en ≤3h
-  'Listo para recoger':        2,   // un repartidor debería tomarlo en ≤2h
-  'En camino':                 3,   // el repartidor debería entregarlo en ≤3h
-  'En reparto':                4,
-};
+  /* ── KPIs de hoy (interino por aggregation; ★ platform_daily en T2) ──────────── */
+  const ordersTodayQ = useMemoFirebase(() => q(() => query(ordersCol, where('createdAt', '>=', tsToday))), [isAdmin, ordersCol, tsToday]);
+  const deliveredTodayQ = useMemoFirebase(() => q(() => query(ordersCol, where('status', '==', 'Entregado'), where('createdAt', '>=', tsToday))), [isAdmin, ordersCol, tsToday]);
+  const cancelledTodayQ = useMemoFirebase(() => q(() => query(ordersCol, where('status', 'in', ['Cancelado', 'Rechazado']), where('createdAt', '>=', tsToday))), [isAdmin, ordersCol, tsToday]);
+  const ordersToday = useCountFromServer(ordersTodayQ);
+  const deliveredToday = useCountFromServer(deliveredTodayQ);
+  const cancelledToday = useCountFromServer(cancelledTodayQ);
+  // Dos aggregations SEPARADAS (regla de la Fase HH: una sum por campo, cada una con su índice).
+  const feesToday = useAggregate(deliveredTodayQ, { v: sum('serviceFee') });
+  const commissionToday = useAggregate(deliveredTodayQ, { v: sum('commissionAmount') });
 
-// Helper seguro para obtener Date desde Timestamp o String
-const getDate = (date: any): Date => {
-    if (!date) return new Date();
-    if (date instanceof Timestamp || (typeof date === 'object' && typeof date.toDate === 'function')) {
-        return date.toDate();
-    }
-    return new Date(date);
-};
+  const driversApprovedQ = useMemoFirebase(() => q(() => query(collection(db, 'users'), where('role', '==', 'delivery'), where('isApproved', '==', true))), [isAdmin]);
+  const driversOfflineQ = useMemoFirebase(() => q(() => query(collection(db, 'users'), where('role', '==', 'delivery'), where('isApproved', '==', true), where('isOnline', '==', false))), [isAdmin]);
+  const driversApproved = useCountFromServer(driversApprovedQ);
+  const driversOffline = useCountFromServer(driversOfflineQ);
 
-// Usamos 'any' en el status para evitar conflictos con tipos estrictos viejos
-const getStatusVariant = (status: any) => {
-    switch (status) {
-      case 'Entregado': return 'secondary';
-      case 'En reparto': return 'default';
-      case 'Pendiente de Pago': return 'default';
-      case 'En preparación':
-      case 'Pedido Realizado': return 'outline';
-      case 'Pendiente de Confirmación': return 'outline';
-      case 'Cancelado':
-      case 'Rechazado': return 'destructive';
-      default: return 'outline';
-    }
-};
+  const claims7dQ = useMemoFirebase(() => q(() => query(collection(db, 'claims'), where('createdAt', '>=', ts7d))), [isAdmin, ts7d]);
+  const orders7dQ = useMemoFirebase(() => q(() => query(ordersCol, where('createdAt', '>=', ts7d))), [isAdmin, ordersCol, ts7d]);
+  const delivered7dQ = useMemoFirebase(() => q(() => query(ordersCol, where('status', '==', 'Entregado'), where('createdAt', '>=', ts7d))), [isAdmin, ordersCol, ts7d]);
+  const claims7d = useCountFromServer(claims7dQ);
+  const orders7d = useCountFromServer(orders7dQ);
+  const delivered7d = useCountFromServer(delivered7dQ);
 
-function AdminDashboard() {
-  const firestore = useFirestore();
-  const router = useRouter();
-  const { toast } = useToast();
-  const { user: adminUser } = useAuth();
+  const storesApprovedQ = useMemoFirebase(() => q(() => query(collection(db, 'stores'), where('isApproved', '==', true))), [isAdmin]);
+  const storesPausedQ = useMemoFirebase(() => q(() => query(collection(db, 'stores'), where('isApproved', '==', true), where('manuallyPaused', '==', true))), [isAdmin]);
+  const storesApproved = useCountFromServer(storesApprovedQ);
+  const storesPaused = useCountFromServer(storesPausedQ);
 
-  // Aprobar / rechazar solicitudes de tiendas y repartidores — SIEMPRE vía el servicio
-  // único (Fase PP): escribe isApproved + status + stores.isApproved juntos, audita y le
-  // avisa a la persona. Antes este camino no escribía users.status y el aprobado quedaba
-  // "Pendiente" en las otras pantallas; el rechazado nunca salía de la cola.
-  const handleUpdateUserStatus = async (userId: string, isApproved: boolean) => {
-    if (!firestore) return;
-    try {
-      const relatedStore = (stores as any[])?.find((s: any) => s.ownerId === userId);
-      await setAccountApproval(firestore, {
-        userId,
-        approved: isApproved,
-        role: relatedStore ? 'store' : 'delivery',
-        storeId: relatedStore?.id ?? null,
-        adminUser,
-        label: relatedStore ? `tienda: ${relatedStore.name || relatedStore.id}` : 'repartidor',
-      });
-      toast({ title: isApproved ? 'Usuario aprobado y notificado' : 'Solicitud rechazada' });
-    } catch (error) {
-      console.error(error);
-      toast({ variant: 'destructive', title: 'Error al actualizar' });
-    }
-  };
+  /* ── Totales históricos (aggregations, foco cada 5 min) ───────────────────── */
+  const deliveredAllQ = useMemoFirebase(() => q(() => query(ordersCol, where('status', '==', 'Entregado'))), [isAdmin, ordersCol]);
+  const deliveredAgg = useAggregate(deliveredAllQ, { revenue: sum('total'), completed: count() }, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
+  const feesAgg = useAggregate(deliveredAllQ, { total: sum('serviceFee') }, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
+  const shippingAgg = useAggregate(deliveredAllQ, { total: sum('deliveryFee') }, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
+  const commissionAgg = useAggregate(deliveredAllQ, { total: sum('commissionAmount') }, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
+  const usersQ = useMemoFirebase(() => q(() => query(collection(db, 'users'), where('role', '!=', 'admin'))), [isAdmin]);
+  const buyersQ = useMemoFirebase(() => q(() => query(collection(db, 'users'), where('role', '==', 'buyer'))), [isAdmin]);
+  const storeUsersQ = useMemoFirebase(() => q(() => query(collection(db, 'users'), where('role', '==', 'store'))), [isAdmin]);
+  const driverUsersQ = useMemoFirebase(() => q(() => query(collection(db, 'users'), where('role', '==', 'delivery'))), [isAdmin]);
+  const allOrdersQ = useMemoFirebase(() => (isAdmin ? ordersCol : null), [isAdmin, ordersCol]);
+  const totalUsers = useCountFromServer(usersQ, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
+  const buyersCount = useCountFromServer(buyersQ, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
+  const storeUsersCount = useCountFromServer(storeUsersQ, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
+  const driverUsersCount = useCountFromServer(driverUsersQ, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
+  const allOrdersCount = useCountFromServer(allOrdersQ, { refreshOnFocus: true, focusIntervalMs: HISTORIC_FOCUS_MS });
 
-  // Controles de período (se declaran arriba porque la query del período los usa).
-  const [analyticsPeriod, setAnalyticsPeriod] = useState<'7d'|'30d'|'month'>('30d');
-  const [alertFilter, setAlertFilter] = useState<AlertKind | 'all'>('all');
-  const [analyticsSort, setAnalyticsSort] = useState<'revenue'|'orders'>('revenue');
+  /* ── Tendencia interina: pedidos por día (7 counts, 1 lectura c/u a esta escala) ── */
+  const [trend, setTrend] = useState<{ label: string; n: number }[] | null>(null);
+  const [trendError, setTrendError] = useState<unknown>(null);
+  const [trendTick, setTrendTick] = useState(0);
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    const days = Array.from({ length: 7 }, (_, i) => startOfDayArgentina(new Date(now), i - 6));
+    Promise.all(days.map((d, i) => {
+      const from = Timestamp.fromDate(d);
+      const to = Timestamp.fromDate(i < 6 ? days[i + 1] : startOfDayArgentina(new Date(now), 1));
+      return getCountFromServer(query(ordersCol, where('createdAt', '>=', from), where('createdAt', '<', to))).then(s => ({ label: weekdayShort(d), n: s.data().count }));
+    })).then(r => { if (!cancelled) { setTrend(r); setTrendError(null); } })
+      .catch(e => { if (!cancelled) setTrendError(e); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, ordersCol, dayKey, trendTick]);
 
-  const analyticsFrom = useMemo(() => {
-    if (analyticsPeriod === '7d') return subDays(new Date(), 7);
-    if (analyticsPeriod === '30d') return subDays(new Date(), 30);
-    return startOfMonth(new Date());
-  }, [analyticsPeriod]);
+  /* ── Pedidos recientes (10) ───────────────────────────────────────────────── */
+  const recentQ = useMemoFirebase(() => q(() => query(ordersCol, orderBy('createdAt', 'desc'), limit(10))), [isAdmin, ordersCol]);
+  const recent = useCollection<Order>(recentQ);
 
-  // La query del período cubre SIEMPRE al menos los últimos 7 días, para que el gráfico de
-  // "últimos 7 días" salga del mismo set aunque el período elegido sea más corto (ej. "este mes"
-  // recién empezado).
-  const ordersFrom = useMemo(() => {
-    const sevenDaysAgo = subDays(new Date(), 7);
-    return analyticsFrom < sevenDaysAgo ? analyticsFrom : sevenDaysAgo;
-  }, [analyticsFrom]);
+  const refreshAll = useCallback(() => {
+    void counts.refresh();
+    [ordersToday, deliveredToday, cancelledToday, driversApproved, driversOffline, claims7d, orders7d, delivered7d, storesApproved, storesPaused,
+      totalUsers, buyersCount, storeUsersCount, driverUsersCount, allOrdersCount].forEach(c => void c.refresh());
+    [feesToday, commissionToday, deliveredAgg, feesAgg, shippingAgg, commissionAgg].forEach(a => void a.refresh());
+    setTrendTick(t => t + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ── Consultas ──────────────────────────────────────────────
-  // Totales históricos: aggregation server-side (no baja documentos). refreshOnFocus para que se
-  // sientan "vivos" sin mantener un listener permanente sobre TODAS las órdenes.
-  const deliveredAggQuery = useMemoFirebase(
-    () => firestore ? query(collection(firestore, 'orders'), where('status', '==', 'Entregado')) : null,
-    [firestore]
-  );
-  const { data: deliveredAgg, error: deliveredErr, refresh: refreshDelivered } = useAggregate(
-    deliveredAggQuery,
-    { revenue: sum('total'), completed: count() },
-    { refreshOnFocus: true }
-  );
+  /* ── Derivados en vivo ─────────────────────────────────────────────────────── */
+  const byStatus = useMemo(() => {
+    const m: Record<string, number> = {};
+    active.forEach(o => { m[o.status] = (m[o.status] || 0) + 1; });
+    return m;
+  }, [active]);
+  const totalActive = active.length;
+  const inStore = PIPELINE_STAGES.slice(0, 4).reduce((s, st) => s + (byStatus[st.status] || 0), 0);
+  const inStreet = PIPELINE_STAGES.slice(4).reduce((s, st) => s + (byStatus[st.status] || 0), 0);
+  const waitingDriver = byStatus['Listo para recoger'] || 0;
+  const stuckItems = inbox.items.filter(i => i.kind === 'stuck');
+  const oldestStuck = stuckItems.reduce<number | null>((acc, it) => (it.since !== null && (acc === null || it.since < acc) ? it.since : acc), null);
 
-  // Comisión de la plataforma y envíos, en aggregations SEPARADAS.
-  // OJO: NO se pueden meter en la misma query que `sum('total')`. Firestore exige un índice
-  // que cubra el filtro + TODOS los campos agregados a la vez; tener (status,total),
-  // (status,serviceFee) y (status,deliveryFee) por separado no alcanza para pedir las tres
-  // sumas juntas — la query falla y `useAggregate` se traga el error, devolviendo 0 en
-  // TODAS las métricas (así se rompieron las tarjetas al intentar unificarlas).
-  const { data: feesAgg, refresh: refreshFees } = useAggregate(
-    deliveredAggQuery, { total: sum('serviceFee') }, { refreshOnFocus: true },
-  );
-  const { data: shippingAgg, refresh: refreshShipping } = useAggregate(
-    deliveredAggQuery, { total: sum('deliveryFee') }, { refreshOnFocus: true },
-  );
-  // Comisión cobrada a las tiendas. Es el OTRO ingreso de la plataforma además de la
-  // tarifa de servicio, y antes no aparecía en ningún número del panel: la tarjeta
-  // rotulaba `sum(serviceFee)` como "Comisión de la plataforma", que es otra cosa.
-  const { data: commissionAgg, refresh: refreshCommission } = useAggregate(
-    deliveredAggQuery, { total: sum('commissionAmount') }, { refreshOnFocus: true },
-  );
+  const driversOnline = driversApproved.count === null || driversOffline.count === null ? null : Math.max(0, driversApproved.count - driversOffline.count);
+  const grossToday = feesToday.data && commissionToday.data ? (feesToday.data.v ?? 0) + (commissionToday.data.v ?? 0) : null;
+  const claimsPer100 = claims7d.count === null || orders7d.count === null ? null : (orders7d.count > 0 ? (claims7d.count / orders7d.count) * 100 : 0);
+  const pendingApprovals = counts.counts.pendingStores === null || counts.counts.pendingDrivers === null ? null : (counts.counts.pendingStores ?? 0) + (counts.counts.pendingDrivers ?? 0);
+  const storesOperating = storesApproved.count === null || storesPaused.count === null ? null : Math.max(0, storesApproved.count - storesPaused.count);
+  const inboxTotal = counts.inboxTotal === null ? null : counts.inboxTotal + inbox.stuckCount;
 
-  const usersCountQuery = useMemoFirebase(
-    () => firestore ? query(collection(firestore, 'users'), where('role', '!=', 'admin')) : null,
-    [firestore]
-  );
-  const { count: totalUsers, refresh: refreshUsers } = useCountFromServer(usersCountQuery, { refreshOnFocus: true });
+  const revenue = deliveredAgg.data?.revenue ?? null;
+  const completed = deliveredAgg.data?.completed ?? null;
+  const fees = feesAgg.data?.total ?? 0;
+  const shipping = shippingAgg.data?.total ?? 0;
+  const commission = commissionAgg.data?.total ?? 0;
+  const products = revenue === null ? 0 : Math.max(0, revenue - fees - shipping);
+  const toStores = Math.max(0, products - commission);
+  const toPlatform = fees + commission;
+  const avgTicket = revenue !== null && completed ? revenue / completed : 0;
+  const deliveryRate = completed !== null && allOrdersCount.count ? Math.round((completed / allOrdersCount.count) * 100) : null;
+  const maxTrend = Math.max(1, ...(trend ?? []).map(t => t.n));
 
-  // Desglose de usuarios por rol y tasa de completado: counts de un solo campo (índice
-  // automático, sin deploy). Le dan contexto a los headline numbers, que antes eran solo
-  // un número suelto sin con qué compararlo.
-  const buyersQ    = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'buyer')) : null, [firestore]);
-  const storesQ    = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'store')) : null, [firestore]);
-  const driversQ   = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'delivery')) : null, [firestore]);
-  const allOrdersQ = useMemoFirebase(() => firestore ? collection(firestore, 'orders') : null, [firestore]);
-  const { count: buyersCount,  refresh: rBuyers }  = useCountFromServer(buyersQ,    { refreshOnFocus: true });
-  const { count: storesCount,  refresh: rStores }  = useCountFromServer(storesQ,    { refreshOnFocus: true });
-  const { count: driversCount, refresh: rDrivers } = useCountFromServer(driversQ,   { refreshOnFocus: true });
-  const { count: allOrdersCount, refresh: rOrders } = useCountFromServer(allOrdersQ, { refreshOnFocus: true });
-
-  // Pedidos activos ahora (set chico) -> en vivo.
-  const activeOrdersQuery = useMemoFirebase(
-    () => firestore ? query(collection(firestore, 'orders'), where('status', 'in', ACTIVE_STATUSES)) as CollectionReference<OrderType> : null,
-    [firestore]
-  );
-  const { data: activeOrders, isLoading: activeLoading } = useCollection<OrderType>(activeOrdersQuery);
-
-  // Pedidos del período (acotado por fecha) -> gráfico 7 días + analíticas por tienda/repartidor.
-  const periodOrdersQuery = useMemoFirebase(
-    () => firestore ? query(collection(firestore, 'orders'), where('createdAt', '>=', Timestamp.fromDate(ordersFrom))) as CollectionReference<OrderType> : null,
-    [firestore, ordersFrom]
-  );
-  const { data: periodOrders } = useCollection<OrderType>(periodOrdersQuery);
-
-  // Pedidos recientes para el mini-historial (el historial completo vive paginado en /admin/orders).
-  const recentOrdersQuery = useMemoFirebase(
-    () => firestore ? query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(10)) as CollectionReference<OrderType> : null,
-    [firestore]
-  );
-  const { data: recentOrders } = useCollection<OrderType>(recentOrdersQuery);
-
-  // Comisión global por defecto: se aplica a las tiendas sin tarifa propia, igual que en
-  // payout-service.ts. Sin esto la tabla mostraba $0 de comisión para esas tiendas.
-  const configRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'platform') : null), [firestore]);
-  const { data: platformConfig } = useDoc<{ defaultCommissionRate?: number }>(configRef);
-  const defaultCommission = typeof platformConfig?.defaultCommissionRate === 'number'
-    ? platformConfig.defaultCommissionRate
-    : FALLBACK_COMMISSION;
-
-  const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') as CollectionReference<StoreType> : null, [firestore]);
-  const { data: stores, isLoading: storesLoading } = useCollection<StoreType>(storesQuery);
-
-  // Repartidores (acotado: son pocos) -> conteo de activos + lookup de nombres en analíticas.
-  const driversQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('role', '==', 'delivery')) : null, [firestore]);
-  const { data: drivers } = useCollection<any>(driversQuery);
-
-  // Usuarios pendientes de aprobación (isApproved==false: set chico) -> listas + conteos.
-  const pendingUsersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'users'), where('isApproved', '==', false)) : null, [firestore]);
-  const { data: pendingUsers, isLoading: pendingLoading } = useCollection<any>(pendingUsersQuery);
-
-  // Incidentes de repartidor (soltar pedido / reportar problema) -- vista previa de 8,
-  // el historial completo con filtro/resolución vive en /admin/incidents (Fase FF).
-  const incidentsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'driver_incidents'), orderBy('createdAt', 'desc'), limit(8)) : null, [firestore]);
-  const { data: driverIncidents } = useCollection<any>(incidentsQuery);
-
-  // Discrepancias de pago del webhook de MP -- antes esta colección no tenía NINGUNA
-  // pantalla, ni siquiera un aviso acá (Fase FF). Colección pequeña por diseño (solo
-  // anomalías), así que basta un límite defensivo sin paginación.
-  const mismatchesQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'payment_mismatches'), orderBy('createdAt', 'desc'), limit(50)) : null, [firestore]);
-  const { data: paymentMismatches } = useCollection<any>(mismatchesQuery);
-  const pendingMismatchesCount = (paymentMismatches || []).filter((m: any) => m.resolved !== true).length;
-
-  // Reclamos de compradores (Fase NN) -- mismo criterio que las discrepancias: ventana
-  // acotada para la bandeja; el historial completo con acciones vive en /admin/claims.
-  const claimsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'claims'), orderBy('createdAt', 'desc'), limit(50)) : null, [firestore]);
-  const { data: buyerClaims } = useCollection<any>(claimsQuery);
-
-  const refreshTotals = () => { refreshDelivered(); refreshFees(); refreshShipping(); refreshCommission(); refreshUsers(); rBuyers(); rStores(); rDrivers(); rOrders(); };
-  const dashboardLoading = activeLoading || storesLoading || pendingLoading;
-
-  // Solicitudes pendientes de aprobación (tiendas y repartidores).
-  // `status !== 'Rechazado'` (Fase PP): la query trae isApproved==false, pero los
-  // RECHAZADOS también cumplen eso — sin este filtro nunca salían de la cola.
-  const pendingStores = useMemo(() => {
-    return (pendingUsers || [])
-      .filter((u: any) => u.role === 'store' && u.status !== 'Rechazado')
-      .map((u: any) => {
-        const storeData = (stores as any[])?.find((s: any) => s.ownerId === u.id);
-        return { ...u, ...storeData, id: u.id };
-      });
-  }, [pendingUsers, stores]);
-
-  const pendingDelivery = useMemo(() => {
-    return (pendingUsers || []).filter((u: any) => u.role === 'delivery' && u.status !== 'Rechazado');
-  }, [pendingUsers]);
-
-  // Totales históricos vía aggregation server-side (revenue/completados) + conteo de usuarios.
-  const stats = useMemo(() => ({
-    totalRevenue: deliveredAgg?.revenue ?? 0,
-    totalUsers: totalUsers ?? 0,
-    completedOrders: deliveredAgg?.completed ?? 0,
-    totalStores: stores?.length ?? 0,
-  }), [deliveredAgg, totalUsers, stores]);
-
-  // Pedidos del período filtrados al rango elegido (periodOrders cubre >= 7 días, se recorta acá).
-  const filteredOrders = useMemo(() => {
-    return (periodOrders || []).filter(o => getDate(o.createdAt) >= analyticsFrom);
-  }, [periodOrders, analyticsFrom]);
-
-  const salesData = useMemo(() => {
-    const last7Days = Array.from({ length: 7 }, (_, i) => startOfDay(subDays(new Date(), i))).reverse();
-    const completedOrders = (periodOrders || []).filter(o => o.status === 'Entregado');
-
-    return last7Days.map(day => {
-        const dayString = format(day, 'yyyy-MM-dd');
-        const salesForDay = completedOrders
-            .filter(order => format(getDate(order.createdAt), 'yyyy-MM-dd') === dayString)
-            .reduce((acc, order) => acc + (order.total || 0), 0);
-
-        return {
-            date: format(day, 'EEE', { locale: es }),
-            Ventas: salesForDay,
-        };
-    });
-  }, [periodOrders]);
-
-  // Distribución de pedidos del PERÍODO seleccionado (antes era sobre TODOS los pedidos).
-  const orderStatusData = useMemo(() => {
-    const statusCounts = filteredOrders.reduce((acc, order) => {
-        const status = order.status || 'Desconocido';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-
-    return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
-  }, [filteredOrders]);
-
-  const stuckOrders = useMemo(() => {
-    const now = Date.now();
-    return (activeOrders || [])
-      .filter(o => {
-        const threshold = STUCK_THRESHOLDS_H[o.status];
-        if (!threshold) return false;
-        const ts = (o as any).updatedAt ?? o.createdAt;
-        if (!ts) return false;
-        const date: Date = ts.toDate ? ts.toDate() : new Date(ts);
-        const hoursElapsed = (now - date.getTime()) / 3_600_000;
-        return hoursElapsed >= threshold;
-      })
-      .map(o => {
-        const ts = (o as any).updatedAt ?? o.createdAt;
-        const date: Date = ts.toDate ? ts.toDate() : new Date(ts);
-        const hoursElapsed = (Date.now() - date.getTime()) / 3_600_000;
-        return { ...o, hoursElapsed };
-      })
-      .sort((a, b) => b.hoursElapsed - a.hoursElapsed);
-  }, [activeOrders]);
-
-  // Bandeja unificada de atención: pedidos trabados + discrepancias de pago + incidentes
-  // de repartidor en UNA sola lista, ordenada por gravedad real y no por tipo. Antes eran
-  // tres bloques separados en los que todo se pintaba de rojo por igual, así que un pedido
-  // trabado hace 3 meses se veía igual de urgente que uno de hace 3 horas.
-  const alerts = useMemo(() => {
-    const items: {
-      id: string; kind: AlertKind; severity: 'high' | 'medium';
-      title: string; subtitle: string; meta: string; sortKey: number; href: string;
-    }[] = [];
-
-    stuckOrders.forEach((o: any) => items.push({
-      id: `s-${o.id}`,
-      kind: 'stuck',
-      // Más de un día parado es otra categoría de problema que "se pasó del umbral".
-      severity: o.hoursElapsed >= 24 ? 'high' : 'medium',
-      title: o.status,
-      subtitle: `${o.customerName || 'Cliente'} · ${o.storeName || 'Tienda'}`,
-      meta: `hace ${formatElapsed(o.hoursElapsed)}`,
-      sortKey: o.hoursElapsed,
-      href: `/orders/${o.id}`,
-    }));
-
-    (paymentMismatches || []).filter((m: any) => m.resolved !== true).forEach((m: any) => items.push({
-      id: `p-${m.id}`,
-      kind: 'payment',
-      severity: 'high', // siempre: es plata real sin conciliar
-      title: m.reason === 'amount_mismatch' ? 'Monto no coincide' : 'Estado de orden inesperado',
-      subtitle: m.reason === 'amount_mismatch'
-        ? `Pagó ${money((m.paidAmount || 0))} · pedido ${money((m.orderTotal || 0))}`
-        : `El pago llegó con el pedido en "${m.orderStatus}"`,
-      meta: 'revisar',
-      sortKey: Number.MAX_SAFE_INTEGER, // primero de todo
-      href: '/admin/payment-issues',
-    }));
-
-    (driverIncidents || []).filter((i: any) => i.resolved !== true).forEach((i: any) => items.push({
-      id: `i-${i.id}`,
-      kind: 'incident',
-      severity: i.type === 'problem_reported' ? 'high' : 'medium',
-      title: i.type === 'released' ? 'Soltó el pedido' : 'Reportó un problema',
-      subtitle: `${i.driverName || 'Repartidor'} · ${i.reason || ''}`,
-      meta: i.type === 'problem_reported' ? 'sin resolver' : '',
-      sortKey: i.type === 'problem_reported' ? 1e6 : 1e5,
-      href: `/orders/${i.orderId}`,
-    }));
-
-    // Reclamos de compradores sin resolver: debajo de las discrepancias de pago (plata sin
-    // conciliar sigue primero) pero por encima de los incidentes -- hay un cliente esperando
-    // una respuesta, y "nunca me llegó" / "no llega" son directamente plata en disputa.
-    (buyerClaims || []).filter((c: any) => c.resolved !== true).forEach((c: any) => items.push({
-      id: `c-${c.id}`,
-      kind: 'claim',
-      severity: (c.type === 'not_received' || c.type === 'stuck_order') ? 'high' : 'medium',
-      title: `Reclamo: ${CLAIM_TYPES[c.type as ClaimType]?.label || c.type}`,
-      subtitle: `${c.userName || 'Comprador'} · ${c.storeName || 'Tienda'}${c.suggestedAmount ? ` · $${Math.round(c.suggestedAmount).toLocaleString('es-AR')}` : ''}`,
-      meta: 'sin responder',
-      sortKey: 2e6,
-      href: '/admin/claims',
-    }));
-
-    return items.sort((a, b) => b.sortKey - a.sortKey);
-  }, [stuckOrders, paymentMismatches, driverIncidents, buyerClaims]);
-
-  const alertCounts = useMemo(() => ({
-    all: alerts.length,
-    stuck: alerts.filter(a => a.kind === 'stuck').length,
-    payment: alerts.filter(a => a.kind === 'payment').length,
-    incident: alerts.filter(a => a.kind === 'incident').length,
-    claim: alerts.filter(a => a.kind === 'claim').length,
-  }), [alerts]);
-
-  const visibleAlerts = (alertFilter === 'all' ? alerts : alerts.filter(a => a.kind === alertFilter));
-
-  // Estado en tiempo real — snapshot de QUÉ ESTÁ PASANDO AHORA en la plataforma
-  const liveStatus = useMemo(() => {
-    const byStatus: Record<string, number> = {};
-    (activeOrders || []).forEach(o => {
-      if (ACTIVE_STATUSES.includes(o.status)) byStatus[o.status] = (byStatus[o.status] || 0) + 1;
-    });
-    const totalActive = Object.values(byStatus).reduce((a, b) => a + b, 0);
-    const pausedStores = (stores || []).filter((s: any) => s.manuallyPaused).length;
-    const activeDrivers = (drivers || []).filter((u: any) => u.status === 'Activo').length;
-    const pendingApprovalStores   = (pendingUsers || []).filter((u: any) => u.role === 'store' && u.status !== 'Rechazado').length;
-    const pendingApprovalDrivers  = (pendingUsers || []).filter((u: any) => u.role === 'delivery' && u.status !== 'Rechazado').length;
-    return { byStatus, totalActive, pausedStores, activeDrivers, pendingApprovalStores, pendingApprovalDrivers };
-  }, [activeOrders, stores, drivers, pendingUsers]);
-
-  const storeAnalytics = useMemo(() => {
-    const map: Record<string, { name: string; revenue: number; delivered: number; cancelled: number; commission: number; rating: number; ratingCount: number }> = {};
-    const delivered = filteredOrders.filter(o => o.status === 'Entregado');
-    const cancelled = filteredOrders.filter(o => o.status === 'Cancelado' || o.status === 'Rechazado');
-
-    delivered.forEach(o => {
-      const sid = o.storeId || '';
-      const store = stores?.find(s => s.id === sid);
-      const name = (o as any).storeName || store?.name || sid.slice(0,8);
-      // Comisión: la congelada en el pedido, o la vigente de la tienda, o la global.
-      // 🚨 Antes era `commissionRate || 0`, así que las tiendas sin tarifa propia
-      // aparecían con comisión $0 mientras el servidor sí les cobraba el default.
-      const storeRate = (store as any)?.commissionRate;
-      const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : defaultCommission;
-      if (!map[sid]) map[sid] = { name, revenue: 0, delivered: 0, cancelled: 0, commission: 0, rating: 0, ratingCount: 0 };
-      map[sid].revenue += o.total || 0;
-      map[sid].delivered += 1;
-      // Comisión NETA (Fase PP, N13): con reembolsos descontados y sin efectivo — misma
-      // regla que platformNetForOrder; antes esta tabla y la tarjeta de Finanzas del
-      // mismo período daban distinto.
-      map[sid].commission += platformBreakdownForOrder(o as any, fallbackRate).commission; // ARQ-009
-    });
-    cancelled.forEach(o => {
-      const sid = o.storeId || '';
-      if (!map[sid]) {
-        const store = stores?.find(s => s.id === sid);
-        map[sid] = { name: (o as any).storeName || store?.name || sid.slice(0,8), revenue: 0, delivered: 0, cancelled: 0, commission: 0, rating: 0, ratingCount: 0 };
+  return (
+    <AdminPage
+      title="Resumen"
+      subtitle={<span className="first-letter:uppercase">{new Date(now).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · pedidos en curso en vivo, totales del día por consulta</span>}
+      crumbs={[{ label: 'Hoy' }, { label: 'Resumen' }]}
+      live
+      actions={
+        <>
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" onClick={refreshAll}>
+            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refrescar
+          </Button>
+          <Button asChild size="sm" className="h-9 gap-1.5">
+            <Link href="/admin/inbox"><Inbox className="h-4 w-4" aria-hidden="true" /> Bandeja{inboxTotal !== null ? ` (${inboxTotal})` : ''}</Link>
+          </Button>
+        </>
       }
-      map[sid].cancelled += 1;
-    });
-    // Rating from store docs
-    Object.keys(map).forEach(sid => {
-      const store = stores?.find(s => s.id === sid) as any;
-      if (store?.rating) { map[sid].rating = store.rating; map[sid].ratingCount = store.ratingCount || 0; }
-    });
-    const arr = Object.values(map);
-    return arr.sort((a, b) => analyticsSort === 'revenue' ? b.revenue - a.revenue : b.delivered - a.delivered);
-  }, [filteredOrders, stores, analyticsSort]);
+    >
+      {/* ── KPIs de hoy ───────────────────────────────────────────────────── */}
+      <KpiRow cols={6}>
+        <KpiCard testId="kpi-orders-today" label="Pedidos hoy" value={ordersToday.count} error={ordersToday.error} onRetry={ordersToday.refresh}
+          hint={ordersToday.count !== null ? `${deliveredToday.count ?? '…'} entregados · ${cancelledToday.count ?? '…'} cancelados` : undefined} href="/admin/orders?date=7d" />
+        <KpiCard testId="kpi-gross-today" label="Ganancia bruta de la app hoy" value={grossToday} format="money" tone="success"
+          error={feesToday.error ?? commissionToday.error} onRetry={() => { void feesToday.refresh(); void commissionToday.refresh(); }}
+          hint="tarifas + comisiones de entregados · sin descontar reembolsos" />
+        <KpiCard testId="kpi-stuck" label="Trabados ahora" value={inbox.loading ? null : inbox.stuckCount} tone={inbox.stuckCount > 0 ? 'warning' : 'default'}
+          hint={oldestStuck !== null ? `el más viejo hace ${fmtElapsed(now - oldestStuck)}` : 'ninguno fuera de umbral'} href="/admin/inbox" />
+        <KpiCard testId="kpi-drivers-online" label="Repartidores online" value={driversOnline} suffix={driversApproved.count !== null ? `/ ${driversApproved.count}` : undefined}
+          tone={driversOnline === 0 && waitingDriver > 0 ? 'destructive' : 'default'} error={driversApproved.error ?? driversOffline.error}
+          hint={waitingDriver > 0 ? `${waitingDriver} pedido${waitingDriver === 1 ? '' : 's'} esperando repartidor` : 'sin pedidos esperando moto'} href="/admin/delivery" />
+        <KpiCard testId="kpi-claims-rate" label="Reclamos por 100 pedidos (7 d)" value={claimsPer100 === null ? null : claimsPer100.toLocaleString('es-AR', { maximumFractionDigits: 1 })} format="text"
+          error={claims7d.error ?? orders7d.error} hint={claims7d.count !== null && orders7d.count !== null ? `${claims7d.count} reclamos · ${orders7d.count} pedidos` : undefined} href="/admin/claims" />
+        {isFullAdmin ? (
+          <KpiCard testId="kpi-liability" label="Pasivo (se debe hoy)" value="—" format="text" hint="se calcula a pedido en Finanzas →" href="/admin/finances" />
+        ) : (
+          <KpiCard label="Tiendas operando" value={storesOperating} hint={storesPaused.count ? `${storesPaused.count} pausadas` : 'ninguna pausada'} href="/admin/stores" />
+        )}
+      </KpiRow>
 
-  const driverAnalytics = useMemo(() => {
-    const map: Record<string, { name: string; deliveries: number; earnings: number; rating: number; ratingCount: number }> = {};
-    filteredOrders.filter(o => o.status === 'Entregado' && o.deliveryPersonId).forEach(o => {
-      const did = o.deliveryPersonId!;
-      const driver = drivers?.find(u => u.id === did);
-      const name = (o as any).deliveryPersonName || driver?.displayName || driver?.name || did.slice(0,8);
-      if (!map[did]) map[did] = { name, deliveries: 0, earnings: 0, rating: 0, ratingCount: 0 };
-      map[did].deliveries += 1;
-      // Neto real (Fase PP, N13): antes sumaba el envío crudo (sin reembolsos/efectivo)
-      // y contradecía la ficha del repartidor, que ya usa driverNetForOrder.
-      map[did].earnings += driverNetForOrder(o as any);
-    });
-    // Rating from user docs (mismo criterio que storeAnalytics con stores/{id}.rating).
-    Object.keys(map).forEach(did => {
-      const driver = drivers?.find(u => u.id === did) as any;
-      if (driver?.rating) { map[did].rating = driver.rating; map[did].ratingCount = driver.ratingCount || 0; }
-    });
-    return Object.values(map).sort((a, b) => analyticsSort === 'revenue' ? b.earnings - a.earnings : b.deliveries - a.deliveries);
-  }, [filteredOrders, drivers, analyticsSort]);
-
-  
-  if (dashboardLoading) {
-    return (
-       <div className="container mx-auto">
-        <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-        </div>
-        <div className="grid gap-4 mt-4 lg:grid-cols-2">
-            <Skeleton className="h-80" />
-            <Skeleton className="h-80" />
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="container mx-auto">
-      <div className="flex items-start justify-between gap-4">
-        <PageHeader title="Panel de Administración" description="Resumen y estadísticas de la plataforma." />
-        <Button variant="outline" size="sm" onClick={refreshTotals} className="mt-1 shrink-0 gap-1.5">
-          <RefreshCw className="h-3.5 w-3.5" /> Refrescar
-        </Button>
-      </div>
-
-      {/* ── Estado en tiempo real ─────────────────────────────────────────────────
-          Rediseñado (Fase GG) a pedido del usuario: antes era una grilla irregular de
-          tarjetas sueltas, con colores sin criterio, textos que no explicaban para qué
-          servía cada número y ninguna acción posible (no llevaban a ningún lado).
-          Ahora: (1) el flujo del pedido se muestra EN ORDEN, con el color que ya usa el
-          resto de la app para ese estado (order-status.ts) y una descripción de a quién
-          le toca actuar; (2) cada etapa es un LINK al filtro correspondiente de
-          /admin/orders; (3) el estado de la red (tiendas/repartidores) va en su propio
-          bloque separado, porque responde otra pregunta. */}
-      <div className="rounded-xl border border-border bg-card/50 p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
-          </span>
-          <h2 className="text-sm font-semibold">Estado actual</h2>
-          <span className="text-xs text-muted-foreground">— en vivo</span>
-        </div>
-
-        {/* ── Pipeline del pedido ──────────────────────────────────────────────
-            Las 6 etapas dibujadas como un recorrido conectado: un círculo por etapa
-            unido por una línea, con el número grande arriba y quién tiene la pelota
-            abajo. En pantalla chica se apila en vertical y la línea pasa a ser lateral. */}
-        <div className="rounded-xl border border-border bg-background/40 p-4 sm:p-5">
-          <div className="mb-5 flex items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Flujo del pedido
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Tocá una etapa para ver esos pedidos</p>
-            </div>
-            <Link href="/admin/orders" className="group flex items-baseline gap-2 text-right transition-opacity hover:opacity-80">
-              <span className="text-4xl font-bold leading-none text-primary">{liveStatus.totalActive}</span>
-              <span className="text-xs text-muted-foreground">en curso →</span>
-            </Link>
+      {/* ── Pipeline en vivo ───────────────────────────────────────────────── */}
+      <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4 sm:p-5" data-testid="pipeline">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Flujo del pedido <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-success-ink"><span className="h-2 w-2 rounded-full bg-success animate-pulse motion-reduce:animate-none" aria-hidden="true" />en vivo</span></h2>
+            <p className="text-xs text-muted-foreground">Tocá una etapa para ver esos pedidos</p>
           </div>
-
-          {liveStatus.totalActive === 0 ? (
-            <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 p-3 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-success" /> Ningún pedido en curso — todo entregado.
-            </div>
-          ) : (
-            <>
-              <div className="relative flex flex-col gap-1 sm:flex-row sm:gap-0">
-                {/* Línea conectora: horizontal en desktop, vertical en móvil. Va detrás de
-                    los círculos y se recorta a los extremos para no sobresalir. */}
-                <div className="pointer-events-none absolute left-[1.375rem] top-6 bottom-6 w-px bg-border sm:left-0 sm:right-0 sm:top-[1.625rem] sm:bottom-auto sm:h-px sm:w-auto sm:mx-[8.333%]" />
-
-                {PIPELINE_STAGES.map(stage => {
-                  const n = liveStatus.byStatus[stage.status] || 0;
-                  const active = n > 0;
-                  return (
-                    <Link
-                      key={stage.status}
-                      href={`/admin/orders?status=${encodeURIComponent(stage.status)}`}
-                      className="group relative flex flex-1 items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/40 sm:flex-col sm:gap-0 sm:text-center"
-                    >
-                      {/* Nodo */}
-                      <span
-                        className={cn(
-                          'relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-4 ring-offset-0 transition-transform group-hover:scale-105',
-                          active ? `${stage.tint} ${stage.ring}` : 'bg-muted/40 ring-background',
-                        )}
-                        style={{ boxShadow: '0 0 0 6px hsl(var(--card) / 0.5)' }}
-                      >
-                        <stage.icon className={cn('h-5 w-5', active ? stage.text : 'text-muted-foreground/40')} />
-                        {active && (
-                          <span className={cn('absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full ring-2 ring-card', stage.dot)} />
-                        )}
-                      </span>
-
-                      <span className="min-w-0 sm:mt-3 sm:w-full">
-                        <span className={cn('block text-2xl font-bold leading-none sm:text-3xl', active ? stage.text : 'text-muted-foreground/40')}>
-                          {n}
-                        </span>
-                        <span className={cn('mt-1.5 block text-[13px] font-medium leading-tight sm:text-xs', active ? 'text-foreground' : 'text-muted-foreground')}>
-                          {stage.label}
-                        </span>
-                        <span className="mt-0.5 block text-xs leading-snug text-muted-foreground sm:text-xs">
-                          {stage.who}
-                        </span>
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-
-              {/* Zonas: dónde está físicamente el pedido. Solo en desktop, donde el
-                  pipeline se lee de izquierda a derecha. */}
-              <div className="mt-4 hidden gap-2 sm:flex">
-                {PIPELINE_ZONES.map(zone => {
-                  const span = zone.to - zone.from + 1;
-                  const count = PIPELINE_STAGES
-                    .slice(zone.from, zone.to + 1)
-                    .reduce((s, st) => s + (liveStatus.byStatus[st.status] || 0), 0);
-                  return (
-                    <div
-                      key={zone.label}
-                      style={{ flexGrow: span }}
-                      className="rounded-md border border-dashed border-border/70 px-2 py-1 text-center text-xs uppercase tracking-wider text-muted-foreground"
-                    >
-                      {zone.label} · {count}
+          <Link href="/admin/orders" className="text-right">
+            <div className="text-2xl font-bold tabular-nums text-primary-ink">{totalActive}</div>
+            <div className="text-xs text-muted-foreground">en curso</div>
+          </Link>
+        </div>
+        {inbox.errors.some(e => e.source === 'Pedidos activos') ? (
+          <ErrorState compact error={inbox.errors.find(e => e.source === 'Pedidos activos')?.error} />
+        ) : totalActive === 0 && !inbox.loading ? (
+          <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 p-3 text-sm">
+            <CheckCircle2 className="h-4 w-4 text-success-ink" aria-hidden="true" /> Ningún pedido en curso — todo entregado.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              {PIPELINE_STAGES.map(st => {
+                const n = byStatus[st.status] || 0;
+                const Icon = st.icon;
+                return (
+                  <Link key={st.status} href={`/admin/orders?status=${encodeURIComponent(st.status)}`}
+                    className={cn('min-w-0 rounded-md border p-3 transition-colors hover:bg-admin-row-hover', n > 0 ? st.soft : 'border-border')}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className={cn('text-[28px] font-bold leading-none tabular-nums', n > 0 ? st.ink : 'text-muted-foreground/50')}>{n}</div>
+                      <Icon className={cn('h-4 w-4 shrink-0', n > 0 ? st.ink : 'text-muted-foreground/40')} aria-hidden="true" />
                     </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Estado de la red: responde "¿tengo con qué operar?" */}
-        <div>
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Capacidad de la red
-          </p>
-          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-            {(() => {
-              const pend = liveStatus.pendingApprovalStores + liveStatus.pendingApprovalDrivers;
-              const noDrivers = liveStatus.activeDrivers === 0;
-              const cards = [
-                {
-                  href: '/admin/stores', icon: StoreIcon, value: (stores?.length || 0) - liveStatus.pausedStores,
-                  label: 'Tiendas operando', hint: 'pueden recibir pedidos',
-                  color: 'text-success', alert: false,
-                },
-                {
-                  href: '/admin/stores', icon: Pause, value: liveStatus.pausedStores,
-                  label: 'Tiendas pausadas', hint: 'cortaron pedidos a mano',
-                  color: liveStatus.pausedStores > 0 ? 'text-warning' : 'text-muted-foreground/40',
-                  alert: liveStatus.pausedStores > 0, tone: 'warning' as const,
-                },
-                {
-                  href: '/admin/delivery', icon: Bike, value: liveStatus.activeDrivers,
-                  label: 'Repartidores activos',
-                  hint: noDrivers ? 'nadie puede entregar' : 'aprobados y disponibles',
-                  color: noDrivers ? 'text-destructive' : 'text-info',
-                  alert: noDrivers, tone: 'destructive' as const,
-                },
-                {
-                  href: '/admin/users', icon: pend > 0 ? AlertTriangle : CheckCircle2, value: pend,
-                  label: 'Esperando aprobación',
-                  hint: pend > 0 ? 'no pueden operar todavía' : 'nada pendiente',
-                  color: pend > 0 ? 'text-destructive' : 'text-muted-foreground/40',
-                  alert: pend > 0, tone: 'destructive' as const,
-                },
-              ];
-              return cards.map((c, i) => (
-                <Link
-                  key={i}
-                  href={c.href}
-                  className={cn(
-                    'rounded-xl border p-4 transition-all hover:-translate-y-0.5',
-                    c.alert && c.tone === 'destructive' ? 'border-destructive/30 bg-destructive/10 hover:bg-destructive/15'
-                      : c.alert ? 'border-warning/30 bg-warning/10 hover:bg-warning/15'
-                      : 'border-border bg-background/40 hover:bg-muted/30',
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={cn('text-3xl font-bold leading-none', c.color)}>{c.value}</span>
-                    <c.icon className={cn('h-5 w-5 shrink-0', c.color)} />
-                  </div>
-                  <div className="mt-2.5 text-[13px] font-medium leading-tight">{c.label}</div>
-                  <div className={cn('mt-0.5 text-xs leading-snug', c.alert ? c.color : 'text-muted-foreground')}>{c.hint}</div>
-                </Link>
-              ));
-            })()}
-          </div>
-        </div>
-      </div>
-      {/* ─────────────────────────────────────────────────────── */}
-
-      {/* ── Bandeja de atención (unificada) ───────────────────────────────────
-          Antes: tres bloques apilados (trabados / discrepancias / incidentes), cada uno
-          con su marco de color, todo en rojo por igual y con el hash del pedido ocupando
-          espacio sin aportar. Ahora: un solo panel, con filtro por tipo, ordenado por
-          gravedad REAL y con una barra de severidad por fila en vez de teñir todo. */}
-      {alerts.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card/50">
-          <div className="flex flex-col gap-3 border-b border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/15">
-                <AlertTriangle className="h-[18px] w-[18px] text-destructive" />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold leading-tight">Requiere tu atención</h2>
-                <p className="text-xs text-muted-foreground">
-                  {alerts.length} cosa{alerts.length === 1 ? '' : 's'} pendiente{alerts.length === 1 ? '' : 's'} de resolver
-                </p>
-              </div>
+                    <div className="mt-1 text-sm font-medium">{st.label}</div>
+                    <div className={cn('text-xs', n > 0 ? st.ink : 'text-muted-foreground')}>{st.who}</div>
+                  </Link>
+                );
+              })}
             </div>
-
-            {/* Filtro por tipo: cada pastilla muestra su propio conteo. */}
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={() => setAlertFilter('all')}
-                className={cn('rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                  alertFilter === 'all' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
-              >
-                Todo ({alertCounts.all})
-              </button>
-              {ALERT_KINDS.filter(k => alertCounts[k.k] > 0).map(({ k, label, icon: Icon }) => (
-                <button
-                  key={k}
-                  onClick={() => setAlertFilter(k)}
-                  className={cn('flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                    alertFilter === k ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
-                >
-                  <Icon className="h-3 w-3" /> {label} ({alertCounts[k]})
-                </button>
-              ))}
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-warning/10 px-3 py-2"><span className="font-semibold text-warning-ink">{inStore} en la tienda</span> <span className="text-muted-foreground">· {inStore > inStreet ? 'cuello de botella: comercios' : 'comercios al día'}</span></div>
+              <div className="rounded-md bg-info/10 px-3 py-2"><span className="font-semibold text-info-ink">{inStreet} en la calle</span> <span className="text-muted-foreground">· {waitingDriver > 0 ? `${waitingDriver} esperando moto` : 'logística al día'}</span></div>
             </div>
-          </div>
+          </>
+        )}
 
-          <div className="divide-y divide-border/60">
-            {visibleAlerts.slice(0, ALERT_PREVIEW).map(a => (
-              <Link
-                key={a.id}
-                href={a.href}
-                className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
-              >
-                {/* Barra de severidad: reemplaza al "todo rojo". */}
-                <span className={cn('h-9 w-1 shrink-0 rounded-full', a.severity === 'high' ? 'bg-destructive' : 'bg-warning')} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">{a.title}</span>
-                  </div>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{a.subtitle}</p>
+        {/* Capacidad de la red: ¿tengo con qué operar? */}
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { href: '/admin/stores', icon: StoreIcon, value: storesOperating, label: 'Tiendas operando', hint: 'aprobadas y sin pausa', tone: 'success' as const },
+            { href: '/admin/stores', icon: Pause, value: storesPaused.count, label: 'Tiendas pausadas', hint: 'cortaron pedidos a mano', tone: (storesPaused.count ?? 0) > 0 ? 'warning' as const : 'default' as const },
+            { href: '/admin/delivery', icon: Bike, value: driversOnline, label: 'Repartidores online', hint: driversOnline === 0 ? 'nadie puede entregar' : 'aprobados y disponibles', tone: driversOnline === 0 ? 'destructive' as const : 'info' as const },
+            { href: '/admin/inbox?tipo=approval', icon: pendingApprovals ? AlertTriangle : CheckCircle2, value: pendingApprovals, label: 'Esperando aprobación', hint: pendingApprovals ? 'no pueden operar todavía' : 'nada pendiente', tone: pendingApprovals ? 'warning' as const : 'default' as const },
+          ].map((c) => {
+            const Icon = c.icon;
+            const ink = c.tone === 'success' ? 'text-success-ink' : c.tone === 'warning' ? 'text-warning-ink' : c.tone === 'destructive' ? 'text-destructive-ink' : c.tone === 'info' ? 'text-info-ink' : 'text-foreground';
+            return (
+              <Link key={c.label} href={c.href} className="rounded-md border border-border p-3 transition-colors hover:bg-admin-row-hover" aria-busy={c.value === null || undefined}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={cn('text-2xl font-bold leading-none tabular-nums', c.value === null ? 'text-muted-foreground' : ink)}>{c.value === null ? '…' : c.value}</span>
+                  <Icon className={cn('h-4 w-4 shrink-0', ink)} aria-hidden="true" />
                 </div>
-                {a.meta && (
-                  <span className={cn('shrink-0 text-xs font-medium tabular-nums',
-                    a.severity === 'high' ? 'text-destructive' : 'text-warning')}>
-                    {a.meta}
-                  </span>
-                )}
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
+                <div className="mt-2 text-[13px] font-medium leading-tight">{c.label}</div>
+                <div className="text-xs text-muted-foreground">{c.hint}</div>
               </Link>
-            ))}
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Bandeja resumida + tendencia ──────────────────────────────────── */}
+      <div className="grid gap-4 lg:grid-cols-5">
+        <div className="min-w-0 lg:col-span-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-semibold">Requiere tu atención {inboxTotal !== null && inboxTotal > 0 && <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-semibold text-destructive-foreground">{inboxTotal > 99 ? '99+' : inboxTotal}</span>}</h2>
+            <Link href="/admin/inbox" className="inline-flex min-h-[36px] items-center text-sm font-medium text-primary-ink hover:underline">Ver bandeja →</Link>
           </div>
-
-          {visibleAlerts.length > ALERT_PREVIEW && (
-            <Link
-              href={ALERT_KINDS.find(k => k.k === alertFilter)?.href ?? '/admin/orders'}
-              className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40"
-            >
-              <span>Y {visibleAlerts.length - ALERT_PREVIEW} más</span>
-              <span className="shrink-0 font-medium">Ver todas →</span>
-            </Link>
-          )}
-
-          <p className="border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
-            Un pedido se marca trabado según su estado: confirmación ≥1h · pago ≥2h · preparación ≥3h · retiro ≥2h · entrega ≥3h
-          </p>
+          <InboxList items={inbox.items} loading={inbox.loading} errors={inbox.errors} now={now} limit={5} moreHref="/admin/inbox" groupBy="none" />
         </div>
-      )}
-
-      {/* Solicitudes de aprobación pendientes */}
-      {(pendingStores.length > 0 || pendingDelivery.length > 0) && (
-        <div className="grid gap-6 md:grid-cols-2">
-          <PendingList
-            title="Solicitudes: Tiendas"
-            icon={StoreIcon}
-            users={pendingStores}
-            isLoading={pendingLoading}
-            onApprove={(id) => handleUpdateUserStatus(id, true)}
-            onReject={(id) => handleUpdateUserStatus(id, false)}
-          />
-          <PendingList
-            title="Solicitudes: Repartidores"
-            icon={Bike}
-            users={pendingDelivery}
-            isLoading={pendingLoading}
-            onApprove={(id) => handleUpdateUserStatus(id, true)}
-            onReject={(id) => handleUpdateUserStatus(id, false)}
-          />
-        </div>
-      )}
-
-      {/* ── Totales históricos ────────────────────────────────────────────────
-          Antes eran tres números sueltos sin con qué compararlos, y el monto salía como
-          "$1953560.00" (toFixed, sin separador de miles y con el punto donde va la coma
-          en Argentina). Ahora cada tarjeta desglosa lo que ese número esconde. */}
-      {/* Si la aggregation falla (típicamente por un índice faltante), avisarlo en vez de
-          mostrar $0 como si no hubiera ventas. */}
-      {deliveredErr && (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-          <span>
-            No se pudieron calcular los totales{(deliveredErr as any)?.code === 'failed-precondition' ? ' — falta un índice de Firestore (el link para crearlo está en la consola)' : ''}.
-            Los números de abajo pueden estar incompletos.
-          </span>
-        </div>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {(() => {
-          const revenue   = stats.totalRevenue;
-          const completed = stats.completedOrders;
-          const fees      = feesAgg?.total ?? 0;
-          const shipping  = shippingAgg?.total ?? 0;
-          const commission = commissionAgg?.total ?? 0;
-          // El reparto REAL de cada pedido (ver src/lib/money.ts):
-          //   productos (subtotal) = total − tarifa − envío
-          //   → a la tienda: productos − comisión
-          //   → a la plataforma: tarifa + comisión
-          //   → al repartidor: envío
-          // Antes la tarjeta decía "Comisión de la plataforma = tarifa" y "A las tiendas =
-          // productos", o sea ignoraba la comisión por completo: mostraba un margen menor
-          // al real y le atribuía a las tiendas plata que no cobran.
-          const products  = Math.max(0, revenue - fees - shipping);
-          const toStores  = Math.max(0, products - commission);
-          const toPlatform = fees + commission;
-          const avgTicket = completed > 0 ? revenue / completed : 0;
-          const totalOrd  = allOrdersCount ?? 0;
-          const rate      = totalOrd > 0 ? Math.round((completed / totalOrd) * 100) : 0;
-
-          const Row = ({ label, value, accent }: { label: string; value: string; accent?: string }) => (
-            <div className="flex items-baseline justify-between gap-2 text-xs">
-              <span className="text-muted-foreground">{label}</span>
-              <span className={cn('font-medium tabular-nums', accent || 'text-foreground')}>{value}</span>
-            </div>
-          );
-
-          return (
+        <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4 lg:col-span-2" data-testid="trend">
+          <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">Últimos 7 días</h2><span className="text-xs text-muted-foreground">pedidos por día</span></div>
+          {trendError ? <ErrorState compact error={trendError} onRetry={() => setTrendTick(t => t + 1)} /> : (
             <>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Facturado</CardTitle>
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    {/* "…" mientras la aggregation carga (Fase QQ): mostraba "$0" varios
-                        segundos — un cero falso en la tarjeta más importante del panel. */}
-                    <div className="text-3xl font-bold tabular-nums">{deliveredAgg === undefined ? '…' : money(revenue)}</div>
-                    <p className="text-xs text-muted-foreground">total BRUTO de pedidos entregados</p>
-                  </div>
-                  {/* 🚨 DESGLOSE BRUTO (Fase PP, N1): estas sumas server-side (aggregation)
-                      NO descuentan reembolsos ni excluyen pedidos en efectivo — no pueden
-                      (la aggregation no aplica money.ts). El número REAL de la plataforma,
-                      neto, vive en Finanzas → Ganancias de la plataforma. Antes las dos
-                      pantallas mostraban cifras distintas sin decir cuál manda. */}
-                  <div className="space-y-1.5 border-t pt-2.5">
-                    <Row label="Queda en la plataforma (bruto)" value={money(toPlatform)} accent="text-success" />
-                    <Row label="· tarifa de servicio" value={money(fees)} accent="text-muted-foreground" />
-                    <Row label="· comisión a tiendas" value={money(commission)} accent="text-muted-foreground" />
-                    <Row label="A las tiendas (bruto)" value={money(toStores)} />
-                    <Row label="Envíos (a repartidores)" value={money(shipping)} accent="text-info" />
-                    <Row label="Ticket promedio" value={money(avgTicket)} />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Cifras brutas (sin descontar reembolsos ni efectivo).{' '}
-                    <Link href="/admin/finances" className="text-primary hover:underline">
-                      Ver la ganancia neta real en Finanzas →
-                    </Link>
-                  </p>
-                  {/* Los pedidos anteriores a esta versión no tienen `commissionAmount`, así
-                      que su comisión no suma acá y aparece como "a las tiendas". */}
-                  {commission === 0 && revenue > 0 && (
-                    <p className="text-xs text-warning">
-                      La comisión histórica no está registrada por pedido: estos pedidos son anteriores al cambio.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Usuarios Registrados</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <div className="text-3xl font-bold tabular-nums">{(stats.totalUsers || 0).toLocaleString('es-AR')}</div>
-                    <p className="text-xs text-muted-foreground">sin contar administradores</p>
-                  </div>
-                  <div className="space-y-1.5 border-t pt-2.5">
-                    <Row label="Compradores" value={(buyersCount ?? 0).toLocaleString('es-AR')} />
-                    <Row label="Tiendas" value={(storesCount ?? 0).toLocaleString('es-AR')} accent="text-info" />
-                    <Row label="Repartidores" value={(driversCount ?? 0).toLocaleString('es-AR')} accent="text-warning" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pedidos Entregados</CardTitle>
-                  <PackageCheck className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <div className="text-3xl font-bold tabular-nums">{completed.toLocaleString('es-AR')}</div>
-                    <p className="text-xs text-muted-foreground">
-                      de {totalOrd.toLocaleString('es-AR')} pedidos en total
-                    </p>
-                  </div>
-                  <div className="space-y-2 border-t pt-2.5">
-                    {/* Barra de tasa de entrega: un 49% dicho en texto no se siente igual
-                        que verlo ocupar la mitad de la barra. */}
-                    <div className="flex items-baseline justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Tasa de entrega</span>
-                      <span className={cn('font-medium tabular-nums', rate >= 70 ? 'text-success' : rate >= 40 ? 'text-warning' : 'text-destructive')}>
-                        {rate}%
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={cn('h-full rounded-full transition-all', rate >= 70 ? 'bg-success' : rate >= 40 ? 'bg-warning' : 'bg-destructive')}
-                        style={{ width: `${Math.min(100, rate)}%` }}
-                      />
-                    </div>
-                    <Row label="Todavía en curso" value={liveStatus.totalActive.toLocaleString('es-AR')} />
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          );
-        })()}
-      </div>
-
-       {/* min-w-0 + overflow-hidden (Fase QQ): sin esto los gráficos de recharts imponen
-           su ancho intrínseco al Card y TODA la página scrollea horizontal en celular
-           (599px en un viewport de 430) — misma familia que el bug del carrusel del shell. */}
-       <div className="grid gap-4 mt-6 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="lg:col-span-4 min-w-0 overflow-hidden">
-          <CardHeader>
-            <CardTitle>Ventas de los Últimos 7 Días</CardTitle>
-          </CardHeader>
-          <CardContent className="pl-2">
-             <ChartContainer config={{ Ventas: { label: "Ventas", color: "hsl(var(--chart-1))" }}} className="h-[300px] w-full">
-                <RechartsBarChart accessibilityLayer data={salesData}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis dataKey="date" tickLine={false} tickMargin={10} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} tickMargin={10} tickFormatter={(value) => `$${value}`} />
-                   <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => `${money(Number(value))}`} />} />
-                  <Bar dataKey="Ventas" fill="var(--color-Ventas)" radius={4} />
-                </RechartsBarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-3 min-w-0 overflow-hidden">
-          <CardHeader>
-            <CardTitle>Distribución de Pedidos</CardTitle>
-             <CardDescription>Estado del período seleccionado.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={{}} className="h-[300px] w-full">
-              <RechartsPieChart>
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-                  <Pie data={orderStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} fill="hsl(var(--chart-1))" label={(entry) => `${entry.name} (${entry.value})`}>
-                      {orderStatusData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                  </Pie>
-                  <Legend />
-              </RechartsPieChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      </div>
-      {/* Analíticas por tienda y repartidor */}
-      <div className="mt-6 space-y-4">
-        {/* Controles de período y orden */}
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-medium text-muted-foreground">Período:</span>
-          {(['7d','30d','month'] as const).map(p => (
-            <button key={p} onClick={() => setAnalyticsPeriod(p)}
-              className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-                analyticsPeriod === p ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
-              )}>
-              {p === '7d' ? '7 días' : p === '30d' ? '30 días' : 'Este mes'}
-            </button>
-          ))}
-          <span className="ml-4 text-sm font-medium text-muted-foreground">Ordenar por:</span>
-          <button onClick={() => setAnalyticsSort('revenue')}
-            className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-              analyticsSort === 'revenue' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
-            )}>Ingresos</button>
-          <button onClick={() => setAnalyticsSort('orders')}
-            className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-              analyticsSort === 'orders' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
-            )}>Pedidos</button>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Por tienda. min-w-0 (Fase QQ): la tabla tiene scroll interno pero el Card
-              no se dejaba encoger y empujaba TODA la página en celular. */}
-          <Card className="min-w-0 overflow-hidden">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-base"><StoreIcon className="h-4 w-4 text-info" /> Por tienda</CardTitle>
-                {storeAnalytics.length > 0 && (
-                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1.5" onClick={() => {
-                    const period = analyticsPeriod === '7d' ? 'ultimos7d' : analyticsPeriod === '30d' ? 'ultimos30d' : analyticsPeriod === 'month' ? 'estemes' : 'todo';
-                    downloadCsv(storeAnalytics.map(s => ({
-                      'Tienda': s.name, 'Ventas brutas': s.revenue, 'Entregados': s.delivered,
-                      'Cancelados': s.cancelled, 'Comisión': Math.round(s.commission),
-                      'Rating': s.ratingCount > 0 ? s.rating.toFixed(1) : '',
-                    })), `tiendas_${period}.csv`);
-                  }}>
-                    <Download className="h-3.5 w-3.5" /> CSV
-                  </Button>
-                )}
+              <div className="flex h-32 items-end gap-2" aria-label={trend ? `Pedidos por día: ${trend.map(t => `${t.label} ${t.n}`).join(', ')}` : 'Cargando'} aria-busy={!trend || undefined}>
+                {(trend ?? Array.from({ length: 7 }, () => ({ label: '', n: 0 }))).map((t, i) => (
+                  <div key={i} className={cn('flex-1 rounded-t', i === 6 ? 'bg-primary' : 'bg-primary/40', !trend && 'animate-pulse bg-muted')} style={{ height: `${Math.max(4, (t.n / maxTrend) * 100)}%` }} title={`${t.label}: ${t.n}`} />
+                ))}
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tienda</TableHead>
-                    <TableHead className="text-right">Ventas brutas</TableHead>
-                    <TableHead className="text-right">Entregados</TableHead>
-                    <TableHead className="text-right">Comisión</TableHead>
-                    <TableHead className="text-right">Rating</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {storeAnalytics.length === 0 && (
-                    <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Sin datos.</TableCell></TableRow>
-                  )}
-                  {storeAnalytics.map((s, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{s.name}</TableCell>
-                      <TableCell className="text-right text-success font-bold">{money(s.revenue)}</TableCell>
-                      <TableCell className="text-right">{s.delivered}</TableCell>
-                      <TableCell className="text-right text-primary">{money(s.commission)}</TableCell>
-                      <TableCell className="text-right text-warning">{s.ratingCount > 0 ? `${s.rating.toFixed(1)} ★` : '—'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+              <div className="mt-1 grid grid-cols-7 text-center text-xs text-muted-foreground">{(trend ?? []).map((t, i) => <span key={i}>{t.label}</span>)}</div>
+              <dl className="mt-4 space-y-2 text-sm">
+                <div className="flex justify-between"><dt className="text-muted-foreground">Pedidos</dt><dd className="font-medium tabular-nums">{orders7d.count ?? '…'}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Entregados</dt><dd className="font-medium tabular-nums text-success-ink">{delivered7d.count ?? '…'}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Reclamos / 100 pedidos</dt><dd className="font-medium tabular-nums">{claimsPer100 === null ? '…' : claimsPer100.toLocaleString('es-AR', { maximumFractionDigits: 1 })}</dd></div>
+              </dl>
+              <p className="mt-3 text-xs text-muted-foreground">Interino por consultas de conteo (7 lecturas). El neto por día, por tienda y por repartidor llega con los cierres diarios (T2).</p>
+            </>
+          )}
+        </section>
+      </div>
 
-          {/* Por repartidor */}
-          <Card className="min-w-0 overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base"><Bike className="h-4 w-4 text-primary" /> Por repartidor</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Repartidor</TableHead>
-                    <TableHead className="text-right">Entregas</TableHead>
-                    <TableHead className="text-right">Ganancias</TableHead>
-                    <TableHead className="text-right">Rating</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {driverAnalytics.length === 0 && (
-                    <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">Sin datos.</TableCell></TableRow>
-                  )}
-                  {driverAnalytics.map((d, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{d.name}</TableCell>
-                      <TableCell className="text-right">{d.deliveries}</TableCell>
-                      <TableCell className="text-right text-success font-bold">{money(d.earnings)}</TableCell>
-                      <TableCell className="text-right text-warning">{d.ratingCount > 0 ? `${d.rating.toFixed(1)} ★` : '—'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+      {/* ── Pedidos recientes ──────────────────────────────────────────────── */}
+      <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card" data-testid="recent-orders">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="font-semibold">Pedidos recientes</h2>
+          <Link href="/admin/orders" className="inline-flex min-h-[36px] items-center text-sm font-medium text-primary-ink hover:underline">Ver todos →</Link>
         </div>
-      </div>
+        {recent.error ? <ErrorState compact error={recent.error} className="m-3" /> : (recent.data ?? []).length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted-foreground">Todavía no hay pedidos.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {(recent.data ?? []).map(o => (
+              <li key={o.id} className="flex min-h-[48px] items-center gap-3 px-4 py-1.5 text-sm">
+                <span className="w-24 shrink-0 text-xs tabular-nums text-muted-foreground">{fmtDate(o.createdAt, 'short')}</span>
+                <EntityLink type="order" id={o.id} />
+                <span className="hidden min-w-0 flex-1 truncate text-muted-foreground sm:block">{o.customerName} · {o.storeName}{o.deliveryPersonName ? ` · ${o.deliveryPersonName}` : ''}</span>
+                <StatusBadge kind="order" value={o.status} />
+                <span className="ml-auto font-semibold tabular-nums">{money(o.total)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <div className="mt-6">
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle>Pedidos Recientes</CardTitle>
-                    <CardDescription>Los últimos 10 pedidos. El historial completo está en Gestión de Pedidos.</CardDescription>
-                </div>
-                <Link href="/admin/orders">
-                    <Button variant="outline" size="sm">Ver todos</Button>
-                </Link>
-            </CardHeader>
-            <CardContent>
-                 <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Pedido</TableHead>
-                            <TableHead>Cliente</TableHead>
-                            <TableHead>Tienda</TableHead>
-                            <TableHead>Repartidor</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {(recentOrders && recentOrders.length > 0) ? (
-                        recentOrders.map((order) => (
-                        // Tanda B: la fila tenía onClick + un <Link> anidado al MISMO
-                        // destino — doble navegación en un click. Queda solo el onClick.
-                        <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
-                            <TableCell className="font-medium hover:underline">#{order.id.substring(0, 7)}</TableCell>
-                             <TableCell>{order.customerName}</TableCell>
-                             <TableCell>{order.storeName}</TableCell>
-                             <TableCell>{order.deliveryPersonName || 'N/A'}</TableCell>
-                            <TableCell>
-                               <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-bold">${Math.round(order.total || 0).toLocaleString('es-AR')}</TableCell>
-                        </TableRow>
-                        ))
-                    ) : (
-                        <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center">
-                                No hay pedidos en el historial.
-                            </TableCell>
-                        </TableRow>
-                    )}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-export default function GuardedAdminDashboard() {
-  return (
-    <AdminAuthGuard>
-      <AdminDashboard />
-    </AdminAuthGuard>
+      {/* ── Totales históricos (al final, desglose colapsado) ───────────────── */}
+      <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4" data-testid="historic">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="font-semibold">Totales históricos</h2>
+          <span className="text-xs text-muted-foreground">se refrescan al volver a la pestaña (cada 5 min)</span>
+        </div>
+        {deliveredAgg.error && <ErrorState compact error={deliveredAgg.error} onRetry={deliveredAgg.refresh} className="mb-3" />}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <KpiCard testId="kpi-revenue" label="Facturado bruto (entregados)" value={deliveredAgg.error ? '—' : revenue} format="money" error={undefined}
+            hint="suma de totales, sin descontar reembolsos" />
+          <KpiCard testId="kpi-users" label="Usuarios registrados" value={totalUsers.count} error={totalUsers.error} onRetry={totalUsers.refresh}
+            hint={buyersCount.count !== null ? `${buyersCount.count} compradores · ${storeUsersCount.count ?? '…'} tiendas · ${driverUsersCount.count ?? '…'} repartidores` : undefined} />
+          <KpiCard testId="kpi-delivered" label="Pedidos entregados" value={completed} error={deliveredAgg.error}
+            hint={allOrdersCount.count !== null && deliveryRate !== null ? `de ${allOrdersCount.count.toLocaleString('es-AR')} en total · tasa ${deliveryRate} %` : undefined}
+            tone={deliveryRate === null ? 'default' : deliveryRate >= 70 ? 'success' : deliveryRate >= 40 ? 'warning' : 'destructive'} />
+        </div>
+        <Collapsible className="mt-3">
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 text-muted-foreground"><ChevronDown className="h-4 w-4" aria-hidden="true" /> Ver desglose bruto</Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+              {[
+                ['Queda en la plataforma (bruto)', money(toPlatform), 'text-success-ink'],
+                ['· tarifa de servicio', money(fees), 'text-muted-foreground'],
+                ['· comisión a tiendas', money(commission), 'text-muted-foreground'],
+                ['A las tiendas (bruto)', money(toStores), ''],
+                ['Envíos (a repartidores)', money(shipping), 'text-info-ink'],
+                ['Ticket promedio', money(avgTicket), ''],
+              ].map(([l, v, c]) => (
+                <div key={l} className="flex items-baseline justify-between gap-2"><dt className="text-muted-foreground">{l}</dt><dd className={cn('font-medium tabular-nums', c)}>{v}</dd></div>
+              ))}
+            </dl>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Cifras BRUTAS (las aggregations no aplican money.ts: no descuentan reembolsos ni excluyen efectivo).{' '}
+              {isFullAdmin && <Link href="/admin/finances" className="text-primary-ink hover:underline">Ver la ganancia neta real en Finanzas →</Link>}
+            </p>
+          </CollapsibleContent>
+        </Collapsible>
+      </section>
+      <p className="text-xs text-muted-foreground">Pedidos en curso: {ADMIN_ACTIVE_STATUSES.length} estados activos escuchados en vivo. Un pedido se marca trabado según su estado (confirmación ≥1h · pago ≥2h · preparación ≥3h · retiro ≥2h · entrega ≥3h · reparto ≥4h).</p>
+    </AdminPage>
   );
 }

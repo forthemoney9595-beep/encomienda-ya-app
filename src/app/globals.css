@@ -214,3 +214,39 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Superficie del PANEL ADMIN (Tanda T1, oct 2026) ──────────────────────────
+   El admin NO inventa una paleta: declara una superficie más densa en el nodo raíz del
+   shell (data-surface="admin") para no tocar la app del comprador. Además agrega los
+   tokens de TINTA (-ink): color para TEXTO sobre card/soft. Los tokens base están
+   calibrados para RELLENOS — medido sobre el DOM del prototipo, `bg-success/15
+   text-success` daba 2,0:1 en modo claro y `text-info` sobre la tarjeta oscura 4,3.
+   Regla: texto coloreado sobre card/soft = text-{token}-ink; relleno sólido =
+   bg-{token} text-{token}-foreground. Solo existen dentro del admin a propósito. */
+[data-surface="admin"] {
+  --radius: 0.625rem;
+  --admin-chrome: 220 20% 97%;
+  --admin-row-hover: 220 20% 96%;
+  /* Un punto más profundo que el global: las pastillas rojas del menú llevan texto
+     blanco de 12 px y con el rojo base daban 3,6:1 en oscuro (AA pide 4,5). */
+  --destructive: 0 72% 46%;
+  --success-ink: 142 72% 28%;
+  --warning-ink: 32 95% 30%;
+  --info-ink: 221 83% 42%;
+  --destructive-ink: 0 72% 42%;
+  --primary-ink: 258 85% 56%;
+  --cat-food-ink: 24 90% 36%;
+}
+.dark [data-surface="admin"] {
+  --card: 240 19% 14%;
+  --popover: 240 19% 14%;
+  --admin-chrome: 240 26% 9%;
+  --admin-row-hover: 240 15% 18%;
+  --destructive: 0 72% 52%;
+  --success-ink: 142 69% 62%;
+  --warning-ink: 40 95% 62%;
+  --info-ink: 217 91% 74%;
+  --destructive-ink: 0 80% 74%;
+  --primary-ink: 258 95% 76%;
+  --cat-food-ink: 25 92% 66%;
+}
