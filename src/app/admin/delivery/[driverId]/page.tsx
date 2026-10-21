@@ -17,7 +17,7 @@ import type { DeliveryPersonnel } from '../delivery-personnel-list';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { useDoc, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirestore, useCollection, useMemoFirebase } from '@/lib/firebase';
 import AdminAuthGuard from '../../admin-auth-guard';
 import { collection, query, where, doc, updateDoc, orderBy, limit, CollectionReference } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';

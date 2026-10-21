@@ -12,8 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, AuthErrorCodes, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { useAuth, useFirestore } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, AuthErrorCodes, GoogleAuthProvider, signInWithPopup, browserPopupRedirectResolver } from 'firebase/auth';
 import { doc, writeBatch } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { isTaken, uniqueRef, uniquePayload } from '@/lib/unique-ids';
@@ -56,7 +56,7 @@ export default function SignupBuyerPage() {
     setIsSubmitting(true);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await signInWithPopup(auth, provider, browserPopupRedirectResolver); // PERF-012: Auth se inicializa sin el resolver; se pasa solo acá
       toast({ title: '¡Bienvenido!', description: 'Tu cuenta quedó lista con Google.' });
       router.push('/');
     } catch (error: any) {

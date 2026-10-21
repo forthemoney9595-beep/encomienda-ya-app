@@ -25,7 +25,7 @@ import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Bike, Car, Loader2, CheckCircle2, ShieldCheck } from 'lucide-react';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth, useFirestore } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification, type User } from 'firebase/auth';
 import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { ImageUpload } from '@/components/image-upload';

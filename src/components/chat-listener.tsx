@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { useFirestore } from '@/firebase';
+import { useFirestore } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { usePathname } from 'next/navigation';
 

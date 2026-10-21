@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, DocumentReference, Query, CollectionReference } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, DocumentReference, Query, CollectionReference, FirestoreError } from 'firebase/firestore';
+import { getAuth, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
+import * as Sentry from '@sentry/nextjs';
 import { getStorage } from 'firebase/storage';
 import { getMessaging, getToken, Messaging } from 'firebase/messaging';
 import { useEffect, useState, useMemo } from 'react';
@@ -16,9 +17,42 @@ const firebaseConfig = {
 };
 
 // --- INICIALIZACIÓN ---
+// 🚨 ARQ-001 (auditoría oct 2026): este módulo es AHORA la ÚNICA capa de Firebase del cliente.
+// Antes convivía con src/firebase/* (provider + hooks propios con comportamiento OPUESTO ante
+// errores: etiquetaba TODO como permiso y re-lanzaba → "Algo salió mal", y data null vs []).
+// Las dos inicializaban el SDK por separado y en /favorites aparecía
+// "INTERNAL ASSERTION FAILED" por las dos instancias conviviendo. Regla: nada importa de
+// '@/firebase' (ya no existe); todo sale de acá.
+const isBrowser = typeof window !== 'undefined';
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
+
+// PERF-012: getAuth() bootea el iframe de popup/redirect (~130 kB + 3 requests) en CADA página.
+// initializeAuth sin popupRedirectResolver no lo carga; el login con Google le pasa
+// browserPopupRedirectResolver explícito a signInWithPopup (login y signup/buyer).
+function makeAuth() {
+  if (!isBrowser) return getAuth(app);
+  try {
+    return initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
+  } catch {
+    return getAuth(app); // ya inicializada (HMR): reusar
+  }
+}
+const auth = makeAuth();
+
+// PERF-008: caché local persistente (IndexedDB). Cada apertura reanuda los listeners con su
+// resume token en vez de re-leer el result set completo — la mayor mejora de velocidad
+// percibida en PWA/APK y ~10× menos lecturas por apertura. Multi-pestaña para que dos
+// pestañas no se peleen por la caché. Si IndexedDB no está (modo privado), el SDK cae solo a
+// memoria; si ya había una instancia (HMR), se reusa.
+function makeDb() {
+  if (!isBrowser) return getFirestore(app);
+  try {
+    return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch {
+    return getFirestore(app);
+  }
+}
+const db = makeDb();
 const storage = getStorage(app);
 
 // --- MESSAGING ---
@@ -87,41 +121,68 @@ export const requestNotificationPermission = async (): Promise<{ token: string |
 };
 
 // ... (El resto de hooks useCollection, useDoc, etc. déjalos igual que antes)
+// Hooks de lectura en vivo. Contrato (vale para las páginas que vinieron de la capa vieja):
+// `data` arranca en [] / null (nunca undefined), `isLoading` arranca en true si hay query,
+// y `error` trae el FirestoreError si el listener falla (permission-denied, índice faltante)
+// — se reporta a Sentry y la página sigue con datos vacíos; NUNCA se re-lanza (BUG-300).
+function reportListenerError(error: FirestoreError, what: string) {
+  console.error(`[firebase] ${what}:`, error?.code || error);
+  try { Sentry.captureException(error, { tags: { area: 'firestore-listener' }, extra: { what } }); } catch { /* noop */ }
+}
+
 export function useCollection<T = any>(query: Query | CollectionReference | null) {
   const [data, setData] = useState<T[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!!query);
+  const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
     if (!query) {
+      setData([]);
       setIsLoading(false);
+      setError(null);
       return;
     }
     setIsLoading(true);
+    setError(null);
     const unsubscribe = onSnapshot(query, (snapshot) => {
       const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as T[];
       setData(items);
+      setError(null);
       setIsLoading(false);
-    }, (error) => { console.error(error); setIsLoading(false); });
+    }, (err) => {
+      reportListenerError(err, 'useCollection ' + ((query as any)?.path ?? 'query'));
+      setData([]);
+      setError(err);
+      setIsLoading(false);
+    });
     return () => unsubscribe();
-  }, [query]); 
-  return { data, isLoading };
+  }, [query]);
+  return { data, isLoading, error };
 }
 
 export function useDoc<T = any>(docRef: DocumentReference | null) {
   const [data, setData] = useState<T | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!!docRef);
+  const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
-    if (!docRef) { setIsLoading(false); return; }
+    if (!docRef) { setData(null); setIsLoading(false); setError(null); return; }
     setIsLoading(true);
-    const unsubscribe = onSnapshot(docRef, (doc) => {
-      if (doc.exists()) setData({ id: doc.id, ...doc.data() } as T);
+    setError(null);
+    const unsubscribe = onSnapshot(docRef, (snap) => {
+      if (snap.exists()) setData({ id: snap.id, ...snap.data() } as T);
       else setData(null);
+      setError(null);
       setIsLoading(false);
-    }, (error) => { console.error(error); setIsLoading(false); });
+    }, (err) => {
+      reportListenerError(err, 'useDoc ' + docRef.path);
+      setData(null);
+      setError(err);
+      setIsLoading(false);
+    });
     return () => unsubscribe();
   }, [docRef]);
-  return { data, isLoading };
+  return { data, isLoading, error };
 }
 
 export function useMemoFirebase<T>(factory: () => T, deps: any[]): T { return useMemo(factory, deps); }

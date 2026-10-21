@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, browserPopupRedirectResolver } from 'firebase/auth';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -85,7 +85,7 @@ export default function LoginPage() {
     try {
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
+        await signInWithPopup(auth, provider, browserPopupRedirectResolver); // PERF-012: Auth se inicializa sin el resolver; se pasa solo acá
         // La redirección la hace el useEffect de arriba, según el ROL del perfil
         // (para una cuenta Google NUEVA, auth-context crea el perfil de comprador solo).
         toast({ title: "¡Bienvenido!", description: "Sesión iniciada con Google." });

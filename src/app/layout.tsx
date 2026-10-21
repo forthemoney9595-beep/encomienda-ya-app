@@ -6,7 +6,6 @@ import { AuthProvider } from '@/context/auth-context';
 // ✅ CORRECCIÓN FINAL: Importación de ChatListener desde '@/components/'
 import { ChatListener } from '@/components/chat-listener'; 
 import { AppContent } from './app-content';
-import { FirebaseClientProvider } from '@/firebase';
 
 // 🚀 METADATOS OPTIMIZADOS PARA SEO Y REDES SOCIALES
 export const metadata: Metadata = {
@@ -77,7 +76,6 @@ export default function RootLayout({
         {/* leaflet.css se importa UNA vez desde globals.css (PERF-010): acá estaba duplicado desde unpkg, bloqueando el primer paint en TODAS las rutas. */}
       </head>
       <body className="font-body antialiased">
-        <FirebaseClientProvider>
           <AuthProvider>
             <CartProvider>
               {/* Tanda C: se eliminó NotificationProvider — su contador no lo leía
@@ -89,7 +87,6 @@ export default function RootLayout({
               </AppContent>
             </CartProvider>
           </AuthProvider>
-        </FirebaseClientProvider>
         <Toaster />
       </body>
     </html>
