@@ -7,22 +7,21 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { doc, collection, query, where, orderBy, updateDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, where, orderBy, getDoc, Timestamp } from 'firebase/firestore';
 import { useState } from 'react';
 import { storeNetForOrder, FALLBACK_COMMISSION } from '@/lib/money';
 import { STORE_LIVE_STATUSES } from '@/lib/order-service';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/hooks/use-toast';
 import {
   Package, Tag, ListOrdered, Star, Wallet, BarChart3,
-  AlertTriangle, PauseCircle, ShoppingBag, Pencil, ArrowRight, ExternalLink, Bell
+  AlertTriangle, ShoppingBag, Pencil, ArrowRight, ExternalLink, Bell
 } from 'lucide-react';
 import { normalizeSchedule, getStoreOpenStatus, describeSchedule } from '@/lib/store-hours';
+import { StorePauseControl } from '@/components/store-pause-control';
+import { StoreComplianceCard } from '@/components/store-compliance-card';
 
 const PRODUCT_STATES = ['Pendiente de Pago', 'En preparación', 'En reparto', 'En camino'];
 
@@ -30,7 +29,6 @@ export default function StoreDashboardPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
-  const { toast } = useToast();
 
   const storeId = userProfile?.storeId;
 
@@ -49,7 +47,7 @@ export default function StoreDashboardPage() {
   // contar 4 números. Ahora: listener de nuevos + en curso (acotado) y, aparte, solo los
   // pedidos creados HOY (índice `orders(storeId, createdAt)`) para "entregados hoy".
   const liveQuery = useMemoFirebase(
-    () => (firestore && storeId
+    () => (firestore && storeId && ready
       ? query(collection(firestore, 'orders'), where('storeId', '==', storeId), where('status', 'in', STORE_LIVE_STATUSES))
       : null),
     [firestore, storeId, ready]
@@ -116,21 +114,6 @@ export default function StoreDashboardPage() {
     return all.filter(p => p.stock != null && p.stock <= 3);
   }, [items, legacyItems]);
 
-  const handleTogglePause = async (checked: boolean) => {
-    if (!firestore || !storeId) return;
-    try {
-      await updateDoc(doc(firestore, 'stores', storeId), { manuallyPaused: checked });
-      toast({
-        title: checked ? 'Tienda pausada' : 'Tienda reactivada',
-        description: checked
-          ? 'No vas a recibir pedidos nuevos hasta que la reactives.'
-          : 'Ya podés volver a recibir pedidos.',
-      });
-    } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo cambiar el estado de la tienda.' });
-    }
-  };
-
   if (authLoading || storeLoading) {
     return (
       <div className="container mx-auto space-y-4 py-6">
@@ -142,7 +125,6 @@ export default function StoreDashboardPage() {
     );
   }
 
-  const paused = !!store?.manuallyPaused;
   const openStatus = getStoreOpenStatus(normalizeSchedule(store));
 
   return (
@@ -163,30 +145,11 @@ export default function StoreDashboardPage() {
         </div>
       </PageHeader>
 
-      {/* Estado de la tienda + pausa rápida */}
-      <Card className={paused ? 'border-destructive/40 bg-destructive/5' : ''}>
-        <CardContent className="flex items-center justify-between gap-4 py-5">
-          <div className="flex items-center gap-3">
-            <PauseCircle className={`h-6 w-6 ${paused ? 'text-destructive' : 'text-muted-foreground'}`} />
-            <div>
-              {/* div, no <p>: Badge renderiza un <div> y un div dentro de <p> es HTML
-                  inválido — tiraba un error de hidratación en consola (Fase QQ). */}
-              <div className="font-semibold flex items-center gap-2">
-                Estado de la tienda
-                <Badge className={paused ? 'bg-destructive/15 text-destructive border-destructive/30' : 'bg-success/15 text-success border-success/30'}>
-                  {paused ? 'Pausada' : 'Activa'}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {paused
-                  ? 'No te llegan pedidos nuevos aunque estés en horario.'
-                  : `${openStatus.isOpen ? 'Abierta ahora' : 'Cerrada ahora'} · ${describeSchedule(store)}`}
-              </p>
-            </div>
-          </div>
-          <Switch checked={paused} onCheckedChange={handleTogglePause} />
-        </CardContent>
-      </Card>
+      {/* Estado de la tienda + pausa con tiempo (Fase YY: 30 min / 1 h / hasta reactivar) */}
+      <StorePauseControl
+        storeId={storeId}
+        activeDescription={`${openStatus.isOpen ? 'Abierta ahora' : 'Cerrada ahora'} · ${describeSchedule(store)}`}
+      />
 
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -246,6 +209,9 @@ export default function StoreDashboardPage() {
           )}
         </div>
       )}
+
+      {/* Cumplimiento (Fase YY, punto 4): aceptación y tiempos, por aggregation */}
+      <StoreComplianceCard storeId={storeId} enabled={ready} variant="owner" />
 
       {/* Rating rápido */}
       <div className="grid gap-4 md:grid-cols-2">

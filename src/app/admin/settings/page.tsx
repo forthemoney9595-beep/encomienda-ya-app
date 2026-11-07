@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { Settings, AlertTriangle, Save, Loader2 } from 'lucide-react';
+import { CONFIRM_DEFAULTS, CONFIRM_RANGES, confirmConfigError } from '@/lib/confirm-timeout';
 
 interface PlatformConfig {
   serviceFee: number;
@@ -26,6 +27,9 @@ interface PlatformConfig {
   maintenanceMode: boolean;
   settlementDayOfWeek?: number;
   claimWindowHours?: number;
+  // Recordatorio / cancelación automática de pedidos sin confirmar (Fase YY)
+  confirmReminderMinutes?: number;
+  confirmTimeoutMinutes?: number;
 }
 
 function AdminSettingsPage() {
@@ -55,7 +59,7 @@ function AdminSettingsPage() {
       return;
     }
 
-    const rangeError = findConfigError(localConfig as any);
+    const rangeError = findConfigError(localConfig as any) ?? confirmConfigError(localConfig);
     if (rangeError) {
       toast({ variant: 'destructive', title: 'Valor fuera de rango', description: rangeError });
       return;
@@ -83,6 +87,8 @@ function AdminSettingsPage() {
           configData?.defaultCommissionRate !== localConfig.defaultCommissionRate ? `comisión default: ${configData?.defaultCommissionRate ?? '—'}% → ${localConfig.defaultCommissionRate}%` : null,
           configData?.settlementDayOfWeek !== localConfig.settlementDayOfWeek ? `día liquidación: ${localConfig.settlementDayOfWeek}` : null,
           configData?.claimWindowHours !== localConfig.claimWindowHours ? `ventana de reclamo: ${configData?.claimWindowHours ?? '—'}h → ${localConfig.claimWindowHours}h` : null,
+          configData?.confirmReminderMinutes !== localConfig.confirmReminderMinutes ? `recordatorio sin confirmar: ${configData?.confirmReminderMinutes ?? CONFIRM_DEFAULTS.reminderMinutes} → ${localConfig.confirmReminderMinutes} min` : null,
+          configData?.confirmTimeoutMinutes !== localConfig.confirmTimeoutMinutes ? `cancelación sin confirmar: ${configData?.confirmTimeoutMinutes ?? CONFIRM_DEFAULTS.timeoutMinutes} → ${localConfig.confirmTimeoutMinutes} min` : null,
           configData?.maintenanceMode !== localConfig.maintenanceMode ? `mantenimiento: ${localConfig.maintenanceMode ? 'ON' : 'OFF'}` : null,
         ].filter(Boolean).join(' · ');
         if (changes) logAdminAction(firestore, adminUser.uid, 'update_config', 'platform', changes);
@@ -205,6 +211,30 @@ function AdminSettingsPage() {
             </p>
           </div>
 
+          {/* Fase YY (punto 5): pedidos que la tienda no confirma. Antes esperaban para siempre. */}
+          <div className="space-y-2">
+            <Label htmlFor="confirmReminder" className="text-sm font-semibold">Recordatorio a la tienda si no confirma (minutos)</Label>
+            <Input id="confirmReminder" type="number" min={CONFIG_RANGES.confirmReminderMinutes.min} max={CONFIG_RANGES.confirmReminderMinutes.max} value={shown(localConfig.confirmReminderMinutes, CONFIRM_DEFAULTS.reminderMinutes)}
+              onChange={(e) => setLocalConfig({ ...localConfig, confirmReminderMinutes: numOrNaN(e) })}
+              className="border-primary/30" />
+            <p className="text-xs text-muted-foreground">
+              A los N minutos de entrar un pedido sin confirmar, la tienda recibe un aviso (campanita +
+              push). Entre {CONFIG_RANGES.confirmReminderMinutes.min} y {CONFIG_RANGES.confirmReminderMinutes.max}. Default: {CONFIRM_DEFAULTS.reminderMinutes}.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmTimeout" className="text-sm font-semibold">Cancelación automática si no confirma (minutos)</Label>
+            <Input id="confirmTimeout" type="number" min={CONFIG_RANGES.confirmTimeoutMinutes.min} max={CONFIG_RANGES.confirmTimeoutMinutes.max} value={shown(localConfig.confirmTimeoutMinutes, CONFIRM_DEFAULTS.timeoutMinutes)}
+              onChange={(e) => setLocalConfig({ ...localConfig, confirmTimeoutMinutes: numOrNaN(e) })}
+              className="border-primary/30" />
+            <p className="text-xs text-muted-foreground">
+              Pasado este plazo el pedido se cancela solo, vuelve el stock y se le avisa al cliente que
+              no se le cobró nada (todavía no pagó: se paga después de que la tienda confirma). Tiene
+              que ser mayor que el recordatorio. Entre {CONFIG_RANGES.confirmTimeoutMinutes.min} y {CONFIG_RANGES.confirmTimeoutMinutes.max}. Default: {CONFIRM_DEFAULTS.timeoutMinutes}.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label className="text-sm font-semibold">Día de liquidación automática</Label>
             <select value={localConfig.settlementDayOfWeek ?? 5}
@@ -251,6 +281,9 @@ const CONFIG_RANGES: Record<string, { min: number; max: number; label: string }>
   maxDeliveryDistanceKm: { min: 1, max: 500,    label: 'Distancia máxima (km)' },
   defaultCommissionRate: { min: 0, max: 50,     label: 'Comisión por defecto (%)' },
   claimWindowHours:      { min: 1, max: 168,    label: 'Ventana de reclamo (horas)' },
+  // Fase YY: mismos rangos que valida el servidor (confirm-timeout.ts → resolveConfirmConfig).
+  confirmReminderMinutes: { ...CONFIRM_RANGES.confirmReminderMinutes },
+  confirmTimeoutMinutes:  { ...CONFIRM_RANGES.confirmTimeoutMinutes },
 };
 // Campo vacío → NaN (no 0): así el validador lo frena en vez de guardar un 0 silencioso.
 const numOrNaN = (e: React.ChangeEvent<HTMLInputElement>) => (e.target.value === '' ? NaN : Number(e.target.value));
@@ -267,7 +300,7 @@ function findConfigError(cfg: Record<string, unknown>): string | null {
 
 // Defaults para campos que el doc todavía no tiene (ARQ-002: como objeto, no como claves sueltas
 // antes del spread — con strictNullChecks TS marcaba las claves como pisadas).
-const CONFIG_DEFAULTS = { serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, settlementDayOfWeek: 5, maintenanceMode: false, claimWindowHours: 24 };
+const CONFIG_DEFAULTS = { serviceFee: 10, deliveryFee: 2000, defaultCommissionRate: 10, settlementDayOfWeek: 5, maintenanceMode: false, claimWindowHours: 24, confirmReminderMinutes: CONFIRM_DEFAULTS.reminderMinutes, confirmTimeoutMinutes: CONFIRM_DEFAULTS.timeoutMinutes };
 
 export default function AdminSettingsPageGuarded() {
   return <AdminAuthGuard requireFullAdmin><AdminSettingsPage /></AdminAuthGuard>;

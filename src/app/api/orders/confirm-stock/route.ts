@@ -180,7 +180,19 @@ export async function POST(request: Request) {
         if (!fresh.exists || current?.status !== "Pendiente de Confirmación") {
           throw new Error(ALREADY + ":" + (current?.status ?? "inexistente"));
         }
+        // Métricas de cumplimiento del comercio (Fase YY, punto 4): cuándo confirmó y cuánto
+        // tardó, server-side. `storeDecision` alimenta la tasa de aceptación por aggregation
+        // (confirmed / rejected / timeout) sin bajar el historial; `confirmSeconds` el
+        // tiempo promedio de confirmación con average().
+        const decidedAt = Timestamp.now();
+        const createdMs = current?.createdAt?.toMillis?.() ?? null;
         tx.update(orderRef, {
+          confirmedAt: decidedAt,
+          storeDecision: "confirmed",
+          storeDecisionAt: decidedAt,
+          ...(typeof createdMs === "number"
+            ? { confirmSeconds: Math.max(0, Math.round((decidedAt.toMillis() - createdMs) / 1000)) }
+            : {}),
           items: pricedItems,
           subtotal: newSubtotal,
           serviceFee: newServiceFee,

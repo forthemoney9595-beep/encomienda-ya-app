@@ -151,6 +151,10 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'description', 'category', 'address', 'imageUrl', 'deliveryTime',
           'weeklySchedule', 'schedule', 'coords', 'updatedAt', 'manuallyPaused',
+          // 'pausedUntil' (Fase YY): pausa con tiempo (30 min / 1 h) desde /my-store. Lo
+          // escribe el CLIENTE junto con manuallyPaused — lección TT: campo nuevo que
+          // escribe el cliente = va al hasOnly de su regla.
+          'pausedUntil',
           'productCategories', 'maxDiscountPercent'
           // 🔒 'payoutCbu' quitado (seguridad ago 2026): el CBU vive en el user doc del
           // dueño (privado), no en el store público. Se escribe por /api/withdrawals/request

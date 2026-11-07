@@ -12,6 +12,7 @@ import { useAggregate, useCountFromServer } from '@/lib/firebase-aggregate';
 import { money } from '@/lib/format-money';
 import { fmtDate, fmtElapsed, startOfDayArgentina, weekdayShort } from '@/lib/format-date';
 import { ADMIN_ACTIVE_STATUSES } from '@/lib/order-stuck';
+import { isStorePaused } from '@/lib/store-hours';
 import type { Order } from '@/lib/order-service';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -88,7 +89,14 @@ export default function AdminResumenPage() {
   const storesApprovedQ = useMemoFirebase(() => q(() => query(collection(db, 'stores'), where('isApproved', '==', true))), [isAdmin]);
   const storesPausedQ = useMemoFirebase(() => q(() => query(collection(db, 'stores'), where('isApproved', '==', true), where('manuallyPaused', '==', true))), [isAdmin]);
   const storesApproved = useCountFromServer(storesApprovedQ);
-  const storesPaused = useCountFromServer(storesPausedQ);
+  // Fase YY: la pausa puede tener vencimiento (pausedUntil) y el doc queda con
+  // manuallyPaused:true aunque ya venció — un count() server-side contaría de más. Las
+  // tiendas pausadas son un set chico y acotado: listener + filtro con isStorePaused.
+  const storesPausedDocs = useCollection<{ id: string; manuallyPaused?: boolean; pausedUntil?: unknown }>(storesPausedQ);
+  const storesPaused = useMemo(() => ({
+    count: storesPausedDocs.isLoading ? null : (storesPausedDocs.data ?? []).filter(st => isStorePaused(st, now)).length,
+    refresh: () => {},
+  }), [storesPausedDocs.isLoading, storesPausedDocs.data, now]);
 
   /* ── Totales históricos (aggregations, foco cada 5 min) ───────────────────── */
   const deliveredAllQ = useMemoFirebase(() => q(() => query(ordersCol, where('status', '==', 'Entregado'))), [isAdmin, ordersCol]);
@@ -156,7 +164,7 @@ export default function AdminResumenPage() {
   const claimsPer100 = claims7d.count === null || orders7d.count === null ? null : (orders7d.count > 0 ? (claims7d.count / orders7d.count) * 100 : 0);
   const pendingApprovals = counts.counts.pendingStores === null || counts.counts.pendingDrivers === null ? null : (counts.counts.pendingStores ?? 0) + (counts.counts.pendingDrivers ?? 0);
   const storesOperating = storesApproved.count === null || storesPaused.count === null ? null : Math.max(0, storesApproved.count - storesPaused.count);
-  const inboxTotal = counts.inboxTotal === null ? null : counts.inboxTotal + inbox.stuckCount;
+  const inboxTotal = counts.inboxTotal === null ? null : counts.inboxTotal + inbox.stuckCount + inbox.storeAlertCount;
 
   const revenue = deliveredAgg.data?.revenue ?? null;
   const completed = deliveredAgg.data?.completed ?? null;

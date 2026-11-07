@@ -28,6 +28,7 @@ import { useConfirm } from '@/components/admin/confirm-dialog';
 import { RefundDialog } from '@/components/admin/refund-dialog';
 import { useAdminCounts } from '@/components/admin/use-admin-counts';
 import { useMemoFirebase } from '@/lib/firebase';
+import { describeOrderEnding } from '@/lib/confirm-timeout';
 
 const PAGE_SIZE = 50;
 const ORDER_ID_MIN_LEN = 15; // los IDs de Firestore tienen 20 chars; desde acá vale intentar el getDoc
@@ -45,6 +46,7 @@ const PAYMENT_OPTIONS = [
 type OrderRow = Order & {
   storeId?: string; storeName?: string; paymentStatus?: string; hasPaymentIssue?: boolean; hasClaim?: boolean;
   subtotal?: number; commissionRate?: number; commissionAmount?: number; refunded?: boolean; refundAmount?: number;
+  cancelReason?: string; cancelledBy?: string; rejectionReason?: string;
 };
 
 function dateFrom(f: DateRangePreset): Date | null {
@@ -231,6 +233,8 @@ function AdminOrdersInner() {
     { key: 'status', header: 'Estado', cell: o => (
       <span className="flex flex-wrap items-center gap-1">
         <StatusBadge kind="order" value={o.status} />
+        {/* Fase YY: cómo terminó ("No confirmado a tiempo", "Cancelado por el cliente"...) */}
+        {describeOrderEnding(o) && <span className="text-xs text-muted-foreground" data-testid="order-ending">{describeOrderEnding(o)!.label}</span>}
         {o.refunded && <StatusBadge kind="payment" value="refunded" suffix={money(o.refundAmount)} />}
         {o.hasClaim && <span className="inline-flex h-[22px] items-center rounded-full bg-warning/15 px-2 text-xs font-semibold text-warning-ink">Reclamo</span>}
       </span>
@@ -299,7 +303,7 @@ function AdminOrdersInner() {
         getMobileCard={o => ({
           title: <EntityLink type="order" id={o.id} />,
           badge: <StatusBadge kind="order" value={o.status} />,
-          secondary: `${o.customerName || '—'} · ${o.storeName || '—'}${o.deliveryPersonName ? ` · ${o.deliveryPersonName}` : ''} · ${fmtDate(o.createdAt, 'short')}`,
+          secondary: `${describeOrderEnding(o) ? describeOrderEnding(o)!.label + ' · ' : ''}${o.customerName || '—'} · ${o.storeName || '—'}${o.deliveryPersonName ? ` · ${o.deliveryPersonName}` : ''} · ${fmtDate(o.createdAt, 'short')}`,
           right: money(o.total),
         })}
         empty={{ title: 'No hay pedidos con este filtro', description: 'Probá ampliar el período o limpiar los filtros.' }}

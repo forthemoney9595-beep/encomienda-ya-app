@@ -11,6 +11,8 @@ import { authedFetch } from '@/lib/authed-fetch';
 import { logAdminAction } from '@/lib/admin-audit';
 import { money } from '@/lib/format-money';
 import { fmtDate } from '@/lib/format-date';
+import { describeOrderEnding } from '@/lib/confirm-timeout';
+import { fmtConfirmSeconds } from '@/lib/store-compliance';
 import { reasonLabel, REASON_HINTS } from '@/lib/payment-issues';
 import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
 import { commissionForOrder, driverNetForOrder, FALLBACK_COMMISSION, platformBreakdownForOrder, storeNetForOrder } from '@/lib/money';
@@ -33,6 +35,7 @@ const CANCELABLE_BY_ADMIN = new Set(['Pendiente de Confirmación', 'Pendiente de
 
 type OrderDoc = Order & Record<string, unknown> & {
   paymentStatus?: string; paidAt?: unknown; mpPaymentId?: string | number; cancelledAt?: unknown; cancelledBy?: string; cancelReason?: string;
+  confirmedAt?: unknown; confirmSeconds?: number; confirmReminderSentAt?: unknown;
   rejectedAt?: unknown; rejectedBy?: string; rejectionReason?: string; refundOperationRef?: string; refundedBy?: string;
   deliveryPinVerified?: boolean; adjustedItems?: Array<{ name?: string; from?: number; to?: number; quantity?: number; originalQuantity?: number }>;
   removedItems?: Array<{ name?: string; quantity?: number }>; commissionRate?: number; commissionAmount?: number; subtotal?: number;
@@ -167,7 +170,11 @@ export default function AdminOrderDetailPage() {
         <span className="inline-flex items-center gap-1">{o.deliveryPinVerified ? <><ShieldCheck className="h-3.5 w-3.5 text-success-ink" aria-hidden="true" /> PIN de entrega verificado</> : <><ShieldX className="h-3.5 w-3.5 text-warning-ink" aria-hidden="true" /> sin PIN verificado</>}</span>
       ) : undefined },
   ];
-  if (o.status === 'Cancelado' || o.cancelledAt) events.push({ key: 'cancelled', at: o.cancelledAt ?? o.updatedAt ?? null, label: 'Cancelado', detail: o.cancelReason || undefined, actor: cancelledBy, tone: 'destructive' });
+  // Fase YY: rótulo único de cómo terminó (incluye 'No confirmado a tiempo' del sistema).
+  const ending = describeOrderEnding(o);
+  if (o.confirmedAt) events.push({ key: 'confirmed', at: o.confirmedAt, label: 'Confirmado por la tienda', detail: typeof o.confirmSeconds === 'number' ? `tardó ${fmtConfirmSeconds(o.confirmSeconds)}` : undefined, tone: 'success' });
+  if (o.confirmReminderSentAt) events.push({ key: 'reminder', at: o.confirmReminderSentAt, label: 'Recordatorio a la tienda (sin confirmar)', tone: 'warning' });
+  if (o.status === 'Cancelado' || o.cancelledAt) events.push({ key: 'cancelled', at: o.cancelledAt ?? o.updatedAt ?? null, label: o.status === 'Cancelado' && ending ? ending.label : 'Cancelado', detail: o.cancelReason === 'auto_unconfirmed' ? ending?.detail : (o.cancelReason || undefined), actor: o.cancelledBy === 'system' ? 'sistema' : cancelledBy, tone: 'destructive' });
   if (o.status === 'Rechazado' || o.rejectedAt) events.push({ key: 'rejected', at: o.rejectedAt ?? o.updatedAt ?? null, label: 'Rechazado por la tienda', detail: o.rejectionReason || undefined, tone: 'destructive' });
   if (o.refunded) events.push({ key: 'refunded', at: o.refundedAt ?? null, label: `Reembolso registrado · ${money(o.refundAmount)}`, detail: o.refundOperationRef ? `op. ${o.refundOperationRef}${o.refundReason ? ` · ${o.refundReason}` : ''}` : o.refundReason, tone: 'warning' });
 

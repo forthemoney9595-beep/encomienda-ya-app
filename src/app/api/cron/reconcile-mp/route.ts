@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { runReconciliation } from "@/lib/reconcile-mp";
 import { updateMonthlyStats, updateDailyStats } from "@/lib/platform-stats";
+import { sweepUnconfirmedOrders } from "@/lib/confirm-timeout-server";
 
 // Cron diario de Vercel (ver vercel.json) — misma protección CRON_SECRET que
 // generate-settlements. Corre la conciliación con MercadoPago: re-verifica los pagos de
@@ -26,8 +27,19 @@ export async function GET(request: Request) {
     const { updated } = await updateMonthlyStats();
     // Cierres diarios (Tanda T2): mismo criterio y mismo cron; alimentan /admin/finances.
     const daily = await updateDailyStats();
-    console.log(`[Cron] reconcile-mp: ${JSON.stringify(summary)} · meses actualizados: ${updated.join(", ") || "ninguno"} · días: ${daily.updated.length}/${daily.checked}`);
-    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked });
+    // Red de seguridad de la cancelación automática (Fase YY): los 'Pendiente de
+    // Confirmación' vencidos que ningún cliente estaba mirando. El reloj fino lo dan los
+    // clientes (ver /api/orders/confirm-timeout); con Vercel Pro un cron por minuto lo
+    // reemplaza. Aislado en su try: un fallo acá no debe tumbar la conciliación.
+    let unconfirmed = { checked: 0, cancelled: 0, errors: 0 };
+    try {
+      unconfirmed = await sweepUnconfirmedOrders();
+    } catch (e) {
+      console.error("❌ [Cron] barrido de pedidos sin confirmar:", e);
+      Sentry.captureException(e, { tags: { route: "cron/reconcile-mp", step: "confirm-timeout-sweep" } });
+    }
+    console.log(`[Cron] reconcile-mp: ${JSON.stringify(summary)} · meses actualizados: ${updated.join(", ") || "ninguno"} · días: ${daily.updated.length}/${daily.checked} · sin confirmar cancelados: ${unconfirmed.cancelled}/${unconfirmed.checked}`);
+    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked, unconfirmedCancelled: unconfirmed.cancelled, unconfirmedChecked: unconfirmed.checked });
   } catch (error: any) {
     console.error("❌ [Cron] Error en reconcile-mp:", error);
     Sentry.captureException(error, { tags: { route: "cron/reconcile-mp" } });

@@ -22,12 +22,13 @@ import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
-import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLAY_ORDER, type WeeklySchedule } from '@/lib/store-hours';
+import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLAY_ORDER, isStorePaused, pausedUntilMs, type WeeklySchedule } from '@/lib/store-hours';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { StarRating } from '@/components/star-rating';
 import { ImageLightbox } from '@/components/image-lightbox';
 import { format } from 'date-fns';
+import { fmtDate } from '@/lib/format-date';
 import { es } from 'date-fns/locale';
 import { publicName } from '@/lib/public-name';
 
@@ -42,6 +43,7 @@ interface StoreData {
   rating?: number;
   ratingCount?: number;
   manuallyPaused?: boolean;
+  pausedUntil?: unknown;
   maxDiscountPercent?: number;
   // Gate de aprobación (Tanda A): sin true, la tienda solo la ven dueño y admin.
   isApproved?: boolean;
@@ -222,7 +224,7 @@ export default function StorePublicPage() {
 
   // 4. Estado de Apertura (helper compartido: soporta horario por día + franjas de siesta)
   const storeStatus = useMemo((): { isOpen: boolean; label: string; timeRange?: string; paused?: boolean } => {
-      if (store?.manuallyPaused) {
+      if (isStorePaused(store)) {
           return { isOpen: false, label: 'Pausada temporalmente', paused: true };
       }
       const status = getStoreOpenStatus(normalizeSchedule(store));
@@ -506,7 +508,9 @@ export default function StorePublicPage() {
       {!storeStatus.isOpen && (
           <div className="bg-destructive/10 border border-destructive/30 text-foreground p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
               <p className="font-semibold">
-                  {storeStatus.paused ? '⏸️ Este local pausó temporalmente los pedidos.' : '🔴 Este local se encuentra cerrado en este momento.'}
+                  {storeStatus.paused
+                      ? (pausedUntilMs(store) ? `⏸️ Este local pausó los pedidos hasta las ${fmtDate(pausedUntilMs(store), 'time')}.` : '⏸️ Este local pausó temporalmente los pedidos.')
+                      : '🔴 Este local se encuentra cerrado en este momento.'}
               </p>
               <p className="text-sm">
                   {storeStatus.paused
@@ -754,7 +758,7 @@ export default function StorePublicPage() {
             <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
               {relatedStores.map((s: any, i: number) => {
                 // Mismo criterio que el inicio: la pausa manual se evalúa aparte del horario.
-                const st = s.manuallyPaused
+                const st = isStorePaused(s)
                   ? { isOpen: false, label: 'Pausada' }
                   : getStoreOpenStatus(normalizeSchedule(s));
                 return (

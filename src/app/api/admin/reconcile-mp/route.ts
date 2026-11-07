@@ -4,6 +4,7 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { runReconciliation } from "@/lib/reconcile-mp";
 import { updateMonthlyStats, updateDailyStats } from "@/lib/platform-stats";
+import { sweepUnconfirmedOrders } from "@/lib/confirm-timeout-server";
 
 // Botón "Conciliar ahora" de /admin/payment-issues. Exige admin 'full': la conciliación
 // puede marcar órdenes como pagadas (webhook perdido) — es un cambio de estado de plata,
@@ -29,7 +30,14 @@ export async function POST(request: Request) {
     // Mismo criterio que el cron: los cierres mensuales se refrescan tras conciliar.
     const { updated } = await updateMonthlyStats();
     const daily = await updateDailyStats(); // cierres diarios (Tanda T2)
-    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked });
+    // Mismo barrido que el cron (Fase YY): pedidos 'Pendiente de Confirmación' vencidos.
+    let unconfirmed = { checked: 0, cancelled: 0, errors: 0 };
+    try {
+      unconfirmed = await sweepUnconfirmedOrders();
+    } catch (e) {
+      Sentry.captureException(e, { tags: { route: "admin/reconcile-mp", step: "confirm-timeout-sweep" } });
+    }
+    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked, unconfirmedCancelled: unconfirmed.cancelled, unconfirmedChecked: unconfirmed.checked });
   } catch (error: any) {
     console.error("❌ Error en conciliación manual:", error);
     Sentry.captureException(error, { tags: { route: "admin/reconcile-mp" } });

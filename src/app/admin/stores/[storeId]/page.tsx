@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, orderBy, limit, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, doc, updateDoc, getDoc, deleteField, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
@@ -31,6 +31,9 @@ import {
 import Link from 'next/link';
 import type { Order } from '@/lib/order-service';
 import { publicName } from '@/lib/public-name';
+import { isStorePaused, pausedUntilMs } from '@/lib/store-hours';
+import { fmtDate } from '@/lib/format-date';
+import { StoreComplianceCard } from '@/components/store-compliance-card';
 
 const formatDate = (ts: any) => {
     if (!ts) return '—';
@@ -233,13 +236,19 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
         }
     };
 
-    const handleTogglePause = async () => {
+    // Fase YY: pausa EFECTIVA (una pausa de 30 min/1 h vencida ya no cuenta) + "Pausar 1 h".
+    const paused = isStorePaused(store);
+    const pausedUntil = pausedUntilMs(store);
+    const handleTogglePause = async (minutes?: number) => {
         if (!firestore || !storeRef || !store) return;
         setTogglingPause(true);
         try {
-            await updateDoc(storeRef, { manuallyPaused: !store.manuallyPaused });
-            if (adminUser) logAdminAction(firestore, adminUser.uid, store.manuallyPaused ? 'unpause_store' : 'pause_store', storeId, store.name || '');
-            toast({ title: store.manuallyPaused ? 'Tienda reactivada' : 'Tienda pausada' });
+            const until = !paused && minutes ? Timestamp.fromMillis(Date.now() + minutes * 60_000) : null;
+            await updateDoc(storeRef, paused
+                ? { manuallyPaused: false, pausedUntil: deleteField() }
+                : { manuallyPaused: true, pausedUntil: until ?? deleteField() });
+            if (adminUser) logAdminAction(firestore, adminUser.uid, paused ? 'unpause_store' : 'pause_store', storeId, `${store.name || ''}${until ? ` · hasta ${fmtDate(until.toMillis(), 'time')}` : ''}`);
+            toast({ title: paused ? 'Tienda reactivada' : (until ? `Tienda pausada hasta las ${fmtDate(until.toMillis(), 'time')}` : 'Tienda pausada') });
         } catch {
             toast({ variant: 'destructive', title: 'Error al cambiar estado' });
         } finally {
@@ -292,8 +301,8 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
 
     return (
         <div className="container mx-auto pb-20 space-y-6">
-            {/* Header */}
-            <div className="flex items-start gap-4">
+            {/* Header — flex-wrap (Fase YY): con "Pausar 1 h" los botones no entraban a 430 px */}
+            <div className="flex flex-wrap items-start gap-4">
                 <Avatar className="h-16 w-16 rounded-xl border">
                     <AvatarImage src={store.imageUrl || store.bannerImageUrl} />
                     <AvatarFallback><Store className="h-7 w-7" /></AvatarFallback>
@@ -304,8 +313,10 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                         <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-xs">
                             {store.isApproved ? 'Aprobada' : 'No aprobada'}
                         </Badge>
-                        {store.manuallyPaused && (
-                            <Badge variant="outline" className="text-xs border-warning/40 text-warning">Pausada</Badge>
+                        {paused && (
+                            <Badge variant="outline" className="text-xs border-warning/40 text-warning">
+                                {pausedUntil ? `Pausada hasta las ${fmtDate(pausedUntil, 'time')}` : 'Pausada'}
+                            </Badge>
                         )}
                     </div>
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
@@ -329,11 +340,16 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                         )}
                     </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                    <Button size="sm" variant="outline" onClick={handleTogglePause} disabled={togglingPause} className="gap-1.5">
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+                    {!paused && (
+                        <Button size="sm" variant="outline" onClick={() => handleTogglePause(60)} disabled={togglingPause} className="gap-1.5">
+                            <Pause className="h-3.5 w-3.5 text-warning" /> Pausar 1 h
+                        </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => handleTogglePause()} disabled={togglingPause} className="gap-1.5">
                         {togglingPause ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : store.manuallyPaused ? <Play className="h-3.5 w-3.5 text-success" /> : <Pause className="h-3.5 w-3.5 text-warning" />}
-                        {store.manuallyPaused ? 'Reactivar' : 'Pausar'}
+                            : paused ? <Play className="h-3.5 w-3.5 text-success" /> : <Pause className="h-3.5 w-3.5 text-warning" />}
+                        {paused ? 'Reactivar' : 'Pausar'}
                     </Button>
                     <Button size="sm" variant="outline" onClick={handleToggleApproval} className="gap-1.5">
                         {store.isApproved
@@ -368,6 +384,9 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                     histórico. El saldo real a pagar está en Finanzas.
                 </p>
             </div>
+
+            {/* Cumplimiento (Fase YY, punto 4): aceptación y tiempos, por aggregation */}
+            <StoreComplianceCard storeId={storeId} variant="admin" />
 
             {/* Estado de cuenta (Fase OO): la historia completa de la plata de esta cuenta */}
             <AccountStatement

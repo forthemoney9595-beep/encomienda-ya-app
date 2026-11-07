@@ -3035,6 +3035,118 @@ datos: el camino "reembolso retroactivo recalcula el día cerrado" (sin reembols
 para ejercerlo) y la `KpiRow` a 430 px (componente de T1) con tarjetas de alturas
 desparejas en el Resumen financiero.
 
+## Fase YY (nov 2026): operación al estándar Rappi/PedidosYa — Tanda A
+Salió de la investigación de la bóveda [[Cómo administran Rappi y PedidosYa (07-11)]], puntos
+4, 5 y 6, aprobados por David. Rama `admin-pro`. Nada de esto mueve plata: `money.ts`, webhook,
+`payout-service`, `refund-order` y las rutas de retiros quedaron intactos.
+
+**1 — Recordatorio y cancelación automática de pedidos sin confirmar (punto 5).** Antes un
+pedido 'Pendiente de Confirmación' esperaba para siempre (recién aparecía como trabado a la
+hora). Config nueva `config/platform.confirmReminderMinutes` (default 5, rango 2–30) y
+`confirmTimeoutMinutes` (default 15, rango 5–60, tiene que ser mayor que el recordatorio),
+editables en `/admin/settings` (`CONFIG_RANGES` + validación cruzada, auditadas en
+`update_config` como el resto).
+- **El reloj sin cron.** Vercel Hobby tiene sus 2 crons usados y son diarios. El reloj lo dan
+  las pantallas que miran el pedido: `src/hooks/use-confirm-timeout.ts`
+  (`useConfirmTimeoutWatcher`) llama UNA vez a `POST /api/orders/confirm-timeout {orderId}` al
+  ver cada pedido pendiente (devuelve `reminderAt`/`timeoutAt`, y si algo ya venció lo aplica
+  en esa llamada) y programa timers al recordatorio y al vencimiento (si el servidor contesta
+  'none' al vencimiento porque el reloj del navegador está adelantado, reintenta cada 5 s,
+  máximo 6). Lo montan el detalle del pedido (`orders/[orderId]/page.tsx`), el panel de la
+  tienda (`store-orders-view.tsx`, sus Nuevos) y `useInboxItems` (Bandeja y Resumen admin).
+  **Red de seguridad:** el cron diario de conciliación (`/api/cron/reconcile-mp`) y el botón
+  "Conciliar ahora" (`/api/admin/reconcile-mp`) corren `sweepUnconfirmedOrders()` (consulta
+  acotada `status ==` + `createdAt <=` corte + `limit(100)` sobre el índice `orders (status,
+  createdAt ASC)` que ya existía), aislado en su try. **Con Vercel Pro, un cron por minuto que
+  llame a `sweepUnconfirmedOrders()` reemplaza a los disparadores de cliente** (pueden quedar,
+  son inofensivos).
+- **Núcleo:** `src/lib/confirm-timeout.ts` (PURO: `decideConfirmTimeout`,
+  `resolveConfirmConfig`, `confirmConfigError`, `describeOrderEnding`, defaults/rangos) y
+  `src/lib/confirm-timeout-server.ts` (Admin SDK: `applyConfirmTimeout`,
+  `sweepUnconfirmedOrders`). Se partió en dos a propósito: si el puro importara
+  `firebase-admin`, ni el cliente ni Vitest podrían cargarlo.
+- **La ruta** autoriza al comprador de ese pedido, al dueño real de la tienda
+  (`stores/{id}.ownerId`) o a un admin de cualquier nivel; token verificado, rate limit 60/min.
+  El servidor decide con SU reloj y el `createdAt`, dentro de una transacción: recordatorio
+  (marca `confirmReminderSentAt` en la misma tx → una sola vez aunque lo disparen tres
+  pantallas) con `notifyUser` al dueño; vencimiento → la tx RE-EXIGE 'Pendiente de
+  Confirmación' (misma disciplina que confirm-stock, ARQ-006), pasa a 'Cancelado' con
+  `cancelReason: 'auto_unconfirmed'`, `cancelledBy: 'system'`, `cancelledAt`, y después
+  `returnStockForOrder` (idempotente) + avisos al comprador ("no se te cobró nada") y a la
+  tienda. Antes del pago no hay plata: no crea `payment_mismatches`. Responde `{action:
+  'none'|'reminded'|'cancelled', reminderAt, timeoutAt}`.
+- **`/api/orders/reject` ahora es transaccional** (re-exige 'Pendiente de Confirmación'):
+  era un update suelto y podía pisar una cancelación automática simultánea.
+- **Motivos visibles:** `describeOrderEnding()` es el rótulo único ("No confirmado a tiempo",
+  "Cancelado por el cliente / la administración", "Rechazado por la tienda" + motivo) en el
+  detalle del pedido, el historial del panel de la tienda, `/admin/orders` (lista y tarjeta
+  móvil) y la ficha `/admin/orders/[id]` (timeline con "Confirmado por la tienda · tardó X" y
+  "Recordatorio a la tienda"). `/api/orders/cancel` guarda por fin el `cancelReason` del admin
+  (nunca el del comprador, y nunca el código del sistema).
+- **UI:** `src/components/confirm-countdown.tsx` — "La tienda tiene hasta las HH:MM para
+  confirmar (quedan N min)" para el comprador, "Confirmá antes de las HH:MM" para la tienda; la
+  hora es la que devuelve el servidor.
+
+**2 — Pausa con tiempo (punto 6).** `stores/{id}.pausedUntil` (timestamp opcional) junto a
+`manuallyPaused`. Pausa EFECTIVA = `manuallyPaused && (!pausedUntil || pausedUntil > ahora)`:
+**`isStorePaused(store, now)` / `pausedUntilMs()` en `store-hours.ts` son el único chequeo**
+(home, tienda pública y "Más de…", `/api/orders/create`, dashboard y edición de tienda,
+`/admin/stores`, ficha admin, contador "Tiendas pausadas" del Resumen — que pasó de `count()`
+a listener del set chico de pausadas + filtro, porque el doc queda con `manuallyPaused:true`
+y un `pausedUntil` vencido: la reactivación no escribe nada). OJO: `now` es un instante real,
+NUNCA `nowInArgentina()` (ese Date está corrido para leer la hora de pared).
+`src/components/store-pause-control.tsx` es el control ÚNICO del dueño (en `/my-store` y en
+`/my-store/edit`, lección R1): el switch ofrece "30 min / 1 hora / Hasta que la reactive",
+muestra "Pausada hasta las HH:MM" y se re-renderiza solo al vencer. La ficha admin ganó
+"Pausar 1 h". **Regla:** `pausedUntil` agregado al `hasOnly` del update del dueño en `stores`
+(lección TT) — caso nuevo en `tests/rules/firestore.rules.test.ts` (dueño pausa/reactiva ✅;
+`isApproved`/`rating`/`ratingCount` ❌; otro dueño ❌).
+
+**3 — Cumplimiento del comercio (punto 4), sin penalizaciones automáticas.** Campo nuevo
+`orders.storeDecision` (`'confirmed' | 'rejected' | 'timeout'`) + `storeDecisionAt`, escritos
+server-side por confirm-stock, reject y la cancelación automática; confirm-stock además
+registra `confirmedAt` y `confirmSeconds` (tiempo hasta confirmar). Los pedidos anteriores no
+lo tienen: **las métricas cuentan desde esta fase**.
+- `src/components/store-compliance-card.tsx` — "Tu cumplimiento, últimos 30 días" en
+  `/my-store` y "Cumplimiento del comercio" en `/admin/stores/[id]`: recibidos, confirmados,
+  rechazados, no confirmados a tiempo, **tasa de aceptación** (sobre los que la tienda tuvo
+  que decidir) y tiempo promedio de confirmación. Todo por aggregation (`count()` +
+  `average('confirmSeconds')`), nunca baja el historial. Funciones puras en
+  `src/lib/store-compliance.ts`.
+- **Bandeja:** alerta "Tienda X: N pedidos rechazados o no confirmados en 30 min" cuando una
+  tienda llega a `STORE_ALERT_THRESHOLD = 3` dentro de `STORE_ALERT_WINDOW_MIN = 30` (umbral que
+  la prensa le atribuye a PedidosYa, no publicado). Consulta acotada `storeDecision in
+  [rejected, timeout]` + `storeDecisionAt >=` corte (avanza en tramos de 10 min) +
+  `limit(200)`; acción rápida **"Pausar 1 h"** (usa `pausedUntil`, auditada `pause_store`); si
+  la tienda ya está pausada la fila lo dice y saca el botón. Chip nuevo "Tiendas" (kind
+  `store_alert`).
+
+**Índices nuevos (desplegados, 43 → 46):** `orders (storeId, storeDecision, createdAt DESC)`,
+`orders (storeId, storeDecision, createdAt ASC, confirmSeconds ASC)` (count + average de los
+confirmados en una aggregation) y `orders (storeDecision, storeDecisionAt DESC)` (alerta). Las
+consultas de la tarjeta llevan `orderBy('createdAt','desc')` para usar los DESC (un rango sin
+`orderBy` pide el ASC).
+
+**Verificación:** `tsc` 0 · lint 0 errores · Vitest 88/88 (16 nuevos: `confirm-timeout.test.ts`,
+`store-hours.test.ts`) · `npm run test:rules` 20/20 (3 nuevos) · reglas e índices con dry-run
+y desplegados ANTES de probar en vivo · build OK. **`_e2e-confirm-timeout.js` 43/43** (dev
+server + Firestore real; retrocede el `createdAt` SOLO de sus pedidos marcados; no toca
+config): recordatorio único con dos llamadas en paralelo, antes del timeout no cancela,
+timeout con stock devuelto + avisos + idempotente, confirmado no se cancela, tercero 403 / sin
+token 401, carrera confirmar-vs-timeout en 3 rondas escalonadas (ganaron los dos lados,
+siempre exactamente uno), barrido vía "Conciliar ahora" (con guarda: se saltea si hay pedidos
+REALES sin confirmar vencidos), pausa vencida = abierta / vigente = 400; limpieza por consulta
+también en el catch y residuo cero (incluye la corrida de conciliación del test).
+**`_pw-tanda-a.js` 40/40** a 1440 y 430 (cuenta regresiva comprador y panel, pausa 30 min y
+reactivación en `/my-store`, cumplimiento = Admin SDK en `/my-store` y ficha admin, alerta de
+la Bandeja + "Pausar 1 h", ajustes con rangos sin guardar — `config/platform` con el mismo
+`updateTime` —, 0 overflow, 0 pageerror). Encontró un overflow real que se corrigió: el
+header de la ficha admin de tienda medía 441 px a 430 con el botón nuevo (ahora `flex-wrap`).
+Regresión verde: confirm-vs-cancel 19/19, stock 13/13, adjust-qty 19/19.
+**A confirmar:** el push real del recordatorio en un celular; el comportamiento con varias
+pestañas de la tienda abiertas un día entero (los timers son por pestaña; el servidor
+deduplica).
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

@@ -105,3 +105,36 @@ export function describeSchedule(store: any, now: Date = new Date()): string {
   if (!today || today.closed) return 'Hoy cerrado';
   return `Hoy ${formatRanges(today.ranges)}`;
 }
+
+// ── Pausa manual con tiempo (Fase YY, punto 6) ─────────────────────────────────────────
+// `stores/{id}.manuallyPaused` era un switch y la gente se olvidaba la tienda pausada. Ahora
+// puede llevar `pausedUntil` (timestamp): pasada esa hora la tienda vuelve SOLA, sin que
+// nadie escriba nada (el doc puede quedar con manuallyPaused:true y un pausedUntil vencido —
+// por eso NINGÚN lector mira `manuallyPaused` a secas: todos pasan por acá, igual que
+// "¿abierta?" pasa siempre por getStoreOpenStatus).
+//
+// ⚠️ `now` es un instante REAL (Date.now() / new Date()), NO nowInArgentina(): esa función
+// devuelve un Date corrido para leer la hora de pared y compararlo contra un timestamp
+// absoluto daría la pausa 3 horas corrida.
+type PausableStore = { manuallyPaused?: boolean; pausedUntil?: unknown } | null | undefined;
+
+/** pausedUntil en ms epoch (acepta Timestamp de cliente o Admin, Date, número o ISO). */
+export function pausedUntilMs(store: PausableStore): number | null {
+  const v = store?.pausedUntil as any;
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.getTime();
+  if (typeof v === 'string') { const t = Date.parse(v); return Number.isNaN(t) ? null : t; }
+  if (typeof v?.toMillis === 'function') return v.toMillis();
+  const secs = v?.seconds ?? v?._seconds;
+  return typeof secs === 'number' ? secs * 1000 : null;
+}
+
+/** Pausa efectiva = manuallyPaused && (sin pausedUntil || pausedUntil todavía no llegó). */
+export function isStorePaused(store: PausableStore, now: Date | number = Date.now()): boolean {
+  if (!store?.manuallyPaused) return false;
+  const until = pausedUntilMs(store);
+  if (until === null) return true;
+  const nowMs = typeof now === 'number' ? now : now.getTime();
+  return until > nowMs;
+}

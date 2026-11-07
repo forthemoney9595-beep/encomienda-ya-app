@@ -12,7 +12,7 @@ import { describeError } from './error-state';
 
 export type InboxSeverity = 'destructive' | 'warning' | 'info';
 export type InboxGroup = 'money' | 'disputes' | 'approvals' | 'info';
-export type InboxKind = 'mismatch' | 'withdrawal' | 'claim' | 'incident' | 'approval' | 'stuck';
+export type InboxKind = 'mismatch' | 'withdrawal' | 'claim' | 'incident' | 'approval' | 'stuck' | 'store_alert';
 
 export interface InboxAction {
   label: string;

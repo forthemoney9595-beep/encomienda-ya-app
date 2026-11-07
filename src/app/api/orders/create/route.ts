@@ -6,7 +6,8 @@ import { adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
-import { normalizeSchedule, getStoreOpenStatus, nowInArgentina } from "@/lib/store-hours";
+import { normalizeSchedule, getStoreOpenStatus, nowInArgentina, isStorePaused } from "@/lib/store-hours";
+import { money } from "@/lib/format-money";
 import { isValidCoords } from "@/lib/geo";
 import { deliveryDistanceMeters, computeDeliveryFee, isBeyondDeliveryLimit } from "@/lib/delivery-pricing";
 
@@ -145,7 +146,9 @@ export async function POST(request: Request) {
 
     // Defensa en profundidad: hasta ahora nada del lado servidor bloqueaba pedidos a una
     // tienda pausada/cerrada (solo era un filtro visual del cliente).
-    if (storeData?.manuallyPaused) {
+    // Fase YY: pausa EFECTIVA (manuallyPaused + pausedUntil). Con Date.now(), NO con
+    // nowInArgentina(): pausedUntil es un instante absoluto (ver store-hours.ts).
+    if (isStorePaused(storeData, Date.now())) {
         return NextResponse.json({ error: "Esta tienda pausó temporalmente los pedidos." }, { status: 400 });
     }
 
@@ -409,7 +412,7 @@ export async function POST(request: Request) {
         await notifyUser({
             userId: ownerId,
             title: "🔔 Nueva Solicitud",
-            body: `Tienes un pedido nuevo de ${safeShippingInfo.name} ($${Math.round(finalTotal).toLocaleString('es-AR')}). Revisa el stock.`,
+            body: `Tienes un pedido nuevo de ${safeShippingInfo.name} (${money(finalTotal)}). Revisa el stock.`,
             type: "order_request",
             orderId: newOrderRef.id,
         });

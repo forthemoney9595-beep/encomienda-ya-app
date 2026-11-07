@@ -183,3 +183,36 @@ describe.skipIf(!HAS_EMULATOR)('firestore.rules — platform_daily (cierres diar
     await assertFails(deleteDoc(doc(db, 'platform_daily', '2026-10-20')));
   });
 });
+
+describe.skipIf(!HAS_EMULATOR)('firestore.rules — pausa con tiempo de la tienda (Fase YY)', () => {
+  // El dueño escribe `pausedUntil` junto con `manuallyPaused` desde /my-store (campo nuevo
+  // del hasOnly del update del dueño). Regresión: sigue sin poder tocar aprobación/rating.
+  const OTHER = 'otro-uid';
+  let env4: RulesTestEnvironment;
+  beforeAll(async () => {
+    env4 = await initializeTestEnvironment({ projectId: PROJECT + '-4', firestore: { rules: readFileSync(resolve(__dirname, '../../firestore.rules'), 'utf8') } });
+  });
+  afterAll(async () => { await env4?.cleanup(); });
+  beforeEach(async () => {
+    await env4.clearFirestore();
+    await env4.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users', STORE_OWNER), { role: 'store', isApproved: true, storeId: 'store-1', email: 's@test' });
+      await setDoc(doc(db, 'users', OTHER), { role: 'store', isApproved: true, storeId: 'store-2', email: 'o@test' });
+      await setDoc(doc(db, 'stores', 'store-1'), { ownerId: STORE_OWNER, name: 'Tienda', isApproved: true, rating: 4, manuallyPaused: false });
+    });
+  });
+  const asOwner = () => env4.authenticatedContext(STORE_OWNER).firestore();
+  it('regresión: el dueño pausa 30 min (manuallyPaused + pausedUntil) y reactiva', async () => {
+    await assertSucceeds(updateDoc(doc(asOwner(), 'stores', 'store-1'), { manuallyPaused: true, pausedUntil: new Date(Date.now() + 30 * 60_000) }));
+    await assertSucceeds(updateDoc(doc(asOwner(), 'stores', 'store-1'), { manuallyPaused: false, pausedUntil: null }));
+  });
+  it('ataque: el dueño sigue sin poder escribir isApproved ni rating (ni colándolos con pausedUntil)', async () => {
+    await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { pausedUntil: new Date(), isApproved: false }));
+    await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { pausedUntil: new Date(), rating: 5 }));
+    await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { ratingCount: 99 }));
+  });
+  it('ataque: otro dueño no pausa una tienda ajena', async () => {
+    await assertFails(updateDoc(doc(env4.authenticatedContext(OTHER).firestore(), 'stores', 'store-1'), { manuallyPaused: true, pausedUntil: new Date() }));
+  });
+});

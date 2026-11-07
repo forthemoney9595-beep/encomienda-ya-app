@@ -21,6 +21,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 // Beep de pedido nuevo (helper compartido en lib/beep — antes estaba inline acá).
 import { playBeep as playNewOrderBeep } from '@/lib/beep';
+import { useConfirmTimeoutWatcher } from '@/hooks/use-confirm-timeout';
+import { ConfirmCountdown } from '@/components/confirm-countdown';
+import { describeOrderEnding } from '@/lib/confirm-timeout';
 
 export default function StoreOrdersView() {
   const { user, userProfile } = useAuth();
@@ -55,6 +58,11 @@ export default function StoreOrdersView() {
   // tienda hasta que un repartidor lo tomaba ('En camino'). El botón del panel no lo
   // producía (deja 'En preparación' + readyForPickup), por eso nunca se había visto.
   const activeOrders = useMemo(() => sortedOrders.filter(o => o.status !== 'Pendiente de Confirmación'), [sortedOrders]);
+
+  // Fase YY: el panel abierto de la tienda es uno de los relojes de la cancelación
+  // automática — programa el recordatorio y el vencimiento de cada pedido Nuevo y le pide
+  // al servidor que decida. Devuelve la hora límite que muestra cada tarjeta.
+  const confirmTimes = useConfirmTimeoutWatcher(pendingOrders, user);
 
   // Historial: getDocs + cursor de a 20 (mismo patrón que el admin, Fase Z). Índice
   // `orders(storeId, status, createdAt DESC)`. Se carga recién al abrir la pestaña.
@@ -254,6 +262,7 @@ export default function StoreOrdersView() {
                         statusLabel="Solicitud Nueva"
                         statusBadgeColor="bg-warning/15 text-warning border-warning/30"
                         selectable
+                        timeoutAt={confirmTimes[order.id]?.timeoutAt}
                     />
                 ))
             )}
@@ -368,7 +377,8 @@ export default function StoreOrdersView() {
 }
 
 // ✅ COMPONENTE TARJETA MEJORADO (Con botón de Navegación)
-function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, isDisabled, statusColor, statusLabel, statusBadgeColor, selectable }: any) {
+function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, isDisabled, statusColor, statusLabel, statusBadgeColor, selectable, timeoutAt }: any) {
+    const ending = describeOrderEnding(order);
     // Solo relevante en "Nuevos": permite destildar ítems sin stock antes de confirmar,
     // en vez del todo-o-nada de antes (confirmar todo o rechazar todo el pedido).
     const [uncheckedIds, setUncheckedIds] = useState<Set<string>>(new Set());
@@ -418,9 +428,16 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                 </div>
             </CardHeader>
             <CardContent className="py-4 space-y-3">
+                {selectable && <ConfirmCountdown timeoutAt={timeoutAt} variant="store" />}
+                {ending && (
+                    <p className="text-sm" data-testid="order-ending">
+                        <span className="font-semibold text-destructive">{ending.label}</span>
+                        {ending.detail && <span className="text-muted-foreground"> · {ending.detail}</span>}
+                    </p>
+                )}
                 <div className="flex justify-between items-center">
                     <p className="text-sm font-medium">Cliente: <span className="text-muted-foreground">{order.customerName}</span></p>
-                    <p className="font-bold text-base text-success">${(order.total || 0).toLocaleString('es-AR')}</p>
+                    <p className="font-bold text-base text-success">{money(order.total || 0)}</p>
                 </div>
                 
                 <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2 border">
@@ -474,9 +491,9 @@ function OrderCard({ order, onAction, onReject, actionLabel, actionIcon: Icon, i
                     if (!delivery && !service) return null;
                     return (
                         <p className="text-xs text-muted-foreground">
-                            Productos ${products.toLocaleString('es-AR')} · Envío ${delivery.toLocaleString('es-AR')}
-                            {service > 0 && <> · Tarifa ${service.toLocaleString('es-AR')}</>}
-                            {' '}= ${total.toLocaleString('es-AR')}
+                            Productos {money(products)} · Envío {money(delivery)}
+                            {service > 0 && <> · Tarifa {money(service)}</>}
+                            {' '}= {money(total)}
                         </p>
                     );
                 })()}

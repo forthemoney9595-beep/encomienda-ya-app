@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { collection, limit, orderBy, query, where, type Query } from 'firebase/firestore';
-import { Bike, Clock, MessageSquareWarning, Scale, Siren, Store, Wallet } from 'lucide-react';
+import { collection, limit, orderBy, query, Timestamp, where, type Query } from 'firebase/firestore';
+import { Bike, Clock, MessageSquareWarning, Scale, Siren, Store, TimerOff, Wallet } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { db, useCollection, useMemoFirebase } from '@/lib/firebase';
 import { toMillis } from '@/lib/format-date';
@@ -11,6 +11,10 @@ import { reasonLabel } from '@/lib/payment-issues';
 import { CLAIM_TYPES, type ClaimType } from '@/lib/claim-types';
 import { ADMIN_ACTIVE_STATUSES, computeStuckOrders } from '@/lib/order-stuck';
 import type { Order } from '@/lib/order-service';
+import { computeStoreAlerts, STORE_ALERT_THRESHOLD, STORE_ALERT_WINDOW_MIN, FAILED_DECISIONS, type DecisionRow } from '@/lib/store-compliance';
+import { isStorePaused, pausedUntilMs } from '@/lib/store-hours';
+import { fmtDate } from '@/lib/format-date';
+import { useConfirmTimeoutWatcher } from '@/hooks/use-confirm-timeout';
 import type { InboxItem, InboxSourceError } from './inbox-list';
 
 /** Tope por fuente: si el count real supera esto, la UI avisa "Hay N más, filtrá por tipo". */
@@ -23,6 +27,7 @@ export interface InboxRaw {
   pendingUsers: Record<string, unknown>[];
   withdrawals: Record<string, unknown>[];
   activeOrders: Order[];
+  pausedStores: Record<string, unknown>[];
 }
 
 export interface UseInboxResult {
@@ -33,6 +38,7 @@ export interface UseInboxResult {
   /** Reloj que avanza cada 60 s para que el "hace Xh" no quede congelado. */
   now: number;
   stuckCount: number;
+  storeAlertCount: number;
 }
 
 type Any = Record<string, unknown>;
@@ -49,7 +55,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
  * lectura): 0 docs sin el campo en claims/payment_mismatches/driver_incidents.
  */
 export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult {
-  const { isFullAdmin, isAdmin } = useAuth();
+  const { isFullAdmin, isAdmin, user } = useAuth();
   const enabled = (opts.enabled ?? true) && isAdmin;
 
   // `ready ? query : null` (regla ARQ-010): nada corre hasta que el rol está confirmado.
@@ -74,6 +80,23 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
     return () => window.clearInterval(id);
   }, []);
 
+  // ── Cumplimiento del comercio (Fase YY, punto 4) ──────────────────────────────
+  // Rechazos / no confirmados a tiempo de los últimos 30 min, agrupados por tienda. La
+  // consulta es ACOTADA (rango sobre storeDecisionAt + limit) y su corte avanza en tramos
+  // de 10 min (no se re-suscribe cada minuto); el filtro fino de la ventana es en memoria
+  // con el reloj de arriba. Índice orders (storeDecision, storeDecisionAt DESC).
+  const decisionsFromMs = Math.floor((now - (STORE_ALERT_WINDOW_MIN + 10) * 60_000) / 600_000) * 600_000;
+  const decisionsQ = useMemoFirebase<Query | null>(() => (enabled ? query(collection(db, 'orders'), where('storeDecision', 'in', FAILED_DECISIONS), where('storeDecisionAt', '>=', Timestamp.fromMillis(decisionsFromMs)), orderBy('storeDecisionAt', 'desc'), limit(INBOX_SOURCE_LIMIT)) : null), [enabled, decisionsFromMs]);
+  const decisions = useCollection<DecisionRow>(decisionsQ);
+  // Tiendas pausadas (set chico): para no ofrecer "Pausar 1 h" a una que ya está pausada.
+  const pausedQ = useMemoFirebase<Query | null>(() => (enabled ? query(collection(db, 'stores'), where('manuallyPaused', '==', true), limit(INBOX_SOURCE_LIMIT)) : null), [enabled]);
+  const pausedStores = useCollection<Any>(pausedQ);
+  const storeAlerts = useMemo(() => computeStoreAlerts(decisions.data ?? [], now), [decisions.data, now]);
+
+  // Reloj de la cancelación automática (Fase YY): la Bandeja también dispara el
+  // recordatorio/vencimiento de los pedidos que esperan confirmación de la tienda.
+  useConfirmTimeoutWatcher(enabled ? active.data : null, user);
+
   const errors = useMemo<InboxSourceError[]>(() => {
     const out: InboxSourceError[] = [];
     if (claims.error) out.push({ source: 'Reclamos', error: claims.error });
@@ -82,8 +105,9 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
     if (pending.error) out.push({ source: 'Aprobaciones', error: pending.error });
     if (withdrawals.error) out.push({ source: 'Retiros', error: withdrawals.error });
     if (active.error) out.push({ source: 'Pedidos activos', error: active.error });
+    if (decisions.error) out.push({ source: 'Cumplimiento de tiendas', error: decisions.error });
     return out;
-  }, [claims.error, mismatches.error, incidents.error, pending.error, withdrawals.error, active.error]);
+  }, [claims.error, mismatches.error, incidents.error, pending.error, withdrawals.error, active.error, decisions.error]);
 
   const stuck = useMemo(() => computeStuckOrders(active.data ?? [], now), [active.data, now]);
 
@@ -164,16 +188,31 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
       });
     });
 
+    storeAlerts.forEach((a) => {
+      const pausedDoc = (pausedStores.data ?? []).find(st => st.id === a.storeId);
+      const alreadyPaused = !!pausedDoc && isStorePaused(pausedDoc as { manuallyPaused?: boolean; pausedUntil?: unknown }, now);
+      const until = pausedDoc ? pausedUntilMs(pausedDoc as { pausedUntil?: unknown }) : null;
+      const parts = [a.rejected ? `${a.rejected} rechazado${a.rejected === 1 ? '' : 's'}` : '', a.timeouts ? `${a.timeouts} no confirmado${a.timeouts === 1 ? '' : 's'} a tiempo` : ''].filter(Boolean);
+      out.push({
+        id: `t-${a.storeId}`, kind: 'store_alert', severity: 'warning', group: 'disputes', icon: TimerOff,
+        title: `Tienda ${a.storeName}: ${a.total} pedidos rechazados o no confirmados en ${STORE_ALERT_WINDOW_MIN} min`,
+        subtitle: `${parts.join(' y ')}${alreadyPaused ? (until ? ` · ya pausada hasta las ${fmtDate(until, 'time')}` : ' · ya pausada') : ' · ¿está atendiendo?'}`,
+        since: a.lastAt, href: `/admin/stores/${a.storeId}`,
+        meta: { storeId: a.storeId, storeName: a.storeName, alreadyPaused, threshold: STORE_ALERT_THRESHOLD },
+      });
+    });
+
     return out;
-  }, [mismatches.data, withdrawals.data, claims.data, incidents.data, pending.data, stuck, now]);
+  }, [mismatches.data, withdrawals.data, claims.data, incidents.data, pending.data, stuck, now, storeAlerts, pausedStores.data]);
 
   const loading = claims.isLoading || mismatches.isLoading || incidents.isLoading || pending.isLoading || active.isLoading || (isFullAdmin && withdrawals.isLoading);
 
   return {
-    items, loading, errors, now, stuckCount: stuck.length,
+    items, loading, errors, now, stuckCount: stuck.length, storeAlertCount: storeAlerts.length,
     raw: {
       claims: claims.data ?? [], mismatches: mismatches.data ?? [], incidents: incidents.data ?? [],
       pendingUsers: pending.data ?? [], withdrawals: withdrawals.data ?? [], activeOrders: active.data ?? [],
+      pausedStores: pausedStores.data ?? [],
     },
   };
 }

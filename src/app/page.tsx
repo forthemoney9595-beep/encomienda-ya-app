@@ -7,7 +7,7 @@ import PageHeader from '@/components/page-header';
 import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, CollectionReference, query, where } from 'firebase/firestore';
-import { normalizeSchedule, getStoreOpenStatus } from '@/lib/store-hours';
+import { normalizeSchedule, getStoreOpenStatus, isStorePaused } from '@/lib/store-hours';
 import { ShoppingBag, Search, Filter, Heart, Zap, ArrowRight, type LucideIcon } from 'lucide-react';
 import { StoreCard, type StoreCardStore } from '@/components/store-card';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
@@ -37,6 +37,7 @@ interface Store {
   schedule?: any;
   weeklySchedule?: any;
   manuallyPaused?: boolean;
+  pausedUntil?: unknown;
   maxDiscountPercent?: number;
 }
 
@@ -44,7 +45,8 @@ interface Store {
 // pública (store-hours.ts) + el corte manual, que store-hours no conoce (igual que en
 // stores/[storeId]/page.tsx la pausa se maneja aparte del horario).
 const storeOpenState = (store: Store): { isOpen: boolean; label: string } => {
-  if (store.manuallyPaused) return { isOpen: false, label: 'Pausada' };
+  // Pausa EFECTIVA (Fase YY): una pausa de 30 min/1 h vencida ya no cuenta.
+  if (isStorePaused(store)) return { isOpen: false, label: 'Pausada' };
   const s = getStoreOpenStatus(normalizeSchedule(store));
   return { isOpen: s.isOpen, label: s.label };
 };

@@ -18,6 +18,7 @@ import { logAdminAction } from '@/lib/admin-audit';
 import { setAccountApproval } from '@/lib/approval-service';
 import { downloadCsv } from '@/lib/csv-export';
 import { cn } from '@/lib/utils';
+import { isStorePaused } from '@/lib/store-hours';
 import { ManageStoreDialog } from './manage-store-dialog';
 import AdminAuthGuard from '../admin-auth-guard';
 
@@ -50,7 +51,7 @@ function AdminStoresPage() {
       if (term && !(`${s.name || ''} ${s.category || ''}`).toLowerCase().includes(term)) return false;
       if (statusFilter === 'approved' && !s.isApproved) return false;
       if (statusFilter === 'pending' && s.isApproved) return false;
-      if (statusFilter === 'paused' && !s.manuallyPaused) return false;
+      if (statusFilter === 'paused' && !isStorePaused(s)) return false;
       return true;
     });
   }, [stores, search, statusFilter]);
@@ -59,7 +60,7 @@ function AdminStoresPage() {
     all: stores?.length || 0,
     approved: (stores || []).filter(s => s.isApproved).length,
     pending: (stores || []).filter(s => !s.isApproved).length,
-    paused: (stores || []).filter(s => s.manuallyPaused).length,
+    paused: (stores || []).filter(s => isStorePaused(s)).length,
   }), [stores]);
 
   const handleExportCsv = () => {
@@ -74,7 +75,7 @@ function AdminStoresPage() {
       'Rating': s.rating ?? '',
       'Reseñas': s.ratingCount ?? 0,
       'Estado': s.isApproved ? 'Aprobada' : 'Pendiente/Rechazada',
-      'Pausada': s.manuallyPaused ? 'Sí' : 'No',
+      'Pausada': isStorePaused(s) ? 'Sí' : 'No',
       // El CBU ya no está en el doc público de la tienda (seguridad, ago 2026): vive en
       // el user doc del dueño y se ve en la ficha individual de cada tienda.
     })), `tiendas_${new Date().toISOString().slice(0, 10)}.csv`);
@@ -278,7 +279,7 @@ function AdminStoresPage() {
                                     <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-xs">
                                         {store.isApproved ? 'Aprobado' : 'Pendiente/Rechazado'}
                                     </Badge>
-                                    {store.manuallyPaused && (
+                                    {isStorePaused(store) && (
                                         <Badge variant="outline" className="text-xs border-warning/40 text-warning gap-1">
                                             <Pause className="h-3 w-3" /> Pausada
                                         </Badge>

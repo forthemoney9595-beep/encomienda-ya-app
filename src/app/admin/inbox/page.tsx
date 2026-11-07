@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
 import { RefreshCw } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { db } from '@/lib/firebase';
@@ -17,12 +17,13 @@ import { useAdminCounts } from '@/components/admin/use-admin-counts';
 import { useConfirm } from '@/components/admin/confirm-dialog';
 import { fmtElapsed } from '@/lib/format-date';
 
-type ChipKey = 'all' | 'money' | 'claim' | 'incident' | 'approval' | 'stuck';
+type ChipKey = 'all' | 'money' | 'claim' | 'incident' | 'approval' | 'stores' | 'stuck';
 const CHIP_KINDS: Record<Exclude<ChipKey, 'all'>, InboxKind[]> = {
   money: ['mismatch', 'withdrawal'],
   claim: ['claim'],
   incident: ['incident'],
   approval: ['approval'],
+  stores: ['store_alert'],
   stuck: ['stuck'],
 };
 
@@ -47,7 +48,7 @@ export default function AdminInboxPage() {
   const approvalsCount = (counts.counts.pendingStores === null || counts.counts.pendingDrivers === null)
     ? null
     : (counts.counts.pendingStores ?? 0) + (counts.counts.pendingDrivers ?? 0);
-  const totalCount = counts.inboxTotal === null ? null : counts.inboxTotal + inbox.stuckCount;
+  const totalCount = counts.inboxTotal === null ? null : counts.inboxTotal + inbox.stuckCount + inbox.storeAlertCount;
 
   const chips: FilterChip[] = [
     { value: 'all', label: 'Todo', count: totalCount },
@@ -55,6 +56,7 @@ export default function AdminInboxPage() {
     { value: 'claim', label: 'Reclamos', count: counts.counts.claimsOpen },
     { value: 'incident', label: 'Incidentes', count: counts.counts.incidentsOpen },
     { value: 'approval', label: 'Aprobaciones', count: approvalsCount },
+    { value: 'stores', label: 'Tiendas', count: inbox.loading ? null : inbox.storeAlertCount },
     { value: 'stuck', label: 'Trabados', count: inbox.loading ? null : inbox.stuckCount },
   ];
 
@@ -126,6 +128,32 @@ export default function AdminInboxPage() {
     }
   };
 
+  // Fase YY (punto 4): pausar 1 h una tienda que viene rechazando / sin confirmar. Usa la
+  // pausa con tiempo (pausedUntil) para que se reactive sola. Sin penalización automática:
+  // la decisión es del admin, caso por caso.
+  const pauseStore = async (item: InboxItem) => {
+    if (!user) return;
+    const storeId = String(item.meta?.storeId ?? '');
+    const name = String(item.meta?.storeName ?? 'la tienda');
+    const { ok } = await confirm({
+      title: `¿Pausar ${name} por 1 hora?`,
+      description: 'No va a recibir pedidos nuevos durante una hora y después se reactiva sola. El dueño lo ve en su panel. Conviene avisarle por qué.',
+      confirmLabel: 'Pausar 1 h',
+    });
+    if (!ok) return;
+    setBusyId(item.id);
+    try {
+      const until = Timestamp.fromMillis(Date.now() + 60 * 60_000);
+      await updateDoc(doc(db, 'stores', storeId), { manuallyPaused: true, pausedUntil: until });
+      void logAdminAction(db, user.uid, 'pause_store', storeId, `${name} · 1 h por cumplimiento (${item.title})`);
+      toast({ title: `${name} pausada por 1 hora` });
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'No se pudo pausar', description: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const items = useMemo<InboxItem[]>(() => {
     const kinds = chip === 'all' ? null : CHIP_KINDS[chip];
     return inbox.items
@@ -157,6 +185,13 @@ export default function AdminInboxPage() {
             ] };
           case 'stuck':
             return { ...it, actions: [{ label: 'Ver pedido', primary: true, href: it.href }] };
+          case 'store_alert':
+            return { ...it, actions: it.meta?.alreadyPaused
+              ? [{ label: 'Ver tienda', primary: true, href: it.href }]
+              : [
+                  { label: 'Ver tienda', href: it.href },
+                  { label: 'Pausar 1 h', primary: true, busy, onClick: () => pauseStore(it) },
+                ] };
           default:
             return it;
         }

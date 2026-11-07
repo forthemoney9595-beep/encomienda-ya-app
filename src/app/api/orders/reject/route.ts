@@ -55,13 +55,39 @@ export async function POST(request: Request) {
 
     const rejectionReason = String(reason || "").trim().slice(0, 300);
 
-    await orderRef.update({
-      status: "Rechazado",
-      rejectedAt: Timestamp.now(),
-      rejectedByStore: callerUid,
-      ...(rejectionReason ? { rejectionReason } : {}),
-      updatedAt: Timestamp.now(),
-    });
+    // Transacción que RE-EXIGE 'Pendiente de Confirmación' (Fase YY, misma disciplina que
+    // confirm-stock y la cancelación automática): antes era un update suelto, y si el
+    // pedido se cancelaba solo por falta de confirmación entre la lectura y la escritura,
+    // este update lo pasaba a 'Rechazado' encima de 'Cancelado' y el stock se devolvía en
+    // nombre de dos motivos.
+    const NOT_PENDING = "__NOT_PENDING__";
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const fresh = await tx.get(orderRef);
+        if (!fresh.exists || fresh.data()?.status !== "Pendiente de Confirmación") {
+          throw new Error(NOT_PENDING + ":" + (fresh.data()?.status ?? "inexistente"));
+        }
+        const now = Timestamp.now();
+        tx.update(orderRef, {
+          status: "Rechazado",
+          rejectedAt: now,
+          rejectedByStore: callerUid,
+          ...(rejectionReason ? { rejectionReason } : {}),
+          updatedAt: now,
+          // Métrica de cumplimiento (punto 4): la tienda dijo que no.
+          storeDecision: "rejected",
+          storeDecisionAt: now,
+        });
+      });
+    } catch (e: any) {
+      if (typeof e?.message === "string" && e.message.startsWith(NOT_PENDING)) {
+        return NextResponse.json(
+          { error: `No se puede rechazar un pedido en estado "${e.message.split(":")[1]}".` },
+          { status: 400 },
+        );
+      }
+      throw e;
+    }
 
     // Devolver las unidades reservadas. El pedido nunca se preparó, así que vuelven enteras.
     const stockResult = await returnStockForOrder(orderId, { reason: "rejected" });

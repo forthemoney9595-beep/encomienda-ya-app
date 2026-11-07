@@ -95,6 +95,10 @@ export async function POST(request: Request) {
                     status: 'Cancelado',
                     cancelledAt: Timestamp.now(),
                     cancelledBy: isAdmin ? 'admin' : 'buyer',
+                    // Motivo visible en el detalle/panel/admin (Fase YY). Solo el del admin:
+                    // el comprador no manda motivo, y así nadie puede disfrazar su
+                    // cancelación con el código del sistema ('auto_unconfirmed').
+                    ...(isAdmin && cancelReason && cancelReason !== 'auto_unconfirmed' ? { cancelReason } : {}),
                     updatedAt: Timestamp.now(),
                     // Marca visible desde el propio pedido: hay plata para devolver.
                     ...(wasPaid ? { hasPaymentIssue: true, paymentIssueReason: 'cancelled_after_payment' } : {}),

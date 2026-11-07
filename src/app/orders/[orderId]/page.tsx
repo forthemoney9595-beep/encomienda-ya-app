@@ -32,6 +32,9 @@ import { ClaimSection } from './claim-section';
 import { LocationTracker } from '@/components/location-tracker';
 import { gmapsDirectionsUrl, isValidCoords } from '@/lib/geo';
 import { publicName } from '@/lib/public-name';
+import { describeOrderEnding } from '@/lib/confirm-timeout';
+import { useConfirmTimeoutWatcher } from '@/hooks/use-confirm-timeout';
+import { ConfirmCountdown } from '@/components/confirm-countdown';
 
 const OrderMap = dynamic(() => import('./order-map'), {
     ssr: false,
@@ -154,13 +157,15 @@ const statusSteps: any = {
   'Rechazado': { step: -1, label: 'Rechazado', icon: Ban, description: 'La tienda no pudo tomar tu pedido en este momento.' },
 };
 
-function OrderProgress({ status }: { status: any }) {
+function OrderProgress({ status, order, timeoutAt, showCountdown, countdownVariant = 'buyer' }: { status: any; order?: any; timeoutAt?: number | null; showCountdown?: boolean; countdownVariant?: 'buyer' | 'store' }) {
     const currentStatusInfo = statusSteps[status] || { step: 0, label: 'Desconocido', icon: Clock, description: '' };
     const totalSteps = 4;
     const progressValue = (currentStatusInfo.step / totalSteps) * 100;
 
     if (status === 'Cancelado' || status === 'Rechazado') {
-        return ( <div className="text-center"><Ban className="mx-auto h-12 w-12 text-destructive" /><h3 className="mt-2 text-lg font-semibold">{status}</h3><p className="text-sm text-muted-foreground">{currentStatusInfo.description}</p></div>)
+        // Fase YY: quién/por qué terminó ("No confirmado a tiempo", "Cancelado por el cliente"...).
+        const ending = describeOrderEnding(order || { status });
+        return ( <div className="text-center" data-testid="order-ending"><Ban className="mx-auto h-12 w-12 text-destructive" /><h3 className="mt-2 text-lg font-semibold">{ending?.label || status}</h3><p className="text-sm text-muted-foreground">{ending?.detail || currentStatusInfo.description}</p></div>)
     }
     const steps = DISPLAY_STEPS;
     const CurrentIcon = currentStatusInfo.icon;
@@ -185,6 +190,7 @@ function OrderProgress({ status }: { status: any }) {
                     ))}
                 </div>
             </div>
+             {showCountdown && status === 'Pendiente de Confirmación' && <ConfirmCountdown timeoutAt={timeoutAt} variant={countdownVariant} />}
              <Alert><currentStatusInfo.icon className="h-4 w-4" /><AlertTitle>{currentStatusInfo.label}</AlertTitle><AlertDescription>{currentStatusInfo.description}{status === 'En preparación' && (<p className="mt-2 text-base font-bold text-primary">Entrega estimada: 25-40 min</p>)}</AlertDescription></Alert>
         </div>
     )
@@ -266,6 +272,16 @@ export default function OrderTrackingPage() {
   // (customerName/customerPhoneNumber), no hace falta esa lectura cruzada.
 
   const isLoading = authLoading || orderLoading;
+
+  // Fase YY: reloj de la cancelación automática. Mientras el pedido espera confirmación,
+  // esta pantalla programa timers al recordatorio y al vencimiento y le pide al servidor que
+  // decida (con SU reloj). Cualquier participante puede dispararlo; el servidor autoriza.
+  const watchList = useMemo(
+    () => (order && order.status === 'Pendiente de Confirmación' ? [{ id: order.id, status: order.status }] : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [order?.id, order?.status],
+  );
+  const confirmTimes = useConfirmTimeoutWatcher(watchList, user);
 
   useEffect(() => {
     const status = searchParams.get('status');
@@ -708,7 +724,7 @@ export default function OrderTrackingPage() {
                  
                  <OrderStatusUpdater order={order} />
             </Card>
-             <Card><CardHeader><CardTitle>Estado del Pedido</CardTitle></CardHeader><CardContent><OrderProgress status={order.status} /></CardContent></Card>
+             <Card><CardHeader><CardTitle>Estado del Pedido</CardTitle></CardHeader><CardContent><OrderProgress status={order.status} order={order} timeoutAt={confirmTimes[order.id]?.timeoutAt} showCountdown={isBuyer || isStoreOwner || isAdminViewer} countdownVariant={isStoreOwner ? 'store' : 'buyer'} /></CardContent></Card>
         </div>
 
         {/* --- COLUMNA DERECHA --- */}
