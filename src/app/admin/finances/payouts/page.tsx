@@ -1,12 +1,12 @@
 'use client';
 
-// Pagos a cuentas (ruta nueva del menú final, Tanda T1). La tabla de retiros de finance-view
-// como página propia, separada del Resumen financiero. T2 la migra a DataTable con total
-// server-side, filtros de origen/fecha/cuenta y CSV completo; mientras tanto reusa el
-// componente actual tal cual (ya va todo por /api/admin/approve|reject-withdrawal).
+// Pagos a cuentas (Tanda T2): la tabla de retiros como página propia, separada del Resumen
+// financiero — DataTable con total server-side, filtros de estado/circuito/origen/fecha en el
+// servidor, CSV completo y Pagar/Rechazar por ConfirmDialog contra
+// /api/admin/approve|reject-withdrawal (ver finance-view.tsx).
 import AdminAuthGuard from '../../admin-auth-guard';
 import { AdminPage } from '@/components/admin/admin-page';
-import { FinanceView } from '../../dashboard/finance-view';
+import { FinanceView } from '../finance-view';
 
 export default function AdminPayoutsPage() {
   return (

@@ -149,3 +149,37 @@ describe.skipIf(!HAS_EMULATOR)('firestore.rules — comprador y plata', () => {
     await assertFails(setDoc(doc(db, 'withdrawals', 'w1'), { userId: BUYER, amount: 99999999, status: 'pending' }));
   });
 });
+
+describe.skipIf(!HAS_EMULATOR)('firestore.rules — platform_daily (cierres diarios, Tanda T2)', () => {
+  // Misma regla que platform_monthly: solo lectura para el admin; NADIE escribe desde el
+  // cliente (los cierres los calcula el cron de conciliación con Admin SDK).
+  const ADMIN = 'admin-uid';
+  let env3: RulesTestEnvironment;
+  beforeAll(async () => {
+    env3 = await initializeTestEnvironment({ projectId: PROJECT + '-3', firestore: { rules: readFileSync(resolve(__dirname, '../../firestore.rules'), 'utf8') } });
+  });
+  afterAll(async () => { await env3?.cleanup(); });
+  beforeEach(async () => {
+    await env3.clearFirestore();
+    await env3.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'roles_admin', ADMIN), { level: 'full' });
+      await setDoc(doc(db, 'users', ADMIN), { role: 'admin', email: 'a@test' });
+      await setDoc(doc(db, 'users', BUYER), { role: 'buyer', email: 'b@test' });
+      await setDoc(doc(db, 'platform_daily', '2026-10-20'), { ymd: '2026-10-20', delivered: 3, platform: 1500 });
+    });
+  });
+  it('regresión: el admin lee un cierre diario', async () => {
+    await assertSucceeds(getDoc(doc(env3.authenticatedContext(ADMIN).firestore(), 'platform_daily', '2026-10-20')));
+  });
+  it('ataque: un comprador (o un anónimo) no lee los cierres', async () => {
+    await assertFails(getDoc(doc(env3.authenticatedContext(BUYER).firestore(), 'platform_daily', '2026-10-20')));
+    await assertFails(getDoc(doc(env3.unauthenticatedContext().firestore(), 'platform_daily', '2026-10-20')));
+  });
+  it('ataque: ni siquiera el admin crea, edita o borra un cierre desde el cliente (solo Admin SDK)', async () => {
+    const db = env3.authenticatedContext(ADMIN).firestore();
+    await assertFails(setDoc(doc(db, 'platform_daily', '2026-10-21'), { ymd: '2026-10-21', platform: 1 }));
+    await assertFails(updateDoc(doc(db, 'platform_daily', '2026-10-20'), { platform: 999999 }));
+    await assertFails(deleteDoc(doc(db, 'platform_daily', '2026-10-20')));
+  });
+});

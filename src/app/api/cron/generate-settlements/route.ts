@@ -13,6 +13,10 @@ import { nowInArgentina } from "@/lib/store-hours";
 // la llame. El cron revisa si hoy es el día de liquidación configurado y, si lo es,
 // genera automáticamente las solicitudes de retiro para tiendas y repartidores que
 // ya hayan ingresado su CBU alguna vez.
+// Tanda T2: recorre O(tiendas + repartidores) cuentas; el default de 10 s se cortaba con
+// volumen. Solo cambia el tope de tiempo, la lógica de cálculo queda intacta.
+export const maxDuration = 30;
+
 export async function GET(request: Request) {
   // 🔒 FAIL-CLOSED (Tanda A de la auditoría): antes era `if (secret && ...)` — si la
   // env var CRON_SECRET faltaba, la guarda entera se salteaba y la ruta quedaba PÚBLICA

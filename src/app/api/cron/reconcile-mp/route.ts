@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { runReconciliation } from "@/lib/reconcile-mp";
-import { updateMonthlyStats } from "@/lib/platform-stats";
+import { updateMonthlyStats, updateDailyStats } from "@/lib/platform-stats";
 
 // Cron diario de Vercel (ver vercel.json) — misma protección CRON_SECRET que
 // generate-settlements. Corre la conciliación con MercadoPago: re-verifica los pagos de
@@ -24,8 +24,10 @@ export async function GET(request: Request) {
     // Hobby no permite un tercero. Corre DESPUÉS de conciliar: los cierres se calculan
     // sobre datos ya verificados contra MP. No lanza (updateMonthlyStats traga y reporta).
     const { updated } = await updateMonthlyStats();
-    console.log(`[Cron] reconcile-mp: ${JSON.stringify(summary)} · meses actualizados: ${updated.join(", ") || "ninguno"}`);
-    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated });
+    // Cierres diarios (Tanda T2): mismo criterio y mismo cron; alimentan /admin/finances.
+    const daily = await updateDailyStats();
+    console.log(`[Cron] reconcile-mp: ${JSON.stringify(summary)} · meses actualizados: ${updated.join(", ") || "ninguno"} · días: ${daily.updated.length}/${daily.checked}`);
+    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked });
   } catch (error: any) {
     console.error("❌ [Cron] Error en reconcile-mp:", error);
     Sentry.captureException(error, { tags: { route: "cron/reconcile-mp" } });

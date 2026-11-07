@@ -30,8 +30,11 @@ export interface FilterBarProps {
   chips?: FilterChip[];
   chipValue?: string;
   onChipChange?: (v: string) => void;
+  /** Chip que NO cuenta como filtro activo (default 'all'); para chips que funcionan como pestañas (ej. 'pending'). */
+  chipDefault?: string;
   selects?: FilterSelect[];
-  dateRange?: { value: DateRangePreset; onChange: (v: DateRangePreset) => void; options?: DateRangePreset[] };
+  /** `defaultValue` = el preset que NO cuenta como filtro activo (default '30d'; Pagos/Reembolsos usan 'all'). */
+  dateRange?: { value: DateRangePreset; onChange: (v: DateRangePreset) => void; options?: DateRangePreset[]; defaultValue?: DateRangePreset };
   search?: {
     value: string;
     onChange: (v: string) => void;
@@ -74,17 +77,17 @@ function Chip({ active, label, count, onClick }: { active: boolean; label: strin
  * celular los chips scrollean horizontal y selects/fecha van en un Sheet "Filtros (N)".
  */
 export function FilterBar(props: FilterBarProps) {
-  const { chips, chipValue, onChipChange, selects = [], dateRange, search, onClear, extra, className } = props;
+  const { chips, chipValue, onChipChange, chipDefault = 'all', selects = [], dateRange, search, onClear, extra, className } = props;
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const activeCount = useMemo(() => {
     let n = 0;
     selects.forEach(s => { if (s.value !== (s.allValue ?? 'all')) n++; });
-    if (dateRange && dateRange.value !== '30d') n++;
-    if (chips && chipValue && chipValue !== 'all') n++;
+    if (dateRange && dateRange.value !== (dateRange.defaultValue ?? '30d')) n++;
+    if (chips && chipValue && chipValue !== chipDefault) n++;
     if (search?.value.trim()) n++;
     return n;
-  }, [selects, dateRange, chips, chipValue, search?.value]);
+  }, [selects, dateRange, chips, chipValue, chipDefault, search?.value]);
 
   const dateOptions = dateRange?.options ?? (['7d', '30d', 'month', 'all'] as DateRangePreset[]);
 

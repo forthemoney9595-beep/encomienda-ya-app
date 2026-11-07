@@ -2,6 +2,10 @@ import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { platformNetForOrder, storeNetForOrder, driverNetForOrder, refundRatio, isPlatformCollected, FALLBACK_COMMISSION, type MoneyOrder, platformBreakdownForOrder } from "@/lib/money";
 import * as Sentry from "@sentry/nextjs";
+import {
+  aggregateDailyOrders, roundDailyBucket, dayIdART, dayStartART, addDaysId, listDayIds,
+  DAILY_RECOMPUTE_DAYS, type DailyOrderInput,
+} from "@/lib/platform-daily";
 
 // Cierres mensuales de la plataforma (Fase OO ter) — colección `platform_monthly`, un
 // doc por mes calendario (id "YYYY-MM") con las ganancias de la app y el reparto de ese
@@ -127,4 +131,81 @@ export async function updateMonthlyStats(): Promise<{ updated: string[] }> {
     Sentry.captureException(e, { tags: { area: "platform-stats" } });
   }
   return { updated };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cierres DIARIOS (Tanda T2 del panel admin) — colección `platform_daily`, un doc por día
+// ARGENTINO (id "YYYY-MM-DD"). Mismo modelo que los mensuales: los mantiene el cron de
+// conciliación y el botón "Conciliar ahora" (decisión de David: NO se escriben dentro de
+// las transacciones de plata — webhook/confirm-delivery/cancel/reject/refund intactos).
+// Cada corrida recalcula los últimos DAILY_RECOMPUTE_DAYS días CERRADOS (un reembolso
+// retroactivo cambia el neto de un día ya cerrado) y rellena cualquier día histórico que
+// falte, desde el pedido más viejo. El día EN CURSO nunca se guarda: la UI lo calcula en
+// vivo con la MISMA función (aggregateDailyOrders) sobre el set chico de pedidos de hoy.
+// Solo se persisten los días con actividad (algún pedido creado); un día sin pedidos no
+// tiene doc y la UI lo trata como cero — salvo que el doc ya existiera (se pisa con ceros
+// para reflejar borrados).
+// Costo por corrida: ≤ 35 consultas por rango de un día + el backfill la primera vez.
+
+const toMs = (v: unknown): number | null => {
+  const d = (v as { toDate?: () => Date } | null | undefined)?.toDate?.();
+  return d instanceof Date ? d.getTime() : null;
+};
+
+export async function updateDailyStats(): Promise<{ updated: string[]; checked: number }> {
+  const updated: string[] = [];
+  let checked = 0;
+  try {
+    let fallbackRate = FALLBACK_COMMISSION;
+    try {
+      const cfg = await adminDb.collection("config").doc("platform").get();
+      const v = Number(cfg.data()?.defaultCommissionRate);
+      if (Number.isFinite(v) && v > 0) fallbackRate = v;
+    } catch { /* default */ }
+
+    // Desde el pedido MÁS VIEJO (cualquier estado: también cuentan creados/cancelados).
+    const oldestSnap = await adminDb.collection("orders").orderBy("createdAt", "asc").limit(1).get();
+    if (oldestSnap.empty) return { updated, checked };
+    const oldestMs = toMs(oldestSnap.docs[0].data().createdAt);
+    if (oldestMs === null) return { updated, checked };
+
+    const todayId = dayIdART(Date.now());
+    const yesterdayId = addDaysId(todayId, -1);
+    const windowFromId = addDaysId(todayId, -DAILY_RECOMPUTE_DAYS);
+
+    const existing = new Set<string>();
+    (await adminDb.collection("platform_daily").select().get()).docs.forEach(d => existing.add(d.id));
+
+    for (const id of listDayIds(dayIdART(oldestMs), yesterdayId)) {
+      const isRecent = id >= windowFromId;
+      if (!isRecent && existing.has(id)) continue; // histórico ya cerrado: congelado
+      checked += 1;
+
+      const start = dayStartART(id);
+      const end = dayStartART(addDaysId(id, 1));
+      const snap = await adminDb.collection("orders")
+        .where("createdAt", ">=", Timestamp.fromDate(start))
+        .where("createdAt", "<", Timestamp.fromDate(end))
+        .get();
+      const inputs: DailyOrderInput[] = snap.docs.map(d => {
+        const o = d.data() as MoneyOrder & { status?: string; createdAt?: unknown; deliveredAt?: unknown };
+        return { ...o, createdAtMs: toMs(o.createdAt), deliveredAtMs: toMs(o.deliveredAt) };
+      });
+      const bucket = roundDailyBucket(aggregateDailyOrders(inputs, fallbackRate));
+      if (bucket.ordersCreated === 0 && !existing.has(id)) continue; // día sin actividad: sin doc
+
+      const [y, m, d] = id.split("-").map(Number);
+      await adminDb.collection("platform_daily").doc(id).set({
+        ymd: id, // campo espejo del id: la UI ordena/filtra por acá (índice automático)
+        year: y, month: m, day: d,
+        ...bucket,
+        computedAt: Timestamp.now(),
+      });
+      updated.push(id);
+    }
+  } catch (e) {
+    console.error("[platform-stats] Error actualizando cierres diarios:", e);
+    Sentry.captureException(e, { tags: { area: "platform-stats-daily" } });
+  }
+  return { updated, checked };
 }

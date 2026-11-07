@@ -416,6 +416,12 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update, delete: if false;
     }
+    // Cierres DIARIOS (Tanda T2 del panel admin): los escribe solo el cron de conciliación /
+    // "Conciliar ahora" con Admin SDK. Solo lectura para el admin, como los mensuales.
+    match /platform_daily/{dayId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
 
     // 5c-bis. LOG DE ACCIONES ADMIN — BUG DE LARGA DATA (Fase GG): esta colección existe
     // desde la Fase N pero NUNCA tuvo regla, así que Firestore denegaba por defecto TODAS

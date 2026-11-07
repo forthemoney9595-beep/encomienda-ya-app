@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { runReconciliation } from "@/lib/reconcile-mp";
-import { updateMonthlyStats } from "@/lib/platform-stats";
+import { updateMonthlyStats, updateDailyStats } from "@/lib/platform-stats";
 
 // Botón "Conciliar ahora" de /admin/payment-issues. Exige admin 'full': la conciliación
 // puede marcar órdenes como pagadas (webhook perdido) — es un cambio de estado de plata,
@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     const summary = await runReconciliation("manual", callerUid);
     // Mismo criterio que el cron: los cierres mensuales se refrescan tras conciliar.
     const { updated } = await updateMonthlyStats();
-    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated });
+    const daily = await updateDailyStats(); // cierres diarios (Tanda T2)
+    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked });
   } catch (error: any) {
     console.error("❌ Error en conciliación manual:", error);
     Sentry.captureException(error, { tags: { route: "admin/reconcile-mp" } });

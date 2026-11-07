@@ -2924,6 +2924,117 @@ quedó intacto (el admin ya no lo usa; sus dos listeners solo corren si un admin
 app como cliente). Los `AdminAuthGuard` por página se dejaron (redundantes e inofensivos;
 los `requireFullAdmin` siguen gateando).
 
+### Tanda T2 · Finanzas (oct 2026, rama `admin-pro`)
+Segunda tanda del panel profesional: Resumen financiero, Pagos a cuentas, Reembolsos y
+Conciliación MP sobre el shell y los componentes de T1. **Modificación de alcance de David
+(no negociable): `platform_daily` NO se escribe dentro de las transacciones de plata** —
+webhook, confirm-delivery, cancel, reject, refund-order, approve/reject-withdrawal,
+`money.ts`, `payout-service.ts` y la lógica de `liability` quedaron INTACTOS.
+
+**Cierres diarios `platform_daily/{YYYY-MM-DD}`** (mismo modelo que `platform_monthly`):
+- **`src/lib/platform-daily.ts`** (puro, sin Firestore; lo importan el servidor y el
+  cliente): `aggregateDailyOrders` (un día = pedidos CREADOS ese día ART: creados,
+  entregados, cancelados, rechazados, facturado bruto, tarifas, comisiones, reembolsos,
+  neto de la app, a tiendas, a repartidores, ticket promedio y minutos promedio
+  creación→entrega sobre los entregados con `deliveredAt`), `sumDailyBuckets` (períodos,
+  promedios ponderados), `dayIdART`/`dayStartART`/`addDaysId`/`listDayIds` (UTC-3 fijo) y
+  `financePeriodBounds` (7d/30d/mes/mes anterior/año en días calendario ART; 'mes' compara
+  contra el MISMO TRAMO del mes pasado — lección OO ter). Fórmulas 100 % de `money.ts`
+  (`platformBreakdownForOrder`, `storeNetForOrder`, `driverNetForOrder`, netas de
+  reembolsos). 17 tests en `platform-daily.test.ts`.
+- **`updateDailyStats()` en `src/lib/platform-stats.ts`** (Admin SDK): lo llaman el cron
+  `/api/cron/reconcile-mp` y el botón "Conciliar ahora" (`/api/admin/reconcile-mp`),
+  después de `updateMonthlyStats`. Recalcula los últimos **35 días cerrados** (un reembolso
+  retroactivo cambia un día ya cerrado), backfillea los históricos que falten desde el
+  pedido más viejo (una consulta por rango de día, sin filtro de estado), **nunca guarda el
+  día en curso** (la UI lo calcula en vivo con la MISMA función sobre los pedidos de hoy) y
+  solo persiste días con actividad (sin pedidos = sin doc; la UI lo trata como cero). `ymd`
+  duplica el id como campo (orden/rango con índice automático, regla OO ter). La respuesta
+  de ambas rutas suma `daysUpdated`/`daysChecked`; la forma de `reconciliations` no cambió
+  (ya registraba cada corrida desde PERF-003).
+- **Reglas:** `match /platform_daily` = solo lectura admin, create/update/delete `false`
+  (como `platform_monthly`). Caso en `tests/rules/firestore.rules.test.ts` (admin lee;
+  comprador/anónimo no; ni el admin escribe desde el cliente). Desplegadas con dry-run.
+- `/api/admin/liability` y `/api/cron/generate-settlements` ganaron `export const
+  maxDuration = 30` (solo el tope de tiempo).
+
+**Pantallas (todas full salvo Conciliación, que es `any` con "Conciliar ahora" solo full):**
+- **`/admin/finances` Resumen financiero** (`finances/page.tsx` + `use-daily-stats.ts` +
+  `daily-chart.tsx` + `liability-panel.tsx` + `monthly-history.tsx`; `platform-earnings.tsx`
+  eliminado): KPIs del período leídos de `platform_daily` (un rango `ymd` que cubre
+  comparación + actual hasta AYER, ≤ 2 × ventana docs y solo los días con actividad) + HOY en
+  vivo; `PctBadge` vs período anterior; segunda fila con creados, cancelados (+ % de los
+  creados), facturado bruto, a tiendas/a repartidores y creación→entrega; gráfico de neto
+  por día (recharts); **Pasivo real filtrable por circuito** (tiendas/repartidores/todos
+  sobre la respuesta de la API, total del circuito = la tarjeta, `totalPending`,
+  `totalDebt` y `computedAt` que la API ya mandaba, `EntityLink` a las fichas); **historial
+  mensual** migrado (cierres `platform_monthly` + mes en curso armado desde los cierres
+  diarios del mes + hoy en vivo — antes bajaba todos los entregados del mes —, desglose
+  bajo demanda de a 25 con cursor, CSV). Nuevo `src/components/admin/period-picker.tsx`.
+  Antes: ~75 días de pedidos entregados por carga; ahora 6 lecturas a "Último año" en la
+  base actual.
+- **`/admin/finances/payouts` Pagos a cuentas** (`finances/finance-view.tsx`, movido desde
+  `admin/dashboard/` y reescrito sobre `DataTable`+`usePagedQuery`+`FilterBar`): circuito
+  arriba de todo, chips de estado con count real, **origen auto/manual y rango de fecha
+  SERVER-SIDE**, búsqueda por nombre/CBU/operación con alcance aclarado (solo la página),
+  **total server-side** ("N solicitudes" antes era lo cargado), aggregations por estado que
+  respetan el circuito, CSV de TODO lo filtrado, Pagar/Rechazar por `ConfirmDialog` con la
+  misma información y comprobante obligatorio contra las MISMAS APIs, `counts.refresh()`
+  tras cada acción. El retiro guarda el uid del dueño: la ficha de tienda se resuelve con un
+  mapa `ownerId → storeId` bajado una vez (`stores` es acotada).
+- **`/admin/finances/refunds` Reembolsos**: filtros server-side por fecha y tienda,
+  búsqueda por ID EXACTO de pedido en toda la base (`where orderId ==` sin orderBy → sin
+  índice extra), KPIs count + `sum('amount')` del filtro, columnas monto/motivo/comprobante/
+  admin/reclamo, CSV. Solo lectura (el reembolso se registra con el `RefundDialog` único).
+- **`/admin/payment-issues` Conciliación MP**: pestañas Pendientes/Resueltas **server-side**
+  (`where resolved ==` + count real; antes `limit(200)` filtrado en memoria), filtro por
+  motivo, **pestaña nueva "Corridas"** (historial paginado de `reconciliations` por
+  `startedAt` — `finishedAt` falta en las corridas que murieron —, con fuente, estado,
+  revisados, reparados, marcados, errores, duración y notas), "Conciliar ahora" con
+  `ConfirmDialog`, resolver con nota obligatoria por `ConfirmDialog` (reemplaza
+  `window.prompt`), `EntityLink` a pedido/cliente/tienda (los stubs de los ≤ 25 pedidos en
+  pantalla se leen con `getDoc`, cacheados) y **Reembolsar desde la fila** con el
+  `RefundDialog` único cuando el motivo lo amerita y el pedido sigue pagado sin reembolso.
+- `FilterBar` ganó `dateRange.defaultValue` y `chipDefault` (chips que son pestañas no
+  cuentan como filtro activo).
+
+**Índices nuevos desplegados** (36 → 43): `withdrawals (source, createdAt↓)`,
+`(source, status, createdAt↓)`, `(source, userRole, createdAt↓)`, `(source, status,
+userRole, createdAt↓)`; `refunds (storeId, createdAt↓)`, `(createdAt↑, amount↑)` (la
+aggregation `sum(amount)` con rango lo exige); `payment_mismatches (resolved, reason,
+createdAt↓)`.
+
+**Verificado:** typecheck 0 · lint 0 errores (86 warnings, los mismos del React Compiler) ·
+Vitest 72/72 (17 nuevos) · `npm run test:rules` 17/17 (3 nuevos de `platform_daily`) ·
+build OK · `_audit-money.js` ✅ CUADRA · **`_pw-admin-t2.js` 76/76** (gitignored; un login,
+1440 y 430, ground truth por Admin SDK de solo lectura con la fórmula de `money.ts`):
+"Conciliar ahora" por la UI creó los 6 cierres diarios (uno por día ART con pedidos, hoy
+nunca), **cada uno cuadra al peso** con el recálculo independiente y su suma de agosto =
+`platform_monthly/2026-08` ($19.147); una segunda corrida no duplica; los 9 KPIs de
+"Último año" = Admin SDK al peso ($19.147 / $4.919 / $14.228 / $2.500 / 10 / $12.569 /
+13 / 3 / $125.685; `_audit-money` reporta $18.970 "a la plataforma" porque excluye el
+pedido reembolsado — $18.970 + $177 netos de ese pedido = $19.147); pasivo filtrable con
+total del circuito = tarjeta y tiendas + repartidores = todos ($61.370 + $11.489 =
+$72.859; `_audit-money` dice $72.858 por redondear al final en vez de por cuenta);
+pagos con total server-side, filtro por origen y circuito, CSV = total; reembolso real con
+link a la ficha y búsqueda por ID; conciliación con counts reales, Corridas listando las
+reales, sin prompt()/confirm() nativo; 4 pantallas a 430 con scrollWidth 430; 0 pageerror.
+Capturas en `scratchpad/admin-t2/`. **Residuo en la base:** 6 docs de `platform_daily`
+(2026-08-10/12/15/17/18/19) y las corridas manuales de `reconciliations` de la verificación
+(una por corrida del script); ningún pedido creado.
+
+**Desviaciones / a confirmar:** el período agrega **"Último año"** además de 7d/30d/mes/mes
+anterior (≤ 365 lecturas, sin comparación — fue lo que permitió verificar al peso con
+datos de agosto); el link "reclamo" de Reembolsos lleva a la ficha del pedido (que muestra
+el reclamo) porque `/admin/claims` no tiene deep link hasta T4; Pagar/Rechazar usan
+`ConfirmDialog` con el mismo contenido que los diálogos viejos (no se copiaron los
+`<Dialog>` a mano); el CSV de Pagos se verificó con 2 retiros (= total; no hay segunda
+página que exceder en la base actual); las tablas por tienda/repartidor del Resumen `/admin`
+con `platform_daily` NO se hicieron (no estaban en el encargo de T2). A confirmar con
+datos: el camino "reembolso retroactivo recalcula el día cerrado" (sin reembolsos nuevos
+para ejercerlo) y la `KpiRow` a 430 px (componente de T1) con tarjetas de alturas
+desparejas en el Resumen financiero.
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

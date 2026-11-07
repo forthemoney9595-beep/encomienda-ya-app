@@ -23,6 +23,10 @@ import { computeStoreBalance, computeDriverBalance } from "@/lib/payout-service"
  * página: se dispara con un botón. Si algún día crece, la salida natural es un documento
  * `stats/liability` mantenido por el cron que ya existe.
  */
+// Tanda T2: recorre O(tiendas + repartidores) cuentas; el default de 10 s se cortaba con
+// volumen. Solo cambia el tope de tiempo, la lógica de cálculo queda intacta.
+export const maxDuration = 30;
+
 export async function GET(request: Request) {
   const ip = getClientIp(request);
   const { allowed } = checkRateLimit(ip, 'admin:liability', 10, 60_000);
