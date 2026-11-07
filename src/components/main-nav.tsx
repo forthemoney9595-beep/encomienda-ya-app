@@ -97,8 +97,9 @@ export function MainNav({
 
   // `status !== 'Rechazado'` (Fase PP): los rechazados también tienen isApproved==false
   // y antes inflaban el badge para siempre.
-  const pendingStoresCount = (pendingUsers || []).filter((u: any) => u.role === 'store' && u.status !== 'Rechazado').length;
-  const pendingDriversCount = (pendingUsers || []).filter((u: any) => u.role === 'delivery' && u.status !== 'Rechazado').length;
+  // 'Suspendido' (Fase YY ter) tampoco es una solicitud pendiente.
+  const pendingStoresCount = (pendingUsers || []).filter((u: any) => u.role === 'store' && u.status !== 'Rechazado' && u.status !== 'Suspendido').length;
+  const pendingDriversCount = (pendingUsers || []).filter((u: any) => u.role === 'delivery' && u.status !== 'Rechazado' && u.status !== 'Suspendido').length;
   const pendingWithdrawalsCount = pendingWithdrawals?.length ?? 0;
 
   // "Explorar Tiendas" (solo comprador): se arma con los rubros REALES de las tiendas

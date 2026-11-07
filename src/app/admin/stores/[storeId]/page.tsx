@@ -35,6 +35,9 @@ import { publicName } from '@/lib/public-name';
 import { isStorePaused, pausedUntilMs } from '@/lib/store-hours';
 import { fmtDate } from '@/lib/format-date';
 import { StoreComplianceCard } from '@/components/store-compliance-card';
+import { SuspendAccountDialog } from '@/components/admin/suspend-account-dialog';
+import { SuspensionPanel } from '@/components/admin/suspension-panel';
+import type { AccountSuspension } from '@/lib/suspension';
 
 const formatDate = (ts: any) => {
     if (!ts) return '—';
@@ -54,6 +57,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     const [cbuInput, setCbuInput]         = useState('');
     const [cbuLoaded, setCbuLoaded]       = useState(false);
     const [togglingPause, setTogglingPause] = useState(false);
+    const [suspendOpen, setSuspendOpen] = useState(false);
 
     // Datos de la tienda
     const storeRef = useMemoFirebase(() => firestore ? doc(firestore, 'stores', storeId) : null, [firestore, storeId]);
@@ -187,6 +191,8 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
 
     // Fase YY: pausa EFECTIVA (una pausa de 30 min/1 h vencida ya no cuenta) + "Pausar 1 h".
     const paused = isStorePaused(store);
+    const ownerSuspension = (ownerDoc?.suspension ?? null) as AccountSuspension | null;
+    const storeSuspended = ownerSuspension?.active === true || store?.suspension?.active === true || store?.status === 'Suspendida';
     const pausedUntil = pausedUntilMs(store);
     const handleTogglePause = async (minutes?: number) => {
         if (!firestore || !storeRef || !store) return;
@@ -205,8 +211,11 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
         }
     };
 
-    const handleToggleApproval = async () => {
-        if (!firestore || !store) return;
+    // Solo APROBAR pasa por acá. Revocar una tienda aprobada ya no es un click: es "Suspender"
+    // (Fase YY ter: motivo + detalle + duración + apelación, server-side). Una tienda
+    // suspendida se levanta desde el panel de suspensión, nunca con este botón.
+    const handleApprove = async () => {
+        if (!firestore || !store || store.isApproved) return;
         try {
             // Servicio único (Fase PP): antes este camino tocaba SOLO stores.isApproved y
             // el dueño quedaba para siempre en la cola de solicitudes del dashboard (que
@@ -214,7 +223,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
             if (store.ownerId) {
                 await setAccountApproval(firestore, {
                     userId: store.ownerId,
-                    approved: !store.isApproved,
+                    approved: true,
                     role: 'store',
                     storeId,
                     adminUser,
@@ -222,12 +231,12 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 });
             } else if (storeRef) {
                 // Tienda sin dueño (caso anómalo): al menos publicarla/despublicarla.
-                await updateDoc(storeRef, { isApproved: !store.isApproved });
-                if (adminUser) logAdminAction(firestore, adminUser.uid, store.isApproved ? 'reject_account' : 'approve_account', storeId, `tienda sin dueño: ${store.name || ''}`);
+                await updateDoc(storeRef, { isApproved: true });
+                if (adminUser) logAdminAction(firestore, adminUser.uid, 'approve_account', storeId, `tienda sin dueño: ${store.name || ''}`);
             }
-            toast({ title: store.isApproved ? 'Aprobación retirada' : 'Tienda aprobada y dueño notificado' });
-        } catch {
-            toast({ variant: 'destructive', title: 'Error' });
+            toast({ title: 'Tienda aprobada y dueño notificado' });
+        } catch (e: unknown) {
+            toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : undefined });
         }
     };
 
@@ -260,7 +269,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                     <div className="flex items-center gap-2 flex-wrap">
                         <h1 className="text-2xl font-bold">{store.name}</h1>
                         <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-xs">
-                            {store.isApproved ? 'Aprobada' : 'No aprobada'}
+                            {store.isApproved ? 'Aprobada' : storeSuspended ? 'Suspendida' : 'No aprobada'}
                         </Badge>
                         {paused && (
                             <Badge variant="outline" className="text-xs border-warning/40 text-warning">
@@ -300,13 +309,32 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                             : paused ? <Play className="h-3.5 w-3.5 text-success" /> : <Pause className="h-3.5 w-3.5 text-warning" />}
                         {paused ? 'Reactivar' : 'Pausar'}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={handleToggleApproval} className="gap-1.5">
-                        {store.isApproved
-                            ? <><XCircle className="h-3.5 w-3.5 text-destructive" /> Revocar</>
-                            : <><Check className="h-3.5 w-3.5 text-success" /> Aprobar</>}
-                    </Button>
+                    {store.isApproved && store.ownerId && (
+                        <Button size="sm" variant="outline" onClick={() => setSuspendOpen(true)} className="gap-1.5" data-testid="open-suspend">
+                            <XCircle className="h-3.5 w-3.5 text-destructive" /> Suspender
+                        </Button>
+                    )}
+                    {!store.isApproved && !storeSuspended && (
+                        <Button size="sm" variant="outline" onClick={handleApprove} className="gap-1.5">
+                            <Check className="h-3.5 w-3.5 text-success" /> Aprobar
+                        </Button>
+                    )}
                 </div>
             </div>
+
+            {store.ownerId && (
+                <SuspendAccountDialog
+                    open={suspendOpen}
+                    onOpenChange={setSuspendOpen}
+                    target={{ uid: store.ownerId, role: 'store', name: store.name || 'la tienda', storeId }}
+                />
+            )}
+
+            {/* Suspensión vigente / apelaciones (Fase YY ter). El detalle vive en el user doc del
+                dueño (privado): stores/{id} es público y solo lleva un espejo mínimo. */}
+            {store.ownerId && (
+                <SuspensionPanel uid={store.ownerId} name={store.name || 'la tienda'} suspension={ownerSuspension} />
+            )}
 
             {/* Métricas — SOBRE LOS ÚLTIMOS 50 PEDIDOS, no el histórico. Antes las tarjetas
                 no lo decían y se leían como totales de la tienda. */}

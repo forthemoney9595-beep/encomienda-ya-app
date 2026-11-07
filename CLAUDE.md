@@ -3272,6 +3272,135 @@ también), no una copia.
 "Se descontaron " en un celular; y con datos reales, si conviene que la sugerencia de "no
 llegó" cambie a "El repartidor" cuando el PIN está verificado (hoy se advierte, no se sugiere).
 
+## Fase YY ter (nov 2026): suspensión de cuentas con debido proceso — Tanda C
+Punto 9 de la bóveda [[Cómo administran Rappi y PedidosYa (07-11)]] (en Colombia y Chile hubo
+protestas y fallos judiciales por bloqueos de repartidores sin motivo ni debido proceso) y el
+borrador [[Términos y obligaciones legales (borrador 07-11)]]. Aprobada por David. Rama
+`admin-pro`. Antes un admin desactivaba a un repartidor o revocaba una tienda con UN click, sin
+motivo, y la persona no se enteraba de por qué ni podía defenderse. `money.ts`, retiros,
+reembolsos y webhook NO se tocaron.
+
+**Modelo.** `users/{uid}.suspension = { active, reason, detail, at, by, until|null,
+durationDays, role, storeId, appealId, appealStatus, liftedAt, liftedBy, liftCause }` +
+`users/{uid}.suspensionCount`, escritos SOLO por el servidor. Suspender deja la cuenta no
+operativa por el MISMO mecanismo que la aprobación (lección R1 / PP R3): `users.isApproved:false`
++ `users.status:'Suspendido'` + `stores.isApproved:false` + `stores.status:'Suspendida'`, en una
+transacción. Así `isApprovedDriver()`, `/api/orders/take`, el catálogo y `/api/orders/create`
+cortan solos sin tocarlos. **Espejo en la tienda mínimo (`{active, at, until}`), sin motivo ni
+detalle: `stores/{id}` es de lectura PÚBLICA**; el detalle vive en el user doc del dueño
+(privado, lo lee él).
+- **`src/lib/suspension.ts` (puro, sin imports — Vitest y el e2e lo cargan directo):** lista
+  cerrada `SUSPENSION_REASONS` (documentación vencida o falsa / reclamos reiterados / incidentes
+  graves con pedidos / conducta con clientes o comercios / uso indebido de la cuenta / otro),
+  duraciones `[null, 7, 15, 30]` (null = hasta revisión), detalle ≥ 20, apelación ≥ 30, respuesta
+  de "mantener" ≥ 10; `validateSuspensionInput`, `validateAppealText`, `validateAppealDecision`,
+  `isSuspensionExpired`/`isSuspensionInForce`/`canAppeal`, `describeSuspensionEnd` (hora ART),
+  `suspensionNoticeBody` (texto ÚNICO del aviso: motivo + detalle + hasta cuándo + cómo apelar),
+  `pickExpiredSuspensions`. 15 tests.
+- **`src/lib/suspension-server.ts` (Admin SDK):** `applySuspension`, `liftSuspension` (causa
+  `admin | appeal | expired`; si había una apelación ABIERTA y se levanta por otro camino, la
+  cierra en la misma transacción — si no quedaría huérfana en la Bandeja), `createAppeal`,
+  `resolveAppeal`, `sweepExpiredSuspensions`. Todo transaccional, aviso con `notifyUser`
+  (tipo `account_status`, link `/delivery` o `/my-store`), auditoría con `logAdminActionServer`
+  (`suspend_account`, `lift_suspension`, `resolve_appeal`, `suspension_expired` con
+  `adminUid:'system'`; etiquetas en `ACTION_LABELS`).
+
+**Rutas nuevas:** `POST /api/admin/suspend-account` · `POST /api/admin/lift-suspension` (nota ≥
+10, levantar sin apelación) · `POST /api/admin/resolve-appeal` (`reactivate` | `maintain`) — las
+tres con `verifyAuthTokenStrict` + `verifyAdmin` + rate limit · `POST /api/account/appeal` (token
+estricto del dueño; el uid sale del token) · `POST /api/account/suspension-check` (token del
+dueño; levanta si venció según el reloj del SERVIDOR).
+- **Decisión de nivel: cualquier admin (incluido 'support') puede suspender, levantar y resolver
+  apelaciones.** Es la misma familia que aprobar/rechazar cuentas (que support ya hace desde PP),
+  a veces es urgente (un repartidor que maltrata clientes un domingo a la noche), no mueve plata
+  y queda auditado y avisado. La protección de la persona es el PROCEDIMIENTO (motivo escrito,
+  aviso, una apelación, respuesta escrita), no el nivel del admin. Pendiente si hay más de un
+  admin: que la apelación la resuelva alguien distinto de quien suspendió (hoy no se exige: con
+  un solo operador es imposible).
+- **Repartidor suspendido con pedidos en curso: la suspensión NO le quita lo que ya lleva** (un
+  pedido no se abandona en la calle) — las reglas del pedido asignado y `confirm-delivery` no
+  miran `isApproved`, así que lo termina; lo que pierde es tomar NUEVOS. El diálogo le muestra al
+  admin cuántos lleva antes de confirmar y el aviso al repartidor lo dice. La tienda suspendida
+  igual: lo que ya estaba en curso sigue (los 'Pendiente de Confirmación' vencen solos por la
+  Tanda A); `create` rechaza los nuevos.
+- **La plata no se toca:** lo ganado se le sigue debiendo; `withdrawals/request` no mira
+  `isApproved` (puede pedir el retiro manual) y la liquidación automática lo saltea mientras dure
+  (filtra `isApproved`). Lo dicen el aviso y Términos.
+- **`/api/orders/take`** ahora re-chequea `isApproved` del repartidor DENTRO de la transacción
+  (cierra la carrera "lo suspendieron justo mientras tomaba"). No cambia nada más.
+
+**Todos los caminos que desactivaban una cuenta aprobada pasan por `SuspendAccountDialog`
+(`src/components/admin/suspend-account-dialog.tsx`, único):** ficha de repartidor ("Desactivar"
+→ "Suspender"), menú ⋯ de la lista de repartidores (nuevo ítem "Suspender…"), modal de ficha
+técnica de la lista (mostraba "Rechazar" para CUALQUIER estado = desactivar sin motivo; ahora
+Aprobar/Rechazar solo para no aprobados y "Suspender…" para activos), ficha de tienda ("Revocar"
+→ "Suspender") y diálogo de edición de Gestión Tiendas (el selector de estado se bloquea para
+tiendas aprobadas o suspendidas, con botón "Suspender…"; de paso el formulario ya no falla con
+el `status` real 'Aprobada'/'Rechazada', que no estaba en su enum). El diálogo muestra antes de
+confirmar el historial (rating, suspensiones previas, pedidos en curso, incidentes del
+repartidor o reclamos de la tienda — consultas acotadas con `limit`) y "Lo que va a leer".
+**Red de seguridad en `approval-service.ts`:** rechaza des-aprobar una cuenta ya aprobada
+("usá Suspender") y aprobar una suspendida — si algún botón nuevo intenta desactivar por ahí,
+falla con mensaje claro en vez de bloquear a alguien sin motivo.
+- **`src/components/admin/suspension-panel.tsx`:** bloque de las dos fichas (suspensión vigente,
+  estado de la apelación, apelación abierta con Mantener/Reactivar, "Levantar suspensión",
+  apelaciones resueltas) + `useAppealActions()` (mismo diálogo en la ficha y en la Bandeja).
+- **Bandeja:** tipo nuevo `appeal` (severidad alta, grupo Disputas, chip "Apelaciones" con
+  `count()` real en `useAdminCounts.appealsOpen`, suma al badge de la Bandeja), acciones Ver
+  ficha / Mantener / Reactivar.
+- **Lado del dueño — `src/components/suspension-notice.tsx`** en `/delivery`, `/orders` (panel
+  del repartidor) y `/my-store`: aviso fijo con motivo, detalle, hasta cuándo, qué sigue
+  pudiendo hacer, estado de la apelación o la respuesta, y "Apelar" (una vez). Reemplaza el
+  aviso de "pendiente de aprobación" cuando la cuenta está suspendida. Además el pool de pedidos
+  ya no se consulta si el repartidor no está aprobado (la regla lo negaba igual y llenaba la
+  consola/Sentry de permission-denied — también le pasaba a los pendientes; se sacó el texto
+  "podés ver los pedidos disponibles", falso desde la Fase TT).
+- **Fin de la suspensión temporal sin cron por minuto:** el aviso llama a
+  `suspension-check` al montarse y al llegar la hora de fin; el barrido diario corre en
+  `/api/cron/reconcile-mp` y en "Conciliar ahora" (`sweepExpiredSuspensions`: igualdad sobre
+  `suspension.active` + `limit(200)`, índice automático de un campo, corte por fecha en memoria;
+  aislado en su try; la respuesta suma `suspensionsLifted`/`suspensionsChecked`).
+- **Términos:** sección nueva "8. Suspensión de cuentas" (`#suspension`, motivo por escrito,
+  duración, qué cambia, derecho a apelar, respuesta por escrito); renumeradas las siguientes;
+  sin datos legales inventados (nombre/CUIT/domicilio siguen pendientes).
+
+**Reglas e índices (dry-run limpio y desplegados ANTES de probar en vivo):** helpers
+`isSuspensionFieldChange()` (nadie escribe `suspension`/`suspensionCount` desde el cliente, ni el
+admin) y `touchesSuspendedApproval()` (una cuenta con `suspension.active` no cambia
+`isApproved`/`status` desde el cliente) en la rama admin del update de `users` y `stores`; el
+`hasOnly` del dueño ya no incluía ninguno de esos campos (verificado). `match /account_appeals`:
+lee el dueño (`resource.data.uid == request.auth.uid`, sin get() cruzado) o el admin; escrituras
+`false`. Índices `account_appeals (resolved, createdAt DESC)` y `(uid, createdAt DESC)` (47 → 49).
+
+**Verificación:** `tsc` 0 · lint 0 errores (93 warnings, misma familia React Compiler) · Vitest
+147/147 (15 nuevos) · `npm run test:rules` 35/35 (10 nuevos: el dueño no se escribe `suspension`
+ni se reactiva, la tienda no se re-publica, ni el admin lo hace por SDK, regresión de aprobar un
+pendiente, apelaciones solo dueño/admin y nadie las escribe, el suspendido no ve el pool ni se
+autoasigna, y SÍ avanza el pedido que ya lleva) · build OK. **`_e2e-suspension.js` 79/79** (dev
+server + Firestore real, cuentas TEMPORALES —repartidor, tienda con dueño y admin support— creadas
+y borradas por el script; nunca toca cuentas reales): 401/403 (comprador, tienda, repartidor)/400
+(motivo, detalle corto, duración, comprador), suspender (campos, status, contador, aviso con
+motivo/detalle/fin/cómo apelar, auditoría server-side, 409 doble), take 403 + reglas (pool,
+autoasignación, reactivarse, borrar la suspensión) y regresión del pedido en curso, apelar
+(409 sin suspensión, 400 corto, una sola, aviso al dueño y a los admins, otro usuario no la
+lee, nadie la escribe), mantener (400 sin respuesta, aviso con la respuesta, no puede re-apelar,
+409 doble), levantar a mano, tienda suspendida POR SUPPORT (privacidad del doc público, create
+rechaza, apela, reactivar), vencimiento por `suspension-check` (antes no, después sí,
+idempotente) y por el barrido de "Conciliar ahora" con apelación abierta (se cierra en la misma
+tx; con guarda: se saltea si hay suspensiones REALES o pedidos reales sin confirmar vencidos);
+limpieza por consulta también en el catch, residuo cero. **`_pw-tanda-c.js` 40/40** a 1440 y 430:
+diálogo sobre el repartidor y la tienda REALES completado
+y CANCELADO (ground truth sin cambios), suspensión por la UI de las temporales desde la ficha y
+desde Gestión Tiendas, aviso + Apelar en `/delivery`, `/orders` y `/my-store`, Bandeja con el
+chip = count real, Mantener/Reactivar por la UI, respuesta visible para el repartidor, Términos,
+0 overflow, 0 pageerror, 0 console.error del lado suspendido. Capturas en el scratchpad de la sesión (`tanda-c/`).
+Regresión: `_pw-require-role` 11/11, `_e2e-pool-privacy` 9/10 (el mismo hallazgo previo de la
+Fase WW, no empeoró), `_pw-admin-t1` 81/81 (el 82º es el chequeo de "Bandeja vacía", que no
+corre porque hoy hay 1 pedido real trabado).
+**A confirmar:** el push real de los avisos en un celular; la redacción final de la sección de
+Términos con el abogado/contador (el borrador legal lo pide); y, si se suma un segundo admin,
+exigir que la apelación la resuelva otra persona.
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

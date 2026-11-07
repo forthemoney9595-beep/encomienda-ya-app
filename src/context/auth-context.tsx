@@ -12,6 +12,7 @@ import { isSignupInProgress } from '@/lib/signup-flag';
 import { getToken } from 'firebase/messaging'; // ✅ Importamos getToken
 // ✅ Importamos messaging también
 import { auth, db, messaging, persistFcmToken } from '@/lib/firebase';
+import type { AccountSuspension } from '@/lib/suspension';
 
 // Definimos la interfaz del perfil
 export interface UserProfile {
@@ -41,6 +42,10 @@ export interface UserProfile {
   adminLevel?: 'full' | 'support';
   // CBU/alias para liquidaciones (lo guarda /api/withdrawals/request en el primer retiro).
   payoutCbu?: string;
+  status?: string;
+  // Suspensión con debido proceso (Fase YY ter): la escribe SOLO el servidor; el dueño la lee
+  // para ver el motivo, hasta cuándo y apelar (SuspensionNotice).
+  suspension?: AccountSuspension;
 }
 
 interface AuthContextType {

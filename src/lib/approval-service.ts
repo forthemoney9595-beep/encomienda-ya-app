@@ -15,7 +15,7 @@
 // el repartidor tenía que descubrir por las suyas que ya podía trabajar).
 
 import {
-  Firestore, doc, writeBatch, collection, query, where, getDocs, serverTimestamp,
+  Firestore, doc, writeBatch, collection, query, where, getDocs, getDoc, serverTimestamp,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { OrderService } from './order-service';
@@ -37,6 +37,21 @@ export async function setAccountApproval(db: Firestore, opts: {
   notify?: boolean;
 }): Promise<void> {
   const { userId, approved } = opts;
+  // Fase YY ter: una cuenta SUSPENDIDA no se aprueba ni se desactiva por acá. Suspender pide
+  // motivo + detalle + duración y se levanta por /api/admin/lift-suspension o resolviendo la
+  // apelación (todo server-side, con aviso y auditoría). La regla de Firestore igual lo
+  // rechazaría (touchesSuspendedApproval); este chequeo da un mensaje claro antes.
+  const current = await getDoc(doc(db, 'users', userId));
+  if (current.data()?.suspension?.active === true) {
+    throw new Error('La cuenta está suspendida: levantá la suspensión desde su ficha (pide una nota y avisa a la persona).');
+  }
+  // Y una cuenta YA APROBADA no se desactiva sin debido proceso: ese camino es "Suspender"
+  // (SuspendAccountDialog → /api/admin/suspend-account). Rechazar queda solo para solicitudes
+  // que nunca se aprobaron. Atajo de la lección R1: si algún botón nuevo intenta desactivar
+  // por acá, falla con un mensaje claro en vez de bloquear a alguien sin motivo.
+  if (!approved && current.data()?.isApproved === true) {
+    throw new Error('La cuenta ya está aprobada: para desactivarla usá "Suspender" (pide motivo y la persona puede apelar).');
+  }
   const userStatus = approved ? 'Activo' : (opts.rejectedStatus || 'Rechazado');
 
   let storeId = opts.storeId ?? null;

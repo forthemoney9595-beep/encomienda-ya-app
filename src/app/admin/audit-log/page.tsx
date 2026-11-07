@@ -40,6 +40,11 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   reject_account:           { label: 'Cuenta rechazada',       color: 'bg-destructive/15 text-destructive border-destructive/30' },
   pause_store:              { label: 'Tienda pausada',         color: 'bg-warning/15 text-warning border-warning/30' },
   unpause_store:            { label: 'Tienda reactivada',      color: 'bg-success/15 text-success border-success/30' },
+  // Suspensión con debido proceso (Fase YY ter) — todas las escribe el servidor.
+  suspend_account:          { label: 'Cuenta suspendida',      color: 'bg-destructive/15 text-destructive border-destructive/30' },
+  lift_suspension:          { label: 'Suspensión levantada',   color: 'bg-success/15 text-success border-success/30' },
+  resolve_appeal:           { label: 'Apelación resuelta',     color: 'bg-info/15 text-info border-info/30' },
+  suspension_expired:       { label: 'Suspensión vencida',     color: 'bg-muted text-muted-foreground border-border' },
   edit_driver:              { label: 'Repartidor editado',     color: 'bg-info/15 text-info border-info/30' },
   edit_cbu:                 { label: 'CBU modificado',         color: 'bg-warning/15 text-warning border-warning/30' },
   cancel_order:             { label: 'Pedido cancelado',       color: 'bg-destructive/15 text-destructive border-destructive/30' },

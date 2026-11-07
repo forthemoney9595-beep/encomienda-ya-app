@@ -10,7 +10,7 @@ import type { AdminCountKey } from '@/lib/admin-nav';
 /**
  * useAdminCounts — los badges del menú y los chips de la Bandeja, de verdad.
  *
- * UNA instancia en el shell (contexto). Corre ≤ 7 `getCountFromServer` (1 lectura cada 1.000
+ * UNA instancia en el shell (contexto). Corre ≤ 8 `getCountFromServer` (1 lectura cada 1.000
  * docs que matchean) y los refresca: (a) al montar, (b) al volver el foco con debounce de
  * 30 s, (c) cada 5 min mientras la pestaña está visible, y (d) después de cualquier acción
  * admin — toda acción que resuelve algo llama `counts.refresh()` en su finally.
@@ -34,7 +34,7 @@ export interface AdminCountsValue {
 }
 
 const EMPTY: AdminCounts = {
-  claimsOpen: null, mismatchesOpen: null, incidentsOpen: null,
+  claimsOpen: null, mismatchesOpen: null, incidentsOpen: null, appealsOpen: null,
   pendingStores: null, pendingDrivers: null, withdrawalsPending: null,
 };
 
@@ -48,6 +48,8 @@ function buildQueries(isFullAdmin: boolean): Partial<Record<keyof AdminCounts, Q
     claimsOpen: query(collection(db, 'claims'), where('resolved', '==', false)),
     mismatchesOpen: query(collection(db, 'payment_mismatches'), where('resolved', '==', false)),
     incidentsOpen: query(collection(db, 'driver_incidents'), where('resolved', '==', false)),
+    // Apelaciones de suspensión abiertas (Fase YY ter).
+    appealsOpen: query(collection(db, 'account_appeals'), where('resolved', '==', false)),
     // Igualdades múltiples: Firestore combina índices de un campo (sin índice compuesto).
     // `status == 'Pendiente'` excluye a los rechazados, que también tienen isApproved:false.
     pendingStores: query(collection(db, 'users'), where('role', '==', 'store'), where('isApproved', '==', false), where('status', '==', 'Pendiente')),
@@ -121,7 +123,7 @@ export function AdminCountsProvider({ children }: { children: React.ReactNode })
   }, [isAdmin, refresh]);
 
   const value = useMemo<AdminCountsValue>(() => {
-    const parts = [counts.claimsOpen, counts.mismatchesOpen, counts.incidentsOpen, counts.pendingStores, counts.pendingDrivers, ...(isFullAdmin ? [counts.withdrawalsPending] : [])];
+    const parts = [counts.claimsOpen, counts.mismatchesOpen, counts.incidentsOpen, counts.appealsOpen, counts.pendingStores, counts.pendingDrivers, ...(isFullAdmin ? [counts.withdrawalsPending] : [])];
     const inboxTotal = parts.some(p => p === null) ? null : parts.reduce<number>((a, b) => a + (b ?? 0), 0);
     return {
       counts, inboxTotal, loading, errors, refreshedAt, refresh,

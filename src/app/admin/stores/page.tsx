@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { isStorePaused } from '@/lib/store-hours';
 import { ManageStoreDialog } from './manage-store-dialog';
 import AdminAuthGuard from '../admin-auth-guard';
+import { SuspendAccountDialog, type SuspendTarget } from '@/components/admin/suspend-account-dialog';
 
 type StoreFilter = 'all' | 'approved' | 'pending' | 'paused';
 
@@ -36,6 +37,8 @@ function AdminStoresPage() {
   // Estados para el Modal
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedStore, setSelectedStore] = useState<any | null>(null);
+  // Fase YY ter: revocar una tienda aprobada = suspenderla con debido proceso.
+  const [suspendTarget, setSuspendTarget] = useState<SuspendTarget | null>(null);
 
   // 1. Cargar Tiendas.
   // OJO escala: a diferencia de `orders`/`users`/`withdrawals`, `stores` es una colección
@@ -74,7 +77,7 @@ function AdminStoresPage() {
         : 'default',
       'Rating': s.rating ?? '',
       'Reseñas': s.ratingCount ?? 0,
-      'Estado': s.isApproved ? 'Aprobada' : 'Pendiente/Rechazada',
+      'Estado': s.isApproved ? 'Aprobada' : s.status === 'Suspendida' ? 'Suspendida' : 'Pendiente/Rechazada',
       'Pausada': isStorePaused(s) ? 'Sí' : 'No',
       // El CBU ya no está en el doc público de la tienda (seguridad, ago 2026): vive en
       // el user doc del dueño y se ve en la ficha individual de cada tienda.
@@ -103,7 +106,11 @@ function AdminStoresPage() {
               // escribía stores.isApproved/status sin tocar users.isApproved — la tienda
               // salía publicada pero el dueño quedaba para siempre en la cola de
               // solicitudes del dashboard.
-              if (storeData.isApproved !== selectedStore.isApproved) {
+              // Fase YY ter: solo se APRUEBA o RECHAZA una solicitud que nunca se aprobó. Una
+              // tienda aprobada se suspende (SuspendAccountDialog) y una suspendida se levanta
+              // desde su ficha — el diálogo ya bloquea el selector, esto es la red de seguridad.
+              const lockedStatus = selectedStore.isApproved || selectedStore.status === 'Suspendida' || selectedStore.suspension?.active === true;
+              if (!lockedStatus && storeData.isApproved !== selectedStore.isApproved) {
                   if ((selectedStore as any).ownerId) {
                       await setAccountApproval(firestore, {
                           userId: (selectedStore as any).ownerId,
@@ -277,7 +284,7 @@ function AdminStoresPage() {
                             <TableCell>
                                 <div className="flex flex-col gap-1 items-start">
                                     <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-xs">
-                                        {store.isApproved ? 'Aprobado' : 'Pendiente/Rechazado'}
+                                        {store.isApproved ? 'Aprobado' : store.status === 'Suspendida' ? 'Suspendida' : 'Pendiente/Rechazado'}
                                     </Badge>
                                     {isStorePaused(store) && (
                                         <Badge variant="outline" className="text-xs border-warning/40 text-warning gap-1">
@@ -316,6 +323,15 @@ function AdminStoresPage() {
         setIsOpen={setIsDialogOpen}
         store={selectedStore}
         onSave={handleSaveStore}
+        onSuspend={selectedStore?.ownerId ? () => {
+          setSuspendTarget({ uid: selectedStore.ownerId, role: 'store', name: selectedStore.name || 'la tienda', storeId: selectedStore.id });
+          setIsDialogOpen(false);
+        } : undefined}
+      />
+      <SuspendAccountDialog
+        open={!!suspendTarget}
+        onOpenChange={(o) => { if (!o) setSuspendTarget(null); }}
+        target={suspendTarget}
       />
     </div>
   );

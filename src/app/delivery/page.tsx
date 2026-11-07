@@ -14,6 +14,7 @@ import PageHeader from '@/components/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
+import { SuspensionNotice } from '@/components/suspension-notice';
 import {
   Truck, Wallet, Star, BarChart3, PackageCheck, ShoppingBag, Clock, ArrowRight,
 } from 'lucide-react';
@@ -27,17 +28,22 @@ export default function DeliveryDashboardPage() {
   const { ready } = useRequireRole('delivery');
 
   const isApprovedDriver = (userProfile as any)?.isApproved === true;
+  // Fase YY ter: una cuenta suspendida no está "pendiente": ve el motivo y puede apelar.
+  const isSuspended = userProfile?.suspension?.active === true;
 
   // Mismas 2 queries que delivery-orders-view.tsx (panel operativo) -- ver por qué el
   // rango de estados tiene que coincidir exacto con firestore.rules en ese archivo.
   const availableQuery = useMemoFirebase(() => {
     if (!firestore || !ready) return null; // ARQ-010: ESTA era la consulta que corría para un comprador (pool → permission-denied)
+    // Fase YY ter: la regla del pool exige isApprovedDriver() — un pendiente o SUSPENDIDO
+    // recibía permission-denied (ruido en consola y Sentry). Sin aprobación no se consulta.
+    if (!isApprovedDriver) return null;
     return query(
       collection(firestore, 'orders'),
       where('deliveryPersonId', '==', null),
       where('status', 'in', ['En preparación', 'Listo para recoger'])
     );
-  }, [firestore, ready]);
+  }, [firestore, ready, isApprovedDriver]);
   const { data: availableOrders } = useCollection<any>(availableQuery);
 
   // 🚨 PERF-001 (auditoría oct 2026): antes UNA query con todo el historial del
@@ -112,7 +118,9 @@ export default function DeliveryDashboardPage() {
         <DeliveryOnlineToggle />
       </PageHeader>
 
-      {!isApprovedDriver && (
+      {isSuspended && <SuspensionNotice />}
+
+      {!isApprovedDriver && !isSuspended && (
         <Card className="border-warning/40 bg-warning/10">
           <CardContent className="flex items-start gap-3 py-5">
             <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />

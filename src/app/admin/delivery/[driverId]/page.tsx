@@ -31,12 +31,16 @@ import { buildDriverStatement, type StatementOrder, type StatementWithdrawal } f
 import { type Order as OrderType } from '@/lib/order-service';
 import Link from 'next/link';
 import { publicName } from '@/lib/public-name';
+import { SuspendAccountDialog } from '@/components/admin/suspend-account-dialog';
+import { SuspensionPanel } from '@/components/admin/suspension-panel';
+import type { AccountSuspension } from '@/lib/suspension';
 
 function getStatusVariant(status: string) {
   switch (status) {
     case 'Activo': return 'secondary';
     case 'Pendiente': return 'default';
     case 'Inactivo':
+    case 'Suspendido':
     case 'Rechazado': return 'destructive';
     default: return 'outline';
   }
@@ -60,6 +64,7 @@ function DriverProfilePage() {
   const [cbuLoaded, setCbuLoaded] = useState(false);
   const [savingCbu, setSavingCbu] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [suspendOpen, setSuspendOpen] = useState(false);
 
   const driverRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
   const { data: driver, isLoading: driverLoading } = useDoc<DeliveryPersonnel>(driverRef);
@@ -154,23 +159,24 @@ function DriverProfilePage() {
     }
   };
 
-  const handleUpdateStatus = async (status: string) => {
+  // Solo ACTIVAR pasa por acá (servicio único de aprobación, Fase PP). Desactivar a un
+  // repartidor aprobado ya no es un click: es "Suspender" (Fase YY ter, debido proceso —
+  // motivo, detalle, duración y apelación). Una cuenta suspendida se levanta desde el panel
+  // de suspensión (server-side), nunca con este botón.
+  const handleActivate = async () => {
     if (!firestore) return;
     setUpdatingStatus(true);
     try {
-      // Servicio único de aprobación (Fase PP): isApproved+status juntos, auditado y con
-      // aviso al repartidor. Este camino usa 'Inactivo' al desactivar (no 'Rechazado').
       await setAccountApproval(firestore, {
         userId: driverId,
-        approved: status === 'Activo',
+        approved: true,
         role: 'delivery',
-        rejectedStatus: status === 'Activo' ? undefined : status,
         adminUser,
-        label: `repartidor — ${status}`,
+        label: 'repartidor — Activo',
       });
-      toast({ title: status === 'Activo' ? 'Repartidor activado y notificado' : `Estado: ${status}` });
-    } catch {
-      toast({ variant: 'destructive', title: 'Error al cambiar estado' });
+      toast({ title: 'Repartidor activado y notificado' });
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', title: 'Error al cambiar estado', description: e instanceof Error ? e.message : undefined });
     } finally {
       setUpdatingStatus(false);
     }
@@ -190,6 +196,8 @@ function DriverProfilePage() {
   if (!driver) return notFound();
 
   const cbuSaved = (driver as any).payoutCbu;
+  const suspension = (driver as any).suspension as AccountSuspension | undefined;
+  const isSuspended = suspension?.active === true || driver.status === ('Suspendido' as string);
 
   return (
     <div className="container mx-auto pb-20 space-y-6">
@@ -211,18 +219,27 @@ function DriverProfilePage() {
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
-          {driver.status !== 'Activo' && (
-            <Button size="sm" variant="outline" onClick={() => handleUpdateStatus('Activo')} disabled={updatingStatus} className="gap-1.5">
+          {driver.status !== 'Activo' && !isSuspended && (
+            <Button size="sm" variant="outline" onClick={handleActivate} disabled={updatingStatus} className="gap-1.5">
               <Check className="h-3.5 w-3.5 text-success" /> Activar
             </Button>
           )}
-          {driver.status === 'Activo' && (
-            <Button size="sm" variant="outline" onClick={() => handleUpdateStatus('Inactivo')} disabled={updatingStatus} className="gap-1.5">
-              <XCircle className="h-3.5 w-3.5 text-destructive" /> Desactivar
+          {driver.status === 'Activo' && !isSuspended && (
+            <Button size="sm" variant="outline" onClick={() => setSuspendOpen(true)} disabled={updatingStatus} className="gap-1.5" data-testid="open-suspend">
+              <XCircle className="h-3.5 w-3.5 text-destructive" /> Suspender
             </Button>
           )}
         </div>
       </div>
+
+      <SuspendAccountDialog
+        open={suspendOpen}
+        onOpenChange={setSuspendOpen}
+        target={{ uid: driverId, role: 'delivery', name: driver.name || driver.email || 'repartidor' }}
+      />
+
+      {/* Suspensión vigente / apelaciones (Fase YY ter) */}
+      <SuspensionPanel uid={driverId} name={driver.name || driver.email || 'el repartidor'} suspension={suspension ?? null} />
 
       {/* Métricas */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">

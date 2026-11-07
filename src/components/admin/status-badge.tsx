@@ -34,6 +34,7 @@ export function resolveStatus(kind: StatusKind, value: string | undefined | null
       if (s === 'pendiente') return { label: 'Pendiente', tone: 'warning' };
       if (s === 'rechazado' || s === 'rechazada') return { label: v, tone: 'destructive' };
       if (s === 'inactivo') return { label: 'Inactivo', tone: 'neutral' };
+      if (s === 'suspendido' || s === 'suspendida') return { label: v, tone: 'destructive' };
       return { label: v || '—', tone: 'neutral' };
     }
     case 'withdrawal': {

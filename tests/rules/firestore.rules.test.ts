@@ -268,3 +268,89 @@ describe.skipIf(!HAS_EMULATOR)('firestore.rules — quién absorbe el reembolso 
     await assertFails(deleteDoc(doc(asAdmin(), 'claim_risk', 'c-1')));
   });
 });
+
+describe.skipIf(!HAS_EMULATOR)('firestore.rules — suspensión con debido proceso (Fase YY ter)', () => {
+  // La suspensión la aplica /api/admin/suspend-account (Admin SDK) con el MISMO mecanismo que
+  // la aprobación (isApproved/status). Acá: el dueño no puede escribirse `suspension` ni
+  // reactivarse; el admin tampoco lo hace desde el cliente (la ruta exige motivo, avisa y
+  // audita); las apelaciones solo las lee su dueño o el admin y nadie las escribe; y el
+  // repartidor suspendido no toma pedidos nuevos pero SÍ termina el que ya lleva.
+  const ADMIN = 'admin-uid';
+  const SUSP_DRIVER = 'susp-driver-uid';
+  const SUSP_OWNER = 'susp-owner-uid';
+  const PENDING_DRIVER = 'pending-driver-uid';
+  const suspension = { active: true, reason: 'conduct', detail: 'Trato agresivo con dos clientes esta semana.', by: ADMIN, until: null };
+  let env6: RulesTestEnvironment;
+  beforeAll(async () => {
+    env6 = await initializeTestEnvironment({ projectId: PROJECT + '-6', firestore: { rules: readFileSync(resolve(__dirname, '../../firestore.rules'), 'utf8') } });
+  });
+  afterAll(async () => { await env6?.cleanup(); });
+  beforeEach(async () => {
+    await env6.clearFirestore();
+    await env6.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'roles_admin', ADMIN), { level: 'support' });
+      await setDoc(doc(db, 'users', ADMIN), { role: 'admin', adminLevel: 'support', email: 'a@test' });
+      await setDoc(doc(db, 'users', SUSP_DRIVER), { role: 'delivery', isApproved: false, status: 'Suspendido', suspension, email: 'sd@test' });
+      await setDoc(doc(db, 'users', SUSP_OWNER), { role: 'store', isApproved: false, status: 'Suspendido', storeId: 'store-s', suspension, email: 'so@test' });
+      await setDoc(doc(db, 'users', PENDING_DRIVER), { role: 'delivery', isApproved: false, status: 'Pendiente', email: 'pd@test' });
+      await setDoc(doc(db, 'users', BUYER), { role: 'buyer', email: 'b@test' });
+      await setDoc(doc(db, 'stores', 'store-s'), { ownerId: SUSP_OWNER, name: 'Suspendida', isApproved: false, status: 'Suspendida', suspension: { active: true } });
+      const base = { storeId: 'store-x', userId: BUYER, customerName: 'C', items: [], total: 1000 };
+      await setDoc(doc(db, 'orders', 'o-libre'), { ...base, status: 'Listo para recoger', deliveryPersonId: null });
+      await setDoc(doc(db, 'orders', 'o-suyo'), { ...base, status: 'En camino', deliveryPersonId: SUSP_DRIVER });
+      await setDoc(doc(db, 'account_appeals', 'ap-1'), { uid: SUSP_DRIVER, role: 'delivery', text: 'No fui yo, el cliente se equivocó de repartidor.', resolved: false, status: 'open' });
+    });
+  });
+  const as = (uid: string) => env6.authenticatedContext(uid).firestore();
+
+  it('ataque: el repartidor suspendido no se reactiva ni se borra la suspensión', async () => {
+    await assertFails(updateDoc(doc(as(SUSP_DRIVER), 'users', SUSP_DRIVER), { isApproved: true }));
+    await assertFails(updateDoc(doc(as(SUSP_DRIVER), 'users', SUSP_DRIVER), { status: 'Activo' }));
+    await assertFails(updateDoc(doc(as(SUSP_DRIVER), 'users', SUSP_DRIVER), { suspension: { active: false } }));
+    await assertFails(updateDoc(doc(as(SUSP_DRIVER), 'users', SUSP_DRIVER), { 'suspension.active': false }));
+    await assertFails(updateDoc(doc(as(SUSP_DRIVER), 'users', SUSP_DRIVER), { suspensionCount: 0 }));
+  });
+  it('regresión: el suspendido sigue editando su perfil (nombre, disponibilidad)', async () => {
+    await assertSucceeds(updateDoc(doc(as(SUSP_DRIVER), 'users', SUSP_DRIVER), { name: 'Nuevo nombre', isOnline: false }));
+  });
+  it('ataque: la tienda suspendida no se re-publica ni toca su espejo de suspensión', async () => {
+    await assertFails(updateDoc(doc(as(SUSP_OWNER), 'stores', 'store-s'), { isApproved: true }));
+    await assertFails(updateDoc(doc(as(SUSP_OWNER), 'stores', 'store-s'), { status: 'Aprobada' }));
+    await assertFails(updateDoc(doc(as(SUSP_OWNER), 'stores', 'store-s'), { suspension: { active: false } }));
+  });
+  it('regresión: la tienda suspendida sigue editando su descripción', async () => {
+    await assertSucceeds(updateDoc(doc(as(SUSP_OWNER), 'stores', 'store-s'), { description: 'Volvemos pronto' }));
+  });
+  it('ataque: ni el admin escribe suspension ni re-aprueba una cuenta suspendida desde el cliente', async () => {
+    await assertFails(updateDoc(doc(as(ADMIN), 'users', SUSP_DRIVER), { 'suspension.active': false }));
+    await assertFails(updateDoc(doc(as(ADMIN), 'users', SUSP_DRIVER), { isApproved: true, status: 'Activo' }));
+    await assertFails(updateDoc(doc(as(ADMIN), 'stores', 'store-s'), { isApproved: true }));
+    await assertFails(updateDoc(doc(as(ADMIN), 'users', BUYER), { suspension: { active: true } }));
+  });
+  it('regresión: el admin sigue aprobando una cuenta pendiente y editando datos de una suspendida', async () => {
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', PENDING_DRIVER), { isApproved: true, status: 'Activo' }));
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', SUSP_DRIVER), { name: 'Corregido por admin' }));
+  });
+  it('apelaciones: el dueño lee la suya; otro usuario no; el admin sí', async () => {
+    await assertSucceeds(getDoc(doc(as(SUSP_DRIVER), 'account_appeals', 'ap-1')));
+    await assertFails(getDoc(doc(as(SUSP_OWNER), 'account_appeals', 'ap-1')));
+    await assertFails(getDoc(doc(as(BUYER), 'account_appeals', 'ap-1')));
+    await assertFails(getDoc(doc(env6.unauthenticatedContext().firestore(), 'account_appeals', 'ap-1')));
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'account_appeals', 'ap-1')));
+  });
+  it('apelaciones: nadie las crea, edita ni borra desde el cliente (ni el dueño ni el admin)', async () => {
+    await assertFails(setDoc(doc(as(SUSP_DRIVER), 'account_appeals', 'ap-2'), { uid: SUSP_DRIVER, text: 'x'.repeat(40), resolved: false }));
+    await assertFails(updateDoc(doc(as(SUSP_DRIVER), 'account_appeals', 'ap-1'), { text: 'cambio mi texto' }));
+    await assertFails(updateDoc(doc(as(ADMIN), 'account_appeals', 'ap-1'), { resolved: true, status: 'maintained' }));
+    await assertFails(deleteDoc(doc(as(ADMIN), 'account_appeals', 'ap-1')));
+  });
+  it('el repartidor suspendido NO ve el pool ni se autoasigna un pedido libre', async () => {
+    await assertFails(getDoc(doc(as(SUSP_DRIVER), 'orders', 'o-libre')));
+    await assertFails(updateDoc(doc(as(SUSP_DRIVER), 'orders', 'o-libre'), { deliveryPersonId: SUSP_DRIVER, status: 'En camino' }));
+  });
+  it('regresión: el repartidor suspendido TERMINA el pedido que ya llevaba (no se abandona en la calle)', async () => {
+    await assertSucceeds(getDoc(doc(as(SUSP_DRIVER), 'orders', 'o-suyo')));
+    await assertSucceeds(updateDoc(doc(as(SUSP_DRIVER), 'orders', 'o-suyo'), { status: 'En reparto', pickedUpAt: new Date() }));
+  });
+});

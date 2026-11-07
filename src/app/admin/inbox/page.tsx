@@ -16,11 +16,13 @@ import { useInboxItems, INBOX_SOURCE_LIMIT } from '@/components/admin/use-inbox'
 import { useAdminCounts } from '@/components/admin/use-admin-counts';
 import { useConfirm } from '@/components/admin/confirm-dialog';
 import { fmtElapsed } from '@/lib/format-date';
+import { useAppealActions } from '@/components/admin/suspension-panel';
 
-type ChipKey = 'all' | 'money' | 'claim' | 'incident' | 'approval' | 'stores' | 'stuck';
+type ChipKey = 'all' | 'money' | 'claim' | 'appeal' | 'incident' | 'approval' | 'stores' | 'stuck';
 const CHIP_KINDS: Record<Exclude<ChipKey, 'all'>, InboxKind[]> = {
   money: ['mismatch', 'withdrawal'],
   claim: ['claim'],
+  appeal: ['appeal'],
   incident: ['incident'],
   approval: ['approval'],
   stores: ['store_alert'],
@@ -41,6 +43,7 @@ export default function AdminInboxPage() {
   const inbox = useInboxItems();
   const [chip, setChip] = useState<ChipKey>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { resolve: resolveAppeal } = useAppealActions();
 
   const moneyCount = (counts.counts.mismatchesOpen === null || (isFullAdmin && counts.counts.withdrawalsPending === null))
     ? null
@@ -54,6 +57,7 @@ export default function AdminInboxPage() {
     { value: 'all', label: 'Todo', count: totalCount },
     { value: 'money', label: 'Plata', count: moneyCount },
     { value: 'claim', label: 'Reclamos', count: counts.counts.claimsOpen },
+    { value: 'appeal', label: 'Apelaciones', count: counts.counts.appealsOpen },
     { value: 'incident', label: 'Incidentes', count: counts.counts.incidentsOpen },
     { value: 'approval', label: 'Aprobaciones', count: approvalsCount },
     { value: 'stores', label: 'Tiendas', count: inbox.loading ? null : inbox.storeAlertCount },
@@ -65,6 +69,7 @@ export default function AdminInboxPage() {
     const c = counts.counts;
     if ((c.claimsOpen ?? 0) > INBOX_SOURCE_LIMIT) out.push(`reclamos (${c.claimsOpen})`);
     if ((c.mismatchesOpen ?? 0) > INBOX_SOURCE_LIMIT) out.push(`discrepancias (${c.mismatchesOpen})`);
+    if ((c.appealsOpen ?? 0) > INBOX_SOURCE_LIMIT) out.push(`apelaciones (${c.appealsOpen})`);
     if ((c.incidentsOpen ?? 0) > INBOX_SOURCE_LIMIT) out.push(`incidentes (${c.incidentsOpen})`);
     if (((c.pendingStores ?? 0) + (c.pendingDrivers ?? 0)) > INBOX_SOURCE_LIMIT) out.push('aprobaciones');
     if ((c.withdrawalsPending ?? 0) > INBOX_SOURCE_LIMIT) out.push(`retiros (${c.withdrawalsPending})`);
@@ -183,6 +188,14 @@ export default function AdminInboxPage() {
               { label: 'Ver pedido', href: `/admin/orders/${String(it.meta?.orderId ?? '')}` },
               { label: 'Resolver', primary: true, href: '/admin/claims' },
             ] };
+          case 'appeal': {
+            const appeal = { id: String(it.meta?.docId ?? ''), accountName: String(it.meta?.accountName ?? ''), text: String(it.meta?.text ?? '') };
+            return { ...it, actions: [
+              { label: 'Ver ficha', href: it.href },
+              { label: 'Mantener', tone: 'destructive' as const, onClick: async () => { await resolveAppeal(appeal, 'maintain'); } },
+              { label: 'Reactivar', primary: true, onClick: async () => { await resolveAppeal(appeal, 'reactivate'); } },
+            ] };
+          }
           case 'stuck':
             return { ...it, actions: [{ label: 'Ver pedido', primary: true, href: it.href }] };
           case 'store_alert':

@@ -18,6 +18,8 @@ interface ManageStoreDialogProps {
   setIsOpen: (isOpen: boolean) => void;
   onSave: (store: Store) => void;
   store: Store | null;
+  /** Fase YY ter: abre el SuspendAccountDialog (una tienda aprobada no se "rechaza" acá). */
+  onSuspend?: () => void;
 }
 
 const formSchema = z.object({
@@ -30,9 +32,19 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
-export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageStoreDialogProps) {
+/** Estado del formulario desde el doc real (stores.status guarda 'Aprobada'/'Rechazada'/'Suspendida'). */
+function formStatusOf(store: any): 'Aprobado' | 'Pendiente' | 'Rechazado' {
+  if (store?.isApproved) return 'Aprobado';
+  return ['Rechazado', 'Rechazada'].includes(store?.status) ? 'Rechazado' : 'Pendiente';
+}
+
+export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store, onSuspend }: ManageStoreDialogProps) {
   const { user } = useAuth();
   const isEditing = store !== null;
+  // Una tienda aprobada o suspendida NO cambia de estado desde este diálogo (lección R1): la
+  // aprobada se suspende con motivo y apelación, y la suspendida se levanta desde su ficha.
+  const isSuspended = (store as any)?.status === 'Suspendida' || (store as any)?.suspension?.active === true;
+  const statusLocked = isEditing && (!!store?.isApproved || isSuspended);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -50,7 +62,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
             form.reset({
                 name: store.name,
                 address: store.address,
-                status: (store.status as "Aprobado" | "Pendiente" | "Rechazado") || 'Pendiente',
+                status: formStatusOf(store),
                 // Aseguramos que sea número al cargar
                 commissionRate: Number(store.commissionRate) || 0,
             });
@@ -124,6 +136,21 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Estado</FormLabel>
+                        {statusLocked ? (
+                          <div className="space-y-2" data-testid="store-status-locked">
+                            <p className="text-sm">{isSuspended ? 'Suspendida' : 'Aprobada'}</p>
+                            {!isSuspended && onSuspend && (
+                              <Button type="button" size="sm" variant="outline" className="h-9 text-destructive" onClick={onSuspend} data-testid="dialog-suspend">
+                                Suspender…
+                              </Button>
+                            )}
+                            <FormDescription className="text-xs">
+                              {isSuspended
+                                ? 'Para levantar la suspensión o responder la apelación, abrí la ficha de la tienda.'
+                                : 'Desactivar una tienda aprobada es una suspensión: pide motivo y el dueño puede apelar.'}
+                            </FormDescription>
+                          </div>
+                        ) : (
                         <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                             <FormControl>
                             <SelectTrigger>
@@ -136,6 +163,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store }: ManageSt
                             <SelectItem value="Rechazado">Rechazado</SelectItem>
                             </SelectContent>
                         </Select>
+                        )}
                         <FormMessage />
                     </FormItem>
                     )}

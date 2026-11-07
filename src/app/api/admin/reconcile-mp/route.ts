@@ -5,6 +5,7 @@ import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { runReconciliation } from "@/lib/reconcile-mp";
 import { updateMonthlyStats, updateDailyStats } from "@/lib/platform-stats";
 import { sweepUnconfirmedOrders } from "@/lib/confirm-timeout-server";
+import { sweepExpiredSuspensions } from "@/lib/suspension-server";
 
 // Botón "Conciliar ahora" de /admin/payment-issues. Exige admin 'full': la conciliación
 // puede marcar órdenes como pagadas (webhook perdido) — es un cambio de estado de plata,
@@ -37,7 +38,15 @@ export async function POST(request: Request) {
     } catch (e) {
       Sentry.captureException(e, { tags: { route: "admin/reconcile-mp", step: "confirm-timeout-sweep" } });
     }
-    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked, unconfirmedCancelled: unconfirmed.cancelled, unconfirmedChecked: unconfirmed.checked });
+    // Fin de suspensiones temporales vencidas (Fase YY ter): el reloj fino lo da el aviso del
+    // dueño (/api/account/suspension-check); esto levanta las que nadie disparó. Aislado.
+    let suspensions = { checked: 0, lifted: 0, errors: 0 };
+    try {
+      suspensions = await sweepExpiredSuspensions();
+    } catch (e) {
+      Sentry.captureException(e, { tags: { route: "admin/reconcile-mp", step: "suspension-sweep" } });
+    }
+    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked, unconfirmedCancelled: unconfirmed.cancelled, unconfirmedChecked: unconfirmed.checked, suspensionsLifted: suspensions.lifted, suspensionsChecked: suspensions.checked });
   } catch (error: any) {
     console.error("❌ Error en conciliación manual:", error);
     Sentry.captureException(error, { tags: { route: "admin/reconcile-mp" } });

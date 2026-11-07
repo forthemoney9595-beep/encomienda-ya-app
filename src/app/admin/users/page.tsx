@@ -479,7 +479,7 @@ function AdminUsersPage() {
                                 <TableCell>
                                     {user.role === 'store' || user.role === 'delivery' ? (
                                         <Badge variant={user.isApproved ? 'default' : 'secondary'} className="text-xs">
-                                            {user.isApproved ? 'Aprobado' : 'Pendiente'}
+                                            {user.isApproved ? 'Aprobado' : user.status === 'Suspendido' ? 'Suspendido' : 'Pendiente'}
                                         </Badge>
                                     ) : (
                                         <span className="text-xs text-muted-foreground">-</span>

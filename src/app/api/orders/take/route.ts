@@ -60,6 +60,10 @@ export async function POST(request: Request) {
     await adminDb.runTransaction(async (tx) => {
       const snap = await tx.get(orderRef);
       if (!snap.exists) throw new Error('__NOT_FOUND__');
+      // Re-chequeo DENTRO de la tx (Fase YY ter): si el admin suspendió al repartidor entre
+      // la lectura de arriba y este punto, la tx lo ve y no le asigna el pedido.
+      const fresh = (await tx.get(adminDb.collection('users').doc(uid))).data();
+      if (!fresh || fresh.role !== 'delivery' || fresh.isApproved !== true) throw new Error('__NOT_APPROVED__');
       const o = snap.data()!;
       // claim-once: solo si sigue libre y en un estado del pool.
       if (o.deliveryPersonId != null) throw new Error('__ALREADY_TAKEN__');
@@ -95,6 +99,7 @@ export async function POST(request: Request) {
       __ALREADY_TAKEN__: [409, "Otro repartidor tomó este pedido un instante antes."],
       __NOT_AVAILABLE__: [409, "Este pedido ya no está disponible."],
       __OWN_ORDER__: [400, "No podés tomar tu propio pedido."],
+      __NOT_APPROVED__: [403, "Tu cuenta de repartidor no está habilitada para tomar pedidos."],
     };
     if (error?.message && map[error.message]) {
       const [status, msg] = map[error.message];

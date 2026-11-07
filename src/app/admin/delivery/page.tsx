@@ -18,8 +18,9 @@ import { collection, query, where, doc, updateDoc, serverTimestamp } from 'fireb
 import { logAdminAction } from '@/lib/admin-audit';
 import { setAccountApproval } from '@/lib/approval-service';
 import { authedFetch } from '@/lib/authed-fetch';
+import { SuspendAccountDialog, type SuspendTarget } from '@/components/admin/suspend-account-dialog';
 
-type DriverFilter = 'all' | 'pending' | 'active' | 'rejected';
+type DriverFilter = 'all' | 'pending' | 'active' | 'suspended' | 'rejected';
 
 function AdminDeliveryPage() {
   const { user, isFullAdmin, loading: authLoading } = useAuth();
@@ -30,6 +31,8 @@ function AdminDeliveryPage() {
   const [editingDriver, setEditingDriver] = useState<DeliveryPersonnel | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DriverFilter>('all');
+  // Fase YY ter: desactivar a un repartidor aprobado = suspender con debido proceso.
+  const [suspendTarget, setSuspendTarget] = useState<SuspendTarget | null>(null);
 
   // Consulta de Repartidores
   const personnelQuery = useMemoFirebase(() => {
@@ -44,6 +47,7 @@ function AdminDeliveryPage() {
     return (personnel || []).filter(p => {
       if (statusFilter === 'pending' && p.status !== 'Pendiente') return false;
       if (statusFilter === 'active' && p.status !== 'Activo') return false;
+      if (statusFilter === 'suspended' && p.status !== 'Suspendido') return false;
       if (statusFilter === 'rejected' && !['Rechazado', 'Inactivo'].includes(p.status)) return false;
       if (!t) return true;
       const plate = typeof p.vehicle === 'object' && p.vehicle ? p.vehicle.plate || '' : '';
@@ -63,6 +67,7 @@ function AdminDeliveryPage() {
     all: personnel?.length || 0,
     pending: (personnel || []).filter(p => p.status === 'Pendiente').length,
     active: (personnel || []).filter(p => p.status === 'Activo').length,
+    suspended: (personnel || []).filter(p => p.status === 'Suspendido').length,
     rejected: (personnel || []).filter(p => ['Rechazado', 'Inactivo'].includes(p.status)).length,
   }), [personnel]);
 
@@ -199,6 +204,7 @@ function AdminDeliveryPage() {
             { k: 'all', label: 'Todos' },
             { k: 'pending', label: 'Pendientes' },
             { k: 'active', label: 'Activos' },
+            { k: 'suspended', label: 'Suspendidos' },
             { k: 'rejected', label: 'Rechazados' },
           ] as { k: DriverFilter; label: string }[]).map(({ k, label }) => (
             <button key={k} onClick={() => setStatusFilter(k)}
@@ -228,8 +234,15 @@ function AdminDeliveryPage() {
           onStatusUpdate={handleStatusUpdate}
           onEdit={openDialogForEdit}
           onDelete={handleDeleteDriver}
+          onSuspend={(d) => setSuspendTarget({ uid: d.id, role: 'delivery', name: d.name || d.email || 'repartidor' })}
         />
       )}
+
+      <SuspendAccountDialog
+        open={!!suspendTarget}
+        onOpenChange={(o) => { if (!o) setSuspendTarget(null); }}
+        target={suspendTarget}
+      />
     </div>
   );
 }

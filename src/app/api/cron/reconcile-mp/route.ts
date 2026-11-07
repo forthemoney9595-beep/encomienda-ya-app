@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { runReconciliation } from "@/lib/reconcile-mp";
 import { updateMonthlyStats, updateDailyStats } from "@/lib/platform-stats";
 import { sweepUnconfirmedOrders } from "@/lib/confirm-timeout-server";
+import { sweepExpiredSuspensions } from "@/lib/suspension-server";
 
 // Cron diario de Vercel (ver vercel.json) — misma protección CRON_SECRET que
 // generate-settlements. Corre la conciliación con MercadoPago: re-verifica los pagos de
@@ -39,7 +40,15 @@ export async function GET(request: Request) {
       Sentry.captureException(e, { tags: { route: "cron/reconcile-mp", step: "confirm-timeout-sweep" } });
     }
     console.log(`[Cron] reconcile-mp: ${JSON.stringify(summary)} · meses actualizados: ${updated.join(", ") || "ninguno"} · días: ${daily.updated.length}/${daily.checked} · sin confirmar cancelados: ${unconfirmed.cancelled}/${unconfirmed.checked}`);
-    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked, unconfirmedCancelled: unconfirmed.cancelled, unconfirmedChecked: unconfirmed.checked });
+    // Fin de suspensiones temporales vencidas (Fase YY ter): el reloj fino lo da el aviso del
+    // dueño (/api/account/suspension-check); esto levanta las que nadie disparó. Aislado.
+    let suspensions = { checked: 0, lifted: 0, errors: 0 };
+    try {
+      suspensions = await sweepExpiredSuspensions();
+    } catch (e) {
+      Sentry.captureException(e, { tags: { route: "cron/reconcile-mp", step: "suspension-sweep" } });
+    }
+    return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked, unconfirmedCancelled: unconfirmed.cancelled, unconfirmedChecked: unconfirmed.checked, suspensionsLifted: suspensions.lifted, suspensionsChecked: suspensions.checked });
   } catch (error: any) {
     console.error("❌ [Cron] Error en reconcile-mp:", error);
     Sentry.captureException(error, { tags: { route: "cron/reconcile-mp" } });

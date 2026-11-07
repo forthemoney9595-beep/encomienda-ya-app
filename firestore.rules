@@ -34,6 +34,20 @@ service cloud.firestore {
     function isMoneyFieldChange() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(['payoutCbu', 'commissionRate']);
     }
+    // Suspensión con debido proceso (Fase YY ter, Tanda C): `suspension`/`suspensionCount` los
+    // escribe SOLO el servidor (/api/admin/suspend-account y compañía, con Admin SDK) — ni el
+    // dueño (no están en su hasOnly) ni un admin desde el cliente (la ruta exige motivo, avisa a
+    // la persona y audita; un updateDoc directo se saltearía las tres cosas).
+    function isSuspensionFieldChange() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['suspension', 'suspensionCount']);
+    }
+    // Una cuenta SUSPENDIDA no se re-aprueba desde el cliente (approval-service): dejaría
+    // suspension.active en true con la cuenta operando. Se levanta por /api/admin/lift-suspension
+    // o /api/admin/resolve-appeal, que escriben las dos cosas juntas en una transacción.
+    function touchesSuspendedApproval() {
+      return resource.data.get('suspension', {}).get('active', false) == true &&
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['isApproved', 'status']);
+    }
     function isStoreOwner(storeId) {
       return get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid;
     }
@@ -93,7 +107,8 @@ service cloud.firestore {
       // estado, CBU — acceso completo, igual que antes. O el PROPIO usuario sobre su doc,
       // pero limitado a perfil/direcciones/favoritos/disponibilidad/CBU/tokens: nunca puede
       // tocar isApproved/role/status/rating por este camino.
-      allow update: if (isAdmin() && (!isAdminRoleChange() || isFullAdmin()) && (!isMoneyFieldChange() || isFullAdmin())) || (
+      allow update: if (isAdmin() && (!isAdminRoleChange() || isFullAdmin()) && (!isMoneyFieldChange() || isFullAdmin()) &&
+          !isSuspensionFieldChange() && !touchesSuspendedApproval()) || (
         isOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'displayName', 'photoURL', 'profileImageUrl', 'phoneNumber',
@@ -146,7 +161,8 @@ service cloud.firestore {
       // dueño sobre SU PROPIA tienda: edición de perfil, horarios, pausa manual,
       // categorías, CBU, y el recálculo automático de maxDiscountPercent (Fase V). Nunca
       // isApproved / rating / ratingCount / ownerId / commissionRate por este camino.
-      allow update: if (isAdmin() && (!isMoneyFieldChange() || isFullAdmin())) || (
+      allow update: if (isAdmin() && (!isMoneyFieldChange() || isFullAdmin()) &&
+          !isSuspensionFieldChange() && !touchesSuspendedApproval()) || (
         isSignedIn() && isOwner(resource.data.ownerId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'description', 'category', 'address', 'imageUrl', 'deliveryTime',
@@ -404,6 +420,15 @@ service cloud.firestore {
     // marcaron. Solo el admin las lee; nadie las escribe desde el cliente.
     match /claim_risk/{claimId} {
       allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // 5c-quater-ter. APELACIONES DE SUSPENSIÓN (Fase YY ter, Tanda C) — las crea
+    // /api/account/appeal y las resuelve /api/admin/resolve-appeal (Admin SDK): una por
+    // suspensión, con aviso y auditoría. El dueño lee las SUYAS (comparación contra el campo
+    // propio del doc, sin get() cruzado); el admin, todas. Nadie escribe desde el cliente.
+    match /account_appeals/{appealId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
       allow create, update, delete: if false;
     }
 

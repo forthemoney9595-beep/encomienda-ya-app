@@ -5,7 +5,7 @@ import type { DeliveryPersonnel } from './delivery-personnel-list';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { MoreVertical, Edit, Trash2, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { MoreVertical, Edit, Trash2, CheckCircle, XCircle, Loader2, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 
 interface PersonnelActionsProps {
@@ -13,9 +13,10 @@ interface PersonnelActionsProps {
     onStatusUpdate: (personnelId: string, status: 'approved' | 'rejected') => void;
     onEdit: (driver: DeliveryPersonnel) => void;
     onDelete: (driverId: string) => void;
+    onSuspend: (driver: DeliveryPersonnel) => void;
 }
 
-export function PersonnelActions({ driver, onStatusUpdate, onEdit, onDelete }: PersonnelActionsProps) {
+export function PersonnelActions({ driver, onStatusUpdate, onEdit, onDelete, onSuspend }: PersonnelActionsProps) {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
@@ -42,6 +43,16 @@ export function PersonnelActions({ driver, onStatusUpdate, onEdit, onDelete }: P
                   <DropdownMenuItem className="text-destructive" onClick={() => handleStatusUpdate(driver.id, 'rejected')}>
                       <XCircle className="mr-2 h-4 w-4" />
                       Rechazar
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              {/* Fase YY ter: un repartidor ACTIVO se suspende con motivo (nunca "rechazar"). */}
+              {driver.status === 'Activo' && (
+                <>
+                  <DropdownMenuItem className="text-destructive" onClick={() => onSuspend(driver)} data-testid="menu-suspend">
+                      <ShieldAlert className="mr-2 h-4 w-4" />
+                      Suspender…
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>

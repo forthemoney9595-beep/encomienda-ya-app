@@ -22,6 +22,7 @@ import {
 import { normalizeSchedule, getStoreOpenStatus, describeSchedule } from '@/lib/store-hours';
 import { StorePauseControl } from '@/components/store-pause-control';
 import { StoreComplianceCard } from '@/components/store-compliance-card';
+import { SuspensionNotice } from '@/components/suspension-notice';
 
 const PRODUCT_STATES = ['Pendiente de Pago', 'En preparación', 'En reparto', 'En camino'];
 
@@ -144,6 +145,9 @@ export default function StoreDashboardPage() {
           )}
         </div>
       </PageHeader>
+
+      {/* Suspensión con debido proceso (Fase YY ter): motivo, hasta cuándo y "Apelar". */}
+      <SuspensionNotice />
 
       {/* Estado de la tienda + pausa con tiempo (Fase YY: 30 min / 1 h / hasta reactivar) */}
       <StorePauseControl

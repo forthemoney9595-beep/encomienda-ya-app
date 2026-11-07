@@ -10,7 +10,7 @@ import {
 
 /** Claves de los contadores reales de useAdminCounts (un badge = un count() server-side). */
 export type AdminCountKey =
-  | 'claimsOpen' | 'mismatchesOpen' | 'incidentsOpen'
+  | 'claimsOpen' | 'mismatchesOpen' | 'incidentsOpen' | 'appealsOpen'
   | 'pendingStores' | 'pendingDrivers' | 'withdrawalsPending' | 'inboxTotal';
 
 export interface AdminNavItem {

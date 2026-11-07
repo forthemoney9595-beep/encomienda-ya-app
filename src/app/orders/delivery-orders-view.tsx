@@ -41,6 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SuspensionNotice } from '@/components/suspension-notice';
 
 const RELEASE_REASONS = ['Se me rompió el vehículo', 'Emergencia personal', 'No pude ubicar la dirección'];
 const PROBLEM_REASONS = ['El cliente no responde', 'Dirección incorrecta/inaccesible', 'El cliente rechazó el pedido', 'El cliente no tiene el código de entrega'];
@@ -90,6 +91,8 @@ export default function DeliveryOrdersView() {
   // escritura igual (permission-denied silencioso). Ver Fase admin donde se corrigieron
   // los 3 caminos que podían dejar status y isApproved desincronizados.
   const isApprovedDriver = (userProfile as any)?.isApproved === true;
+  // Fase YY ter: suspendido ≠ pendiente. Termina lo que lleva, no toma nuevos, y ve el motivo.
+  const isSuspended = userProfile?.suspension?.active === true;
 
   // 1. PESTAÑA ACTIVA
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'available');
@@ -117,14 +120,17 @@ export default function DeliveryOrdersView() {
   // Pago" a propósito: la tienda todavía no confirmó que tiene stock, no correspondería
   // que cualquier repartidor vea esos pedidos todavía.
   const availableQuery = useMemo(() => {
-     if (!firestore) return null;
+     // Fase YY ter: el pool solo lo puede leer un repartidor APROBADO (isApprovedDriver() en
+     // las reglas). Para un pendiente o suspendido la consulta fallaba entera con
+     // permission-denied (ruido en consola/Sentry): no se arma.
+     if (!firestore || !isApprovedDriver) return null;
      return query(
        collection(firestore, 'orders'),
        // Que no tengan repartidor asignado
        where('deliveryPersonId', '==', null),
        where('status', 'in', ['En preparación', 'Listo para recoger'])
      );
-  }, [firestore]);
+  }, [firestore, isApprovedDriver]);
 
   const { data: allAvailableOrders, isLoading: availableLoading } = useCollection<Order>(availableQuery);
   // Un repartidor puede COMPRAR como cualquier vecino (decisión de producto, 18/8), pero
@@ -187,8 +193,10 @@ export default function DeliveryOrdersView() {
     if (!isApprovedDriver) {
       toast({
         variant: 'destructive',
-        title: 'Cuenta pendiente de aprobación',
-        description: 'Un administrador debe aprobar tu cuenta antes de que puedas tomar pedidos.',
+        title: isSuspended ? 'Cuenta suspendida' : 'Cuenta pendiente de aprobación',
+        description: isSuspended
+          ? 'No podés tomar pedidos nuevos mientras dure la suspensión. Mirá el motivo arriba y, si no estás de acuerdo, apelá.'
+          : 'Un administrador debe aprobar tu cuenta antes de que puedas tomar pedidos.',
       });
       return;
     }
@@ -323,20 +331,21 @@ export default function DeliveryOrdersView() {
       <div className="flex items-center justify-between mb-6 gap-3">
           <h2 className="text-2xl font-bold tracking-tight">Panel de Repartidor</h2>
           <div className="flex items-center gap-3">
-              <Badge variant="outline" className="hidden sm:flex">{isApprovedDriver ? 'Zona Activa' : 'Pendiente'}</Badge>
+              <Badge variant="outline" className="hidden sm:flex">{isApprovedDriver ? 'Zona Activa' : isSuspended ? 'Suspendida' : 'Pendiente'}</Badge>
               {isApprovedDriver && <DeliveryOnlineToggle />}
           </div>
       </div>
 
-      {!isApprovedDriver && (
+      {isSuspended && <SuspensionNotice className="mb-6" />}
+
+      {!isApprovedDriver && !isSuspended && (
         <div className="mb-6 rounded-xl border border-warning/40 bg-warning/10 p-4 flex items-start gap-3">
           <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold text-sm text-warning">Tu cuenta está pendiente de aprobación</p>
             <p className="text-sm text-muted-foreground mt-0.5">
               Un administrador tiene que revisar y aprobar tus datos (vehículo y licencia) antes de que
-              puedas tomar pedidos. Mientras tanto podés ver los pedidos disponibles, pero no aceptarlos.
-              Asegurate de haber subido las 3 fotos de tu licencia en tu perfil.
+              puedas tomar pedidos. Asegurate de haber subido las 3 fotos de tu licencia en tu perfil.
             </p>
           </div>
         </div>
@@ -429,7 +438,7 @@ export default function DeliveryOrdersView() {
                         disabled={!isApprovedDriver || myActiveOrders.length >= MAX_ACTIVE_ORDERS}
                     >
                         {!isApprovedDriver
-                          ? 'Cuenta pendiente de aprobación'
+                          ? (isSuspended ? 'Cuenta suspendida' : 'Cuenta pendiente de aprobación')
                           : myActiveOrders.length >= MAX_ACTIVE_ORDERS
                           ? `Ya tenés ${MAX_ACTIVE_ORDERS} pedidos en curso`
                           : 'Tomar Pedido'}

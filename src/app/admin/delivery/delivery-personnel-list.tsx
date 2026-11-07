@@ -24,7 +24,7 @@ export interface DeliveryPersonnel {
   id: string;
   name: string;
   email: string;
-  status: 'Activo' | 'Inactivo' | 'Pendiente' | 'Rechazado';
+  status: 'Activo' | 'Inactivo' | 'Pendiente' | 'Rechazado' | 'Suspendido';
   phoneNumber?: string;
   vehicle?: string | { type?: string; plate?: string; model?: string; color?: string };
   profileImageUrl?: string;
@@ -42,6 +42,8 @@ interface DeliveryPersonnelListProps {
     onStatusUpdate: (personnelId: string, status: 'approved' | 'rejected') => void;
     onEdit: (driver: DeliveryPersonnel) => void;
     onDelete: (driverId: string) => void;
+    /** Fase YY ter: suspender (con motivo y apelación) a un repartidor YA aprobado. */
+    onSuspend: (driver: DeliveryPersonnel) => void;
 }
 
 const getStatusVariant = (status: string) => {
@@ -49,12 +51,13 @@ const getStatusVariant = (status: string) => {
       case 'Activo': return 'secondary';
       case 'Pendiente': return 'default';
       case 'Inactivo':
+      case 'Suspendido':
       case 'Rechazado': return 'destructive';
       default: return 'outline';
     }
 };
 
-export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDelete }: DeliveryPersonnelListProps) {
+export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDelete, onSuspend }: DeliveryPersonnelListProps) {
   const { user: adminUser } = useAuth();
   const [selectedDriver, setSelectedDriver] = useState<DeliveryPersonnel | null>(null);
   // Fotos de licencia: URLs firmadas de corta duración, nunca el link permanente con token
@@ -145,6 +148,7 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                         onStatusUpdate={onStatusUpdate}
                         onEdit={onEdit as any}
                         onDelete={onDelete}
+                        onSuspend={onSuspend}
                       />
                     </TableCell>
                   </TableRow>
@@ -234,7 +238,26 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                     )}
                 </div>
 
-                {selectedDriver && (
+                {/* Aprobar/Rechazar solo para solicitudes (Pendiente) o cuentas que nunca
+                    operaron (Rechazado/Inactivo). A un repartidor ACTIVO no se lo "rechaza":
+                    se lo suspende con motivo y derecho a apelar (Fase YY ter). Antes este
+                    modal mostraba "Rechazar" para cualquier estado = desactivar sin motivo. */}
+                {selectedDriver && selectedDriver.status === 'Activo' && (
+                    <div className="flex gap-2 pt-2">
+                        <Button variant="destructive" className="w-full" data-testid="modal-suspend" onClick={() => {
+                            onSuspend(selectedDriver);
+                            setSelectedDriver(null);
+                        }}>
+                            Suspender…
+                        </Button>
+                    </div>
+                )}
+                {selectedDriver && selectedDriver.status === 'Suspendido' && (
+                    <p className="pt-2 text-sm text-muted-foreground">
+                        Cuenta suspendida. Para levantar la suspensión o resolver su apelación, abrí la ficha completa.
+                    </p>
+                )}
+                {selectedDriver && !['Activo', 'Suspendido'].includes(selectedDriver.status) && (
                     <div className="flex gap-2 pt-2">
                         <Button className="w-full bg-success hover:bg-success/90 text-success-foreground" onClick={() => {
                             onStatusUpdate(selectedDriver.id, 'approved');

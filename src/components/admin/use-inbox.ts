@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { collection, limit, orderBy, query, Timestamp, where, type Query } from 'firebase/firestore';
-import { Bike, Clock, MessageSquareWarning, Scale, Siren, Store, TimerOff, Wallet } from 'lucide-react';
+import { Bike, Clock, Gavel, MessageSquareWarning, Scale, Siren, Store, TimerOff, Wallet } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { db, useCollection, useMemoFirebase } from '@/lib/firebase';
 import { toMillis } from '@/lib/format-date';
@@ -15,6 +15,7 @@ import { computeStoreAlerts, STORE_ALERT_THRESHOLD, STORE_ALERT_WINDOW_MIN, FAIL
 import { isStorePaused, pausedUntilMs } from '@/lib/store-hours';
 import { fmtDate } from '@/lib/format-date';
 import { useConfirmTimeoutWatcher } from '@/hooks/use-confirm-timeout';
+import { reasonLabelOf } from '@/lib/suspension';
 import type { InboxItem, InboxSourceError } from './inbox-list';
 
 /** Tope por fuente: si el count real supera esto, la UI avisa "Hay N más, filtrá por tipo". */
@@ -28,6 +29,7 @@ export interface InboxRaw {
   withdrawals: Record<string, unknown>[];
   activeOrders: Order[];
   pausedStores: Record<string, unknown>[];
+  appeals: Record<string, unknown>[];
 }
 
 export interface UseInboxResult {
@@ -70,6 +72,9 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
   // (claim_risk solo existe si hubo señal; al resolver el reclamo pasa a resolved:true).
   // Índice claim_risk (resolved, createdAt DESC).
   const riskQ = useMemoFirebase<Query | null>(() => (enabled ? query(collection(db, 'claim_risk'), where('resolved', '==', false), orderBy('createdAt', 'desc'), limit(INBOX_SOURCE_LIMIT)) : null), [enabled]);
+  // Apelaciones de suspensión abiertas (Fase YY ter). Índice account_appeals (resolved, createdAt DESC).
+  const appealsQ = useMemoFirebase<Query | null>(() => (enabled ? query(collection(db, 'account_appeals'), where('resolved', '==', false), orderBy('createdAt', 'desc'), limit(INBOX_SOURCE_LIMIT)) : null), [enabled]);
+  const appeals = useCollection<Any>(appealsQ);
   const claims = useCollection<Any>(claimsQ);
   const claimRisk = useCollection<Any>(riskQ);
   const mismatches = useCollection<Any>(mismatchesQ);
@@ -112,8 +117,9 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
     if (withdrawals.error) out.push({ source: 'Retiros', error: withdrawals.error });
     if (active.error) out.push({ source: 'Pedidos activos', error: active.error });
     if (decisions.error) out.push({ source: 'Cumplimiento de tiendas', error: decisions.error });
+    if (appeals.error) out.push({ source: 'Apelaciones', error: appeals.error });
     return out;
-  }, [claims.error, claimRisk.error, mismatches.error, incidents.error, pending.error, withdrawals.error, active.error, decisions.error]);
+  }, [appeals.error, claims.error, claimRisk.error, mismatches.error, incidents.error, pending.error, withdrawals.error, active.error, decisions.error]);
 
   const stuck = useMemo(() => computeStuckOrders(active.data ?? [], now), [active.data, now]);
 
@@ -162,6 +168,19 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
         subtitle: `${signals.length ? `⚠ ${signals.map(s => s.label).join(' · ')} · ` : ''}${str(c.userName, 'comprador')} · ${str(c.storeName, 'tienda')} · ${prev === 0 ? '1er reclamo' : `${prev + 1}º reclamo, ${prevRef} reembolsado${prevRef === 1 ? '' : 's'}`}`,
         amount: num(c.suggestedAmount), since: toMillis(c.createdAt), href: `/admin/claims`,
         meta: { docId: c.id, orderId: str(c.orderId), risk: signals.map(s => s.code) },
+      });
+    });
+
+    // Apelaciones: severidad ALTA — hay una persona sin poder trabajar esperando respuesta.
+    (appeals.data ?? []).forEach((a) => {
+      const isStore = str(a.role) === 'store';
+      out.push({
+        id: `ap-${a.id}`, kind: 'appeal', severity: 'destructive', group: 'disputes', icon: Gavel,
+        title: `Apelación · ${isStore ? 'tienda' : 'repartidor'} ${str(a.accountName, 'cuenta')} · ${reasonLabelOf(a.suspensionReason)}`,
+        subtitle: str(a.text).slice(0, 140),
+        since: toMillis(a.createdAt),
+        href: isStore && str(a.storeId) ? `/admin/stores/${str(a.storeId)}` : `/admin/delivery/${str(a.uid)}`,
+        meta: { docId: a.id, uid: str(a.uid), accountName: str(a.accountName), text: str(a.text) },
       });
     });
 
@@ -214,9 +233,9 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
     });
 
     return out;
-  }, [mismatches.data, withdrawals.data, claims.data, claimRisk.data, incidents.data, pending.data, stuck, now, storeAlerts, pausedStores.data]);
+  }, [appeals.data, mismatches.data, withdrawals.data, claims.data, claimRisk.data, incidents.data, pending.data, stuck, now, storeAlerts, pausedStores.data]);
 
-  const loading = claims.isLoading || mismatches.isLoading || incidents.isLoading || pending.isLoading || active.isLoading || (isFullAdmin && withdrawals.isLoading);
+  const loading = appeals.isLoading || claims.isLoading || mismatches.isLoading || incidents.isLoading || pending.isLoading || active.isLoading || (isFullAdmin && withdrawals.isLoading);
 
   return {
     items, loading, errors, now, stuckCount: stuck.length, storeAlertCount: storeAlerts.length,
@@ -224,6 +243,7 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
       claims: claims.data ?? [], mismatches: mismatches.data ?? [], incidents: incidents.data ?? [],
       pendingUsers: pending.data ?? [], withdrawals: withdrawals.data ?? [], activeOrders: active.data ?? [],
       pausedStores: pausedStores.data ?? [],
+      appeals: appeals.data ?? [],
     },
   };
 }
