@@ -8,7 +8,7 @@ import { db, useCollection, useMemoFirebase } from '@/lib/firebase';
 import { toMillis } from '@/lib/format-date';
 import { money } from '@/lib/format-money';
 import { reasonLabel } from '@/lib/payment-issues';
-import { CLAIM_TYPES, type ClaimType } from '@/lib/claim-types';
+import { CLAIM_TYPES, type ClaimType, type ClaimRiskSignal } from '@/lib/claim-types';
 import { ADMIN_ACTIVE_STATUSES, computeStuckOrders } from '@/lib/order-stuck';
 import type { Order } from '@/lib/order-service';
 import { computeStoreAlerts, STORE_ALERT_THRESHOLD, STORE_ALERT_WINDOW_MIN, FAILED_DECISIONS, type DecisionRow } from '@/lib/store-compliance';
@@ -66,7 +66,12 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
   const withdrawalsQ = useMemoFirebase<Query | null>(() => (enabled && isFullAdmin ? query(collection(db, 'withdrawals'), where('status', '==', 'pending'), orderBy('createdAt', 'desc'), limit(INBOX_SOURCE_LIMIT)) : null), [enabled, isFullAdmin]);
   const activeQ = useMemoFirebase<Query | null>(() => (enabled ? query(collection(db, 'orders'), where('status', 'in', [...ADMIN_ACTIVE_STATUSES])) : null), [enabled]);
 
+  // Señales antifraude (Fase YY bis): set chico de reclamos ABIERTOS con alguna señal
+  // (claim_risk solo existe si hubo señal; al resolver el reclamo pasa a resolved:true).
+  // Índice claim_risk (resolved, createdAt DESC).
+  const riskQ = useMemoFirebase<Query | null>(() => (enabled ? query(collection(db, 'claim_risk'), where('resolved', '==', false), orderBy('createdAt', 'desc'), limit(INBOX_SOURCE_LIMIT)) : null), [enabled]);
   const claims = useCollection<Any>(claimsQ);
+  const claimRisk = useCollection<Any>(riskQ);
   const mismatches = useCollection<Any>(mismatchesQ);
   const incidents = useCollection<Any>(incidentsQ);
   const pending = useCollection<Any>(pendingQ);
@@ -100,6 +105,7 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
   const errors = useMemo<InboxSourceError[]>(() => {
     const out: InboxSourceError[] = [];
     if (claims.error) out.push({ source: 'Reclamos', error: claims.error });
+    if (claimRisk.error) out.push({ source: 'Señales de riesgo de reclamos', error: claimRisk.error });
     if (mismatches.error) out.push({ source: 'Discrepancias de pago', error: mismatches.error });
     if (incidents.error) out.push({ source: 'Incidentes', error: incidents.error });
     if (pending.error) out.push({ source: 'Aprobaciones', error: pending.error });
@@ -107,7 +113,7 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
     if (active.error) out.push({ source: 'Pedidos activos', error: active.error });
     if (decisions.error) out.push({ source: 'Cumplimiento de tiendas', error: decisions.error });
     return out;
-  }, [claims.error, mismatches.error, incidents.error, pending.error, withdrawals.error, active.error, decisions.error]);
+  }, [claims.error, claimRisk.error, mismatches.error, incidents.error, pending.error, withdrawals.error, active.error, decisions.error]);
 
   const stuck = useMemo(() => computeStuckOrders(active.data ?? [], now), [active.data, now]);
 
@@ -141,16 +147,21 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
       });
     });
 
+    const riskById = new Map<string, ClaimRiskSignal[]>();
+    (claimRisk.data ?? []).forEach((r) => { if (Array.isArray(r.signals) && r.signals.length) riskById.set(str(r.claimId) || String(r.id), r.signals as ClaimRiskSignal[]); });
+
     (claims.data ?? []).forEach((c) => {
       const type = str(c.type) as ClaimType;
       const label = CLAIM_TYPES[type]?.label || type || 'Reclamo';
       const prev = num(c.previousClaims) ?? 0; const prevRef = num(c.previousRefunded) ?? 0;
+      // Con alguna señal antifraude el ítem sube a rojo (sin bloquear nada: decide el admin).
+      const signals = riskById.get(String(c.id)) ?? [];
       out.push({
-        id: `c-${c.id}`, kind: 'claim', severity: 'warning', group: 'disputes', icon: MessageSquareWarning,
+        id: `c-${c.id}`, kind: 'claim', severity: signals.length ? 'destructive' : 'warning', group: 'disputes', icon: MessageSquareWarning,
         title: `Reclamo · ${label} · pedido #${str(c.orderId).slice(0, 7)}`,
-        subtitle: `${str(c.userName, 'comprador')} · ${str(c.storeName, 'tienda')} · ${prev === 0 ? '1er reclamo' : `${prev + 1}º reclamo, ${prevRef} reembolsado${prevRef === 1 ? '' : 's'}`}`,
+        subtitle: `${signals.length ? `⚠ ${signals.map(s => s.label).join(' · ')} · ` : ''}${str(c.userName, 'comprador')} · ${str(c.storeName, 'tienda')} · ${prev === 0 ? '1er reclamo' : `${prev + 1}º reclamo, ${prevRef} reembolsado${prevRef === 1 ? '' : 's'}`}`,
         amount: num(c.suggestedAmount), since: toMillis(c.createdAt), href: `/admin/claims`,
-        meta: { docId: c.id, orderId: str(c.orderId) },
+        meta: { docId: c.id, orderId: str(c.orderId), risk: signals.map(s => s.code) },
       });
     });
 
@@ -203,7 +214,7 @@ export function useInboxItems(opts: { enabled?: boolean } = {}): UseInboxResult 
     });
 
     return out;
-  }, [mismatches.data, withdrawals.data, claims.data, incidents.data, pending.data, stuck, now, storeAlerts, pausedStores.data]);
+  }, [mismatches.data, withdrawals.data, claims.data, claimRisk.data, incidents.data, pending.data, stuck, now, storeAlerts, pausedStores.data]);
 
   const loading = claims.isLoading || mismatches.isLoading || incidents.isLoading || pending.isLoading || active.isLoading || (isFullAdmin && withdrawals.isLoading);
 

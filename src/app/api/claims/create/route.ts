@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthToken } from "@/lib/auth-server";
@@ -12,7 +12,10 @@ import {
   STUCK_CLAIMABLE_STATUSES,
   lastMovementMillis,
   toMillis,
+  computeClaimRiskSignals,
+  REPEAT_CLAIMS_WINDOW_DAYS,
   type ClaimType,
+  type ClaimRiskSignal,
 } from "@/lib/claim-types";
 
 // El comprador reporta un problema con su pedido (Fase NN). Mismo criterio que el
@@ -163,6 +166,30 @@ export async function POST(request: Request) {
       Sentry.captureException(e, { tags: { area: "claims-create" }, extra: { step: "fraud-counters" } });
     }
 
+    // Señales antifraude (Fase YY bis, punto 8) — calculadas acá, nunca en el cliente, y
+    // guardadas en `claim_risk/{claimId}` (solo admin): el comprador lee su propio doc de
+    // `claims`, así que las señales NO pueden ir ahí. No bloquean nada.
+    let riskSignals: ClaimRiskSignal[] = [];
+    try {
+      const cutoff = Timestamp.fromMillis(now - REPEAT_CLAIMS_WINDOW_DAYS * 86_400_000);
+      const [authUser, recentSnap] = await Promise.all([
+        adminAuth.getUser(callerUid).catch(() => null),
+        // orderBy desc para usar el índice claims (userId, createdAt DESC) que ya existe.
+        adminDb.collection("claims").where("userId", "==", callerUid)
+          .where("createdAt", ">=", cutoff).orderBy("createdAt", "desc").count().get(),
+      ]);
+      const created = authUser?.metadata?.creationTime ? Date.parse(authUser.metadata.creationTime) : NaN;
+      riskSignals = computeClaimRiskSignals({
+        type: String(type),
+        deliveryPinVerified: order.deliveryPinVerified === true,
+        accountCreatedMs: Number.isFinite(created) ? created : null,
+        nowMs: now,
+        previousClaimsInWindow: recentSnap.data().count,
+      });
+    } catch (e) {
+      Sentry.captureException(e, { tags: { area: "claims-create" }, extra: { step: "risk-signals" } });
+    }
+
     // Crear el reclamo y marcar el pedido en la MISMA transacción: el chequeo de
     // "un reclamo por pedido" no sirve si dos requests simultáneas pasan el get de arriba.
     const claimRef = adminDb.collection("claims").doc();
@@ -187,6 +214,16 @@ export async function POST(request: Request) {
         createdAt: Timestamp.now(),
       });
       tx.update(orderRef, { hasClaim: true, claimId: claimRef.id });
+      if (riskSignals.length > 0) {
+        tx.create(adminDb.collection("claim_risk").doc(claimRef.id), {
+          claimId: claimRef.id,
+          orderId,
+          userId: callerUid,
+          signals: riskSignals,
+          resolved: false,
+          createdAt: Timestamp.now(),
+        });
+      }
     });
 
     // Confirmación al comprador (campanita + push). El admin lo ve en su bandeja de

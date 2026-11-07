@@ -218,11 +218,14 @@ service cloud.firestore {
         // la comisión CONGELADA de un pedido desde la consola y alterar el saldo de la
         // tienda (payout-service la deriva de esos campos). Ningún flujo legítimo del
         // cliente escribe estos campos en un pedido — van por las API con Admin SDK.
+        // Fase YY bis: `refundAllocation` (quién absorbe el reembolso) define cuánto se le
+        // descuenta a la tienda y al repartidor — es plata: solo /api/admin/refund-order.
         (isAdmin() &&
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'total', 'subtotal', 'serviceFee', 'deliveryFee', 'items',
             'paymentStatus', 'refunded', 'refundAmount', 'paidAmount',
-            'commissionRate', 'commissionAmount'
+            'commissionRate', 'commissionAmount',
+            'refundAllocation', 'refundAllocationPreset'
           ])) ||
 
         // TIENDA: solo rechazar el pedido o marcarlo listo para retirar, y avisar al
@@ -392,6 +395,15 @@ service cloud.firestore {
     // comprador y deja auditoría, cosas que un updateDoc directo se saltearía.
     match /claims/{claimId} {
       allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // 5c-quater-bis. SEÑALES ANTIFRAUDE DE RECLAMOS (Fase YY bis) — las calcula
+    // /api/claims/create con Admin SDK. Van en una colección APARTE porque el comprador
+    // puede leer su propio doc de `claims`: si las señales vivieran ahí, vería que lo
+    // marcaron. Solo el admin las lee; nadie las escribe desde el cliente.
+    match /claim_risk/{claimId} {
+      allow read: if isAdmin();
       allow create, update, delete: if false;
     }
 

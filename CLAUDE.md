@@ -3147,6 +3147,131 @@ Regresión verde: confirm-vs-cancel 19/19, stock 13/13, adjust-qty 19/19.
 pestañas de la tienda abiertas un día entero (los timers son por pestaña; el servidor
 deduplica).
 
+## Fase YY bis (nov 2026): plata al estándar Rappi/PedidosYa — Tanda B
+Puntos 1, 2, 7 y 8 de la bóveda [[Cómo administran Rappi y PedidosYa (07-11)]], aprobados por
+David. Rama `admin-pro`. Webhook, `approve-withdrawal`, `reject-withdrawal`,
+`withdrawals/request` y el cron de liquidación quedaron INTACTOS (solo se leyeron).
+
+**1 — Quién absorbe cada reembolso (punto 7).** Hallazgo: `refundRatio` bajaba
+proporcionalmente a tienda, repartidor y plataforma, así que un reembolso por un ítem que la
+tienda no mandó le descontaba plata al repartidor.
+- **Campo nuevo `orders.refundAllocation: { store, driver, platform }`** (pesos, suma
+  `refundAmount`) + `refundAllocationPreset`, escritos SOLO por `/api/admin/refund-order` dentro
+  de la misma transacción que registra el reembolso; copia en `refunds.allocation` /
+  `allocationPreset` (+ `deliveryPersonId`). **Sin el campo = proporcional de siempre**: lo
+  histórico no cambia (verificado con `_audit-money.js`, mismos números al peso).
+- **`money.ts` (única fórmula):** `grossSharesForOrder` (bruto de cada parte: tienda = base −
+  comisión, repartidor = envío, plataforma = tarifa + comisión), `refundSharesForOrder`
+  (cuánto absorbió cada una; proporcional = bruto − neto), y con asignación: neto tienda =
+  bruto − `store`, repartidor = envío − `driver`, plataforma = (tarifa + comisión) −
+  `platform`, repartido entre tarifa y comisión en proporción para que
+  `platformBreakdownForOrder` siga devolviendo `serviceFee`/`commission`/`total`. Sin
+  asignación, `storeNetForOrder`/`driverNetForOrder`/`platformBreakdownForOrder` ejecutan
+  EXACTAMENTE la expresión vieja. **Invariante con test: tienda + repartidor + plataforma =
+  total − reembolso** en proporcional, cada preset, personalizado, parcial y total.
+- Funciones puras compartidas por el diálogo y la ruta: `suggestRefundAllocation(o, rate,
+  amount, preset)` (si la parte elegida no alcanza, el EXCEDENTE va a la plataforma y, si
+  tampoco alcanza, a las otras partes en proporción; devuelve `overflow` para mostrarlo),
+  `validateRefundAllocation` (cada parte ≥ 0, tienda ≤ su neto bruto, repartidor ≤ envío,
+  plataforma ≤ tarifa + comisión, suma = monto con tolerancia $1; devuelve la asignación
+  NORMALIZADA, suma exacta) y `refundAllocationCaps`. La ruta además rechaza asignar algo a
+  tienda/repartidor en un pedido NO entregado (no cobraron nada: el aviso sería falso), algo al
+  repartidor si no hay repartidor, y responde 409 si el pedido cambió entre la validación y la
+  transacción. Comisión por defecto = la de la tienda si tiene, si no `config` (mismo criterio
+  que `computeStoreBalance`).
+- **`RefundDialog` único** (pedidos, ficha, reclamos —que tenía su propio diálogo y se migró—
+  y conciliación): lee el pedido completo al abrir (1-3 lecturas), selector "¿Quién absorbe
+  este reembolso?" (Proporcional / La tienda / El repartidor / La plataforma / Personalizado)
+  con el reparto resultante, lo que le queda a cada parte y el excedente ANTES de confirmar.
+  **Sugerencia por tipo de reclamo** = `CLAIM_REFUND_ABSORBER` en `claim-types.ts`
+  (faltó/mal estado/otro producto → la tienda; no llegó → la plataforma; trabado/otro y sin
+  reclamo → proporcional). Es solo el preset marcado: el admin elige y confirma. En pedidos no
+  entregados o en efectivo no muestra el selector y no manda asignación. `DialogContent` lleva
+  `data-surface="admin"`: el Dialog se porta a `<body>`, fuera del shell, y sin eso los tokens
+  `-ink` no existen (afectaba al diálogo desde T1).
+- **Transparencia:** si la tienda o el repartidor absorben algo, `notifyUser` (tipo
+  `refund_charge`, link a su billetera, sin `orderId` para que el push abra la billetera): "Se
+  descontaron $X de tu saldo por el reembolso del pedido #… Motivo: …". La asignación se ve en
+  `/admin/finances/refunds` (columna "Quién absorbe" + CSV), en la ficha admin del pedido
+  (bloque "Quién absorbió el reembolso") y como DETALLE de la fila del pedido en el estado de
+  cuenta (nunca fila aparte: restaría dos veces). Auditoría `refund_order` con el reparto.
+- **Reglas:** `refundAllocation` y `refundAllocationPreset` agregados a los campos de plata de
+  `orders` que el admin NO puede escribir directo. `platform_daily`/`platform_monthly` ya usan
+  money.ts: un reembolso con asignación cambia el día correcto (test de `aggregateDailyOrders`).
+
+**2 — Estado de cuenta y día de cobro en las billeteras (puntos 1 y 2).**
+- **`src/lib/account-movements.ts` (puro):** `buildStoreStatement` / `buildDriverStatement`
+  (antes el armado estaba copiado en las dos fichas del admin, que ahora lo importan) y
+  `storeWeeklyCsvRows` / `driverWeeklyCsvRows`. Todo con money.ts. Fecha de un pedido en el
+  estado de cuenta = la de ENTREGA (`deliveredAt`, o `createdAt`).
+- **`src/lib/settlement-calendar.ts` (puro):** `nextSettlement(nowInArgentina(), dow)` (si hoy
+  es el día y no pasaron las 11:00 ART —el cron corre 14:00 UTC—, es hoy), `weekBoundsART`
+  (lunes 00:00 → lunes siguiente, UTC-3 fijo) y `monthBoundsART`.
+- **`src/components/wallet-statement.tsx`** en `/my-store/wallet` y `/delivery/earnings`:
+  "Próxima liquidación: viernes 14/11" con `config/platform.settlementDayOfWeek`, aclaración
+  de que se acredita cuando el admin aprueba y del CBU (lee `userProfile.payoutCbu`); el
+  `AccountStatement` de siempre (ganó props `periodLabel`, `balanceLabel`, `toolbar`,
+  `footer`, `title`, `description` y testids por chip) con selector Últimos 90 días (default)
+  / Esta semana / Semana pasada / Este mes / Mes pasado; consulta ACOTADA por rango
+  (`createdAt` ≥ desde − 3 días de colchón, < hasta, `orderBy desc`, `limit(500)`, índices
+  existentes `(storeId|deliveryPersonId, status, createdAt DESC)`), filtro fino por fecha de
+  entrega en memoria. El SALDO no se recalcula: lo pasa la página (el de siempre). Botón
+  "Descargar" del **resumen semanal** (lunes a domingo ART, últimas 8 semanas): tienda =
+  fecha, pedido, venta (productos), envío y tarifa (informativos), comisión, reembolso
+  absorbido y neto (identidad por fila: venta − comisión − absorbido = neto); repartidor =
+  solo envío, reembolso absorbido y neto. TOTAL al pie en centavos = el "Ganado" del estado de
+  cuenta de esa semana. `downloadCsv` (neutraliza `=+-@`).
+- **Facturación de la comisión (ARCA): NO implementada** — es tema del contador; comentario
+  en `wallet-statement.tsx`.
+
+**3 — Señales antifraude en reclamos (punto 8), sin bloqueos.** `/api/claims/create` calcula
+server-side (`computeClaimRiskSignals`, puro en `claim-types.ts`): **"no llegó" con PIN
+verificado**, **cuenta nueva** (Auth `metadata.creationTime` < 7 días) y **reclamos
+seguidos** (≥ 2 reclamos previos en 30 días: `count()` acotado con `orderBy desc` sobre el
+índice `claims (userId, createdAt DESC)`). Como el comprador lee su propio doc de `claims`,
+las señales van a **`claim_risk/{claimId}`** (solo si hay alguna; `read: isAdmin()`,
+escrituras solo Admin SDK), creado en la MISMA transacción que el reclamo. Al resolverse el
+reclamo (`refund-order` dentro de su transacción, `claims/resolve` best-effort después del
+update) pasa a `resolved: true`. **UI:** chips en `/admin/claims` (lee `claim_risk` por id de
+los reclamos de la página, chunks de 30), la Bandeja escucha `claim_risk where resolved ==
+false` (índice nuevo `claim_risk (resolved, createdAt DESC)`) y sube el reclamo a severidad
+roja con las señales en el subtítulo, y el `RefundDialog` advierte "el comprador dice que no
+le llegó, pero la entrega se confirmó con su PIN" (para reclamos anteriores lo deduce de
+`order.deliveryPinVerified`).
+
+**Reglas e índices desplegados** (dry-run limpio antes, ANTES de probar en vivo): reglas
+(`refundAllocation*` bloqueados al admin + `match /claim_risk`) e índice `claim_risk
+(resolved, createdAt DESC)` (46 → 47).
+
+**Verificación:** `tsc` 0 · lint 0 errores · Vitest 132/132 (44 nuevos: invariante en todos
+los casos, legado idéntico, presets/excedente, validaciones, `account-movements` +
+`settlement-calendar` + señales en `account-movements.test.ts`, día con asignación en
+`platform-daily.test.ts`) · `npm run test:rules` 25/25 (5 nuevos) · build OK.
+**`_audit-money.js` CUADRA con los mismos números de antes** (cobrado $120.960 → tiendas
+$83.090 / repartidores $18.900 / plataforma $18.970; pasivo $72.858); ahora además revisa en
+los reembolsados que reparto = total − reembolso y que la asignación sume lo devuelto.
+**`_e2e-refund-allocation.js` 50/50** (dev server + Firestore real; 5 pedidos por el camino
+real create → confirm-stock → pago de prueba → take → En reparto → confirm-delivery con PIN):
+señales (PIN + reclamos seguidos + cuenta nueva con un comprador temporal), el comprador NO
+lee `claim_risk` y sí su reclamo, validaciones (suma, negativo, repartidor > envío, 'support'
+403, pedido no entregado), cada preset + personalizado + reembolso TOTAL (campo escrito,
+netos de money.ts bajan exactamente lo asignado, invariante, copia en `refunds`), sin
+allocation = proporcional sin escribir el campo, saldos vía `/api/admin/liability`
+(= computeStoreBalance/computeDriverBalance) bajan exactamente lo absorbido, avisos con
+link a la billetera, el admin NO escribe `refundAllocation*` por SDK de cliente (regresión:
+sí un campo operativo); limpieza por consulta también en el catch, residuo cero.
+**`_pw-tanda-b.js` 42/42** a 1440 y 430 (estado de cuenta + próxima liquidación + CSV semanal
+con TOTAL = "Ganado" = Admin SDK en las dos billeteras, chips de riesgo, selector del diálogo
+con los 4 presets distintos + excedente + personalizado inválido SIN confirmar, Bandeja roja,
+ficha del pedido, columna de Reembolsos, 0 overflow, 0 pageerror, residuo cero). Regresión:
+payout 21/21, claims 31/31 (su limpieza ahora borra también `claim_risk`), concurrency
+12/12, `_pw-admin-t2` 76/76.
+El e2e importa el `money.ts` REAL (Node 24 hace type stripping de `.ts`; `claim-types.ts`
+también), no una copia.
+**A confirmar:** la facturación de la comisión (ARCA), con el contador; el push real del aviso
+"Se descontaron " en un celular; y con datos reales, si conviene que la sugerencia de "no
+llegó" cambie a "El repartidor" cuando el PIN está verificado (hoy se advierte, no se sugiere).
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

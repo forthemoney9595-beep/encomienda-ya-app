@@ -6,6 +6,13 @@ import { Timestamp } from "firebase-admin/firestore";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
+import { money } from "@/lib/format-money";
+import { FALLBACK_COMMISSION, validateRefundAllocation, type RefundAllocation, type RefundPreset } from "@/lib/money";
+
+const PRESETS: RefundPreset[] = ['proportional', 'store', 'driver', 'platform', 'custom'];
+const PRESET_LABEL: Record<RefundPreset, string> = {
+  proportional: 'proporcional', store: 'la tienda', driver: 'el repartidor', platform: 'la plataforma', custom: 'personalizado',
+};
 
 // Registra un reembolso/compensación sobre un pedido.
 // Nota: NO transfiere plata por sí solo -- deja registro del reembolso, marca el pedido
@@ -25,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { orderId, amount, reason, operationRef, claimId } = await request.json();
+    const { orderId, amount, reason, operationRef, claimId, allocation, allocationPreset } = await request.json();
     if (!orderId) return NextResponse.json({ error: "Falta orderId" }, { status: 400 });
 
     const numAmount = Number(amount);
@@ -55,7 +62,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Este pedido ya tiene un reembolso registrado." }, { status: 400 });
     }
     if (numAmount > (order.total || 0) + 1) {
-      return NextResponse.json({ error: `El reembolso ($${numAmount}) supera el total del pedido ($${order.total}).` }, { status: 400 });
+      return NextResponse.json({ error: `El reembolso (${money(numAmount)}) supera el total del pedido (${money(order.total)}).` }, { status: 400 });
+    }
+
+    // Quién absorbe el reembolso (Fase YY bis). Opcional: sin `allocation` el pedido queda
+    // con el reparto PROPORCIONAL de siempre (no se escribe el campo). Con ella se valida
+    // con la MISMA función pura que usa el diálogo (money.ts) y se guarda normalizada
+    // (suma exacta = monto, ninguna parte sobre lo que cobra de ese pedido).
+    let finalAllocation: RefundAllocation | null = null;
+    let finalPreset: RefundPreset | null = null;
+    const storeSnap = order.storeId ? await adminDb.collection('stores').doc(String(order.storeId)).get() : null;
+    const storeOwnerId: string | null = storeSnap?.data()?.ownerId || order.storeOwnerId || null;
+    if (allocation != null) {
+      const a = allocation as Partial<RefundAllocation>;
+      const touchesAccounts = (Number(a.store) || 0) > 0 || (Number(a.driver) || 0) > 0;
+      if (order.status !== 'Entregado') {
+        // Sin entrega no se le acreditó nada a nadie: el reembolso sale entero de lo que
+        // cobró la plataforma. Asignarle a la tienda o al repartidor algo que nunca
+        // cobraron les mandaría un aviso de descuento falso.
+        if (touchesAccounts) {
+          return NextResponse.json({ error: "Este pedido no se entregó: la tienda y el repartidor no cobraron nada de él. El reembolso sale de lo que cobró la plataforma." }, { status: 400 });
+        }
+      } else {
+        // Comisión por defecto: la de la tienda si tiene propia, si no la de config (mismo
+        // criterio que computeStoreBalance — si no, los topes no coinciden con el saldo).
+        let fallbackRate = FALLBACK_COMMISSION;
+        try {
+          const cfg = await adminDb.collection('config').doc('platform').get();
+          const storeRate = storeSnap?.data()?.commissionRate;
+          const def = cfg.data()?.defaultCommissionRate;
+          fallbackRate = typeof storeRate === 'number' && storeRate > 0 ? storeRate
+            : (typeof def === 'number' && def >= 0 ? def : FALLBACK_COMMISSION);
+        } catch { /* default */ }
+        const v = validateRefundAllocation(order, fallbackRate, numAmount, a);
+        if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
+        if (v.allocation.driver > 0 && !order.deliveryPersonId) {
+          return NextResponse.json({ error: "Este pedido no tiene repartidor asignado: no puede absorber nada del reembolso." }, { status: 400 });
+        }
+        finalAllocation = v.allocation;
+        finalPreset = PRESETS.includes(allocationPreset) ? allocationPreset : 'custom';
+      }
     }
 
     // Si el reembolso sale de un reclamo del comprador (Fase NN), se validan y linkean
@@ -80,21 +126,32 @@ export async function POST(request: Request) {
     // requests simultáneas podían registrar DOS reembolsos del mismo pedido. El re-chequeo
     // de `refunded` adentro de la transacción hace imposible el doble registro.
     const refundRef = adminDb.collection('refunds').doc();
+    const riskRef = claimRef ? adminDb.collection('claim_risk').doc(claimRef.id) : null;
     try {
       await adminDb.runTransaction(async (tx) => {
         const freshOrder = await tx.get(orderRef);
         if (!freshOrder.exists || freshOrder.data()!.refunded) {
           throw new Error('__ALREADY_REFUNDED__');
         }
+        // La asignación se validó contra el pedido leído arriba: si entre medio cambió el
+        // estado o la plata del pedido, se rechaza en vez de guardar topes viejos.
+        const fo = freshOrder.data()!;
+        if (finalAllocation && (fo.status !== order.status || fo.total !== order.total || fo.deliveryFee !== order.deliveryFee)) {
+          throw new Error('__ORDER_CHANGED__');
+        }
+        // Todas las lecturas antes de las escrituras (regla de las transacciones).
+        const riskSnap = riskRef ? await tx.get(riskRef) : null;
         if (claimRef) {
           const freshClaim = await tx.get(claimRef);
           if (!freshClaim.exists || freshClaim.data()!.resolved === true) {
             throw new Error('__CLAIM_RESOLVED__');
           }
+          // Las señales antifraude del reclamo salen de la Bandeja al resolverse.
+          if (riskRef && riskSnap?.exists) tx.update(riskRef, { resolved: true, resolvedAt: Timestamp.now() });
           tx.update(claimRef, {
             resolved: true,
             resolution: 'refunded',
-            resolutionNote: `Reembolso de $${numAmount.toLocaleString('es-AR')} · op ${opRef}`,
+            resolutionNote: `Reembolso de ${money(numAmount)} · op ${opRef}`,
             refundId: refundRef.id,
             resolvedAt: Timestamp.now(),
             resolvedBy: callerUid,
@@ -109,6 +166,8 @@ export async function POST(request: Request) {
           operationRef: opRef,
           adminUid: callerUid,
           ...(claimRef ? { claimId: claimRef.id } : {}),
+          ...(finalAllocation ? { allocation: finalAllocation, allocationPreset: finalPreset } : {}),
+          deliveryPersonId: order.deliveryPersonId || null,
           createdAt: Timestamp.now(),
         });
         tx.update(orderRef, {
@@ -118,11 +177,15 @@ export async function POST(request: Request) {
           refundOperationRef: opRef,
           refundedBy: callerUid,
           refundedAt: Timestamp.now(),
+          ...(finalAllocation ? { refundAllocation: finalAllocation, refundAllocationPreset: finalPreset } : {}),
         });
       });
     } catch (e: any) {
       if (e?.message === '__ALREADY_REFUNDED__') {
         return NextResponse.json({ error: "Este pedido ya tiene un reembolso registrado." }, { status: 400 });
+      }
+      if (e?.message === '__ORDER_CHANGED__') {
+        return NextResponse.json({ error: "El pedido cambió mientras registrabas el reembolso. Volvé a abrir el diálogo." }, { status: 409 });
       }
       if (e?.message === '__CLAIM_RESOLVED__') {
         return NextResponse.json({ error: "Este reclamo ya fue resuelto." }, { status: 400 });
@@ -137,9 +200,32 @@ export async function POST(request: Request) {
       await notifyUser({
         userId: order.userId,
         title: '💸 Reembolso enviado',
-        body: `Devolvimos $${Math.round(numAmount).toLocaleString('es-AR')} de tu pedido. Puede tardar unos días en verse acreditado según tu medio de pago.${reason ? ` Motivo: ${reason}` : ''}`,
+        body: `Devolvimos ${money(numAmount)} de tu pedido. Puede tardar unos días en verse acreditado según tu medio de pago.${reason ? ` Motivo: ${reason}` : ''}`,
         type: 'refund',
         orderId,
+      });
+    }
+
+    // Transparencia (Fase YY bis): si la tienda o el repartidor absorben algo, se les avisa
+    // con el monto, el pedido y el motivo; el link va a su billetera.
+    const shortId = String(orderId).slice(0, 7);
+    const why = reason ? ` Motivo: ${reason}` : '';
+    if (finalAllocation && finalAllocation.store > 0 && storeOwnerId) {
+      await notifyUser({
+        userId: storeOwnerId,
+        title: '↩️ Descuento por reembolso',
+        body: `Se descontaron ${money(finalAllocation.store)} de tu saldo por el reembolso del pedido #${shortId}.${why}`,
+        type: 'refund_charge',
+        link: '/my-store/wallet',
+      });
+    }
+    if (finalAllocation && finalAllocation.driver > 0 && order.deliveryPersonId) {
+      await notifyUser({
+        userId: String(order.deliveryPersonId),
+        title: '↩️ Descuento por reembolso',
+        body: `Se descontaron ${money(finalAllocation.driver)} de tu saldo por el reembolso del pedido #${shortId}.${why}`,
+        type: 'refund_charge',
+        link: '/delivery/earnings',
       });
     }
 
@@ -147,10 +233,10 @@ export async function POST(request: Request) {
     // cliente después; si fallaba, el reembolso quedaba sin autor).
     await logAdminActionServer(
       callerUid, 'refund_order', orderId,
-      `${numAmount.toLocaleString('es-AR')} · op ${opRef}${reason ? ' — ' + reason : ''}`,
+      `${money(numAmount)} · op ${opRef}${finalAllocation ? ` · absorbe ${PRESET_LABEL[finalPreset || 'custom']} (tienda ${money(finalAllocation.store)} / repartidor ${money(finalAllocation.driver)} / plataforma ${money(finalAllocation.platform)})` : ' · proporcional'}${reason ? ' — ' + reason : ''}`,
     );
 
-    return NextResponse.json({ success: true, amount: numAmount });
+    return NextResponse.json({ success: true, amount: numAmount, allocation: finalAllocation });
   } catch (error: any) {
     console.error("❌ Error registrando reembolso:", error);
     Sentry.captureException(error, { tags: { route: "admin/refund-order" } });

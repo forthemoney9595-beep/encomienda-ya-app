@@ -26,7 +26,8 @@ import { logAdminAction } from '@/lib/admin-audit';
 import { setAccountApproval } from '@/lib/approval-service';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { driverNetForOrder } from '@/lib/money';
-import { AccountStatement, type StatementMovement } from '@/components/account-statement';
+import { AccountStatement } from '@/components/account-statement';
+import { buildDriverStatement, type StatementOrder, type StatementWithdrawal } from '@/lib/account-movements';
 import { type Order as OrderType } from '@/lib/order-service';
 import Link from 'next/link';
 import { publicName } from '@/lib/public-name';
@@ -122,47 +123,11 @@ function DriverProfilePage() {
   // Estado de cuenta (Fase OO) — mismo componente y criterio que la ficha de tienda:
   // entregas netas via money.ts + retiros; el reembolso vive como detalle de la entrega
   // (ya está descontado en el neto, una fila aparte lo restaría dos veces).
-  const statement = useMemo(() => {
-    const movements: StatementMovement[] = [];
-    for (const o of orders || []) {
-      if (o.status !== 'Entregado') continue;
-      const net = driverNetForOrder(o as any);
-      movements.push({
-        id: `o-${o.id}`,
-        date: (o as any).deliveredAt || o.createdAt,
-        label: `Entrega — ${(o as any).storeName || 'Tienda'}`,
-        detail: `envío $${(o.deliveryFee || 0).toLocaleString('es-AR')}` +
-          ((o as any).refunded ? ` · reembolso aplicado` : ''),
-        amount: net,
-        tone: 'in',
-        href: `/orders/${o.id}`,
-      });
-    }
-    for (const w of withdrawals || []) {
-      const amount = Number(w.amount) || 0;
-      if (w.status === 'approved') {
-        movements.push({
-          id: `w-${w.id}`, date: w.processedAt || w.createdAt,
-          label: w.source === 'auto' ? 'Liquidación pagada' : 'Retiro pagado',
-          detail: w.operationRef ? `op ${w.operationRef}` : 'sin comprobante (anterior a que fuera obligatorio)',
-          amount: -amount, tone: 'out',
-        });
-      } else if (w.status === 'pending') {
-        movements.push({
-          id: `w-${w.id}`, date: w.createdAt,
-          label: w.source === 'auto' ? 'Liquidación generada' : 'Retiro solicitado',
-          amount: -amount, tone: 'muted', badge: 'pendiente',
-        });
-      } else {
-        movements.push({
-          id: `w-${w.id}`, date: w.createdAt,
-          label: 'Retiro rechazado', detail: w.rejectionReason || undefined,
-          amount: -amount, tone: 'muted', badge: 'rechazado',
-        });
-      }
-    }
-    return movements;
-  }, [orders, withdrawals]);
+  const statement = useMemo(
+    // Armado único (src/lib/account-movements.ts), compartido con la billetera del repartidor.
+    () => buildDriverStatement((orders || []) as StatementOrder[], (withdrawals || []) as StatementWithdrawal[]).movements,
+    [orders, withdrawals],
+  );
 
   const recentOrders = useMemo(() => {
     return [...(orders || [])]

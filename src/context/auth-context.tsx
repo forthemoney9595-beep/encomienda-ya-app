@@ -39,6 +39,8 @@ export interface UserProfile {
   // plata/config/broadcast/borrado de cuentas ni poder de promover otros admins. Sin valor
   // (undefined) = 'full', para que los admins creados antes de esta fase no pierdan nada.
   adminLevel?: 'full' | 'support';
+  // CBU/alias para liquidaciones (lo guarda /api/withdrawals/request en el primer retiro).
+  payoutCbu?: string;
 }
 
 interface AuthContextType {

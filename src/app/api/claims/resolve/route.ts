@@ -60,6 +60,14 @@ export async function POST(request: Request) {
       resolvedBy: callerUid,
     });
 
+    // Las señales antifraude del reclamo (Fase YY bis) salen de la Bandeja al resolverse.
+    // Best-effort: si falla, el reclamo igual queda resuelto (la Bandeja cruza con los
+    // reclamos abiertos, así que una señal huérfana no se muestra).
+    try {
+      const risk = await adminDb.collection("claim_risk").doc(claimId).get();
+      if (risk.exists) await risk.ref.update({ resolved: true, resolvedAt: Timestamp.now() });
+    } catch { /* best-effort */ }
+
     // El comprador recibe la explicación, no un silencio.
     await notifyUser({
       userId: claim.userId,

@@ -86,6 +86,10 @@ export interface Order {
   refundAmount?: number;
   refundReason?: string;
   refundedAt?: Timestamp | Date;
+  // Quién absorbe el reembolso, en pesos (Fase YY bis, solo /api/admin/refund-order). Sin el
+  // campo = reparto proporcional de siempre. Ver money.ts.
+  refundAllocation?: { store: number; driver: number; platform: number } | null;
+  refundAllocationPreset?: string;
 
   // Reclamo del comprador (Fase NN) -- lo escribe /api/claims/create (Admin SDK).
   // Un solo reclamo por pedido: claimId apunta al doc en `claims`.

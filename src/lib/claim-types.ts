@@ -3,6 +3,8 @@
 // Mismo criterio que Rappi/PedidosYa: el reclamo nace estructurado (tipo + pedido +
 // evidencia), no como texto libre.
 
+import type { RefundPreset } from './money';
+
 export type ClaimType =
   | 'missing_item'   // me faltó un producto (Entregado)
   | 'bad_condition'  // llegó en mal estado (Entregado, exige foto)
@@ -140,4 +142,94 @@ export function lastMovementMillis(order: {
     .map(toMillis)
     .filter((n): n is number => n !== null);
   return candidates.length ? Math.max(...candidates) : 0;
+}
+
+/* ───────────── Quién absorbe el reembolso de un reclamo (Fase YY bis) ───────────── */
+
+
+/**
+ * SUGERENCIA por defecto del diálogo de reembolso según el tipo de reclamo. Es solo el
+ * preset que aparece marcado: el admin siempre elige y confirma (principio "el dinero
+ * nunca sale solo"). Criterio:
+ * - faltó / mal estado / producto equivocado: lo armó la tienda → la tienda.
+ * - no llegó: la plataforma, de entrada; si después se confirma que el repartidor lo
+ *   perdió, el admin elige "El repartidor" (el PIN verificado es la pista, ver abajo).
+ * - pedido trabado y otro: sin culpable claro → proporcional (el reparto histórico).
+ * Un reembolso SIN reclamo también arranca en proporcional.
+ */
+export const CLAIM_REFUND_ABSORBER: Record<ClaimType, Exclude<RefundPreset, 'custom'>> = {
+  missing_item: 'store',
+  bad_condition: 'store',
+  wrong_item: 'store',
+  not_received: 'platform',
+  stuck_order: 'proportional',
+  other: 'proportional',
+};
+
+export function suggestedRefundPreset(type?: string | null): Exclude<RefundPreset, 'custom'> {
+  return (type && CLAIM_REFUND_ABSORBER[type as ClaimType]) || 'proportional';
+}
+
+/* ───────────── Señales antifraude (Fase YY bis, punto 8) ───────────── */
+
+// Se calculan en /api/claims/create y se guardan en `claim_risk/{claimId}` — colección
+// SOLO admin: el comprador puede leer su propio doc de `claims`, así que las señales no
+// pueden vivir ahí. Nunca bloquean nada: el admin decide con el dato a la vista.
+
+export type ClaimRiskCode = 'pin_verified_not_received' | 'new_account' | 'repeat_claims';
+
+export interface ClaimRiskSignal {
+  code: ClaimRiskCode;
+  label: string;
+  detail?: string;
+}
+
+/** Cuenta "nueva": creada hace menos de esto. */
+export const NEW_ACCOUNT_DAYS = 7;
+/** "Reclamos seguidos": esta cantidad de reclamos previos o más dentro de la ventana. */
+export const REPEAT_CLAIMS_MIN = 2;
+export const REPEAT_CLAIMS_WINDOW_DAYS = 30;
+
+export const CLAIM_RISK_LABELS: Record<ClaimRiskCode, string> = {
+  pin_verified_not_received: '"No llegó" con PIN verificado',
+  new_account: 'Cuenta nueva',
+  repeat_claims: 'Reclamos seguidos',
+};
+
+/** Función pura: qué señales levanta un reclamo nuevo. */
+export function computeClaimRiskSignals(input: {
+  type: string;
+  deliveryPinVerified?: boolean | null;
+  accountCreatedMs?: number | null;
+  nowMs: number;
+  previousClaimsInWindow?: number | null;
+}): ClaimRiskSignal[] {
+  const out: ClaimRiskSignal[] = [];
+  if (input.type === 'not_received' && input.deliveryPinVerified === true) {
+    out.push({
+      code: 'pin_verified_not_received',
+      label: CLAIM_RISK_LABELS.pin_verified_not_received,
+      detail: 'El repartidor confirmó la entrega con el código que solo tenía el comprador.',
+    });
+  }
+  if (typeof input.accountCreatedMs === 'number' && Number.isFinite(input.accountCreatedMs)) {
+    const ageDays = (input.nowMs - input.accountCreatedMs) / 86_400_000;
+    if (ageDays >= 0 && ageDays < NEW_ACCOUNT_DAYS) {
+      const d = Math.floor(ageDays);
+      out.push({
+        code: 'new_account',
+        label: CLAIM_RISK_LABELS.new_account,
+        detail: d === 0 ? 'Creada hoy.' : `Creada hace ${d} día${d === 1 ? '' : 's'}.`,
+      });
+    }
+  }
+  const prev = Number(input.previousClaimsInWindow) || 0;
+  if (prev >= REPEAT_CLAIMS_MIN) {
+    out.push({
+      code: 'repeat_claims',
+      label: CLAIM_RISK_LABELS.repeat_claims,
+      detail: `${prev} reclamos previos en los últimos ${REPEAT_CLAIMS_WINDOW_DAYS} días.`,
+    });
+  }
+  return out;
 }

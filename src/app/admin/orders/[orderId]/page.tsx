@@ -15,7 +15,7 @@ import { describeOrderEnding } from '@/lib/confirm-timeout';
 import { fmtConfirmSeconds } from '@/lib/store-compliance';
 import { reasonLabel, REASON_HINTS } from '@/lib/payment-issues';
 import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
-import { commissionForOrder, driverNetForOrder, FALLBACK_COMMISSION, platformBreakdownForOrder, storeNetForOrder } from '@/lib/money';
+import { commissionForOrder, driverNetForOrder, FALLBACK_COMMISSION, platformBreakdownForOrder, refundSharesForOrder, storeNetForOrder } from '@/lib/money';
 import type { Order } from '@/lib/order-service';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -256,6 +256,24 @@ export default function AdminOrderDetailPage() {
               <Row label={`Comisión congelada (${rate} %${typeof o.commissionRate !== 'number' ? ', default' : ''})`} value={money(o.commissionAmount ?? (o.subtotal ?? 0) * rate / 100)} />
               {o.refunded && <Row label="Reembolsado" value={`− ${money(o.refundAmount)}`} tone="text-destructive-ink" />}
             </dl>
+            {o.refunded && (() => {
+              // Quién absorbió el reembolso (Fase YY bis). Sin refundAllocation = proporcional.
+              const sh = refundSharesForOrder(o, defaultCommission);
+              const preset = (o as { refundAllocationPreset?: string }).refundAllocationPreset;
+              const presetLabel: Record<string, string> = { proportional: 'proporcional', store: 'la tienda', driver: 'el repartidor', platform: 'la plataforma', custom: 'personalizado' };
+              return (
+                <div className="mt-3 border-t border-border pt-3" data-testid="order-refund-allocation">
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Quién absorbió el reembolso · {o.refundAllocation ? presetLabel[preset || 'custom'] || 'personalizado' : 'proporcional (anterior a la Fase YY bis)'}
+                  </p>
+                  <dl className="space-y-1.5">
+                    <Row label="Tienda" value={`− ${money(sh.store)}`} tone={sh.store > 0 ? 'text-destructive-ink' : 'text-muted-foreground'} />
+                    <Row label="Repartidor" value={`− ${money(sh.driver)}`} tone={sh.driver > 0 ? 'text-destructive-ink' : 'text-muted-foreground'} />
+                    <Row label="Plataforma" value={`− ${money(sh.platform)}`} tone={sh.platform > 0 ? 'text-destructive-ink' : 'text-muted-foreground'} />
+                  </dl>
+                </div>
+              );
+            })()}
             <div className="mt-3 border-t border-border pt-3">
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reparto{isDelivered ? '' : ' (si se entrega)'}</p>
               <dl className="space-y-1.5">

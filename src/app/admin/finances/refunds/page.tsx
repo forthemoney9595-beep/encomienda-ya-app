@@ -34,6 +34,20 @@ interface RefundRow {
   adminUid?: string;
   claimId?: string;
   createdAt?: unknown;
+  /** Quién absorbió el reembolso (Fase YY bis). Sin el campo = proporcional (los anteriores). */
+  allocation?: { store: number; driver: number; platform: number };
+  allocationPreset?: string;
+}
+
+const PRESET_LABEL: Record<string, string> = {
+  proportional: 'Proporcional', store: 'La tienda', driver: 'El repartidor', platform: 'La plataforma', custom: 'Personalizado',
+};
+/** "Tienda $X · Repartidor $Y · Plataforma $Z" (solo las partes que absorbieron algo). */
+function allocationText(r: RefundRow): string {
+  if (!r.allocation) return 'Proporcional (anterior)';
+  const parts = ([['store', 'Tienda'], ['driver', 'Repartidor'], ['platform', 'Plataforma']] as const)
+    .filter(([k]) => (r.allocation![k] || 0) > 0).map(([k, l]) => `${l} ${money(r.allocation![k])}`);
+  return parts.join(' · ') || '—';
 }
 
 function dateFrom(f: DateRangePreset): Date | null {
@@ -101,6 +115,12 @@ function RefundsInner() {
     { key: 'buyer', header: 'Cliente', cell: r => <EntityLink type="user" id={r.buyerId} label={r.buyerId ? r.buyerId.slice(0, 8) : '—'} quick /> },
     { key: 'store', header: 'Tienda', cell: r => <EntityLink type="store" id={r.storeId ?? undefined} label={storeName(r.storeId)} /> },
     { key: 'amount', header: 'Monto', align: 'right', cell: r => <span className="font-semibold">{money(r.amount)}</span> },
+    { key: 'absorbs', header: 'Quién absorbe', cell: r => (
+      <div className="min-w-[150px]" data-testid="refund-absorbs">
+        <div className="text-sm">{r.allocation ? (PRESET_LABEL[r.allocationPreset || 'custom'] || 'Personalizado') : <span className="text-muted-foreground">Proporcional</span>}</div>
+        <div className="text-xs text-muted-foreground">{r.allocation ? allocationText(r) : 'registrado antes de elegir quién absorbe'}</div>
+      </div>
+    ) },
     { key: 'reason', header: 'Motivo', cell: r => <span className="block max-w-[260px] truncate text-muted-foreground" title={r.reason}>{r.reason || '—'}</span> },
     { key: 'op', header: 'Comprobante', cell: r => <span className="font-mono text-xs">{r.operationRef || '—'}</span> },
     { key: 'admin', header: 'Admin', cell: r => <EntityLink type="user" id={r.adminUid} label={r.adminUid ? r.adminUid.slice(0, 8) : '—'} quick /> },
@@ -118,7 +138,7 @@ function RefundsInner() {
         <KpiRow cols={4}>
           <KpiCard testId="kpi-refunds-n" label="Reembolsos del filtro" value={idSearch ? paged.total : paged.total} error={paged.countError} onRetry={paged.reload} hint={idSearch ? 'por ID de pedido' : date === 'all' ? 'todo el historial' : 'en el período'} />
           <KpiCard testId="kpi-refunds-sum" label="Monto devuelto" value={aggQ ? (agg.error ? '—' : agg.data ? agg.data.total : null) : '—'} format={aggQ && !agg.error ? 'money' : 'text'} tone="warning" error={agg.error} onRetry={agg.refresh}
-            hint={aggQ ? 'suma del filtro · ya descontado del saldo de tienda y repartidor' : 'no disponible con filtro de tienda o búsqueda por ID'} />
+            hint={aggQ ? 'suma del filtro · descontado del saldo de quien lo absorbió' : 'no disponible con filtro de tienda o búsqueda por ID'} />
         </KpiRow>
       }
       filters={
@@ -144,10 +164,10 @@ function RefundsInner() {
         pagination={{ page: paged.page, pageSize: PAGE_SIZE, total: paged.total, hasMore: paged.hasMore, hasPrev: paged.hasPrev, onNext: paged.next, onPrev: paged.prev, rangeFrom: paged.rangeFrom, rangeTo: paged.rangeTo }}
         onExportCsv={async () => {
           const { rows: all, capped } = await paged.exportAll(5000);
-          return { capped, rows: all.map(r => ({ Fecha: fmtDate(r.createdAt, 'long'), Pedido: r.orderId, Cliente: r.buyerId ?? '', Tienda: storeName(r.storeId), 'ID tienda': r.storeId ?? '', Monto: r.amount, Motivo: r.reason ?? '', Comprobante: r.operationRef ?? '', Admin: r.adminUid ?? '', Reclamo: r.claimId ?? '' })) };
+          return { capped, rows: all.map(r => ({ Fecha: fmtDate(r.createdAt, 'long'), Pedido: r.orderId, Cliente: r.buyerId ?? '', Tienda: storeName(r.storeId), 'ID tienda': r.storeId ?? '', Monto: r.amount, 'Quién absorbe': r.allocation ? (PRESET_LABEL[r.allocationPreset || 'custom'] || 'Personalizado') : 'Proporcional (anterior)', 'Absorbe tienda': r.allocation?.store ?? '', 'Absorbe repartidor': r.allocation?.driver ?? '', 'Absorbe plataforma': r.allocation?.platform ?? '', Motivo: r.reason ?? '', Comprobante: r.operationRef ?? '', Admin: r.adminUid ?? '', Reclamo: r.claimId ?? '' })) };
         }}
         csvFilename={`reembolsos_${fmtDate(Date.now(), 'date').replace(/\//g, '-')}.csv`}
-        getMobileCard={r => ({ title: <EntityLink type="order" id={r.orderId} />, secondary: `${fmtDate(r.createdAt, 'short')} · ${storeName(r.storeId)} · op. ${r.operationRef || '—'}`, right: money(r.amount), badge: r.claimId ? <span className="inline-flex h-[22px] items-center rounded-full bg-warning/15 px-2 text-xs font-semibold text-warning-ink">reclamo</span> : undefined })}
+        getMobileCard={r => ({ title: <EntityLink type="order" id={r.orderId} />, secondary: `${fmtDate(r.createdAt, 'short')} · ${storeName(r.storeId)} · op. ${r.operationRef || '—'} · ${allocationText(r)}`, right: money(r.amount), badge: r.claimId ? <span className="inline-flex h-[22px] items-center rounded-full bg-warning/15 px-2 text-xs font-semibold text-warning-ink">reclamo</span> : undefined })}
         empty={{ icon: Undo2, title: idSearch ? 'Ese pedido no tiene reembolsos' : 'Todavía no hay reembolsos registrados', description: idSearch ? 'Verificá el ID o probá sin filtro.' : 'Cuando registres una devolución desde un pedido o un reclamo, aparece acá.' }}
       />
     </AdminPage>

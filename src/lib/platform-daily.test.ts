@@ -55,6 +55,30 @@ describe('platform-daily — agregación de un día', () => {
     expect(b.revenue).toBe(12500); // bruto, sin descontar
   });
 
+  it('reembolso CON asignación (Fase YY bis): el día descuenta a quien absorbió, no proporcional', () => {
+    // $2.500 devueltos que absorbe la tienda: la app y el repartidor quedan enteros.
+    const byStore = { ...REF, refunded: true, refundAmount: 2500, refundAllocation: { store: 2500, driver: 0, platform: 0 } };
+    const b = aggregateDailyOrders([byStore], 10);
+    expect(b.refunds).toBe(2500);
+    expect(b.toStores).toBeCloseTo(9000 - 2500, 6);
+    expect(b.toDrivers).toBeCloseTo(2000, 6);
+    expect(b.platform).toBeCloseTo(1500, 6);
+    expect(b.serviceFees).toBeCloseTo(500, 6);
+    expect(b.commissions).toBeCloseTo(1000, 6);
+    expect(b.toStores + b.toDrivers + b.platform).toBeCloseTo(12500 - 2500, 6);
+    // Lo absorbe la plataforma: baja tarifa y comisión en proporción (1/3 y 2/3).
+    const byPlat = { ...REF, refunded: true, refundAmount: 300, refundAllocation: { store: 0, driver: 0, platform: 300 } };
+    const p = aggregateDailyOrders([byPlat], 10);
+    expect(p.platform).toBeCloseTo(1200, 6);
+    expect(p.serviceFees).toBeCloseTo(400, 6);
+    expect(p.commissions).toBeCloseTo(800, 6);
+    expect(p.toStores).toBeCloseTo(9000, 6);
+    // El MISMO monto sin asignación sigue siendo proporcional (lo histórico no cambia).
+    const legacy = aggregateDailyOrders([{ ...REF, refunded: true, refundAmount: 2500 }], 10);
+    expect(legacy.toStores).toBeCloseTo(9000 * 0.8, 6);
+    expect(legacy.toDrivers).toBeCloseTo(2000 * 0.8, 6);
+  });
+
   it('un reembolso sobre un pedido cancelado tras pagar cuenta en `refunds` aunque no se haya entregado', () => {
     const b = aggregateDailyOrders([{ ...REF, status: 'Cancelado', refunded: true, refundAmount: 12500 }], 10);
     expect(b.refunds).toBe(12500);

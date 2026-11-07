@@ -25,16 +25,17 @@ import {
 import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
 import {
-  collection, query, orderBy, limit, startAfter, getDocs,
+  collection, query, orderBy, limit, startAfter, getDocs, where, documentId,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
-import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
+import { CLAIM_TYPES, type Claim, type ClaimType, type ClaimRiskSignal } from '@/lib/claim-types';
+import { RefundDialog } from '@/components/admin/refund-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
-  Loader2, AlertTriangle, CheckCircle2, ExternalLink, ImageIcon, Wallet, XCircle, UserRound,
+  Loader2, AlertTriangle, CheckCircle2, ExternalLink, ImageIcon, Wallet, XCircle, UserRound, ShieldAlert,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +53,6 @@ const RESOLUTION_LABELS: Record<string, string> = {
 };
 
 type DialogMode =
-  | { kind: 'refund'; claim: Claim }
   | { kind: 'reject'; claim: Claim }
   | { kind: 'other'; claim: Claim }
   | null;
@@ -76,6 +76,21 @@ function AdminClaimsPage() {
     return cursor ? query(base, startAfter(cursor)) : base;
   }, [firestore]);
 
+  // Señales antifraude (Fase YY bis): `claim_risk/{claimId}`, solo admin. Se leen por id
+  // para los reclamos de la página (chunks de 30, el máximo de un 'in').
+  const [risks, setRisks] = useState<Record<string, ClaimRiskSignal[]>>({});
+  const loadRisks = useCallback(async (ids: string[]) => {
+    if (!firestore || ids.length === 0) return;
+    const found: Record<string, ClaimRiskSignal[]> = {};
+    for (let i = 0; i < ids.length; i += 30) {
+      try {
+        const snap = await getDocs(query(collection(firestore, 'claim_risk'), where(documentId(), 'in', ids.slice(i, i + 30))));
+        snap.docs.forEach(d => { found[d.id] = (d.data().signals as ClaimRiskSignal[]) || []; });
+      } catch (e) { console.error(e); }
+    }
+    setRisks(prev => ({ ...prev, ...found }));
+  }, [firestore]);
+
   const resetLoad = useCallback(async () => {
     const q = buildQuery(null);
     if (!q) return;
@@ -85,12 +100,13 @@ function AdminClaimsPage() {
       setRows(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Claim));
       setLastSnap(snap.docs[snap.docs.length - 1] || null);
       setHasMore(snap.docs.length === PAGE_SIZE);
+      void loadRisks(snap.docs.map(d => d.id));
     } catch (e) {
       console.error(e);
     } finally {
       setIsLoading(false);
     }
-  }, [buildQuery]);
+  }, [buildQuery, loadRisks]);
 
   useEffect(() => { resetLoad(); }, [resetLoad]);
 
@@ -101,6 +117,7 @@ function AdminClaimsPage() {
     try {
       const snap = await getDocs(q);
       setRows(prev => [...prev, ...snap.docs.map(d => ({ id: d.id, ...d.data() }) as Claim)]);
+      void loadRisks(snap.docs.map(d => d.id));
       setLastSnap(snap.docs[snap.docs.length - 1] || lastSnap);
       setHasMore(snap.docs.length === PAGE_SIZE);
     } catch (e) {
@@ -135,16 +152,13 @@ function AdminClaimsPage() {
   // --- Diálogos de resolución ---
   const [dialog, setDialog] = useState<DialogMode>(null);
   const [note, setNote] = useState('');
-  const [refundAmount, setRefundAmount] = useState('');
-  const [operationRef, setOperationRef] = useState('');
   const [working, setWorking] = useState(false);
+  // Reembolso: el RefundDialog ÚNICO (Fase YY bis — antes este page tenía su propio diálogo,
+  // sin "quién absorbe" ni el aviso del PIN).
+  const [refundClaim, setRefundClaim] = useState<Claim | null>(null);
 
   const openDialog = (mode: NonNullable<DialogMode>) => {
-    setNote(mode.kind === 'refund'
-      ? `Reclamo: ${CLAIM_TYPES[mode.claim.type]?.label || mode.claim.type}`
-      : '');
-    setRefundAmount(String(mode.claim.suggestedAmount ?? mode.claim.orderTotal ?? ''));
-    setOperationRef('');
+    setNote('');
     setDialog(mode);
   };
 
@@ -157,29 +171,15 @@ function AdminClaimsPage() {
     if (!dialog || !user) return;
     setWorking(true);
     try {
-      if (dialog.kind === 'refund') {
-        const res = await authedFetch('/api/admin/refund-order', user, {
-          orderId: dialog.claim.orderId,
-          amount: Number(refundAmount),
-          reason: note.trim(),
-          operationRef: operationRef.trim(),
-          claimId: dialog.claim.id,
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'No se pudo registrar el reembolso.');
-        toast({ title: '💸 Reembolso registrado', description: `Se devolvieron ${money(Number(refundAmount))} y el reclamo quedó resuelto.` });
-        markResolvedLocally(dialog.claim.id, 'refunded', `Reembolso de ${money(Number(refundAmount))}`);
-      } else {
-        const res = await authedFetch('/api/claims/resolve', user, {
-          claimId: dialog.claim.id,
-          action: dialog.kind === 'reject' ? 'reject' : 'other',
-          note: note.trim(),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'No se pudo resolver el reclamo.');
-        toast({ title: dialog.kind === 'reject' ? 'Reclamo rechazado' : 'Reclamo resuelto', description: 'El comprador fue notificado.' });
-        markResolvedLocally(dialog.claim.id, dialog.kind === 'reject' ? 'rejected' : 'other', note.trim());
-      }
+      const res = await authedFetch('/api/claims/resolve', user, {
+        claimId: dialog.claim.id,
+        action: dialog.kind === 'reject' ? 'reject' : 'other',
+        note: note.trim(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo resolver el reclamo.');
+      toast({ title: dialog.kind === 'reject' ? 'Reclamo rechazado' : 'Reclamo resuelto', description: 'El comprador fue notificado.' });
+      markResolvedLocally(dialog.claim.id, dialog.kind === 'reject' ? 'rejected' : 'other', note.trim());
       setDialog(null);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message });
@@ -220,7 +220,7 @@ function AdminClaimsPage() {
           {displayed.map((claim) => {
             const meta = CLAIM_TYPES[claim.type as ClaimType];
             return (
-              <Card key={claim.id} className={cn('border-l-4',
+              <Card key={claim.id} data-testid="claim-card" className={cn('border-l-4',
                 claim.resolved
                   ? (claim.resolution === 'rejected' ? 'border-l-muted-foreground' : 'border-l-success')
                   : (claim.type === 'not_received' || claim.type === 'stuck_order' ? 'border-l-destructive' : 'border-l-warning'))}>
@@ -254,6 +254,17 @@ function AdminClaimsPage() {
                         ? `Reclamo n.º ${claim.previousClaims + 1} de este comprador · ${claim.previousRefunded || 0} terminaron en reembolso`
                         : 'Primer reclamo de este comprador'}
                     </p>
+                    {(risks[claim.id]?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5" data-testid="claim-risk-chips">
+                        {risks[claim.id].map(sig => (
+                          <span key={sig.code} title={sig.detail}
+                            className={cn('inline-flex min-h-[24px] items-center gap-1 rounded-full px-2 text-xs font-semibold',
+                              sig.code === 'pin_verified_not_received' ? 'bg-destructive/15 text-destructive' : 'bg-warning/15 text-warning')}>
+                            <ShieldAlert className="h-3 w-3" aria-hidden="true" /> {sig.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {claim.items?.length > 0 && (
                       <p className="text-xs text-muted-foreground">
                         Productos: {claim.items.map(it => `${it.name} ×${it.quantity}`).join(', ')}
@@ -281,7 +292,7 @@ function AdminClaimsPage() {
                     {claim.resolved !== true && (
                       <div className="flex items-center gap-2 ml-auto">
                         {!isSupport && (
-                          <Button size="sm" onClick={() => openDialog({ kind: 'refund', claim })}>
+                          <Button size="sm" onClick={() => setRefundClaim(claim)}>
                             <Wallet className="h-3.5 w-3.5 mr-1.5" /> Reembolsar
                           </Button>
                         )}
@@ -313,46 +324,6 @@ function AdminClaimsPage() {
 
       <Dialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent className="max-w-md">
-          {dialog?.kind === 'refund' && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Reembolsar reclamo</DialogTitle>
-                <DialogDescription>
-                  Primero hacé la devolución en MercadoPago; después registrala acá con el número
-                  de operación. El reclamo queda resuelto y el comprador es notificado.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="refund-amount">Monto a devolver</Label>
-                  <Input id="refund-amount" type="number" value={refundAmount}
-                    onChange={e => setRefundAmount(e.target.value)} />
-                  {typeof dialog.claim.suggestedAmount === 'number' && (
-                    <p className="text-xs text-muted-foreground">
-                      Sugerido por el reclamo: {money(dialog.claim.suggestedAmount)} · total del pedido: {money(dialog.claim.orderTotal || 0)}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="refund-reason">Motivo (lo ve el comprador)</Label>
-                  <Textarea id="refund-reason" value={note} onChange={e => setNote(e.target.value)} rows={2} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="refund-op">N.º de operación de MercadoPago <span className="text-destructive">*</span></Label>
-                  <Input id="refund-op" value={operationRef} onChange={e => setOperationRef(e.target.value)}
-                    placeholder="Comprobante de la devolución" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialog(null)} disabled={working}>Cancelar</Button>
-                <Button onClick={handleConfirm}
-                  disabled={working || operationRef.trim().length < 4 || !Number(refundAmount)}>
-                  {working && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Registrar reembolso
-                </Button>
-              </DialogFooter>
-            </>
-          )}
           {(dialog?.kind === 'reject' || dialog?.kind === 'other') && (
             <>
               <DialogHeader>
@@ -379,6 +350,16 @@ function AdminClaimsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <RefundDialog
+        order={refundClaim ? { id: refundClaim.orderId, customerName: refundClaim.userName, storeName: refundClaim.storeName || undefined, total: refundClaim.orderTotal } : null}
+        claim={refundClaim}
+        onOpenChange={(o) => { if (!o) setRefundClaim(null); }}
+        onDone={() => {
+          if (refundClaim) markResolvedLocally(refundClaim.id, 'refunded', 'Reembolsado');
+          setRefundClaim(null);
+        }}
+      />
     </div>
   );
 }

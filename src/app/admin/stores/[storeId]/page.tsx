@@ -17,7 +17,8 @@ import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { getOrderStatusKind, orderStatusBadgeClass } from '@/lib/order-status';
 import { storeBaseAmount, commissionForOrder, storeNetForOrder, refundRatio, isPlatformCollected, FALLBACK_COMMISSION, platformBreakdownForOrder } from "@/lib/money";
-import { AccountStatement, type StatementMovement } from '@/components/account-statement';
+import { AccountStatement } from '@/components/account-statement';
+import { buildStoreStatement, type StatementOrder, type StatementWithdrawal } from '@/lib/account-movements';
 import { setAccountApproval } from '@/lib/approval-service';
 import { CLAIM_TYPES, type Claim, type ClaimType } from '@/lib/claim-types';
 import { cn } from '@/lib/utils';
@@ -162,60 +163,8 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     const statement = useMemo(() => {
         const storeRate = store?.commissionRate;
         const fallbackRate = (typeof storeRate === 'number' && storeRate > 0) ? storeRate : defaultCommission;
-        const movements: StatementMovement[] = [];
-        let earned = 0, paid = 0, requested = 0;
-
-        for (const o of orders || []) {
-            if (o.status !== 'Entregado') continue;
-            const net = storeNetForOrder(o as any, fallbackRate);
-            earned += net;
-            movements.push({
-                id: `o-${o.id}`,
-                date: (o as any).deliveredAt || o.createdAt,
-                label: `Pedido entregado — ${o.customerName || 'Cliente'}`,
-                detail: `venta $${(o.total || 0).toLocaleString('es-AR')} · comisión ${commissionForOrder(o as any, fallbackRate)}%` +
-                    (o.refunded ? ` · reembolso −$${Math.round(o.refundAmount || 0).toLocaleString('es-AR')} aplicado` : ''),
-                amount: net,
-                tone: 'in',
-                href: `/orders/${o.id}`,
-            });
-        }
-        for (const w of withdrawals || []) {
-            const amount = Number(w.amount) || 0;
-            if (w.status === 'approved') {
-                paid += amount;
-                movements.push({
-                    id: `w-${w.id}`,
-                    date: w.processedAt || w.createdAt,
-                    label: w.source === 'auto' ? 'Liquidación pagada' : 'Retiro pagado',
-                    detail: w.operationRef ? `op ${w.operationRef}` : 'sin comprobante (anterior a que fuera obligatorio)',
-                    amount: -amount,
-                    tone: 'out',
-                });
-            } else if (w.status === 'pending') {
-                requested += amount;
-                movements.push({
-                    id: `w-${w.id}`, date: w.createdAt,
-                    label: w.source === 'auto' ? 'Liquidación generada' : 'Retiro solicitado',
-                    amount: -amount, tone: 'muted', badge: 'pendiente',
-                });
-            } else {
-                movements.push({
-                    id: `w-${w.id}`, date: w.createdAt,
-                    label: 'Retiro rechazado',
-                    detail: w.rejectionReason || undefined,
-                    amount: -amount, tone: 'muted', badge: 'rechazado',
-                });
-            }
-        }
-        return {
-            movements,
-            summary: {
-                earned, paid, requested,
-                balance: Math.max(0, earned - paid - requested),
-                debt: Math.max(0, paid - earned),
-            },
-        };
+        // Armado único (src/lib/account-movements.ts), compartido con la billetera de la tienda.
+        return buildStoreStatement((orders || []) as StatementOrder[], (withdrawals || []) as StatementWithdrawal[], fallbackRate);
     }, [orders, withdrawals, store, defaultCommission]);
 
     // Acciones

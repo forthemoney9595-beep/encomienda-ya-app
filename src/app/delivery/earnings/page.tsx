@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { collection, query, where, orderBy, doc } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
 import type { Order } from '@/lib/order-service';
 import { driverNetForOrder } from '@/lib/money';
@@ -31,6 +31,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { WalletStatement } from '@/components/wallet-statement';
+import { FALLBACK_COMMISSION } from '@/lib/money';
 
 // ✅ FUNCIÓN AUXILIAR: Maneja fechas de forma segura
 const formatDate = (date: any) => {
@@ -92,6 +94,10 @@ export default function DeliveryEarningsPage() {
 
   const { data: withdrawals, isLoading: withdrawalsLoading } = useCollection<any>(withdrawalsQuery);
 
+  // Día de liquidación (config/platform.settlementDayOfWeek) para "Próxima liquidación".
+  const configRef = useMemoFirebase(() => (firestore && ready ? doc(firestore, 'config', 'platform') : null), [firestore, ready]);
+  const { data: platformConfig } = useDoc<{ settlementDayOfWeek?: number }>(configRef);
+
   // 4. Cálculos Financieros
   const financialSummary = useMemo(() => {
       const deliveredOrders = orders || [];
@@ -108,10 +114,12 @@ export default function DeliveryEarningsPage() {
           .reduce((sum, w) => sum + (w.amount || 0), 0);
 
       const availableBalance = totalEarned - totalWithdrawn;
+      const settled = withdrawalHistory.filter(w => w.status === 'approved').reduce((sum, w) => sum + (w.amount || 0), 0);
 
       return {
           totalEarned,
           totalWithdrawn,
+          debt: Math.max(0, settled - totalEarned),
           availableBalance: Math.max(0, availableBalance), // Evitar negativos visuales
           deliveredOrders
       };
@@ -272,6 +280,19 @@ export default function DeliveryEarningsPage() {
         </Card>
       </div>
 
+      {/* Estado de cuenta + día de cobro (Fase YY bis): mismas fórmulas que la ficha del admin. */}
+      <WalletStatement
+          role="delivery"
+          uid={user?.uid}
+          fallbackRate={FALLBACK_COMMISSION}
+          withdrawals={withdrawals || []}
+          balance={financialSummary.availableBalance}
+          debt={financialSummary.debt}
+          settlementDayOfWeek={platformConfig?.settlementDayOfWeek}
+          hasCbu={!!userProfile?.payoutCbu}
+          ready={ready && !!user?.uid}
+      />
+
       {/* PESTAÑAS DE HISTORIAL */}
       <Tabs defaultValue="withdrawals" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
@@ -296,7 +317,7 @@ export default function DeliveryEarningsPage() {
                                   <div className="flex items-center justify-between gap-2">
                                       <div>
                                           <div className="flex items-center gap-2">
-                                              <p className="font-bold">${(w.amount || 0).toLocaleString('es-AR')}</p>
+                                              <p className="font-bold">{money(w.amount || 0)}</p>
                                               {w.source === 'auto' && <Badge variant="outline" className="text-xs border-primary/40 text-primary">Automático</Badge>}
                                           </div>
                                           <p className="text-xs text-muted-foreground">{formatDate(w.createdAt)}</p>
@@ -358,7 +379,7 @@ export default function DeliveryEarningsPage() {
                                     {/* Neto (Fase PP, N4): antes mostraba deliveryFee crudo y las
                                         filas no sumaban el titular de la misma pantalla. */}
                                     <span className="block font-bold text-success">
-                                        +${Math.round(driverNetForOrder(order as any)).toLocaleString('es-AR')}
+                                        +{money(driverNetForOrder(order as any))}
                                     </span>
                                     {(order as any).refunded && (
                                         <span className="block text-xs text-info">reembolso aplicado</span>

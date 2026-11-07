@@ -216,3 +216,55 @@ describe.skipIf(!HAS_EMULATOR)('firestore.rules — pausa con tiempo de la tiend
     await assertFails(updateDoc(doc(env4.authenticatedContext(OTHER).firestore(), 'stores', 'store-1'), { manuallyPaused: true, pausedUntil: new Date() }));
   });
 });
+
+describe.skipIf(!HAS_EMULATOR)('firestore.rules — quién absorbe el reembolso y señales antifraude (Fase YY bis)', () => {
+  // `refundAllocation` lo escribe SOLO /api/admin/refund-order (Admin SDK): define cuánto se
+  // le descuenta a la tienda y al repartidor. `claim_risk` es admin-only: el comprador lee su
+  // propio reclamo, pero no puede ver que lo marcaron.
+  const ADMIN = 'admin-uid';
+  let env5: RulesTestEnvironment;
+  beforeAll(async () => {
+    env5 = await initializeTestEnvironment({ projectId: PROJECT + '-5', firestore: { rules: readFileSync(resolve(__dirname, '../../firestore.rules'), 'utf8') } });
+  });
+  afterAll(async () => { await env5?.cleanup(); });
+  beforeEach(async () => {
+    await env5.clearFirestore();
+    await env5.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'roles_admin', ADMIN), { level: 'full' });
+      await setDoc(doc(db, 'users', ADMIN), { role: 'admin', email: 'a@test' });
+      await setDoc(doc(db, 'users', BUYER), { role: 'buyer', email: 'b@test' });
+      await setDoc(doc(db, 'orders', 'o-reemb'), {
+        storeId: 'store-1', userId: BUYER, customerName: 'C', items: [], status: 'Entregado',
+        total: 12500, subtotal: 10000, deliveryFee: 2000, serviceFee: 500, refunded: true, refundAmount: 2500,
+        refundAllocation: { store: 2500, driver: 0, platform: 0 }, refundAllocationPreset: 'store',
+      });
+      await setDoc(doc(db, 'claims', 'c-1'), { userId: BUYER, orderId: 'o-reemb', type: 'not_received', resolved: false });
+      await setDoc(doc(db, 'claim_risk', 'c-1'), { claimId: 'c-1', userId: BUYER, signals: [{ code: 'pin_verified_not_received' }], resolved: false });
+    });
+  });
+  const asAdmin = () => env5.authenticatedContext(ADMIN).firestore();
+  const asBuyer5 = () => env5.authenticatedContext(BUYER).firestore();
+
+  it('ataque: el admin NO reescribe refundAllocation (ni el preset) por escritura directa', async () => {
+    await assertFails(updateDoc(doc(asAdmin(), 'orders', 'o-reemb'), { refundAllocation: { store: 0, driver: 2500, platform: 0 } }));
+    await assertFails(updateDoc(doc(asAdmin(), 'orders', 'o-reemb'), { refundAllocationPreset: 'driver' }));
+  });
+  it('regresión: el admin sigue pudiendo escribir un campo operativo del pedido', async () => {
+    await assertSucceeds(updateDoc(doc(asAdmin(), 'orders', 'o-reemb'), { adminNote: 'revisado' }));
+  });
+  it('ataque: el comprador tampoco toca refundAllocation de su pedido', async () => {
+    await assertFails(updateDoc(doc(asBuyer5(), 'orders', 'o-reemb'), { refundAllocation: { store: 0, driver: 0, platform: 2500 } }));
+  });
+  it('claim_risk: el admin lo lee; el dueño del reclamo NO (aunque sí lee su reclamo)', async () => {
+    await assertSucceeds(getDoc(doc(asAdmin(), 'claim_risk', 'c-1')));
+    await assertSucceeds(getDoc(doc(asBuyer5(), 'claims', 'c-1')));
+    await assertFails(getDoc(doc(asBuyer5(), 'claim_risk', 'c-1')));
+    await assertFails(getDoc(doc(env5.unauthenticatedContext().firestore(), 'claim_risk', 'c-1')));
+  });
+  it('claim_risk: nadie lo escribe desde el cliente, ni el admin', async () => {
+    await assertFails(setDoc(doc(asAdmin(), 'claim_risk', 'c-2'), { claimId: 'c-2', signals: [] }));
+    await assertFails(updateDoc(doc(asAdmin(), 'claim_risk', 'c-1'), { resolved: true }));
+    await assertFails(deleteDoc(doc(asAdmin(), 'claim_risk', 'c-1')));
+  });
+});

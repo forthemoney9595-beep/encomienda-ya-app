@@ -155,3 +155,144 @@ describe('platformBreakdownForOrder — desglose único de lo que gana la app', 
     expect(b).toEqual({ serviceFee: 0, commission: 0, total: 0 });
   });
 });
+
+// Fase YY bis: quién absorbe cada reembolso. Invariante: tienda + repartidor + plataforma =
+// total − reembolso en TODOS los casos; y sin `refundAllocation` el reparto es el de siempre.
+import {
+  grossSharesForOrder, refundSharesForOrder, suggestRefundAllocation, validateRefundAllocation,
+  refundAllocationCaps, type RefundAllocation,
+} from './money';
+
+const sumParts = (o: MoneyOrder) =>
+  storeNetForOrder(o, 10) + driverNetForOrder(o) + platformNetForOrder(o, 10);
+const withAlloc = (amount: number, a: RefundAllocation): MoneyOrder =>
+  ({ ...REF, refunded: true, refundAmount: amount, refundAllocation: a });
+const PRESETS = ['proportional', 'store', 'driver', 'platform'] as const;
+
+describe('reembolsos con asignación — invariante en todos los casos', () => {
+  const amounts = [500, 2500, 6250, 12500];
+  for (const amount of amounts) {
+    for (const preset of PRESETS) {
+      it(`${preset} · reembolso de $${amount}: partes = total − reembolso, ninguna negativa`, () => {
+        const { allocation } = suggestRefundAllocation(REF, 10, amount, preset);
+        expect(allocation.store + allocation.driver + allocation.platform).toBeCloseTo(amount, 2);
+        const o = withAlloc(amount, allocation);
+        expect(sumParts(o)).toBeCloseTo(REF.total! - amount, 2);
+        expect(storeNetForOrder(o, 10)).toBeGreaterThanOrEqual(0);
+        expect(driverNetForOrder(o)).toBeGreaterThanOrEqual(0);
+        expect(platformNetForOrder(o, 10)).toBeGreaterThanOrEqual(-1e-9);
+        expect(validateRefundAllocation(REF, 10, amount, allocation).ok).toBe(true);
+      });
+    }
+  }
+  it('personalizado: cada parte baja exactamente lo asignado', () => {
+    const o = withAlloc(1500, { store: 1000, driver: 300, platform: 200 });
+    expect(storeNetForOrder(o, 10)).toBeCloseTo(9000 - 1000, 6);
+    expect(driverNetForOrder(o)).toBeCloseTo(2000 - 300, 6);
+    expect(platformNetForOrder(o, 10)).toBeCloseTo(1500 - 200, 6);
+    expect(sumParts(o)).toBeCloseTo(REF.total! - 1500, 6);
+  });
+  it('platformBreakdown reparte la parte de la plataforma entre tarifa y comisión en proporción', () => {
+    const o = withAlloc(300, { store: 0, driver: 0, platform: 300 });
+    const b = platformBreakdownForOrder(o, 10);
+    // bruto: tarifa 500 + comisión 1000 → absorbe 1/3 de tarifa y 2/3 de comisión
+    expect(b.serviceFee).toBeCloseTo(400, 6);
+    expect(b.commission).toBeCloseTo(800, 6);
+    expect(b.total).toBeCloseTo(1200, 6);
+    expect(b.total).toBe(platformNetForOrder(o, 10));
+  });
+  it('reembolso TOTAL con cualquier preset deja a todos en 0', () => {
+    for (const preset of PRESETS) {
+      const { allocation } = suggestRefundAllocation(REF, 10, REF.total!, preset);
+      const o = withAlloc(REF.total!, allocation);
+      expect(storeNetForOrder(o, 10)).toBeCloseTo(0, 2);
+      expect(driverNetForOrder(o)).toBeCloseTo(0, 2);
+      expect(platformNetForOrder(o, 10)).toBeCloseTo(0, 2);
+    }
+  });
+});
+
+describe('reembolsos — compatibilidad con lo histórico', () => {
+  it('SIN refundAllocation el reparto es idéntico al de siempre (proporcional)', () => {
+    const legacy: MoneyOrder = { ...REF, refunded: true, refundAmount: 2500 };
+    const keep = 1 - 2500 / 12500;
+    expect(storeNetForOrder(legacy, 10)).toBe(9000 * keep);
+    expect(driverNetForOrder(legacy)).toBe(2000 * keep);
+    expect(platformNetForOrder(legacy, 10)).toBe(500 * keep + 1000 * keep);
+  });
+  it('el preset proporcional da los mismos netos que el legado (al centavo)', () => {
+    for (const amount of [777, 2500, 9999]) {
+      const legacy: MoneyOrder = { ...REF, refunded: true, refundAmount: amount };
+      const { allocation } = suggestRefundAllocation(REF, 10, amount, 'proportional');
+      const o = withAlloc(amount, allocation);
+      expect(Math.abs(storeNetForOrder(o, 10) - storeNetForOrder(legacy, 10))).toBeLessThanOrEqual(0.01);
+      expect(Math.abs(driverNetForOrder(o) - driverNetForOrder(legacy))).toBeLessThanOrEqual(0.01);
+      expect(Math.abs(platformNetForOrder(o, 10) - platformNetForOrder(legacy, 10))).toBeLessThanOrEqual(0.01);
+    }
+  });
+  it('una asignación en un pedido NO reembolsado se ignora', () => {
+    const o: MoneyOrder = { ...REF, refunded: false, refundAllocation: { store: 5000, driver: 0, platform: 0 } };
+    expect(storeNetForOrder(o, 10)).toBe(9000);
+  });
+  it('refundSharesForOrder proporcional = bruto − neto (identidad del estado de cuenta)', () => {
+    const legacy: MoneyOrder = { ...REF, refunded: true, refundAmount: 2500 };
+    const g = grossSharesForOrder(legacy, 10);
+    const s = refundSharesForOrder(legacy, 10);
+    expect(g.store - s.store).toBeCloseTo(storeNetForOrder(legacy, 10), 9);
+    expect(g.driver - s.driver).toBeCloseTo(driverNetForOrder(legacy), 9);
+    expect(s.store + s.driver + s.platform).toBeCloseTo(2500, 9);
+  });
+  it('refundSharesForOrder con asignación = lo asignado', () => {
+    const s = refundSharesForOrder(withAlloc(1500, { store: 1000, driver: 300, platform: 200 }), 10);
+    expect(s.store).toBe(1000); expect(s.driver).toBe(300); expect(s.platform).toBe(200);
+  });
+});
+
+describe('suggestRefundAllocation — presets y excedente', () => {
+  it('La tienda: si alcanza, absorbe todo; el resto en 0', () => {
+    const r = suggestRefundAllocation(REF, 10, 3000, 'store');
+    expect(r.allocation).toEqual({ store: 3000, driver: 0, platform: 0 });
+    expect(r.overflow).toBe(0);
+  });
+  it('La tienda: si no alcanza, el excedente va a la plataforma y se informa', () => {
+    const r = suggestRefundAllocation(REF, 10, 10000, 'store'); // la tienda cobra 9000
+    expect(r.allocation).toEqual({ store: 9000, driver: 0, platform: 1000 });
+    expect(r.overflow).toBe(1000);
+  });
+  it('El repartidor: tope = envío; el excedente a la plataforma y después a la tienda', () => {
+    const r = suggestRefundAllocation(REF, 10, 5000, 'driver');
+    expect(r.allocation).toEqual({ store: 1500, driver: 2000, platform: 1500 });
+    expect(r.overflow).toBe(3000);
+  });
+  it('La plataforma: tope = tarifa + comisión; el resto entre tienda y repartidor en proporción', () => {
+    expect(suggestRefundAllocation(REF, 10, 12500, 'platform').allocation).toEqual({ store: 9000, driver: 2000, platform: 1500 });
+    expect(suggestRefundAllocation(REF, 10, 1000, 'platform').allocation).toEqual({ store: 0, driver: 0, platform: 1000 });
+  });
+});
+
+describe('validateRefundAllocation — lo que la ruta rechaza', () => {
+  it('suma distinta al monto', () => {
+    expect(validateRefundAllocation(REF, 10, 1000, { store: 500, driver: 0, platform: 0 }).ok).toBe(false);
+  });
+  it('negativo', () => {
+    expect(validateRefundAllocation(REF, 10, 1000, { store: 1500, driver: -500, platform: 0 }).ok).toBe(false);
+  });
+  it('repartidor más que el envío / tienda más que su neto / plataforma más que tarifa+comisión', () => {
+    expect(validateRefundAllocation(REF, 10, 2500, { store: 0, driver: 2500, platform: 0 }).ok).toBe(false);
+    expect(validateRefundAllocation(REF, 10, 9500, { store: 9500, driver: 0, platform: 0 }).ok).toBe(false);
+    expect(validateRefundAllocation(REF, 10, 2000, { store: 0, driver: 0, platform: 2000 }).ok).toBe(false);
+  });
+  it('pedido en efectivo: no hay nada que asignar', () => {
+    expect(validateRefundAllocation({ ...REF, paymentMethod: 'Efectivo' }, 10, 100, { store: 100, driver: 0, platform: 0 }).ok).toBe(false);
+  });
+  it('tolera centavos: normaliza para que la suma sea exacta y nadie pase su tope', () => {
+    const o: MoneyOrder = { total: 12527.5, subtotal: 10010, deliveryFee: 2000, serviceFee: 517.5, commissionRate: 10 };
+    const caps = refundAllocationCaps(o, 10); // tienda 9009, repartidor 2000, plataforma 1518,5
+    const v = validateRefundAllocation(o, 10, 3000, { store: 0, driver: 1500, platform: 1500.4 });
+    expect(v.ok).toBe(true);
+    if (v.ok) {
+      expect(v.allocation.store + v.allocation.driver + v.allocation.platform).toBeCloseTo(3000, 6);
+      expect(v.allocation.platform).toBeLessThanOrEqual(caps.platform);
+    }
+  });
+});

@@ -32,6 +32,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { WalletStatement } from '@/components/wallet-statement';
 
 const formatDate = (date: any) => {
     if (!date) return 'Fecha desc.';
@@ -59,7 +60,7 @@ export default function StoreWalletPage() {
   // corría DURANTE el render (efecto secundario en render, warning de React y
   // comportamiento errático en re-renders).
   // ARQ-010: guard único.
-  useRequireRole('store');
+  const { ready } = useRequireRole('store');
 
   // 2. BUSCAR LA TIENDA DE ESTE USUARIO (CORRECCIÓN)
   // En lugar de buscar por ID directo, buscamos donde ownerId sea igual al usuario actual
@@ -77,7 +78,7 @@ export default function StoreWalletPage() {
   // Comisión por defecto de la plataforma, para tiendas sin tarifa propia (mismo criterio
   // que payout-service.ts en el servidor).
   const configRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'platform') : null), [firestore]);
-  const { data: platformConfig } = useDoc<{ defaultCommissionRate?: number }>(configRef);
+  const { data: platformConfig } = useDoc<{ defaultCommissionRate?: number; settlementDayOfWeek?: number }>(configRef);
 
   // 3. Traer VENTAS (Usando el storeId real encontrado)
   const salesQuery = useMemoFirebase(() => {
@@ -133,10 +134,13 @@ export default function StoreWalletPage() {
           .reduce((sum, w) => sum + (w.amount || 0), 0);
 
       const availableBalance = totalSalesRevenue - totalWithdrawn;
+      // Pagado de más (reembolso posterior a una liquidación): mismo criterio que payout-service.
+      const settled = withdrawalHistory.filter(w => w.status === 'approved').reduce((sum, w) => sum + (w.amount || 0), 0);
 
       return {
           totalSalesRevenue,
           totalWithdrawn,
+          debt: Math.max(0, settled - totalSalesRevenue),
           availableBalance: Math.max(0, availableBalance),
           sales,
           commissionRate // Lo mostramos en la UI
@@ -239,6 +243,19 @@ export default function StoreWalletPage() {
         </Card>
       </div>
 
+      {/* Estado de cuenta + día de cobro (Fase YY bis): mismas fórmulas que la ficha del admin. */}
+      <WalletStatement
+          role="store"
+          storeId={storeId}
+          fallbackRate={financialSummary.commissionRate}
+          withdrawals={withdrawals || []}
+          balance={financialSummary.availableBalance}
+          debt={financialSummary.debt}
+          settlementDayOfWeek={platformConfig?.settlementDayOfWeek}
+          hasCbu={!!userProfile?.payoutCbu}
+          ready={ready && !!storeId}
+      />
+
       <Tabs defaultValue="history" className="w-full">
           <TabsList className="w-full grid grid-cols-2">
               <TabsTrigger value="history">Retiros</TabsTrigger>
@@ -252,7 +269,7 @@ export default function StoreWalletPage() {
                           <div key={w.id} className="p-3 border rounded text-sm space-y-1.5">
                               <div className="flex justify-between items-center gap-2">
                                   <span className="flex items-center gap-2">
-                                      ${(w.amount || 0).toLocaleString('es-AR')} - {formatDate(w.createdAt)}
+                                      {money(w.amount || 0)} - {formatDate(w.createdAt)}
                                       {w.source === 'auto' && <Badge variant="outline" className="text-xs border-primary/40 text-primary">Automático</Badge>}
                                   </span>
                                   <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'secondary'}>
@@ -297,7 +314,7 @@ export default function StoreWalletPage() {
                                       {o.refunded && <span className="ml-2 text-xs text-destructive">reembolsada</span>}
                                   </span>
                                   <span className={cn('font-bold', neto > 0 ? 'text-success' : 'text-muted-foreground')}>
-                                      +${Math.round(neto).toLocaleString('es-AR')}
+                                      +{money(neto)}
                                   </span>
                               </div>
                           );
