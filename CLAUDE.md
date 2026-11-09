@@ -116,6 +116,9 @@ NEXT_PUBLIC_BASE_URL=https://encomienda-ya-app.vercel.app
 
 # Sentry (monitoreo de errores, Fase CC)
 NEXT_PUBLIC_SENTRY_DSN=
+
+# Google Routes API (distancia por ruta, solo servidor)
+GOOGLE_MAPS_API_KEY=
 ```
 El archivo `.env.local` con los valores reales NO va a git. Hay que copiarlo manualmente en cada PC.
 
