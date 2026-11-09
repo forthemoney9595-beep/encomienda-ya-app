@@ -46,3 +46,6 @@ firestore-debug.log
 # scripts temporales de QA/seed (Admin SDK) — no van al repo
 _*.js
 _*.mjs
+
+# estado local del plugin de diseño Impeccable (hooks, críticas, mocks) — no va al repo
+.impeccable/

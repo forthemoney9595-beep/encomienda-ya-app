@@ -226,17 +226,29 @@ export default function OrderTrackingPage() {
   // Un repartidor del POOL (no asignado) recibe permission-denied → no ve la PII (correcto).
   // Los pedidos legacy ya traen esos campos embebidos en el doc principal → siguen andando.
   const [orderPrivate, setOrderPrivate] = useState<any>(null);
+  // Se relee cuando cambia el repartidor asignado: un repartidor que TOMA el pedido desde esta
+  // misma pantalla entró como "del pool" (lectura denegada, correcto) y antes no volvía a leer,
+  // así que no veía la dirección hasta recargar (hallazgo de la Fase WW, nov 2026). Si quien
+  // mira es el repartidor recién asignado y la lectura todavía falla, reintenta un par de veces.
+  const viewerIsAssignedDriver = !!user?.uid && orderRaw?.deliveryPersonId === user.uid;
   useEffect(() => {
     if (!firestore || !orderRaw?.id) { setOrderPrivate(null); return; }
     let cancelled = false;
+    const orderIdForRead = orderRaw.id;
     (async () => {
-      try {
-        const snap = await getDoc(doc(firestore, 'order_private', orderRaw.id));
-        if (!cancelled) setOrderPrivate(snap.exists() ? snap.data() : null);
-      } catch { if (!cancelled) setOrderPrivate(null); }
+      const attempts = viewerIsAssignedDriver ? 3 : 1;
+      for (let i = 0; i < attempts && !cancelled; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 1500 * i));
+        try {
+          const snap = await getDoc(doc(firestore, 'order_private', orderIdForRead));
+          if (!cancelled) setOrderPrivate(snap.exists() ? snap.data() : null);
+          return;
+        } catch { /* denegado (pool) o carrera con la asignación: reintenta si corresponde */ }
+      }
+      if (!cancelled) setOrderPrivate(null);
     })();
     return () => { cancelled = true; };
-  }, [firestore, orderRaw?.id]);
+  }, [firestore, orderRaw?.id, orderRaw?.deliveryPersonId, viewerIsAssignedDriver]);
   // PERF-004 (auditoría oct 2026): la posición en vivo del repartidor dejó de escribirse en el
   // doc del pedido (cada fix despertaba a todos los listeners de la orden) y vive en
   // orders/{id}/live/driver — SOLO esta pantalla lo escucha, y solo mientras el pedido está

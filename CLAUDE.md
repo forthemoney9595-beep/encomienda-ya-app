@@ -2790,8 +2790,20 @@ mezclar. Superficie real del cambio: chica, y ninguna regla ni ruta de API cambi
     El SDK `firebase` es idéntico en main → pre-existente, no del salto. Impacto real:
     el panel del repartidor solo lee `order_private` de pedidos YA asignados (no lo sufre);
     la página de detalle lee antes de tomar y su efecto no se re-ejecuta tras tomar → quien
-    toma desde el detalle no ve la dirección hasta recargar. Pendiente de una pasada propia
-    (re-leer `order_private` al cambiar `deliveryPersonId`, y si persiste, sonda del SDK).
+    toma desde el detalle no ve la dirección hasta recargar. ~~Pendiente de una pasada propia~~
+    **Resuelto el 9/11/2026:** el detalle relee `order_private` cuando cambia
+    `deliveryPersonId` y, si quien mira es el repartidor recién asignado, reintenta hasta 3
+    veces (1,5 s y 3 s). Verificado con `_pw-fix-kpi-detail.js` (UI real: no ve la dirección
+    antes de tomar, la ve ~2,5–4 s después sin recargar). `_e2e-pool-privacy` sigue en 9/10
+    porque prueba la lectura inmediata desde la MISMA instancia del SDK sin reintento; es
+    propio del script, no de la página.
+  - **Tarjetas de KPI superpuestas en celular (auditoría Impeccable 9/11):** en `KpiRow` el
+    envoltorio de cada `KpiCard` lleva `min-w-0` (lo necesita la grilla de escritorio) y en la
+    fila flex del celular se achicaba casi a cero mientras la tarjeta exigía 168 px → se
+    pisaban en `/admin` y `/admin/finances`. Arreglado en `KpiRow` (no en `KpiCard`, que
+    también vive en grillas comunes): ancho fijo 184 px sin encogerse, envoltorio en grilla de
+    una celda y `h-auto` para que la fila iguale alturas (`h-full` impedía el stretch).
+    Verificado 15/15 a 430 y 1440, `_pw-admin-t1` 81/81, `_pw-admin-t2` 76/76.
   - `tanda1-ui` 9/10: el optimizador de imágenes devuelve 400 a `placehold.co` porque sirve
     **SVG** (`dangerouslyAllowSVG` apagado, misma política que en 14). Solo afecta
     imágenes de seed; `StoreImage` cae al degradé. Las fotos reales (JPEG en Storage) no.
@@ -3441,6 +3453,22 @@ lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo ti
   `marketing`, `design`, `data`, `sales`, `productivity`, `figma`, `postiz`. Se descartaron
   a propósito los no revisados por Anthropic/partner (ux-ui-audit, design-skills, Obsidian
   Notes): lo que aportan ya lo cubren `design:*` + los scripts Playwright propios.
+- **Excepción aprobada por David (9/11/2026): `impeccable` (pbakaus/impeccable, Apache 2.0,
+  ~106k estrellas)**, el plugin de diseño "anti aspecto IA" (`/impeccable critique`, `audit`,
+  `polish`…). Se revisó el código antes de instalarlo (v4.8.1, commit 613fbf8). Trae hooks que
+  corren un motor local en Rust al iniciar sesión, después de cada Edit/Write y al terminar
+  cada turno; el motor se descarga de los releases de GitHub y se verifica con SHA-256 (el de
+  Windows coincidió con el manifiesto). **Registro apagado con dos barreras independientes**:
+  `~/.impeccable/config.json` con `"telemetry": false` y `env` en `~/.claude/settings.json`
+  (`IMPECCABLE_NO_TELEMETRY=1`, `IMPECCABLE_NO_UPDATE_CHECK=1`); `impeccable telemetry`
+  confirma `off` con cada una por separado. Con el registro apagado, la única llamada que
+  queda es la "tirada" de direcciones de diseño a `impeccable.style/api/roll` cuando se pide
+  trabajo NUEVO, marcada para que no se guarde; el código del proyecto nunca se envía.
+  **No usar `/impeccable live`**: su agente de edición lanza `claude` con
+  `--permission-mode bypassPermissions`. La generación de imágenes solo corre con
+  `OPENAI_API_KEY`, que no está definida. Su estado local vive en `.impeccable/` (gitignored).
+  Para apagar solo los hooks en este repo: `impeccable hook off`, o la variable
+  `IMPECCABLE_HOOK_DISABLED=1`.
 
 ## 🔒 PRINCIPIO DE PRODUCTO — el dinero nunca sale solo (decisión del usuario, ago 2026)
 **Ninguna plata sale de la plataforma sin que el admin analice y apruebe ese caso

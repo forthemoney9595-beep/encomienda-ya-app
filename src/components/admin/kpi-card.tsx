@@ -112,11 +112,21 @@ export function KpiCard(props: KpiCardProps) {
   return <div className="h-full min-w-0 snap-start">{body}</div>;
 }
 
-/** Fila de KPIs: scroll horizontal controlado en celular, grilla en escritorio. */
+/**
+ * Fila de KPIs: scroll horizontal controlado en celular, grilla en escritorio.
+ * En celular cada tarjeta tiene ancho FIJO y no se encoge: el envoltorio de KpiCard lleva
+ * `min-w-0` (lo necesita la grilla de escritorio), y en una fila flex eso lo dejaba achicarse
+ * casi a cero mientras la tarjeta de adentro exige 168 px → las tarjetas se pisaban y tapaban
+ * el texto (auditoría Impeccable 9/11). El ancho se fija acá, en la fila, y no en KpiCard,
+ * porque KpiCard también vive dentro de grillas comunes donde tiene que seguir adaptándose.
+ */
 export function KpiRow({ children, cols = 6, className }: { children: React.ReactNode; cols?: 4 | 5 | 6; className?: string }) {
   const grid = cols === 4 ? 'lg:grid-cols-4' : cols === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-6';
   return (
-    <div className={cn('flex min-w-0 snap-x gap-3 overflow-x-auto pb-1 no-scrollbar lg:grid lg:overflow-visible lg:pb-0', grid, className)}>
+    // `[&>*]:grid`: el envoltorio pasa a grilla de una celda para que la tarjeta lo llene en ancho
+    // y alto. `[&>*]:h-auto`: el `h-full` del envoltorio, dentro de una fila flex sin alto fijo,
+    // le impedía estirarse (stretch solo aplica con alto `auto`) → tarjetas de alturas distintas.
+    <div className={cn('flex min-w-0 snap-x gap-3 overflow-x-auto pb-1 no-scrollbar [&>*]:grid [&>*]:h-auto [&>*]:w-[184px] [&>*]:shrink-0 lg:grid lg:overflow-visible lg:pb-0 lg:[&>*]:h-full lg:[&>*]:w-auto', grid, className)}>
       {children}
     </div>
   );
