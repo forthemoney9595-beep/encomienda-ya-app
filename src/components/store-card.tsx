@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { StoreImage } from '@/components/store-image';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
+import { TextTag } from '@/components/price-tag';
 
 export interface StoreCardStore {
   id: string;
@@ -55,8 +56,10 @@ export function StoreCard({
     >
       <Card
         className={cn(
-          'relative flex h-full flex-col overflow-hidden border-transparent transition-colors',
-          'hover:border-primary/30',
+          'relative flex h-full flex-col overflow-hidden transition-colors',
+          // Celular: fila de lista ("Los de la cuadra"), sin caja; desde sm, tarjeta.
+          isCarousel ? 'border-2 border-foreground' : 'rounded-none border-0 border-b bg-transparent sm:rounded-lg sm:border-2 sm:border-foreground sm:bg-card',
+          'hover:bg-muted/40',
         )}
       >
         {/* Badge de descuento junto al nombre, rubro en el color de su FAMILIA + "Llega
@@ -72,7 +75,7 @@ export function StoreCard({
           <div
             className={cn(
               'relative shrink-0 overflow-hidden',
-              isCarousel ? 'aspect-[16/10] w-full' : 'h-24 w-24 self-center rounded-xl ml-3 my-2 sm:ml-0 sm:my-0 sm:h-auto sm:w-full sm:self-auto sm:rounded-none sm:aspect-[16/10]',
+              isCarousel ? 'aspect-[16/10] w-full border-b-2 border-foreground' : 'h-[5.25rem] w-[5.25rem] self-center rounded-lg border-2 border-foreground my-3 sm:my-0 sm:h-auto sm:w-full sm:self-auto sm:rounded-none sm:border-0 sm:border-b-2 sm:aspect-[16/10]',
             )}
           >
             <StoreImage
@@ -87,23 +90,21 @@ export function StoreCard({
           </div>
 
           {/* --- Contenido --- */}
-          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 p-3 sm:p-4 sm:pb-2">
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-3 pl-3 pr-10 sm:p-4 sm:pb-3">
             <div className="flex items-center gap-2">
-              <h3 className="line-clamp-1 font-headline text-sm font-bold sm:text-base">{store.name}</h3>
+              <h3 className="line-clamp-1 font-headline text-xl font-extrabold leading-tight">{store.name}</h3>
               {(store.maxDiscountPercent || 0) > 0 && (
-                <span className="shrink-0 rounded-full bg-offer px-2 py-0.5 text-xs font-bold text-offer-foreground">
-                  Hasta -{store.maxDiscountPercent}%
-                </span>
+                <TextTag offer className="shrink-0 text-sm">−{store.maxDiscountPercent}%</TextTag>
               )}
             </div>
 
             {/* Rubro coloreado por familia + tiempo estimado */}
-            <p className="line-clamp-1 text-xs sm:text-[13px]">
+            <p className="line-clamp-1 text-sm">
               <span className={cn('font-bold', catStyle.text)}>{formatCategoryLabel(store.category ?? '') || 'General'}</span>
               <span className="text-muted-foreground"> · Llega en {store.deliveryTime || '30-45 min'}</span>
             </p>
 
-            <div className="flex items-center gap-3 text-xs sm:text-[13px]">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
               {(store.rating || 0) > 0 && (
                 <span className="flex items-center gap-1 font-bold text-warning">
                   <Star className="h-3.5 w-3.5 fill-current" />

@@ -257,3 +257,70 @@ html:has([data-surface="admin"]) {
   --primary-ink: 332 100% 84%;
   --cat-food-ink: 25 92% 66%;
 }
+
+/* ── Rediseño 2 · las dos piezas de identidad del "Toldo" ─────────────────────────────
+   Clases LITERALES a propósito (el JIT de Tailwind escanea texto: nada de armar nombres
+   por concatenación). Las rayas usan los tonos PROFUNDOS de cada familia en los dos temas:
+   el toldo es un dibujo y tiene que verse igual de noche; en la pizarra cambia el "lienzo"
+   (--awn-paper) a un crudo, como una lona.
+   Toldo: rayas del color del rubro + festón abajo. Componente: components/awning.tsx. */
+.awn {
+  --c: #BD3F0B;
+  --awn-paper: #FFFFFF;
+  --p: color-mix(in srgb, var(--c) 22%, var(--awn-paper));
+  position: relative;
+  background: repeating-linear-gradient(90deg, var(--c) 0 13px, var(--p) 13px 26px);
+}
+.dark .awn { --awn-paper: #E9E4DC; }
+.awn::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 7px;
+  background:
+    radial-gradient(circle at 6.5px 0, var(--c) 6.5px, transparent 7px) 0 0 / 26px 7px repeat-x,
+    radial-gradient(circle at 19.5px 0, var(--p) 6.5px, transparent 7px) 0 0 / 26px 7px repeat-x;
+}
+.awn-brand { --c: #B0145D; }
+.awn-food { --c: #BD3F0B; }
+.awn-fast { --c: #A8320F; }
+.awn-drink { --c: #B8501A; }
+.awn-kiosk { --c: #7A4A00; }
+.awn-market { --c: #875600; }
+.awn-pharma { --c: #0D7266; }
+.awn-cloth { --c: #2347AC; }
+.awn-home { --c: #1F4F8F; }
+.awn-other { --c: #3B4FA8; }
+
+/* Etiqueta de precio: punta + agujerito. Componente: components/price-tag.tsx. */
+.price-tag {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  padding: 0.15em 0.55em 0.15em 1.15em;
+  clip-path: polygon(0.6em 0, 100% 0, 100% 100%, 0.6em 100%, 0 50%);
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-family: var(--font-cartel), var(--font-body), system-ui, sans-serif;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.price-tag::before {
+  content: '';
+  position: absolute;
+  left: 0.5em;
+  top: 50%;
+  width: 0.32em;
+  height: 0.32em;
+  margin-top: -0.16em;
+  border-radius: 9999px;
+  background: hsl(var(--background));
+}
+.price-tag-offer {
+  background: hsl(var(--offer));
+  color: hsl(var(--offer-foreground));
+}

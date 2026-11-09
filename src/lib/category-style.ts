@@ -22,67 +22,71 @@ export type CategoryStyle = {
   ring: string;     // anillo del chip activo
   solid: string;    // badge lleno — incluye el color de texto correcto para ese fondo
   gradient: string; // degradé para el placeholder de imagen (ver components/store-image.tsx)
+  // Rediseño 2 (Toldo): clase LITERAL del toldo a rayas del rubro (globals.css, .awn-*).
+  // `solid` usa text-background: blanco sobre los tonos profundos del claro y oscuro sobre
+  // los tonos suaves de la pizarra, así el relleno se lee en los dos temas.
+  awning: string;
 };
 
 export const CATEGORY_STYLES: Record<string, CategoryStyle> = {
   brand: {
     icon: LayoutGrid,
     bg: 'bg-cat-brand/15', text: 'text-cat-brand', ring: 'ring-cat-brand/40',
-    solid: 'bg-cat-brand text-white',
+    solid: 'bg-cat-brand text-background', awning: 'awn-brand',
     gradient: 'from-cat-brand via-cat-brand/70 to-cat-brand/40',
   },
   food: {
     icon: Utensils,
     bg: 'bg-cat-food/15', text: 'text-cat-food', ring: 'ring-cat-food/40',
-    solid: 'bg-cat-food text-black',
+    solid: 'bg-cat-food text-background', awning: 'awn-food',
     gradient: 'from-cat-food via-cat-food/70 to-cat-fast/60',
   },
   fast: {
     icon: Sandwich,
     bg: 'bg-cat-fast/15', text: 'text-cat-fast', ring: 'ring-cat-fast/40',
-    solid: 'bg-cat-fast text-white',
+    solid: 'bg-cat-fast text-background', awning: 'awn-fast',
     gradient: 'from-cat-fast via-cat-fast/70 to-cat-food/60',
   },
   drink: {
     icon: Coffee,
     bg: 'bg-cat-drink/15', text: 'text-cat-drink', ring: 'ring-cat-drink/40',
-    solid: 'bg-cat-drink text-black',
+    solid: 'bg-cat-drink text-background', awning: 'awn-drink',
     gradient: 'from-cat-drink via-cat-drink/70 to-cat-food/60',
   },
   kiosk: {
     icon: Store,
     bg: 'bg-cat-kiosk/15', text: 'text-cat-kiosk', ring: 'ring-cat-kiosk/40',
-    solid: 'bg-cat-kiosk text-black',
+    solid: 'bg-cat-kiosk text-background', awning: 'awn-kiosk',
     gradient: 'from-cat-kiosk via-cat-kiosk/70 to-cat-market/60',
   },
   market: {
     icon: ShoppingCart,
     bg: 'bg-cat-market/15', text: 'text-cat-market', ring: 'ring-cat-market/40',
-    solid: 'bg-cat-market text-black',
+    solid: 'bg-cat-market text-background', awning: 'awn-market',
     gradient: 'from-cat-market via-cat-market/70 to-cat-kiosk/60',
   },
   pharma: {
     icon: Pill,
     bg: 'bg-cat-pharma/15', text: 'text-cat-pharma', ring: 'ring-cat-pharma/40',
-    solid: 'bg-cat-pharma text-white',
+    solid: 'bg-cat-pharma text-background', awning: 'awn-pharma',
     gradient: 'from-cat-pharma via-cat-pharma/70 to-cat-pharma/40',
   },
   cloth: {
     icon: Shirt,
     bg: 'bg-cat-cloth/15', text: 'text-cat-cloth', ring: 'ring-cat-cloth/40',
-    solid: 'bg-cat-cloth text-white',
+    solid: 'bg-cat-cloth text-background', awning: 'awn-cloth',
     gradient: 'from-cat-cloth via-cat-cloth/70 to-cat-home/60',
   },
   home: {
     icon: Laptop,
     bg: 'bg-cat-home/15', text: 'text-cat-home', ring: 'ring-cat-home/40',
-    solid: 'bg-cat-home text-white',
+    solid: 'bg-cat-home text-background', awning: 'awn-home',
     gradient: 'from-cat-home via-cat-home/70 to-cat-cloth/60',
   },
   other: {
     icon: Store,
     bg: 'bg-cat-other/15', text: 'text-cat-other', ring: 'ring-cat-other/40',
-    solid: 'bg-cat-other text-black',
+    solid: 'bg-cat-other text-background', awning: 'awn-other',
     gradient: 'from-cat-other via-cat-other/70 to-cat-cloth/60',
   },
 };

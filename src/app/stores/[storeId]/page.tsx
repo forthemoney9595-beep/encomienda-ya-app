@@ -25,6 +25,8 @@ import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLA
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { StarRating } from '@/components/star-rating';
+import { PriceTag } from '@/components/price-tag';
+import { Awning } from '@/components/awning';
 import { ImageLightbox } from '@/components/image-lightbox';
 import { format } from 'date-fns';
 import { fmtDate } from '@/lib/format-date';
@@ -400,8 +402,8 @@ export default function StorePublicPage() {
       {/* BANNER — más bajo que antes (Rediseño 2, Tanda 0): en celular el primer producto
           aparecía recién después de una pantalla y media de cabecera. Sin velo degradé: el
           nombre ya no va encima de la foto. */}
-      <div className="relative -mx-4 sm:mx-0 mb-4">
-        <div className="relative aspect-[3.2/1] sm:aspect-[4/1] sm:rounded-2xl overflow-hidden">
+      <div className="relative -mx-4 sm:mx-0">
+        <div className="relative aspect-[3.2/1] sm:aspect-[4/1] sm:rounded-t-lg overflow-hidden">
             <StoreImage
               src={store.imageUrl}
               name={store.name}
@@ -410,16 +412,20 @@ export default function StorePublicPage() {
               grayscale={!storeStatus.isOpen}
               sizes="(max-width: 640px) 100vw, 1100px"
               priority
-              initialsClassName="text-5xl"
+              withName
+              initialsClassName="text-4xl"
             />
         </div>
       </div>
+
+      {/* Franja de TOLDO del rubro (Rediseño 2): la firma visual de la tienda. */}
+      <Awning category={storeCategory} className="-mx-4 sm:mx-0 h-5 mb-6" />
 
       {/* INFO — todo en dos renglones. La dirección y el horario de la semana viven en la
           pestaña Info (antes se repetían en una tarjeta de tres bloques acá arriba). */}
       <div className="px-4 sm:px-0 mb-6 space-y-2">
           <div className="flex items-start justify-between gap-3">
-              <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight">{store.name}</h1>
+              <h1 className="font-headline text-4xl sm:text-5xl font-extrabold leading-none tracking-tight text-balance">{store.name}</h1>
               <Button variant="outline" size="icon" onClick={handleShare} className="h-10 w-10 shrink-0" aria-label="Compartir tienda">
                   <Share2 className="h-4 w-4" />
               </Button>
@@ -476,7 +482,7 @@ export default function StorePublicPage() {
 
       {/* PESTAÑAS — antes las reseñas quedaban al fondo de todo el scroll del menú. */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="px-4 sm:px-0">
-        <TabsList className="mb-6 h-auto rounded-full bg-muted/60 p-1">
+        <TabsList className="mb-6 h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
           {[
             { v: 'menu', label: 'Menú' },
             { v: 'info', label: 'Info' },
@@ -485,7 +491,7 @@ export default function StorePublicPage() {
             <TabsTrigger
               key={t.v}
               value={t.v}
-              className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              className="rounded-none border-b-4 border-transparent px-0 pb-2 pt-1 font-headline text-lg font-bold text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
               {t.label}
             </TabsTrigger>
@@ -793,21 +799,21 @@ function StoreNotFound({ router }: { router: any }) {
 function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: { product: Product, onAdd: (p: Product) => void, onOpenDetail: (p: Product) => void, isFeatured?: boolean, isDisabled?: boolean }) {
     const outOfStock = product.stock != null && product.stock <= 0;
     return (
-        <Card className={`flex flex-col overflow-hidden border hover:shadow-md transition-all ${isFeatured ? 'border-warning/30 bg-warning/5' : ''} ${(isDisabled || outOfStock) ? 'opacity-70 grayscale' : ''}`}>
+        <Card className={`flex flex-col overflow-hidden border ${isFeatured ? 'border-warning/40' : ''}`}>
             <button type="button" onClick={() => onOpenDetail(product)} className="text-left">
-                <div className="relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden">
+                <div className={`relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden ${(isDisabled || outOfStock) ? 'opacity-50 grayscale' : ''}`}>
                     {product.imageUrl ? (
-                        <img loading="lazy" decoding="async" src={product.imageUrl} alt={product.name} className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
+                        <img loading="lazy" decoding="async" src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
                         <Package className="h-10 w-10 text-muted-foreground/50" />
                     )}
                     {isFeatured && (
-                        <span className="absolute top-2 right-2 bg-warning text-warning-foreground text-xs font-bold px-2 py-1 rounded-full shadow-sm">
+                        <span className="absolute top-2 right-2 bg-foreground text-background text-xs font-bold px-2 py-1 rounded-full">
                             POPULAR
                         </span>
                     )}
                     {!outOfStock && product.stock != null && product.stock <= 3 && (
-                        <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1 rounded-full shadow-sm">
+                        <span className="absolute top-2 left-2 bg-warning text-warning-foreground text-xs font-bold px-2 py-1 rounded-full">
                             Quedan {product.stock}
                         </span>
                     )}
@@ -822,11 +828,11 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
                 <CardHeader className="p-4 pb-0">
                     <div className="flex justify-between items-start gap-2">
                         <CardTitle className="text-base line-clamp-1">{product.name}</CardTitle>
-                        <span className="flex flex-col items-end shrink-0">
+                        <span className="flex flex-col items-end gap-1 shrink-0">
+                            <PriceTag value={effectivePrice(product)} offer={!!product.discountPercent} className="text-base" />
                             {!!product.discountPercent && (
-                                <span className="text-xs text-muted-foreground line-through">${product.price}</span>
+                                <span className="text-xs text-muted-foreground line-through">{money(product.price)}</span>
                             )}
-                            <span className="font-bold text-foreground">{money(effectivePrice(product))}</span>
                         </span>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
@@ -846,27 +852,27 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
 function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Product, onAdd: (p: Product) => void, onOpenDetail: (p: Product) => void, isDisabled?: boolean }) {
     const outOfStock = product.stock != null && product.stock <= 0;
     return (
-        <div className={cn('flex items-center gap-4 py-4 border-b last:border-0', (isDisabled || outOfStock) && 'opacity-60')}>
+        // Rediseño 2 (Toldo): precio en etiqueta de góndola. Antes TODA la fila se atenuaba
+        // (opacity-60) cuando no había stock y el texto quedaba en 2,5-3,4:1: ahora solo se
+        // apaga la foto y el aviso se lee. "Quedan N" va en ámbar (aviso), no en rojo (error).
+        <div className="flex items-center gap-4 py-4 border-b last:border-0">
             <button type="button" onClick={() => onOpenDetail(product)} className="flex-1 min-w-0 text-left">
                 <h3 className="font-semibold line-clamp-1">{product.name}</h3>
-                <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>
-                <p className="mt-1.5 flex items-center gap-2">
+                {product.description && <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>}
+                <p className="mt-2 flex flex-wrap items-center gap-2">
+                    <PriceTag value={effectivePrice(product)} offer={!!product.discountPercent} className="text-lg" />
                     {!!product.discountPercent && (
-                        <span className="text-xs text-muted-foreground line-through">{money(product.price)}</span>
-                    )}
-                    <span className="font-bold text-foreground">{money(effectivePrice(product))}</span>
-                    {!!product.discountPercent && (
-                        <span className="rounded-full bg-offer px-1.5 py-0.5 text-xs font-bold text-offer-foreground">-{product.discountPercent}%</span>
+                        <span className="text-sm text-muted-foreground line-through">{money(product.price)}</span>
                     )}
                 </p>
                 {outOfStock ? (
-                    <p className="text-xs font-medium text-destructive mt-1">Sin stock</p>
+                    <p className="text-sm font-semibold text-muted-foreground mt-1">Sin stock por hoy</p>
                 ) : product.stock != null && product.stock <= 3 ? (
-                    <p className="text-xs font-medium text-destructive mt-1">Quedan {product.stock}</p>
+                    <p className="text-sm font-semibold text-warning mt-1">Quedan {product.stock}</p>
                 ) : null}
             </button>
             <div className="relative h-24 w-24 shrink-0">
-                <button type="button" onClick={() => onOpenDetail(product)} className="h-24 w-24 rounded-xl bg-muted border overflow-hidden flex items-center justify-center">
+                <button type="button" onClick={() => onOpenDetail(product)} className={cn('h-24 w-24 rounded-lg bg-muted border overflow-hidden flex items-center justify-center', (isDisabled || outOfStock) && 'opacity-50 grayscale')}>
                     {product.imageUrl ? (
                         <img loading="lazy" decoding="async" src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
@@ -977,17 +983,17 @@ function QuantityControl({ product, onAdd, isDisabled, variant = 'full', maxQuan
                     onClick={() => onAdd(product)}
                     disabled={isDisabled}
                     aria-label={`Agregar ${product.name}`}
-                    className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md disabled:opacity-50"
+                    data-testid="add-product" className="h-11 w-11 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50"
                 >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-5 w-5" aria-hidden="true" />
                 </button>
             );
         }
         return (
-            <div className="flex items-center gap-0.5 bg-primary text-primary-foreground rounded-full shadow-md px-1 h-9">
-                <button onClick={dec} disabled={isDisabled} aria-label={`Quitar uno de ${product.name}`} className="h-7 w-7 flex items-center justify-center"><Minus className="h-3.5 w-3.5" /></button>
-                <span className="text-xs font-bold w-3 text-center">{quantity}</span>
-                <button onClick={inc} disabled={isDisabled || atMax} aria-label={`Agregar uno de ${product.name}`} className="h-7 w-7 flex items-center justify-center disabled:opacity-50"><Plus className="h-3.5 w-3.5" /></button>
+            <div className="flex items-center gap-0.5 bg-primary text-primary-foreground rounded-lg px-0.5 h-11">
+                <button onClick={dec} disabled={isDisabled} aria-label={`Quitar uno de ${product.name}`} className="h-10 w-9 flex items-center justify-center"><Minus className="h-4 w-4" /></button>
+                <span className="font-headline text-base font-extrabold w-4 text-center tabular-nums">{quantity}</span>
+                <button onClick={inc} disabled={isDisabled || atMax} aria-label={`Agregar uno de ${product.name}`} className="h-10 w-9 flex items-center justify-center disabled:opacity-50"><Plus className="h-4 w-4" /></button>
             </div>
         );
     }

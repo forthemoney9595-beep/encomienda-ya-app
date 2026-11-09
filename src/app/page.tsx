@@ -17,6 +17,8 @@ import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Awning } from '@/components/awning';
+import { TextTag } from '@/components/price-tag';
 
 // --- TIPOS ---
 interface Store {
@@ -68,8 +70,8 @@ const StoreRow = ({
   title, icon: Icon, accent, children,
 }: { title: string; icon: LucideIcon; accent: string; children: React.ReactNode }) => (
   <section className="mb-8">
-    <h2 className="font-headline text-lg font-bold mb-3 flex items-center gap-2">
-      <Icon className={cn('h-5 w-5', accent)} />
+    <h2 className="font-headline text-2xl font-extrabold mb-3 flex items-center gap-2 border-b-2 border-foreground pb-1">
+      <Icon className={cn('h-5 w-5', accent)} aria-hidden="true" />
       {title}
     </h2>
     {/* min-w-0 obligatorio: sin esto el contenido ancho de la fila estira toda la página
@@ -94,25 +96,24 @@ const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, coun
       const Icon = style.icon;
       const isActive = selectedCategory === cat;
       return (
+        // Rediseño 2 (Toldo): cada rubro es una baldosa con el toldo de su color arriba, como
+        // la fachada de un negocio. La activa lleva la marca abajo (no un anillo con brillo).
         <button
           key={cat}
           onClick={() => setSelectedCategory(cat)}
           aria-pressed={isActive}
-          className="flex flex-col items-center gap-1.5 shrink-0"
+          className={cn(
+            'w-[5.5rem] shrink-0 overflow-hidden rounded-lg border-2 border-foreground pb-2 text-center transition-colors',
+            isActive ? 'bg-primary/10 shadow-[inset_0_-4px_0_hsl(var(--primary))]' : 'bg-card',
+          )}
         >
-          <div className={cn(
-            'h-14 w-14 rounded-2xl flex items-center justify-center transition-colors ring-2',
-            isActive
-              ? cn('ring-offset-2 ring-offset-background', style.solid, style.ring)
-              : cn('ring-transparent', style.bg),
-          )}>
-            <Icon className={cn('h-6 w-6', isActive ? '' : style.text)} />
-          </div>
-          <span className={cn('text-xs font-medium whitespace-nowrap', isActive ? 'text-foreground' : 'text-muted-foreground')}>
+          <Awning category={cat === 'Todas' ? 'todas' : cat} className="mb-3 h-5" />
+          <Icon className={cn('mx-auto h-7 w-7', style.text)} aria-hidden="true" />
+          <span className="mt-1 block px-1 font-headline text-base font-bold leading-tight">
             {formatCategoryLabel(cat)}
           </span>
           {counts[cat] !== undefined && (
-            <span className="text-xs leading-none text-muted-foreground/70">{counts[cat]}</span>
+            <span className="block text-sm leading-none text-muted-foreground">{counts[cat]}</span>
           )}
         </button>
       );
@@ -147,7 +148,7 @@ const FilterBar = ({ searchTerm, setSearchTerm }: FilterBarProps) => (
 // "Hola, david".
 function firstName(full?: string | null): string {
   const first = (full || '').trim().split(/\s+/)[0];
-  if (!first) return 'te damos la bienvenida';
+  if (!first) return ''; // sin nombre: el saludo usa otra frase
   return first.charAt(0).toLocaleUpperCase('es-AR') + first.slice(1);
 }
 
@@ -190,12 +191,11 @@ function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscou
     <Link href={`/stores/${offer.id}`} className="block" draggable={false}>
       {/* Naranja de OFERTAS con texto oscuro: el blanco sobre este naranja daba 2,2-2,6:1
           (auditoría Impeccable 9/11). El oscuro se lee en los dos temas. */}
-      <div className="flex items-center justify-between gap-3 rounded-2xl bg-offer px-4 py-3.5 text-offer-foreground">
-        <div className="min-w-0">
-          <p className="line-clamp-1 font-headline text-base font-bold">
-            Hasta -{offer.maxDiscountPercent}% en {offer.name}
-          </p>
-          <p className="text-sm">Ofertas de hoy · tocá para verlas</p>
+      <div className="flex items-center gap-4 rounded-lg border-2 border-foreground bg-card px-3 py-3">
+        <TextTag offer className="text-4xl">−{offer.maxDiscountPercent}%</TextTag>
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-1 font-headline text-xl font-extrabold">En {offer.name}</p>
+          <p className="text-sm text-muted-foreground">Ofertas de hoy · tocá para verlas</p>
         </div>
         <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
       </div>
@@ -417,8 +417,8 @@ function HomeContent() {
       <div className="container mx-auto animate-in fade-in duration-500 pt-4">
         {/* Bienvenida compacta con CTA de registro (no el hero gigante de antes) */}
         <div className="mb-6">
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight text-balance">
-            Tu ciudad, en la puerta de tu casa
+          <h1 className="font-headline text-4xl sm:text-5xl font-extrabold leading-none tracking-tight text-balance">
+            Lo de tu barrio, en la puerta de tu casa
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Mirá las tiendas de Tinogasta. Creá tu cuenta gratis cuando quieras pedir.
@@ -459,12 +459,12 @@ function HomeContent() {
           </StoreRow>
         )}
 
-        <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
-          <ShoppingBag className="h-5 w-5 text-primary" />
-          {hasFilters ? 'Resultados' : 'Todas las tiendas'}
-          <span className="text-sm font-normal text-muted-foreground ml-2">({filteredStores.length})</span>
+        <h2 className="font-headline text-2xl font-extrabold mb-1 flex items-baseline gap-2 border-b-2 border-foreground pb-1">
+          <ShoppingBag className="h-5 w-5 self-center text-primary" aria-hidden="true" />
+          {hasFilters ? 'Resultados' : 'Los de la cuadra'}
+          <span className="ml-auto font-body text-sm font-normal text-muted-foreground">{filteredStores.length} {filteredStores.length === 1 ? 'tienda' : 'tiendas'}</span>
         </h2>
-        <div className="grid gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-0 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredStores.length === 0 ? (
             <div className="col-span-full text-center py-12 opacity-70">
               <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
@@ -514,10 +514,11 @@ function HomeContent() {
           (Rediseño 2, Tanda 0: eran las tres señas de "hecho con IA" más visibles). */}
       <div className="mb-6">
         <div className="min-w-0">
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight text-balance">
-            Hola, {firstName(userProfile?.displayName || userProfile?.name)}
+          <h1 className="font-headline text-4xl sm:text-5xl font-extrabold leading-none tracking-tight text-balance">
+            {firstName(userProfile?.displayName || userProfile?.name)
+              ? `¿Qué te traemos, ${firstName(userProfile?.displayName || userProfile?.name)}?`
+              : '¿Qué te traemos hoy?'}
           </h1>
-          <p className="text-base text-muted-foreground">¿Qué se te antoja hoy?</p>
         </div>
 
         {/* Mini-stats: todo derivado del array ya cargado, cero lecturas extra */}
@@ -560,13 +561,13 @@ function HomeContent() {
         </StoreRow>
       )}
 
-      <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
-        <ShoppingBag className="h-5 w-5 text-primary" />
-        {hasFilters ? 'Resultados' : 'Todas las tiendas'}
-        <span className="text-sm font-normal text-muted-foreground ml-2">({filteredStores.length})</span>
+      <h2 className="font-headline text-2xl font-extrabold mb-1 flex items-baseline gap-2 border-b-2 border-foreground pb-1">
+        <ShoppingBag className="h-5 w-5 self-center text-primary" aria-hidden="true" />
+        {hasFilters ? 'Resultados' : 'Los de la cuadra'}
+        <span className="ml-auto font-body text-sm font-normal text-muted-foreground">{filteredStores.length} {filteredStores.length === 1 ? 'tienda' : 'tiendas'}</span>
       </h2>
 
-      <div className="grid gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-0 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredStores.length === 0 ? (
              <div className="col-span-full text-center py-12 opacity-70">
                 <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
