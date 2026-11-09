@@ -191,9 +191,14 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
   // asignado en firestore.rules ya permite 'deliveredAt' junto con 'status'.
   // driverCoords se BORRA al entregar (Fase RR): antes la última posición del repartidor
   // quedaba persistida en la orden para siempre, legible por comprador/tienda/admin.
+  // pickedUpAt (9/11): el panel lo escribía al tocar "Ya lo retiré", pero el botón del
+  // DETALLE pasa por acá y lo perdía — el pedido quedaba sin hora de retiro (timeline del
+  // admin, "último movimiento" de pedidos trabados). La regla del repartidor ya lo permite.
   await updateDoc(orderRef, status === 'Entregado'
     ? { status, deliveredAt: serverTimestamp(), driverCoords: deleteField() }
-    : { status });
+    : status === 'En reparto'
+      ? { status, pickedUpAt: serverTimestamp() }
+      : { status });
   // PERF-004: la posición en vivo ahora es el subdoc orders/{id}/live/driver — se borra
   // también (la regla deja borrarlo al repartidor asignado y al admin). Best-effort.
   if (status === 'Entregado') {

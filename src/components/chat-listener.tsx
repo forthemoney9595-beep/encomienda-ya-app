@@ -6,16 +6,14 @@ import { useFirestore } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { usePathname } from 'next/navigation';
 
-// Sonido de notificación. PERF-011 (auditoría oct 2026): antes era un mp3 de 63 kB en mixkit.co
-// que se descargaba 2× en CADA página (StrictMode) para todos los roles, incluso en /login.
-// Ahora es local y el objeto Audio se crea recién al primer sonido.
-const NOTIFICATION_SOUND_URL = '/sounds/notify.mp3';
+// Sonido de notificación: el mismo aviso sintetizado que el resto de la app (9/11). Antes
+// era un mp3 aparte (/sounds/notify.mp3) que sonaba distinto a los demás avisos.
+import { playBeep } from '@/lib/beep';
 
 export function ChatListener(): null {
   const { user, userProfile } = useAuth();
   const firestore = useFirestore();
   const pathname = usePathname();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // El pathname se lee por REF (Tanda A de la auditoría): estaba en las deps del efecto
   // principal, así que CADA navegación tiraba abajo y volvía a levantar TODOS los
@@ -24,17 +22,7 @@ export function ChatListener(): null {
   const pathnameRef = useRef(pathname);
   useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
 
-  const playSound = () => {
-    if (!audioRef.current && typeof window !== 'undefined') {
-      audioRef.current = new Audio(NOTIFICATION_SOUND_URL);
-      audioRef.current.preload = 'auto';
-    }
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      // El navegador puede bloquear el audio si no ha habido interacción previa del usuario — es esperable, no hace falta loggearlo
-      audioRef.current.play().catch(() => {});
-    }
-  };
+  const playSound = () => playBeep();
 
   useEffect(() => {
     if (!user || !firestore || !userProfile) return;

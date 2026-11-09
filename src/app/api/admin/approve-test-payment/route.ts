@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { verifyAuthTokenStrict, verifyFullAdmin } from "@/lib/auth-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { notifyUser } from "@/lib/notify-server";
+import { money } from "@/lib/format-money";
 import { logAdminActionServer } from "@/lib/admin-audit-server";
 import { broadcastOrderToDrivers } from "@/lib/driver-broadcast";
 
@@ -87,8 +88,8 @@ export async function POST(request: Request) {
     if (storeUser) {
       await notifyUser({
         userId: storeUser,
-        title: "¡Pago Confirmado! 💰",
-        body: `Orden #${orderId.substring(0, 6)} pagada por $${paidAmount}. A cocinar.`,
+        title: "¡Pago Confirmado!",
+        body: `Orden #${orderId.substring(0, 6)} pagada por ${money(paidAmount)}. A cocinar.`,
         type: "order_paid",
         link: "/orders",
         orderId,
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
     if (order.userId) {
       await notifyUser({
         userId: order.userId,
-        title: "Pago Recibido ✅",
+        title: "Pago Recibido",
         body: "Tu pago se acreditó y la tienda ya está preparando tu pedido.",
         type: "payment_success",
         link: `/orders/${orderId}`,
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
     try {
       await broadcastOrderToDrivers({
         orderId,
-        title: "📦 Nuevo Pedido Disponible",
+        title: "Nuevo Pedido Disponible",
         body: `${order.storeName || "Una tienda"} tiene un pedido pagado para entregar. ¡Tomalo!`,
       });
     } catch (e) {

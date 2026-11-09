@@ -110,7 +110,11 @@ export function ChatWindow({ order }: ChatWindowProps) {
             // A. Guardar mensaje en Firestore
             const messageData = {
                 senderId: myUser.uid,
-                senderName: userProfile.displayName || userProfile.name || 'Usuario',
+                // La tienda firma con el nombre del local (visto en la prueba del 9/11: "Nuevo
+                // mensaje de Usuario" porque la cuenta del dueño no tiene nombre propio).
+                senderName: (myRole === 'store' ? order.storeName : null)
+                    || userProfile.displayName || userProfile.name
+                    || (myRole === 'store' ? 'La tienda' : myRole === 'delivery' ? 'Tu repartidor' : 'Cliente'),
                 senderRole: myRole || 'buyer', 
                 text: text.trim(),
                 createdAt: serverTimestamp(),

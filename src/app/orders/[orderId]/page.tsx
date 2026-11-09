@@ -420,7 +420,7 @@ export default function OrderTrackingPage() {
     }
 
     const handleAcceptOrder = async () => {
-        if (!user || !orderRef || !order || !firestore) return;
+        if (!user || !orderRef || !order || !firestore || isAccepting) return;
         setIsAccepting(true);
         try {
             // Tomar el pedido va por /api/orders/take (AUTHZ-001): asigna en tx claim-once,

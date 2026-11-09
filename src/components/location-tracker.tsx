@@ -37,8 +37,11 @@ const MIN_MOVE_MS = 10_000;    // ...pero nunca más seguido que esto
 export const liveDriverRef = (firestore: Firestore, orderId: string) => doc(firestore, 'orders', orderId, 'live', 'driver');
 
 // A nivel módulo: con varios pedidos activos hay un tracker por pedido (el panel monta
-// uno por cada orden en curso) — el toast "GPS Activo" tiene que salir UNA vez, no tres.
+// uno por cada orden en curso, y el detalle monta otro) — los toasts tienen que salir UNA
+// vez, no uno por tracker (prueba del 9/11: el "Error GPS" salió dos veces).
 let lastGpsToastAt = 0;
+let lastGpsErrorToastAt = 0;
+let gpsHadError = false;
 
 export function LocationTracker({ orderId, isDriver, status }: LocationTrackerProps): null {
     const firestore = useFirestore();
@@ -56,55 +59,101 @@ export function LocationTracker({ orderId, isDriver, status }: LocationTrackerPr
             return;
         }
 
-        const watchId = navigator.geolocation.watchPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords;
+        let watchId: number | null = null;
+        // Con el permiso DENEGADO el watch queda muerto: el navegador no lo reanuda solo
+        // aunque después se habilite la ubicación. Antes el pedido seguía sin GPS hasta el
+        // próximo cambio de estado (prueba del 9/11: GPS prendido tarde → el comprador no
+        // veía la moto en el tramo a la tienda). Ahora se reintenta al habilitar el permiso
+        // y al volver a la app (ej. desde los Ajustes del teléfono).
+        let denied = false;
+        let cancelled = false;
 
-                // El "GPS Activo" recién cuando de verdad hay un fix — antes se mostraba
-                // al montar, incluso con el permiso denegado (y después llegaba el error).
-                if (notifiedRef.current !== 'ok') {
-                    notifiedRef.current = 'ok';
-                    if (Date.now() - lastGpsToastAt > 60_000) {
-                        lastGpsToastAt = Date.now();
-                        toast({ title: 'GPS Activo', description: 'Compartiendo ubicación en tiempo real.' });
-                    }
-                }
+        const onPosition = async (position: GeolocationPosition) => {
+            denied = false;
+            const { latitude, longitude } = position.coords;
 
-                const now = Date.now();
-                const last = lastWriteRef.current;
-                if (last) {
-                    const elapsed = now - last.t;
-                    if (elapsed < MIN_MOVE_MS) return;
-                    const moved = distanceMeters(last, { latitude, longitude });
-                    if (moved < MIN_MOVE_METERS && elapsed < HEARTBEAT_MS) return;
+            // El "GPS Activo" recién cuando de verdad hay un fix — antes se mostraba
+            // al montar, incluso con el permiso denegado (y después llegaba el error).
+            if (notifiedRef.current !== 'ok') {
+                notifiedRef.current = 'ok';
+                if (gpsHadError || Date.now() - lastGpsToastAt > 60_000) {
+                    gpsHadError = false;
+                    lastGpsToastAt = Date.now();
+                    toast({ title: 'GPS activo', description: 'El cliente ya ve tu ubicación en el mapa.' });
                 }
-                lastWriteRef.current = { t: now, latitude, longitude };
+            }
 
-                try {
-                    await setDoc(liveDriverRef(firestore, orderId), {
-                        latitude,
-                        longitude,
-                        lastUpdate: new Date().toISOString(),
-                    });
-                } catch (error) {
-                    console.error('Error guardando ubicación:', error);
-                }
-            },
-            (error) => {
-                console.error('Error de GPS:', error);
-                if (notifiedRef.current === 'error') return;
-                notifiedRef.current = 'error';
-                toast({ variant: 'destructive', title: 'Error GPS', description: geoErrorMessage(error) });
-            },
-            {
+            const now = Date.now();
+            const last = lastWriteRef.current;
+            if (last) {
+                const elapsed = now - last.t;
+                if (elapsed < MIN_MOVE_MS) return;
+                const moved = distanceMeters(last, { latitude, longitude });
+                if (moved < MIN_MOVE_METERS && elapsed < HEARTBEAT_MS) return;
+            }
+            lastWriteRef.current = { t: now, latitude, longitude };
+
+            try {
+                await setDoc(liveDriverRef(firestore, orderId), {
+                    latitude,
+                    longitude,
+                    lastUpdate: new Date().toISOString(),
+                });
+            } catch (error) {
+                console.error('Error guardando ubicación:', error);
+            }
+        };
+
+        const onError = (error: GeolocationPositionError) => {
+            // warn y no error: es un estado del teléfono (permiso, señal), no un bug.
+            console.warn('GPS sin señal o sin permiso:', error.code, error.message);
+            if (error.code === 1) denied = true;
+            gpsHadError = true;
+            if (notifiedRef.current === 'error') return;
+            notifiedRef.current = 'error';
+            if (Date.now() - lastGpsErrorToastAt < 60_000) return;
+            lastGpsErrorToastAt = Date.now();
+            toast({
+                variant: 'destructive',
+                title: 'Sin GPS',
+                description: error.code === 1
+                    ? 'El cliente no ve tu ubicación. Activá la ubicación para esta app y volvé a esta pantalla: se reconecta sola.'
+                    : geoErrorMessage(error),
+            });
+        };
+
+        const startWatch = () => {
+            if (cancelled) return;
+            if (watchId != null) navigator.geolocation.clearWatch(watchId);
+            notifiedRef.current = null;
+            watchId = navigator.geolocation.watchPosition(onPosition, onError, {
                 enableHighAccuracy: true, // GPS real (batería), no solo WiFi
                 timeout: 10000,
                 maximumAge: 5000,
-            }
-        );
+            });
+        };
+
+        startWatch();
+
+        const onVisible = () => {
+            if (document.visibilityState === 'visible' && denied) startWatch();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+
+        let permission: PermissionStatus | null = null;
+        navigator.permissions?.query({ name: 'geolocation' as PermissionName })
+            .then((p) => {
+                if (cancelled) return;
+                permission = p;
+                p.onchange = () => { if (p.state === 'granted' && denied) startWatch(); };
+            })
+            .catch(() => { /* navegadores sin Permissions API: queda el reintento al volver */ });
 
         return () => {
-            navigator.geolocation.clearWatch(watchId);
+            cancelled = true;
+            if (watchId != null) navigator.geolocation.clearWatch(watchId);
+            document.removeEventListener('visibilitychange', onVisible);
+            if (permission) permission.onchange = null;
             lastWriteRef.current = null;
             notifiedRef.current = null;
         };

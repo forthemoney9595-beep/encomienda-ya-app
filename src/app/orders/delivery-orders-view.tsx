@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
@@ -105,6 +105,8 @@ export default function DeliveryOrdersView() {
     if (tab === 'available' || tab === 'active') setActiveTab(tab);
   }, [searchParams]);
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
+  const [takingId, setTakingId] = useState<string | null>(null);
+  const takingRef = useRef(false);
 
   // Soltar pedido (antes de retirar) / Reportar problema (después de retirar) -- un
   // mismo diálogo para las dos, ver /api/orders/release y /api/orders/report-problem.
@@ -188,6 +190,9 @@ export default function DeliveryOrdersView() {
   // A. TOMAR PEDIDO -> Pasa a 'En camino'
   const handleTakeOrder = async (order: Order) => {
     if (!user || !firestore) return;
+    // Doble toque (prueba del 9/11): con la respuesta lenta salían DOS pedidos a la API; uno
+    // lo tomaba y el otro volvía 409 → el repartidor veía "Pedido ya tomado" aunque era suyo.
+    if (takingRef.current) return;
     if ((order as any).userId === user.uid) {
       toast({ variant: 'destructive', title: 'Este pedido es tuyo', description: 'Tu propio pedido lo lleva otro repartidor.' });
       return;
@@ -210,6 +215,8 @@ export default function DeliveryOrdersView() {
       });
       return;
     }
+    takingRef.current = true;
+    setTakingId(order.id);
     try {
       // Tomar el pedido va por /api/orders/take (AUTHZ-001): asigna en una tx claim-once Y
       // espeja deliveryPersonId en order_private (para que el repartidor pueda leer la PII sin
@@ -232,6 +239,9 @@ export default function DeliveryOrdersView() {
           ? "Otro repartidor ya tomó este pedido justo antes que tú."
           : "No se pudo tomar el pedido.",
       });
+    } finally {
+      takingRef.current = false;
+      setTakingId(null);
     }
   };
 
@@ -437,9 +447,11 @@ export default function DeliveryOrdersView() {
                         className="w-full"
                         size="lg"
                         onClick={() => handleTakeOrder(order)}
-                        disabled={!isApprovedDriver || myActiveOrders.length >= MAX_ACTIVE_ORDERS}
+                        disabled={!isApprovedDriver || myActiveOrders.length >= MAX_ACTIVE_ORDERS || takingId !== null}
                     >
-                        {!isApprovedDriver
+                        {takingId === order.id
+                          ? 'Tomando el pedido…'
+                          : !isApprovedDriver
                           ? (isSuspended ? 'Cuenta suspendida' : 'Cuenta pendiente de aprobación')
                           : myActiveOrders.length >= MAX_ACTIVE_ORDERS
                           ? `Ya tenés ${MAX_ACTIVE_ORDERS} pedidos en curso`
