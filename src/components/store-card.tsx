@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { StoreImage } from '@/components/store-image';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
-import { TextTag } from '@/components/price-tag';
+import { Pill } from '@/components/price-pill';
 
 export interface StoreCardStore {
   id: string;
@@ -58,8 +58,9 @@ export function StoreCard({
         className={cn(
           'relative flex h-full flex-col overflow-hidden transition-colors',
           // Celular: fila de lista ("Los de la cuadra"), sin caja; desde sm, tarjeta.
-          isCarousel ? 'border-2 border-foreground' : 'rounded-none border-0 border-b bg-transparent sm:rounded-lg sm:border-2 sm:border-foreground sm:bg-card',
-          'hover:bg-muted/40',
+          // Vidrio (9/11/2026): la tarjeta es la <Card> de vidrio; en celular la fila no lleva caja.
+          isCarousel ? '' : 'rounded-none border-0 border-b border-border/70 bg-transparent shadow-none backdrop-blur-none sm:rounded-card sm:border sm:border-[color:var(--glass-line)] sm:bg-[color:var(--glass)] sm:shadow-[var(--glass-shadow)]',
+          'hover:bg-foreground/[0.04]',
         )}
       >
         {/* Badge de descuento junto al nombre, rubro en el color de su FAMILIA + "Llega
@@ -75,7 +76,7 @@ export function StoreCard({
           <div
             className={cn(
               'relative shrink-0 overflow-hidden',
-              isCarousel ? 'aspect-[16/10] w-full border-b-2 border-foreground' : 'h-[5.25rem] w-[5.25rem] self-center rounded-lg border-2 border-foreground my-3 sm:my-0 sm:h-auto sm:w-full sm:self-auto sm:rounded-none sm:border-0 sm:border-b-2 sm:aspect-[16/10]',
+              isCarousel ? 'aspect-[16/10] w-full' : 'h-[5.25rem] w-[5.25rem] self-center rounded-2xl my-3 sm:my-0 sm:h-auto sm:w-full sm:self-auto sm:rounded-none sm:aspect-[16/10]',
             )}
           >
             <StoreImage
@@ -94,7 +95,7 @@ export function StoreCard({
             <div className="flex items-center gap-2">
               <h3 className="line-clamp-1 font-headline text-xl font-extrabold leading-tight">{store.name}</h3>
               {(store.maxDiscountPercent || 0) > 0 && (
-                <TextTag offer className="shrink-0 text-sm">−{store.maxDiscountPercent}%</TextTag>
+                <Pill tone="offer" className="shrink-0 text-sm">−{store.maxDiscountPercent}%</Pill>
               )}
             </div>
 

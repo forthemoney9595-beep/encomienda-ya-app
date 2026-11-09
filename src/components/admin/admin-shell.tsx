@@ -23,6 +23,7 @@ import { Notifications } from '@/components/notifications';
 import { ForegroundPush } from '@/components/foreground-push';
 import { GlobalSearch, useGlobalSearchShortcut } from '@/components/global-search';
 import Logo from '@/components/logo';
+import { SeasonStar } from '@/components/garland';
 import { AdminCountsProvider, useAdminCounts } from './use-admin-counts';
 import { AdminChromeProvider, useAdminChrome } from './admin-chrome';
 import { ConfirmProvider } from './confirm-dialog';
@@ -124,7 +125,7 @@ function useTheme() {
     setTheme(next);
     try { localStorage.setItem('eya-theme', next); } catch { /* noop */ }
     document.documentElement.classList.toggle('dark', next === 'dark');
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#1C1F22' : '#FFFFFF');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#121618' : '#EEF1F1');
   };
   return { theme, toggle };
 }
@@ -222,7 +223,7 @@ function BottomNav({ onMore }: { onMore: () => void }) {
     <nav
       aria-label="Navegación principal"
       data-testid="admin-bottom-nav"
-      className="fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-5 border-t border-border bg-admin-chrome pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="glass-bar fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-30 grid h-16 grid-cols-5 rounded-[1.125rem] lg:hidden"
     >
       {items.map(item => {
         const active = isAdminNavActive(item, pathname);
@@ -265,19 +266,21 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
   return (
-    <div data-surface="admin" className="flex min-h-screen min-w-0 bg-background text-foreground">
+    // Vidrio SOBRIO (9/11/2026): fondo transparente para que se vea la veladura (tenue en el
+    // admin, ver globals.css); menú y barra superior son paneles de vidrio flotantes.
+    <div data-surface="admin" className="flex min-h-screen w-full min-w-0 flex-1 bg-transparent text-foreground">
       {/* Sidebar escritorio */}
       <aside
         data-testid="admin-sidebar"
         data-collapsed={collapsed ? '1' : '0'}
-        className={cn('sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-border bg-admin-chrome transition-[width] duration-200 lg:flex', collapsed ? 'w-16' : 'w-60')}
+        className={cn('glass sticky top-2 my-2 ml-2 hidden h-[calc(100vh-1rem)] shrink-0 flex-col overflow-y-auto rounded-card transition-[width] duration-200 lg:flex', collapsed ? 'w-16' : 'w-60')}
       >
         <div className={cn('flex h-14 items-center gap-2 border-b border-border px-4', collapsed && 'justify-center px-0')}>
           <Link href="/admin" className="flex items-center gap-2" aria-label="EncomiendaYA · Centro de control">
             <Logo />
             {!collapsed && (
               <span className="min-w-0 leading-tight">
-                <span className="block text-sm font-semibold">EncomiendaYA</span>
+                <span className="flex items-center gap-1 text-sm font-semibold">EncomiendaYA<SeasonStar className="h-4 w-4" /></span>
                 <span className="block text-xs text-muted-foreground">Centro de control</span>
               </span>
             )}
@@ -293,8 +296,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Columna principal */}
-      <div className="flex min-w-0 flex-1 flex-col pb-20 lg:pb-0">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-admin-chrome/95 px-3 backdrop-blur sm:px-4" data-testid="admin-topbar">
+      <div className="flex min-w-0 flex-1 flex-col pb-24 lg:pb-0">
+        <header className="glass-bar sticky top-2 z-30 mx-2 mt-2 flex h-14 items-center gap-2 rounded-[1rem] px-2 sm:mx-4 sm:px-3" data-testid="admin-topbar">
           <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0 lg:hidden" aria-label="Abrir menú" onClick={() => setDrawerOpen(true)} data-testid="open-drawer">
             <Menu className="h-5 w-5" aria-hidden="true" />
           </Button>

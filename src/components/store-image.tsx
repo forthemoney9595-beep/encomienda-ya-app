@@ -4,49 +4,49 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { getCategoryStyle } from '@/lib/category-style';
-import { Awning } from '@/components/awning';
+import { CategoryTile, type CategoryTileSize } from '@/components/category-tile';
 
 interface StoreImageProps {
   src?: string;
   alt?: string;
-  /** Nombre de la tienda — se usa para las iniciales del placeholder. */
+  /** Nombre de la tienda — se muestra como cartel si `withName`, y nombra la imagen. */
   name?: string;
-  /** Rubro (`stores/{id}.category`) — define el degradé y el ícono. */
+  /** Rubro (`stores/{id}.category`) — define el color del tinte y el ícono. */
   category?: string;
-  /** Semilla para variar la dirección del degradé (usar el storeId). */
+  /** Se conserva por compatibilidad (antes variaba el degradé); hoy no cambia nada. */
   seed?: string;
   /** Tienda cerrada/pausada: apaga el color. */
   grayscale?: boolean;
   sizes?: string;
   priority?: boolean;
   className?: string;
-  /** Tamaño de las iniciales; el default sirve para tarjetas. */
+  /** Tamaño de letra del nombre cuando `withName` (p. ej. "text-4xl"). */
   initialsClassName?: string;
-  /** Banner grande: la fachada muestra el nombre de la tienda como un cartel. */
+  /** Banner grande: al lado del cuadradito del rubro va el nombre de la tienda. */
   withName?: boolean;
+  /** Tamaño del cuadradito del rubro sin foto. Default: 'md' (o 'lg' con `withName`). */
+  tileSize?: CategoryTileSize;
 }
 
 /**
- * Imagen de una tienda con fallback de FACHADA (Rediseño 2, dirección "Toldo").
+ * Imagen de una tienda con fallback del RUBRO (rediseño en vidrio, 9/11/2026).
  *
- * Muchas tiendas no tienen banner cargado. Antes eso dejaba un rectángulo gris (y después
- * un degradé con iniciales, que era una de las señas de "hecho con IA"). Ahora, sin foto
- * (o si la que hay no carga), se dibuja una fachada: el toldo a rayas del color del rubro
- * arriba y el dibujo del rubro abajo; en el banner grande, el nombre como un cartel. Cada
- * tienda se ve como un negocio con la persiana abierta aunque nunca suba una imagen.
+ * Muchas tiendas no tienen banner cargado. Sin foto (o si la que hay no carga) se pinta una
+ * superficie con un tinte suave del color del rubro y, al centro, el cuadradito del rubro
+ * (`CategoryTile`); en el banner grande (`withName`), además el nombre como cartel. Antes era
+ * la fachada con toldo a rayas, que se sacó del diseño.
  *
  * El `onError` además hace segura la migración a `next/image`: si la URL viene de un host
  * que no está en `remotePatterns` (next.config.js), el optimizador responde 400 y en vez
- * de una imagen rota se ve la fachada.
+ * de una imagen rota se ve el rubro.
  *
- * El contenedor padre define la forma (aspect-ratio / alto); acá todo es `absolute inset-0`.
+ * El contenedor padre define la forma (aspect-ratio / alto / radio); acá todo es `absolute inset-0`.
  */
 export function StoreImage({
-  src, alt, name, category, grayscale, sizes, priority, className, initialsClassName, withName,
+  src, alt, name, category, grayscale, sizes, priority, className, initialsClassName, withName, tileSize,
 }: StoreImageProps) {
   const [errored, setErrored] = useState(false);
   const style = getCategoryStyle(category || '');
-  const Icon = style.icon;
   const showImage = !!src && !errored;
 
   return (
@@ -62,16 +62,19 @@ export function StoreImage({
           onError={() => setErrored(true)}
         />
       ) : (
-        <div className="absolute inset-0 flex flex-col" role="img" aria-label={name ? `Fachada de ${name}` : 'Tienda sin foto'}>
-          <Awning category={category} className={withName ? 'h-[38%] min-h-[28px] shrink-0' : 'h-[34%] min-h-[16px] shrink-0'} />
-          <div className="flex flex-1 items-center justify-center gap-3 px-3 pt-2">
-            <Icon className={cn(withName ? 'h-10 w-10' : 'h-[42%] w-[42%] max-h-14 max-w-14', style.text)} aria-hidden="true" />
-            {withName && name && (
-              <span className={cn('font-headline font-extrabold leading-none tracking-tight text-foreground line-clamp-1', initialsClassName || 'text-3xl')}>
-                {name}
-              </span>
-            )}
-          </div>
+        <div
+          className={cn('absolute inset-0 flex items-center justify-center gap-3 px-4', style.bg)}
+          role="img"
+          aria-label={name ? `${name}, sin foto` : 'Tienda sin foto'}
+        >
+          {/* Brillo suave arriba a la izquierda: que el tinte no se vea como un bloque plano. */}
+          <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_0%_0%,rgb(255_255_255/0.45),transparent_60%)] dark:bg-[radial-gradient(120%_80%_at_0%_0%,rgb(255_255_255/0.08),transparent_60%)]" aria-hidden="true" />
+          <CategoryTile category={category} size={tileSize ?? (withName ? 'lg' : 'md')} className="relative" />
+          {withName && name && (
+            <span className={cn('relative min-w-0 font-headline font-extrabold leading-none tracking-tight text-foreground line-clamp-2', initialsClassName || 'text-3xl')}>
+              {name}
+            </span>
+          )}
         </div>
       )}
     </div>

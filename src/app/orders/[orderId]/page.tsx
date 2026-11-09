@@ -85,9 +85,9 @@ function BuyerDeliveryPin({ orderId, delivered, verified }: { orderId: string; d
     const { data } = useDoc<{ pin?: string }>(pinRef);
     if (!data?.pin) return null;
     return (
-        // Rediseño 2 (Toldo): el código va en un TICKET con muescas, como el de la fila del
-        // almacén. Los números grandes en letra de cartel, separados por una línea punteada.
-        <div className="ticket-notch flex w-full items-center gap-3 rounded-md bg-muted px-4 py-3">
+        // Vidrio (9/11/2026): el código va en una tarjeta redondeada con borde de la marca (antes,
+        // un ticket con muescas del Toldo). Los números grandes en letra de cartel.
+        <div className="flex w-full items-center gap-3 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3">
             <div className="min-w-0 flex-1 text-left">
                 <p className="font-headline text-xl font-extrabold leading-tight">Tu código de entrega</p>
                 {delivered ? (

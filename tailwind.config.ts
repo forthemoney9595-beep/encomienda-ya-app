@@ -116,6 +116,10 @@ export default {
         },
       },
       borderRadius: {
+        // Rediseño en vidrio (9/11/2026): `rounded-card` = radio de las tarjetas de vidrio
+        // (22 px en la app, 16 px en el admin; --radius-card en globals.css). lg/md/sm siguen
+        // a --radius (1rem en la app = 18 px; 0.75rem en el admin) → botones de 14-18 px.
+        card: 'var(--radius-card)',
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',

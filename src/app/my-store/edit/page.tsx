@@ -3,21 +3,22 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle, Plus, X, Truck } from 'lucide-react';
+import { Loader2, Save, Store as StoreIcon, LocateFixed, CheckCircle2, Clock, MapPin, AlertTriangle, Plus, X, Truck, CalendarDays, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 import { ImageUpload } from '@/components/image-upload';
 import { useRouter } from 'next/navigation';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  type WeeklySchedule, normalizeSchedule, defaultWeeklySchedule, DAY_LABELS, DISPLAY_ORDER,
+  type WeeklySchedule, type TimeRange, normalizeWeeklySchedule, defaultWeeklySchedule, DAY_LABELS, DISPLAY_ORDER,
+  normalizeSpecialHours, validateSpecialDays, buildSpecialHours, dateKey, addDaysWall, nowInArgentina, isValidDateKey,
 } from '@/lib/store-hours';
 import { STORE_CATEGORIES } from '@/lib/store-categories';
 import { capturePosition } from '@/lib/geo';
@@ -30,6 +31,32 @@ function legacyScheduleMirror(week: WeeklySchedule): { open: string; close: stri
   const day = week.find(d => !d.closed && d.ranges.length > 0);
   const r = day?.ranges[0];
   return r ? { open: r.open, close: r.close } : { open: '09:00', close: '22:00' };
+}
+
+// ── Horario especial por fecha (nov 2026) ─────────────────────────────────────────────
+// Fila del editor: `id` local estable (la lista se reordena por fecha y React tiene que
+// seguir sabiendo qué input es cuál).
+type SpecialDraft = { id: string; date: string; closed: boolean; ranges: TimeRange[] };
+const MAX_SPECIAL_DAYS = 30;
+let draftSeq = 0;
+const newDraftId = () => `sd-${Date.now().toString(36)}-${draftSeq++}`;
+// Sin fecha va al final (recién agregada, todavía sin elegir).
+const sortDrafts = (list: SpecialDraft[]) =>
+  [...list].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+// JSON con claves ordenadas: para saber si el horario especial cambió y no reescribirlo de
+// gusto (así una tienda que no toca esta sección guarda igual que antes).
+const stableJson = (v: unknown): string => JSON.stringify(v, (_k, val) =>
+  val && typeof val === 'object' && !Array.isArray(val)
+    ? Object.keys(val).sort().reduce((o: any, k) => { o[k] = val[k]; return o; }, {})
+    : val);
+const shortLabel = (k: string) => k.split('-').reverse().slice(0, 2).map(Number).join('/');
+// Atajos de fiestas: 24/12, 25/12, 31/12 y 1/1 de la temporada que viene (solo las que
+// todavía no pasaron y caen dentro de los próximos 60 días).
+function holidayShortcuts(todayKey: string): string[] {
+  const now = nowInArgentina();
+  const y = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const limit = dateKey(addDaysWall(now, 60));
+  return [`${y}-12-24`, `${y}-12-25`, `${y}-12-31`, `${y + 1}-01-01`].filter(k => k >= todayKey && k <= limit);
 }
 
 export default function EditStorePage() {
@@ -46,6 +73,12 @@ export default function EditStorePage() {
 
   // Estado para Horarios (por día, con franjas múltiples — ej: mañana/tarde)
   const [weeklySchedule, setWeeklySchedule] = useState<WeeklySchedule>(defaultWeeklySchedule());
+
+  // Horario especial por fecha (fiestas). `originalSpecialJson` = lo que había guardado,
+  // para escribir el campo SOLO si cambió (o si hay fechas pasadas que limpiar).
+  const [specialDays, setSpecialDays] = useState<SpecialDraft[]>([]);
+  const [originalSpecialJson, setOriginalSpecialJson] = useState<string>('{}');
+  const [hadSpecialHours, setHadSpecialHours] = useState(false);
 
   // Pausa manual: se guarda al toque (no espera a "Guardar Cambios") porque es una
   // acción de emergencia ("me quedé sin stock/personal"), no un dato de perfil.
@@ -83,8 +116,18 @@ export default function EditStorePage() {
               setCoords(data.coords);
           }
 
-          // Cargar Horarios (formato nuevo por día o el viejo {open,close} vía normalizeSchedule)
-          setWeeklySchedule(normalizeSchedule(data) || defaultWeeklySchedule());
+          // Cargar Horarios (formato nuevo por día o el viejo {open,close}). Solo el SEMANAL:
+          // normalizeSchedule además cuelga las fechas especiales, que se editan aparte.
+          setWeeklySchedule(normalizeWeeklySchedule(data) || defaultWeeklySchedule());
+
+          // Horario especial: las fechas pasadas no se muestran (se limpian al guardar).
+          const special = normalizeSpecialHours(data.specialHours) || {};
+          const todayKey = dateKey(nowInArgentina());
+          setHadSpecialHours(data.specialHours !== undefined);
+          setOriginalSpecialJson(stableJson(special));
+          setSpecialDays(sortDrafts(Object.entries(special)
+            .filter(([k]) => k >= todayKey)
+            .map(([k, v]) => ({ id: newDraftId(), date: k, closed: v.closed, ranges: v.closed ? [] : v.ranges }))));
 
         }
       } catch (error) {
@@ -138,6 +181,48 @@ export default function EditStorePage() {
     ));
   };
 
+  // --- Edición del horario especial por fecha ---
+  const addSpecialDay = (date = '') => {
+    setSpecialDays(prev => {
+      if (prev.length >= MAX_SPECIAL_DAYS) return prev;
+      if (date && prev.some(d => d.date === date)) return prev;
+      return sortDrafts([...prev, { id: newDraftId(), date, closed: false, ranges: [{ open: '09:00', close: '20:00' }] }]);
+    });
+  };
+  const updateSpecialDay = (id: string, patch: Partial<SpecialDraft>) => {
+    setSpecialDays(prev => {
+      const next = prev.map(d => {
+        if (d.id !== id) return d;
+        const merged = { ...d, ...patch };
+        // Al reabrir un día sin franjas, sembramos una (igual que el editor semanal).
+        if (patch.closed === false && merged.ranges.length === 0) merged.ranges = [{ open: '09:00', close: '20:00' }];
+        return merged;
+      });
+      return 'date' in patch ? sortDrafts(next) : next;
+    });
+  };
+  const updateSpecialRange = (id: string, ri: number, field: 'open' | 'close', value: string) => {
+    setSpecialDays(prev => prev.map(d => d.id !== id ? d
+      : { ...d, ranges: d.ranges.map((r, i) => i === ri ? { ...r, [field]: value } : r) }));
+  };
+  const addSpecialRange = (id: string) => {
+    setSpecialDays(prev => prev.map(d => d.id !== id ? d
+      : { ...d, ranges: [...d.ranges, { open: '17:00', close: '21:00' }] }));
+  };
+  const removeSpecialRange = (id: string, ri: number) => {
+    setSpecialDays(prev => prev.map(d => d.id !== id ? d : { ...d, ranges: d.ranges.filter((_, i) => i !== ri) }));
+  };
+  const removeSpecialDay = (id: string) => setSpecialDays(prev => prev.filter(d => d.id !== id));
+
+  // Link "Cargar horario de fiestas" (/my-store/edit#horario-especial): la página arranca
+  // con un loader, así que el salto nativo al ancla no ocurre — lo hacemos al terminar de cargar.
+  useEffect(() => {
+    if (isLoading) return;
+    if (typeof window === 'undefined' || window.location.hash !== '#horario-especial') return;
+    const t = setTimeout(() => document.getElementById('horario-especial')?.scrollIntoView({ block: 'start' }), 50);
+    return () => clearTimeout(t);
+  }, [isLoading]);
+
   // ✅ GPS del dueño (Fase RR: captura compartida de geo.ts — timeout y mensajes por
   // tipo de error). Ya no es la ÚNICA forma de cargar la ubicación: el mapa con pin
   // ajustable de abajo permite marcarla a mano sin estar físicamente en el local.
@@ -187,6 +272,24 @@ export default function EditStorePage() {
         }
     }
 
+    // Horario especial: mismo criterio que el semanal (apertura < cierre) + fecha válida,
+    // no pasada y sin repetir.
+    const todayKey = dateKey(nowInArgentina());
+    const specialError = validateSpecialDays(specialDays, todayKey);
+    if (specialError) {
+        toast({ variant: "destructive", title: "Horario especial inválido", description: specialError });
+        document.getElementById('horario-especial')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        return;
+    }
+    // Se escribe SOLO si cambió (o si había fechas pasadas que limpiar): una tienda que no
+    // usa esta sección guarda exactamente los mismos campos que antes.
+    const builtSpecial = buildSpecialHours(specialDays, todayKey);
+    const specialUpdate: Record<string, unknown> =
+        stableJson(builtSpecial) === originalSpecialJson ? {}
+        : Object.keys(builtSpecial).length > 0 ? { specialHours: builtSpecial }
+        : hadSpecialHours ? { specialHours: deleteField() }
+        : {};
+
     // VALIDACIÓN: Si hay GPS pero no hay dirección escrita, avisar
     if (coords && (!formData.address || formData.address.trim() === '' || formData.address.includes('Ubicación GPS'))) {
         toast({
@@ -213,9 +316,14 @@ export default function EditStorePage() {
         // primera franja de un día abierto). normalizeSchedule igual prioriza weeklySchedule.
         schedule: legacyScheduleMirror(weeklySchedule),
         coords: coords,
+        ...specialUpdate,
 
         updatedAt: new Date()
       });
+      if ('specialHours' in specialUpdate) {
+        setOriginalSpecialJson(stableJson(builtSpecial));
+        setHadSpecialHours(Object.keys(builtSpecial).length > 0);
+      }
 
       toast({
         title: "Tienda actualizada",
@@ -452,6 +560,154 @@ export default function EditStorePage() {
                 </div>
             );
           })}
+        </CardContent>
+      </Card>
+
+      {/* SECCIÓN 3 bis: HORARIO ESPECIAL POR FECHA (fiestas). Ese día pisa al semanal. */}
+      <Card id="horario-especial" className="scroll-mt-20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" /> Horario especial
+          </CardTitle>
+          <CardDescription>
+            Para fechas puntuales (24/12, 31/12, feriados): ese día manda este horario en vez del semanal, y tus clientes ven hasta qué hora pueden pedir.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(() => {
+            const todayKey = dateKey(nowInArgentina());
+            const shortcuts = holidayShortcuts(todayKey).filter(k => !specialDays.some(d => d.date === k));
+            const full = specialDays.length >= MAX_SPECIAL_DAYS;
+            return (
+              <>
+                {specialDays.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No cargaste ninguna fecha. Sin fechas especiales, rige el horario semanal de arriba.
+                  </p>
+                )}
+
+                {specialDays.map((d) => {
+                  const pastOrInvalid = !!d.date && (!isValidDateKey(d.date) || d.date < todayKey);
+                  const duplicated = !!d.date && specialDays.filter(x => x.date === d.date).length > 1;
+                  return (
+                    <div key={d.id} data-testid="special-day" className="space-y-3 rounded-md border bg-muted/20 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`sd-date-${d.id}`} className="sr-only">Fecha</Label>
+                          <Input
+                            id={`sd-date-${d.id}`}
+                            type="date"
+                            min={todayKey}
+                            value={d.date}
+                            onChange={(e) => updateSpecialDay(d.id, { date: e.target.value })}
+                            aria-invalid={pastOrInvalid || duplicated || !d.date}
+                            className={`w-44 ${pastOrInvalid || duplicated ? 'border-destructive' : ''}`}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs ${d.closed ? 'text-muted-foreground' : 'text-success'}`}>
+                            {d.closed ? 'Cerrado' : 'Abierto'}
+                          </span>
+                          <Switch
+                            checked={!d.closed}
+                            onCheckedChange={(v) => updateSpecialDay(d.id, { closed: !v })}
+                            aria-label={`${d.date ? shortLabel(d.date) : 'Fecha nueva'}: abierto`}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => removeSpecialDay(d.id)}
+                            aria-label={`Quitar ${d.date ? shortLabel(d.date) : 'esta fecha'}`}
+                            title="Quitar fecha"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      {(pastOrInvalid || duplicated) && (
+                        <p className="text-xs text-destructive">
+                          {duplicated ? 'Esta fecha está cargada dos veces.' : 'Esa fecha ya pasó: elegí otra o quitala.'}
+                        </p>
+                      )}
+
+                      {!d.closed && (
+                        <div className="space-y-2">
+                          {d.ranges.map((r, ri) => {
+                            const bad = !!r.open && !!r.close && r.open >= r.close;
+                            return (
+                              <div key={ri} className="flex items-center gap-2">
+                                <Input
+                                  type="time"
+                                  value={r.open}
+                                  onChange={(e) => updateSpecialRange(d.id, ri, 'open', e.target.value)}
+                                  aria-label="Abre"
+                                  aria-invalid={bad}
+                                  className={`w-32 ${bad ? 'border-destructive' : ''}`}
+                                />
+                                <span className="text-muted-foreground text-sm">a</span>
+                                <Input
+                                  type="time"
+                                  value={r.close}
+                                  onChange={(e) => updateSpecialRange(d.id, ri, 'close', e.target.value)}
+                                  aria-label="Cierra"
+                                  aria-invalid={bad}
+                                  className={`w-32 ${bad ? 'border-destructive' : ''}`}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  onClick={() => removeSpecialRange(d.id, ri)}
+                                  aria-label="Quitar franja"
+                                  title="Quitar franja"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                          {d.ranges.some(r => r.open && r.close && r.open >= r.close) && (
+                            <p className="text-xs text-destructive">La hora de cierre tiene que ser posterior a la de apertura.</p>
+                          )}
+                          <Button type="button" variant="outline" size="sm" onClick={() => addSpecialRange(d.id)}>
+                            <Plus className="mr-2 h-3 w-3" /> Agregar franja
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <Button type="button" variant="outline" size="sm" onClick={() => addSpecialDay()} disabled={full}>
+                    <Plus className="mr-2 h-3 w-3" /> Agregar fecha
+                  </Button>
+                  {shortcuts.map(k => (
+                    <Button
+                      key={k}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => addSpecialDay(k)}
+                      disabled={full}
+                      data-testid={`special-shortcut-${k}`}
+                    >
+                      <Plus className="mr-1 h-3 w-3" /> {shortLabel(k)}
+                    </Button>
+                  ))}
+                </div>
+                {full && (
+                  <p className="text-xs text-muted-foreground">Llegaste al máximo de {MAX_SPECIAL_DAYS} fechas. Quitá alguna para sumar otra.</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Las fechas que ya pasaron se borran solas al guardar.
+                </p>
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
 

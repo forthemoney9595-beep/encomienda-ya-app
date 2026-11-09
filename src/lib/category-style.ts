@@ -22,71 +22,74 @@ export type CategoryStyle = {
   ring: string;     // anillo del chip activo
   solid: string;    // badge lleno — incluye el color de texto correcto para ese fondo
   gradient: string; // degradé para el placeholder de imagen (ver components/store-image.tsx)
-  // Rediseño 2 (Toldo): clase LITERAL del toldo a rayas del rubro (globals.css, .awn-*).
+  // Rediseño en vidrio (9/11/2026): clase LITERAL del cuadradito del rubro (globals.css,
+  // .tile-*): tono PROFUNDO de la familia en los dos temas, ícono blanco. Lo usa
+  // components/category-tile.tsx. (Reemplaza a `awning`, el toldo a rayas, que se borró.)
   // `solid` usa text-background: blanco sobre los tonos profundos del claro y oscuro sobre
   // los tonos suaves de la pizarra, así el relleno se lee en los dos temas.
-  awning: string;
+  // `gradient` quedó sin uso desde el Toldo; se conserva por si alguna pantalla lo retoma.
+  tile: string;
 };
 
 export const CATEGORY_STYLES: Record<string, CategoryStyle> = {
   brand: {
     icon: LayoutGrid,
     bg: 'bg-cat-brand/15', text: 'text-cat-brand', ring: 'ring-cat-brand/40',
-    solid: 'bg-cat-brand text-background', awning: 'awn-brand',
+    solid: 'bg-cat-brand text-background', tile: 'tile-brand',
     gradient: 'from-cat-brand via-cat-brand/70 to-cat-brand/40',
   },
   food: {
     icon: Utensils,
     bg: 'bg-cat-food/15', text: 'text-cat-food', ring: 'ring-cat-food/40',
-    solid: 'bg-cat-food text-background', awning: 'awn-food',
+    solid: 'bg-cat-food text-background', tile: 'tile-food',
     gradient: 'from-cat-food via-cat-food/70 to-cat-fast/60',
   },
   fast: {
     icon: Sandwich,
     bg: 'bg-cat-fast/15', text: 'text-cat-fast', ring: 'ring-cat-fast/40',
-    solid: 'bg-cat-fast text-background', awning: 'awn-fast',
+    solid: 'bg-cat-fast text-background', tile: 'tile-fast',
     gradient: 'from-cat-fast via-cat-fast/70 to-cat-food/60',
   },
   drink: {
     icon: Coffee,
     bg: 'bg-cat-drink/15', text: 'text-cat-drink', ring: 'ring-cat-drink/40',
-    solid: 'bg-cat-drink text-background', awning: 'awn-drink',
+    solid: 'bg-cat-drink text-background', tile: 'tile-drink',
     gradient: 'from-cat-drink via-cat-drink/70 to-cat-food/60',
   },
   kiosk: {
     icon: Store,
     bg: 'bg-cat-kiosk/15', text: 'text-cat-kiosk', ring: 'ring-cat-kiosk/40',
-    solid: 'bg-cat-kiosk text-background', awning: 'awn-kiosk',
+    solid: 'bg-cat-kiosk text-background', tile: 'tile-kiosk',
     gradient: 'from-cat-kiosk via-cat-kiosk/70 to-cat-market/60',
   },
   market: {
     icon: ShoppingCart,
     bg: 'bg-cat-market/15', text: 'text-cat-market', ring: 'ring-cat-market/40',
-    solid: 'bg-cat-market text-background', awning: 'awn-market',
+    solid: 'bg-cat-market text-background', tile: 'tile-market',
     gradient: 'from-cat-market via-cat-market/70 to-cat-kiosk/60',
   },
   pharma: {
     icon: Pill,
     bg: 'bg-cat-pharma/15', text: 'text-cat-pharma', ring: 'ring-cat-pharma/40',
-    solid: 'bg-cat-pharma text-background', awning: 'awn-pharma',
+    solid: 'bg-cat-pharma text-background', tile: 'tile-pharma',
     gradient: 'from-cat-pharma via-cat-pharma/70 to-cat-pharma/40',
   },
   cloth: {
     icon: Shirt,
     bg: 'bg-cat-cloth/15', text: 'text-cat-cloth', ring: 'ring-cat-cloth/40',
-    solid: 'bg-cat-cloth text-background', awning: 'awn-cloth',
+    solid: 'bg-cat-cloth text-background', tile: 'tile-cloth',
     gradient: 'from-cat-cloth via-cat-cloth/70 to-cat-home/60',
   },
   home: {
     icon: Laptop,
     bg: 'bg-cat-home/15', text: 'text-cat-home', ring: 'ring-cat-home/40',
-    solid: 'bg-cat-home text-background', awning: 'awn-home',
+    solid: 'bg-cat-home text-background', tile: 'tile-home',
     gradient: 'from-cat-home via-cat-home/70 to-cat-cloth/60',
   },
   other: {
     icon: Store,
     bg: 'bg-cat-other/15', text: 'text-cat-other', ring: 'ring-cat-other/40',
-    solid: 'bg-cat-other text-background', awning: 'awn-other',
+    solid: 'bg-cat-other text-background', tile: 'tile-other',
     gradient: 'from-cat-other via-cat-other/70 to-cat-cloth/60',
   },
 };

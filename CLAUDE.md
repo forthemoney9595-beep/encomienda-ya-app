@@ -3560,6 +3560,63 @@ exacta sigue apareciendo recién al tomar el pedido (Fase UU / AUTHZ-001 intacta
   borraron. Con la app CERRADA el push suena con el tono del celular (no se controla desde la web).
   Verificado `_pw-petroleo.js` 25/25, `_pw-tanda2-visual` 24/24, `_pw-rediseno-t0` 33/33.
 
+## Rediseño en vidrio (9/11/2026, rama `rediseno-toldo`) — TANDA BASE
+David aprobó el 9/11 una dirección nueva: **vidrio** (recuadros translúcidos bien redondeados
+sobre una veladura suave de la marca) y **SIN el toldo a rayas**. El rubro pasa a ser un **ícono
+en un cuadradito de color**. Se conservan petróleo, Sofia Sans / Condensed, claro por defecto +
+oscuro "pizarra", semánticos (naranja ofertas con texto oscuro, verde plata), 18 px y targets
+≥ 44 px. Prototipo: `scratchpad/paneles-vidrio.html` de esa sesión; capturas en la bóveda,
+`Diseños/Vidrio 2026-11/`. Esta tanda es la BASE que usan las tandas por rol.
+- **Tokens (`globals.css`):** fondo claro `--background 180 8% 94%` (#EEF1F1, antes blanco: el
+  vidrio blanco sobre blanco no se ve) y pizarra `200 14% 8%` / `--card 206 12% 12%`;
+  `--radius 1rem` (botones 14-18 px) y `--radius-card 1.25rem` (tarjetas ~22 px); vidrio en
+  valores crudos `--glass`, `--glass-strong`, `--glass-line`, `--glass-hi`, `--glass-shadow`,
+  `--glass-blur`, `--bar`; veladura `--veil-a/b/c` pintada por **`body::before` fijo**
+  (z-index -1; NO `background-attachment: fixed`, que tironea en celular). **Un contenedor con
+  `bg-background` opaco tapa la veladura**: el `SidebarInset` y el shell del admin van
+  `bg-transparent`. Dialog/AlertDialog/Sheet/Toast pasaron a `bg-popover` (blanco en claro) y
+  el pulgar del Switch a blanco. `theme-color`: #EEF1F1 / #121618.
+- **Clases (`@layer components`, así un `bg-*`/`border-*` de utilidad gana):** `glass`
+  (tarjeta), `glass-strong` (más opaca: sobre fotos, destacadas), `glass-bar` (barras
+  flotantes, blur 22 px). Sin radio propio: `rounded-card` (Tailwind, = `--radius-card`;
+  `cn()` usa `extendTailwindMerge` para que un `rounded-none/lg` pasado a una Card lo pise).
+  Fallback sólido con `prefers-reduced-transparency` y opaco si no hay `backdrop-filter`.
+- **`<Card>`** = `glass rounded-card` por defecto (sin `border`/`bg-card` propios).
+- **Shell:** encabezado = `glass-bar` sticky `top-2` con margen y radio 1.25rem
+  (`data-testid="app-header"`; ocupa 4rem arriba → lo que se pegue debajo usa `top-[4.5rem]`);
+  en celular muestra "EncomiendaYA" + estrellita solo cuando no está el buscador. Sidebar de
+  escritorio `variant="floating"` + vidrio (`sidebar.tsx`). Barra de abajo del comprador =
+  píldora flotante `inset-x-3 bottom-[calc(0.75rem+safe-area)]` (`data-testid="bottom-nav"`),
+  `<main>` con `pb-28`, barra de carrito de la tienda a `4rem + 1,5rem`. Admin = vidrio
+  SOBRIO (`[data-surface="admin"]`: más opaco, blur 12 px, `--radius .75rem`,
+  `--radius-card 1rem`, veladura al 50 %), sidebar/topbar/barra de abajo flotantes; los `-ink`
+  intactos; el `--card` oscuro del admin dejó el azul violáceo de la era violeta.
+- **Rubro:** `components/category-tile.tsx` (`CategoryTile category size=sm|md|lg label?`),
+  clases `.cat-tile` + `.tile-*` (tono PROFUNDO de la familia en los dos temas, ícono blanco ≥
+  4,5:1); `category-style.ts` cambió `awning` por `tile`. `StoreImage` sin foto = tinte del
+  rubro + cuadradito (+ nombre con `withName`; prop nueva `tileSize`). **Borrados:**
+  `awning.tsx`, `price-tag.tsx`, `.awn-*`, `.price-tag`, `.ticket-notch`. Precios:
+  `components/price-pill.tsx` (`PricePill value offer? tone?`, `Pill tone=neutral|offer|money`).
+- **Navidad:** `lib/seasonal.ts` (puro: `isChristmasActive(nowMs, mode)`, 8/12 00:00 → 6/1
+  23:59 ART, 7 tests), `hooks/use-christmas.ts` (`useChristmas()` → `{active, mode}`, lee
+  `config/platform.christmasMode`; invitado = 'auto'; en desarrollo
+  `localStorage['eya-xmas-preview']='on'|'off'` la fuerza sin escribir la config),
+  `components/garland.tsx` (`<Garland />` dentro de una tarjeta `relative`; `<SeasonStar />`
+  junto al nombre de la app en el shell y en el admin). Selector en `/admin/settings`
+  (auditado en `update_config`); la regla de `config` ya lo permitía (full admin).
+- **Verificado:** tsc 0 · lint 0 errores (93 warnings, los de siempre) · Vitest 174/174 ·
+  `_pw-vidrio-base.js` 54/54 (inicio, tienda, /my-store, /delivery, /admin × claro/oscuro ×
+  430/1440, 0 desborde, 0 errores de consola) · `_pw-vidrio-contraste.js` 38/38 (contraste
+  medido sobre el DOM con el texto oculto: peor 5,30:1) · regresión `_pw-rediseno-t0` 33/33,
+  `_pw-tanda2-visual` 24/24, `_pw-vidrio-xmas.js` 8/8 (selector de Ajustes sin guardar,
+  estrellita solo con la Navidad prendida), `_pw-admin-t1` 80/82 (las 2 del drawer → Bandeja
+  fueron compilación lenta del dev server: con la ruta precompilada navega en 500 ms). De paso:
+  la raíz del shell admin ganó `w-full flex-1` (medía lo que su contenido y la barra superior
+  quedaba angosta en /admin/settings, misma familia que el fix del ancho por solapa).
+- **Pendiente para las tandas por rol:** títulos de sección con `border-b-2 border-foreground`
+  (línea de tinta del Toldo) en el inicio; puntitos del slider de promos < 36 px; las tarjetas
+  de cada pantalla todavía con bordes/`bg-card` propios donde los pasaban.
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

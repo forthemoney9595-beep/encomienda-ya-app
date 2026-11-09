@@ -11,14 +11,14 @@ import { normalizeSchedule, getStoreOpenStatus, isStorePaused } from '@/lib/stor
 import { ShoppingBag, Search, Heart, Zap, ArrowRight, type LucideIcon } from 'lucide-react';
 import { StoreCard, type StoreCardStore } from '@/components/store-card';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
-import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
+import { formatCategoryLabel } from '@/lib/category-style';
 import { Input } from '@/components/ui/input';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Awning } from '@/components/awning';
-import { TextTag } from '@/components/price-tag';
+import { CategoryTile } from '@/components/category-tile';
+import { Pill } from '@/components/price-pill';
 
 // --- TIPOS ---
 interface Store {
@@ -92,24 +92,21 @@ interface CategoryChipsProps {
 const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, counts }: CategoryChipsProps) => (
   <div role="group" aria-label="Filtrar por rubro" className="flex gap-3 overflow-x-auto pb-2 mb-6 no-scrollbar">
     {categories.map((cat) => {
-      const style = getCategoryStyle(cat);
-      const Icon = style.icon;
       const isActive = selectedCategory === cat;
       return (
-        // Rediseño 2 (Toldo): cada rubro es una baldosa con el toldo de su color arriba, como
-        // la fachada de un negocio. La activa lleva la marca abajo (no un anillo con brillo).
+        // Vidrio (9/11/2026): cada rubro es una baldosa de vidrio con el cuadradito de su color
+        // (antes, el toldo a rayas). La activa lleva el borde de la marca.
         <button
           key={cat}
           onClick={() => setSelectedCategory(cat)}
           aria-pressed={isActive}
           className={cn(
-            'w-[5.5rem] shrink-0 overflow-hidden rounded-lg border-2 border-foreground pb-2 text-center transition-colors',
-            isActive ? 'bg-primary/10 shadow-[inset_0_-4px_0_hsl(var(--primary))]' : 'bg-card',
+            'glass w-[5.5rem] shrink-0 rounded-card px-1 pb-2 pt-3 text-center transition-colors',
+            isActive && 'border-primary bg-primary/10 ring-2 ring-primary',
           )}
         >
-          <Awning category={cat === 'Todas' ? 'todas' : cat} className="mb-3 h-5" />
-          <Icon className={cn('mx-auto h-7 w-7', style.text)} aria-hidden="true" />
-          <span className="mt-1 block px-1 font-headline text-base font-bold leading-tight">
+          <CategoryTile category={cat === 'Todas' ? 'todas' : cat} size="sm" className="mx-auto" />
+          <span className="mt-1.5 block px-1 font-headline text-base font-bold leading-tight">
             {formatCategoryLabel(cat)}
           </span>
           {counts[cat] !== undefined && (
@@ -191,8 +188,8 @@ function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscou
     <Link href={`/stores/${offer.id}`} className="block" draggable={false}>
       {/* Naranja de OFERTAS con texto oscuro: el blanco sobre este naranja daba 2,2-2,6:1
           (auditoría Impeccable 9/11). El oscuro se lee en los dos temas. */}
-      <div className="flex items-center gap-4 rounded-lg border-2 border-foreground bg-card px-3 py-3">
-        <TextTag offer className="text-4xl">−{offer.maxDiscountPercent}%</TextTag>
+      <div className="glass flex items-center gap-4 rounded-card px-3 py-3">
+        <Pill tone="offer" className="text-4xl">−{offer.maxDiscountPercent}%</Pill>
         <div className="min-w-0 flex-1">
           <p className="line-clamp-1 font-headline text-xl font-extrabold">En {offer.name}</p>
           <p className="text-sm text-muted-foreground">Ofertas de hoy · tocá para verlas</p>

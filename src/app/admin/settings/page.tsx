@@ -15,6 +15,7 @@ import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { Settings, AlertTriangle, Save, Loader2 } from 'lucide-react';
 import { CONFIRM_DEFAULTS, CONFIRM_RANGES, confirmConfigError } from '@/lib/confirm-timeout';
+import { CHRISTMAS_MODES, normalizeChristmasMode, type ChristmasMode } from '@/lib/seasonal';
 
 interface PlatformConfig {
   serviceFee: number;
@@ -30,6 +31,8 @@ interface PlatformConfig {
   // Recordatorio / cancelación automática de pedidos sin confirmar (Fase YY)
   confirmReminderMinutes?: number;
   confirmTimeoutMinutes?: number;
+  // Decoración de Navidad (rediseño en vidrio): 'auto' = del 8/12 al 6/1 (lib/seasonal.ts)
+  christmasMode?: ChristmasMode;
 }
 
 function AdminSettingsPage() {
@@ -89,6 +92,7 @@ function AdminSettingsPage() {
           configData?.claimWindowHours !== localConfig.claimWindowHours ? `ventana de reclamo: ${configData?.claimWindowHours ?? '—'}h → ${localConfig.claimWindowHours}h` : null,
           configData?.confirmReminderMinutes !== localConfig.confirmReminderMinutes ? `recordatorio sin confirmar: ${configData?.confirmReminderMinutes ?? CONFIRM_DEFAULTS.reminderMinutes} → ${localConfig.confirmReminderMinutes} min` : null,
           configData?.confirmTimeoutMinutes !== localConfig.confirmTimeoutMinutes ? `cancelación sin confirmar: ${configData?.confirmTimeoutMinutes ?? CONFIRM_DEFAULTS.timeoutMinutes} → ${localConfig.confirmTimeoutMinutes} min` : null,
+          normalizeChristmasMode(configData?.christmasMode) !== normalizeChristmasMode(localConfig.christmasMode) ? `decoración de Navidad: ${normalizeChristmasMode(configData?.christmasMode)} → ${normalizeChristmasMode(localConfig.christmasMode)}` : null,
           configData?.maintenanceMode !== localConfig.maintenanceMode ? `mantenimiento: ${localConfig.maintenanceMode ? 'ON' : 'OFF'}` : null,
         ].filter(Boolean).join(' · ');
         if (changes) logAdminAction(firestore, adminUser.uid, 'update_config', 'platform', changes);
@@ -246,6 +250,23 @@ function AdminSettingsPage() {
               ))}
             </select>
             <p className="text-xs text-muted-foreground">El cron genera automáticamente los retiros pendientes ese día.</p>
+          </div>
+
+          {/* Navidad (rediseño en vidrio, 9/11/2026): guirnalda de lucecitas y estrellita en el
+              encabezado. Solo decoración: no cambia ningún dato ni ningún horario. */}
+          <div className="space-y-2">
+            <Label htmlFor="christmasMode" className="text-sm font-semibold">Decoración de Navidad</Label>
+            <select id="christmasMode" value={normalizeChristmasMode(localConfig.christmasMode)}
+              onChange={(e) => setLocalConfig({ ...localConfig, christmasMode: normalizeChristmasMode(e.target.value) })}
+              className="min-h-[44px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
+              {CHRISTMAS_MODES.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Lucecitas en las tarjetas principales y una estrellita junto al nombre de la app. En
+              Automática se prende sola del 8 de diciembre al 6 de enero (hora de Argentina).
+            </p>
           </div>
 
           <div className="flex items-center justify-between border border-border p-3 rounded-lg bg-muted/30 backdrop-blur-sm">

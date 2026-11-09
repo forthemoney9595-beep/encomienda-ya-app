@@ -10,7 +10,7 @@ import { Badge } from "./ui/badge";
 import Image from "next/image";
 import { ScrollArea } from "./ui/scroll-area";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
-import { PriceTag } from "@/components/price-tag";
+import { PricePill } from "@/components/price-pill";
 // ✅ Importamos el nuevo diálogo de pago
 import { CheckoutDialog } from "@/components/checkout-dialog";
 
@@ -73,7 +73,7 @@ export function Cart({ hideTriggerWhenEmpty = false }: { hideTriggerWhenEmpty?: 
                         </div>
                         </div>
                         <div className="text-right flex flex-col justify-between h-full">
-                            <PriceTag value={item.price * item.quantity} className="text-base" />
+                            <PricePill value={item.price * item.quantity} className="text-base" />
                             <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:bg-destructive/10 self-end" aria-label={`Sacar ${item.name} del carrito`} onClick={() => removeFromCart(item.id)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>

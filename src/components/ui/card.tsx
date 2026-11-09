@@ -9,7 +9,10 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-lg border bg-card text-card-foreground",
+      // Vidrio por defecto (rediseño 9/11/2026): .glass trae fondo translúcido, borde
+      // claro, sombra y brillo arriba (globals.css, @layer components: un bg-*/border-*/
+      // shadow-* que se pase en className gana). rounded-card = 22 px app / 16 px admin.
+      "glass rounded-card text-card-foreground",
       className
     )}
     {...props}

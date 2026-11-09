@@ -354,3 +354,57 @@ describe.skipIf(!HAS_EMULATOR)('firestore.rules — suspensión con debido proce
     await assertSucceeds(updateDoc(doc(as(SUSP_DRIVER), 'orders', 'o-suyo'), { status: 'En reparto', pickedUpAt: new Date() }));
   });
 });
+
+describe.skipIf(!HAS_EMULATOR)('firestore.rules — horario especial por fecha (nov 2026)', () => {
+  // `specialHours` lo escribe el DUEÑO desde /my-store/edit (campo nuevo del hasOnly del
+  // update del dueño, lección TT) con forma mínima: mapa con tope de 60 fechas.
+  // Regresión: sigue sin poder tocar aprobación/rating, y otro dueño no lo toca.
+  const OTHER = 'otro-dueno-uid';
+  const SH = {
+    '2026-12-24': { closed: false, ranges: [{ open: '09:00', close: '20:00' }] },
+    '2026-12-25': { closed: true, ranges: [] },
+  };
+  let env8: RulesTestEnvironment;
+  beforeAll(async () => {
+    env8 = await initializeTestEnvironment({ projectId: PROJECT + '-8', firestore: { rules: readFileSync(resolve(__dirname, '../../firestore.rules'), 'utf8') } });
+  });
+  afterAll(async () => { await env8?.cleanup(); });
+  beforeEach(async () => {
+    await env8.clearFirestore();
+    await env8.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users', STORE_OWNER), { role: 'store', isApproved: true, storeId: 'store-1', email: 's@test' });
+      await setDoc(doc(db, 'users', OTHER), { role: 'store', isApproved: true, storeId: 'store-2', email: 'o@test' });
+      await setDoc(doc(db, 'stores', 'store-1'), { ownerId: STORE_OWNER, name: 'Tienda', isApproved: true, rating: 4 });
+      await setDoc(doc(db, 'stores', 'store-2'), { ownerId: OTHER, name: 'Otra', isApproved: true, rating: 3 });
+    });
+  });
+  const asOwner = () => env8.authenticatedContext(STORE_OWNER).firestore();
+
+  it('regresión: el dueño escribe specialHours (y lo guarda junto con el resto del editor)', async () => {
+    await assertSucceeds(updateDoc(doc(asOwner(), 'stores', 'store-1'), { specialHours: SH }));
+    await assertSucceeds(updateDoc(doc(asOwner(), 'stores', 'store-1'), {
+      name: 'Tienda', weeklySchedule: [], schedule: { open: '09:00', close: '22:00' }, updatedAt: new Date(),
+      specialHours: { '2026-12-31': { closed: false, ranges: [{ open: '09:00', close: '19:00' }] } },
+    }));
+  });
+  it('regresión: el dueño puede borrar el campo (sin fechas especiales)', async () => {
+    await assertSucceeds(updateDoc(doc(asOwner(), 'stores', 'store-1'), { specialHours: SH }));
+    const { deleteField } = await import('firebase/firestore');
+    await assertSucceeds(updateDoc(doc(asOwner(), 'stores', 'store-1'), { specialHours: deleteField() }));
+  });
+  it('ataque: otro dueño NO escribe el specialHours de una tienda ajena', async () => {
+    await assertFails(updateDoc(doc(env8.authenticatedContext(OTHER).firestore(), 'stores', 'store-1'), { specialHours: SH }));
+  });
+  it('ataque: specialHours que no es un mapa, o con más de 60 fechas, se BLOQUEA', async () => {
+    await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { specialHours: 'siempre abierta' }));
+    const big: Record<string, unknown> = {};
+    for (let i = 0; i < 61; i++) big[`2027-01-${String((i % 28) + 1).padStart(2, '0')}-${i}`] = { closed: true, ranges: [] };
+    await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { specialHours: big }));
+  });
+  it('ataque: el dueño sigue sin poder tocar isApproved ni rating (ni colándolos con specialHours)', async () => {
+    await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { specialHours: SH, isApproved: false }));
+    await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { specialHours: SH, rating: 5 }));
+    await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { rating: 5 }));
+  });
+});

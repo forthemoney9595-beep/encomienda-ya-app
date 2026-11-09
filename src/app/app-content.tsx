@@ -20,6 +20,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { getAuth, signOut, sendEmailVerification } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { SeasonStar } from '@/components/garland';
+import { cn } from '@/lib/utils';
 
 // Definición de tipo para el contexto con las propiedades extendidas
 interface AuthContextWithAdmin extends ReturnType<typeof useAuth> {
@@ -145,12 +147,12 @@ function EmailVerificationBanner({ user }: { user: any }) {
     };
 
     return (
-        <div className="bg-warning/10 border-b border-warning/30 px-4 py-2 flex items-center justify-between gap-4 text-sm text-foreground">
+        <div className="mx-2 mt-2 flex items-center justify-between gap-4 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-2 text-sm text-foreground sm:mx-4 md:mx-6">
             <div className="flex items-center gap-2">
                 <MailWarning className="h-4 w-4 shrink-0 text-warning" />
                 <span>Verificá tu correo electrónico para acceder a todas las funciones.</span>
             </div>
-            <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs border-warning/40 hover:bg-warning/15" onClick={handleResend} disabled={sending}>
+            <Button size="sm" variant="outline" className="shrink-0 h-9 text-xs border-warning/40 hover:bg-warning/15" onClick={handleResend} disabled={sending}>
                 {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Reenviar correo"}
             </Button>
         </div>
@@ -203,11 +205,13 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
     // pantalla cambiaba de una solapa a otra (418 / 394 / 430 px en Pedidos de la tienda).
     return (
         <div className="flex min-h-screen min-w-0 flex-1">
-            <Sidebar side="left" className="w-64" collapsible="icon">
+            {/* Vidrio (9/11/2026): en escritorio el menú es un panel de vidrio flotante
+                (variant="floating": margen alrededor + bordes redondeados; ver sidebar.tsx). */}
+            <Sidebar side="left" className="w-64" collapsible="icon" variant="floating">
                 <SidebarHeader>
                     <Link href="/" className="flex items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center">
                         <Logo />
-                        <span className="font-headline text-lg font-bold group-data-[collapsible=icon]:hidden">EncomiendaYA</span>
+                        <span className="flex items-center gap-1.5 font-headline text-lg font-bold group-data-[collapsible=icon]:hidden">EncomiendaYA<SeasonStar /></span>
                     </Link>
                 </SidebarHeader>
                 <SidebarContent>
@@ -232,14 +236,29 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                     )}
                 </SidebarFooter>
             </Sidebar>
-            <SidebarInset>
-                {/* Header sticky en TODOS los tamaños. Antes en escritorio se volvía
-                    transparente y sin borde (sm:static sm:bg-transparent), así que quedaban
-                    dos íconos flotando sueltos arriba a la derecha. */}
-                <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-6">
+            {/* bg-transparent: el fondo opaco del SidebarInset tapaba la veladura del body. */}
+            <SidebarInset className="bg-transparent">
+                {/* Encabezado = BARRA FLOTANTE DE VIDRIO (rediseño 9/11/2026): sticky con margen
+                    y redondeada, el contenido pasa por debajo. Alto total ocupado arriba =
+                    0,5rem de margen + 3,5rem de barra = 4rem; lo que se pegue debajo (chips de
+                    la tienda pública) usa top-[4.5rem]. Sticky en TODOS los tamaños (antes en
+                    escritorio se volvía transparente y quedaban dos íconos sueltos). */}
+                <header data-testid="app-header" className="glass-bar sticky top-2 z-30 mx-2 mt-2 flex h-14 items-center gap-2 rounded-[1.25rem] px-2 sm:mx-4 sm:gap-3 sm:px-3 md:mx-6">
                     {/* Visible también en escritorio: el sidebar es collapsible="icon" pero
                         antes no había forma de colapsarlo desde ahí. */}
-                    <SidebarTrigger variant="outline" className="h-9 w-9 shrink-0 rounded-full" />
+                    <SidebarTrigger variant="ghost" className="h-11 w-11 shrink-0 rounded-[0.875rem]" />
+
+                    {/* Nombre de la app + estrellita de fiestas. En celular, solo cuando no está el
+                        buscador (en el inicio y para invitados); en escritorio lo muestra el menú. */}
+                    <Link
+                        href="/"
+                        className={cn(
+                            'flex min-w-0 items-center gap-1.5 truncate font-headline text-xl font-extrabold leading-none md:hidden',
+                            user && !loading && !isLandingPage && 'hidden',
+                        )}
+                    >
+                        EncomiendaYA<SeasonStar />
+                    </Link>
 
                     {/* SOLO PARA USUARIOS LOGUEADOS. En el inicio no se muestra: ahí ya está el
                         buscador de tiendas y quedaban dos apilados (Rediseño 2, Tanda 0). El ⌘K
@@ -270,7 +289,8 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                 {user && !user.emailVerified && !isLoginPage && (
                     <EmailVerificationBanner user={user} />
                 )}
-                <main className="flex-1 min-w-0 p-4 md:p-6 pb-20 md:pb-6">
+                {/* pb-28 en celular: la barra de abajo flota (alto 4rem + 0,75rem de margen). */}
+                <main className="flex-1 min-w-0 p-4 md:p-6 pb-28 md:pb-6">
                     {children}
                 </main>
                 {user && !loading && !isLoginPage && <BottomNav />}

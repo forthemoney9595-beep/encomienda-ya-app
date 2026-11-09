@@ -6,16 +6,17 @@
 
 @layer base {
   /* ── Rediseño 2 · dirección "Toldo" (aprobada por David el 9/11/2026) ─────────────
-     Claro POR DEFECTO, tinta casi negra sobre blanco, líneas de tinta, radios chicos.
+     Claro POR DEFECTO, tinta casi negra. Desde el 9/11/2026 en VIDRIO: tarjetas translúcidas
+     bien redondeadas sobre un fondo gris verdoso con una veladura suave de la marca (sin toldo).
      Un solo token de marca sirve para TEXTO y para RELLENO en los dos temas (en claro
      PETRÓLEO #0F6376 con texto blanco, 7:1; en la pizarra petróleo claro #69C9D3 con
      texto oscuro). Elegido por David el 9/11/2026 entre violeta, índigo, marino, bordó y
      petróleo (el fucsia provisorio no le gustó). Para cambiarlo: --primary, --ring,
      --chart-1, --cat-brand, --sidebar-accent*, --sidebar-ring, --primary-ink (admin),
-     .awn-brand, el pin de location-picker-map.tsx y theme_color del manifest. Semánticos: verde = plata/éxito,
+     el pin de location-picker-map.tsx y theme_color del manifest. Semánticos: verde = plata/éxito,
      rojo = error, ámbar = aviso/rating, azul = en tránsito; --offer = OFERTAS. */
   :root {
-    --background: 0 0% 100%;
+    --background: 180 8% 94%;
     --foreground: 20 6% 10%;
     --card: 0 0% 100%;
     --card-foreground: 20 6% 10%;
@@ -42,13 +43,13 @@
     --border: 43 10% 85%;
     --input: 43 10% 80%;
     --ring: 191 78% 26%;
-    --radius: 0.625rem;
+    --radius: 1rem;
     --chart-1: 191 78% 26%;
     --chart-2: 174 80% 25%;
     --chart-3: 217 74% 43%;
     --chart-4: 38 100% 26%;
     --chart-5: 18 89% 39%;
-    --sidebar-background: 60 7% 96%;
+    --sidebar-background: 180 12% 97%;
     --sidebar-foreground: 20 6% 10%;
     --sidebar-primary: 20 6% 10%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -70,15 +71,29 @@
     --cat-cloth: 224 66% 41%;   /* ROPA Y HOGAR: azul */
     --cat-home: 218 70% 36%;
     --cat-other: 230 55% 45%;
+
+    /* Vidrio (9/11/2026). Valores crudos (no triples HSL): solo los usan .glass*. */
+    --radius-card: 1.25rem; /* tarjetas: ~22 px en la app (texto base 18 px) */
+    --glass: rgb(255 255 255 / 0.58);
+    --glass-strong: rgb(255 255 255 / 0.82);
+    --glass-line: rgb(255 255 255 / 0.85);
+    --glass-hi: rgb(255 255 255 / 0.9);
+    --glass-shadow: 0 12px 32px -16px rgb(15 60 70 / 0.35), 0 2px 6px -2px rgb(15 60 70 / 0.1);
+    --glass-blur: 18px;
+    --bar: rgb(255 255 255 / 0.66);
+    /* Veladura del fondo: manchas suaves de la marca (body::before). */
+    --veil-a: 191 78% 26% / 0.3;
+    --veil-b: 191 78% 26% / 0.14;
+    --veil-c: 21 88% 40% / 0.07;
   }
 
   /* Oscuro "pizarra": gris pizarra, tiza clara, marca en petróleo claro con texto oscuro. */
   .dark {
-    --background: 210 10% 12%;
+    --background: 200 14% 8%;
     --foreground: 38 30% 94%;
-    --card: 210 9% 16%;
+    --card: 206 12% 12%;
     --card-foreground: 38 30% 94%;
-    --popover: 210 9% 16%;
+    --popover: 206 12% 14%;
     --popover-foreground: 38 30% 94%;
     --primary: 186 55% 62%;
     --primary-foreground: 210 10% 12%;
@@ -106,7 +121,7 @@
     --chart-3: 43 96% 56%;
     --chart-4: 220 100% 78%;
     --chart-5: 23 100% 69%;
-    --sidebar-background: 210 12% 9%;
+    --sidebar-background: 204 14% 10%;
     --sidebar-foreground: 38 30% 94%;
     --sidebar-primary: 38 30% 94%;
     --sidebar-primary-foreground: 210 12% 9%;
@@ -125,6 +140,16 @@
     --cat-cloth: 222 100% 79%;
     --cat-home: 215 90% 72%;
     --cat-other: 228 80% 80%;
+
+    --glass: rgb(255 255 255 / 0.07);
+    --glass-strong: rgb(36 42 46 / 0.8);
+    --glass-line: rgb(255 255 255 / 0.12);
+    --glass-hi: rgb(255 255 255 / 0.1);
+    --glass-shadow: 0 14px 32px -16px rgb(0 0 0 / 0.7);
+    --bar: rgb(26 30 33 / 0.66);
+    --veil-a: 186 55% 62% / 0.14;
+    --veil-b: 191 78% 30% / 0.22;
+    --veil-c: 23 100% 69% / 0.06;
   }
 }
 
@@ -147,6 +172,26 @@ html:has([data-surface="admin"]) {
   body {
     @apply bg-background text-foreground;
   }
+  /* Veladura del fondo (rediseño en vidrio): manchas suaves de la marca detrás de todo, para
+     que el vidrio tenga algo que "mostrar". Va en un ::before FIJO y no con
+     `background-attachment: fixed`, que en el celular repinta todo el fondo al scrollear y
+     tironea. z-index -1 = debajo del contenido pero arriba del fondo del <body> (que se
+     propaga al lienzo). Ojo: un contenedor con `bg-background` opaco la tapa. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 55% at 105% -8%, hsl(var(--veil-a)), transparent 62%),
+      radial-gradient(85% 45% at -15% 38%, hsl(var(--veil-b)), transparent 66%),
+      radial-gradient(90% 40% at 60% 108%, hsl(var(--veil-c)), transparent 70%);
+  }
+  /* En el admin la veladura es más tenue (superficie densa de trabajo). */
+  html:has([data-surface='admin']) body::before {
+    opacity: 0.5;
+  }
 }
 
 @layer utilities {
@@ -166,10 +211,8 @@ html:has([data-surface="admin"]) {
   /* `.text-gradient` (texto con degradé violeta → fucsia) se eliminó en el Rediseño 2,
      Tanda 0: era la seña de "hecho con IA" más visible del inicio y ya nada la usaba. */
 
-  /* Superficie translúcida con desenfoque, para barras sticky y overlays sobre imágenes. */
-  .glass {
-    @apply border border-white/10 bg-card/60 backdrop-blur-md;
-  }
+  /* `.glass` se movió a @layer components (rediseño en vidrio, más abajo): así un `bg-*`
+     de utilidad que se le pase a una <Card> sigue ganando. */
 
   /* Resplandor violeta al hacer hover — reemplaza al `hover:shadow-lg` que no se notaba
      porque <Card> ya trae sombra por defecto. */
@@ -223,18 +266,26 @@ html:has([data-surface="admin"]) {
   }
 }
 
-/* ── Superficie del PANEL ADMIN (Tanda T1, oct 2026) ──────────────────────────
+/* ── Superficie del PANEL ADMIN (Tanda T1, oct 2026; vidrio sobrio desde el 9/11/2026) ──
    El admin NO inventa una paleta: declara una superficie más densa en el nodo raíz del
    shell (data-surface="admin") para no tocar la app del comprador. Además agrega los
    tokens de TINTA (-ink): color para TEXTO sobre card/soft. Los tokens base están
    calibrados para RELLENOS — medido sobre el DOM del prototipo, `bg-success/15
    text-success` daba 2,0:1 en modo claro y `text-info` sobre la tarjeta oscura 4,3.
    Regla: texto coloreado sobre card/soft = text-{token}-ink; relleno sólido =
-   bg-{token} text-{token}-foreground. Solo existen dentro del admin a propósito. */
+   bg-{token} text-{token}-foreground. Solo existen dentro del admin a propósito.
+   Vidrio del admin = SOBRIO: más opaco, menos desenfoque, sombra corta, radios algo
+   menores y la veladura del fondo a la mitad (ver body::before). */
 [data-surface="admin"] {
-  --radius: 0.625rem;
-  --admin-chrome: 220 20% 97%;
-  --admin-row-hover: 220 20% 96%;
+  --radius: 0.75rem;
+  --radius-card: 1rem;
+  --glass: rgb(255 255 255 / 0.74);
+  --glass-strong: rgb(255 255 255 / 0.9);
+  --glass-shadow: 0 6px 18px -12px rgb(15 60 70 / 0.3), 0 1px 3px -1px rgb(15 60 70 / 0.08);
+  --glass-blur: 12px;
+  --bar: rgb(255 255 255 / 0.78);
+  --admin-chrome: 180 12% 97%;
+  --admin-row-hover: 185 14% 93%;
   /* Un punto más profundo que el global: las pastillas rojas del menú llevan texto
      blanco de 12 px y con el rojo base daban 3,6:1 en oscuro (AA pide 4,5). */
   --destructive: 0 72% 46%;
@@ -246,10 +297,14 @@ html:has([data-surface="admin"]) {
   --cat-food-ink: 24 90% 36%;
 }
 .dark [data-surface="admin"] {
-  --card: 240 19% 14%;
-  --popover: 240 19% 14%;
-  --admin-chrome: 240 26% 9%;
-  --admin-row-hover: 240 15% 18%;
+  --card: 206 12% 12%;
+  --popover: 206 12% 14%;
+  --glass: rgb(255 255 255 / 0.05);
+  --glass-strong: rgb(30 35 39 / 0.9);
+  --glass-shadow: 0 8px 20px -14px rgb(0 0 0 / 0.75);
+  --bar: rgb(22 26 29 / 0.82);
+  --admin-chrome: 204 14% 9%;
+  --admin-row-hover: 206 10% 17%;
   --destructive: 0 72% 52%;
   --success-ink: 142 69% 62%;
   --warning-ink: 40 95% 62%;
@@ -259,79 +314,118 @@ html:has([data-surface="admin"]) {
   --cat-food-ink: 25 92% 66%;
 }
 
-/* ── Rediseño 2 · las dos piezas de identidad del "Toldo" ─────────────────────────────
-   Clases LITERALES a propósito (el JIT de Tailwind escanea texto: nada de armar nombres
-   por concatenación). Las rayas usan los tonos PROFUNDOS de cada familia en los dos temas:
-   el toldo es un dibujo y tiene que verse igual de noche; en la pizarra cambia el "lienzo"
-   (--awn-paper) a un crudo, como una lona.
-   Toldo: rayas del color del rubro + festón abajo. Componente: components/awning.tsx. */
-.awn {
-  --c: #BD3F0B;
-  --awn-paper: #FFFFFF;
-  --p: color-mix(in srgb, var(--c) 22%, var(--awn-paper));
-  position: relative;
-  background: repeating-linear-gradient(90deg, var(--c) 0 13px, var(--p) 13px 26px);
-}
-.dark .awn { --awn-paper: #E9E4DC; }
-.awn::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -7px;
-  height: 7px;
-  background:
-    radial-gradient(circle at 6.5px 0, var(--c) 6.5px, transparent 7px) 0 0 / 26px 7px repeat-x,
-    radial-gradient(circle at 19.5px 0, var(--p) 6.5px, transparent 7px) 0 0 / 26px 7px repeat-x;
-}
-.awn-brand { --c: #0F6376; }
-.awn-food { --c: #BD3F0B; }
-.awn-fast { --c: #A8320F; }
-.awn-drink { --c: #B8501A; }
-.awn-kiosk { --c: #7A4A00; }
-.awn-market { --c: #875600; }
-.awn-pharma { --c: #117456; }
-.awn-cloth { --c: #2347AC; }
-.awn-home { --c: #1F4F8F; }
-.awn-other { --c: #3B4FA8; }
+/* ── Rediseño en vidrio (9/11/2026) · piezas compartidas ─────────────────────────────
+   Aprobado por David: recuadros de vidrio bien redondeados sobre una veladura suave de la
+   marca, SIN el toldo a rayas (se borraron .awn-*, la etiqueta .price-tag y .ticket-notch).
+   API (la usan todas las pantallas; detalle en CLAUDE.md, "Rediseño en vidrio"):
+   - .glass         tarjeta de vidrio (la usa <Card> por defecto). Sin radio: va aparte con
+                    `rounded-card` (22 px en la app, 16 px en el admin).
+   - .glass-strong  vidrio más opaco: tarjetas destacadas, sobre fotos, menús flotantes.
+   - .glass-bar     barras flotantes (encabezado, barra de abajo): el contenido pasa por debajo.
+   - .cat-tile + .tile-{brand|food|fast|drink|kiosk|market|pharma|cloth|home|other}
+                    cuadradito del rubro (components/category-tile.tsx).
+   - .garland, .season-star   decoración de Navidad (components/garland.tsx).
+   En @layer components a propósito: un `bg-*`/`border-*`/`shadow-*` de utilidad que se le
+   pase a una <Card> sigue ganando. Con "reducir transparencia" todo cae a superficies
+   sólidas; sin backdrop-filter (navegadores viejos), a un vidrio más opaco. */
+@layer components {
+  .glass,
+  .glass-strong,
+  .glass-bar {
+    border: 1px solid var(--glass-line);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  }
+  .glass {
+    background-color: var(--glass);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
+  }
+  .glass-strong {
+    background-color: var(--glass-strong);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
+  }
+  .glass-bar {
+    --glass-blur: 22px;
+    background-color: var(--bar);
+    box-shadow: var(--glass-shadow);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass { background-color: var(--glass-strong); }
+    .glass-strong,
+    .glass-bar { background-color: hsl(var(--card) / 0.96); }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .glass,
+    .glass-strong,
+    .glass-bar {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background-color: hsl(var(--card));
+    }
+  }
 
-/* Etiqueta de precio: punta + agujerito. Componente: components/price-tag.tsx. */
-.price-tag {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  padding: 0.15em 0.55em 0.15em 1.15em;
-  clip-path: polygon(0.6em 0, 100% 0, 100% 100%, 0.6em 100%, 0 50%);
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
-  font-family: var(--font-cartel), var(--font-body), system-ui, sans-serif;
-  font-weight: 800;
-  line-height: 1.15;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.price-tag::before {
-  content: '';
-  position: absolute;
-  left: 0.5em;
-  top: 50%;
-  width: 0.32em;
-  height: 0.32em;
-  margin-top: -0.16em;
-  border-radius: 9999px;
-  background: hsl(var(--background));
-}
-.price-tag-offer {
-  background: hsl(var(--offer));
-  color: hsl(var(--offer-foreground));
-}
+  /* Cuadradito del rubro: tono PROFUNDO de la familia en los DOS temas + ícono blanco
+     (≥ 4,5:1 en todos). Reemplaza al toldo a rayas: el rubro se reconoce igual de noche. */
+  .cat-tile {
+    --tile-c: 191 78% 26%;
+    background-color: hsl(var(--tile-c));
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 8px 18px -8px hsl(var(--tile-c) / 0.8);
+  }
+  .tile-brand { --tile-c: 191 78% 26%; }
+  .tile-food { --tile-c: 21 88% 40%; }
+  .tile-fast { --tile-c: 14 84% 36%; }
+  .tile-drink { --tile-c: 22 75% 41%; }
+  .tile-kiosk { --tile-c: 39 100% 27%; }
+  .tile-market { --tile-c: 37 100% 26%; }
+  .tile-pharma { --tile-c: 162 75% 26%; }
+  .tile-cloth { --tile-c: 224 64% 38%; }
+  .tile-home { --tile-c: 214 64% 34%; }
+  .tile-other { --tile-c: 230 48% 45%; }
 
-/* Ticket con muescas a los costados (código de entrega del pedido, Rediseño 2). */
-.ticket-notch {
-  -webkit-mask:
-    radial-gradient(circle 9px at 0 50%, transparent 9px, #000 9.5px) left / 51% 100% no-repeat,
-    radial-gradient(circle 9px at 100% 50%, transparent 9px, #000 9.5px) right / 51% 100% no-repeat;
-  mask:
-    radial-gradient(circle 9px at 0 50%, transparent 9px, #000 9.5px) left / 51% 100% no-repeat,
-    radial-gradient(circle 9px at 100% 50%, transparent 9px, #000 9.5px) right / 51% 100% no-repeat;
+  /* Navidad: cable + lucecitas que titilan escalonadas (components/garland.tsx). */
+  .garland-cable {
+    fill: none;
+    stroke: hsl(var(--foreground) / 0.45);
+    stroke-width: 1.4;
+  }
+  .garland-bulb {
+    position: absolute;
+    top: 7px;
+    width: 8px;
+    height: 11px;
+    margin-left: -4px;
+    border-radius: 50% 50% 46% 46% / 40% 40% 60% 60%;
+    background: var(--c);
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--c) 75%, transparent);
+    animation: garland-twinkle 2.6s ease-in-out infinite;
+    animation-delay: var(--d);
+  }
+  .garland-bulb::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: 2px;
+    width: 4px;
+    height: 3px;
+    border-radius: 1px;
+    background: #4a4a4a;
+  }
+  .season-star {
+    color: #e0a526;
+    fill: currentColor;
+    animation: season-shine 3s ease-in-out infinite;
+  }
+}
+@keyframes garland-twinkle {
+  50% { opacity: 0.4; box-shadow: none; }
+}
+@keyframes season-shine {
+  50% { transform: rotate(18deg) scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .garland-bulb,
+  .season-star {
+    animation: none !important;
+  }
 }

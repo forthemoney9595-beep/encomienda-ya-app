@@ -29,7 +29,7 @@ export function ThemeToggle() {
     try { localStorage.setItem('eya-theme', next); } catch {}
     document.documentElement.classList.toggle('dark', next === 'dark');
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
-      'content', next === 'dark' ? '#1C1F22' : '#FFFFFF',
+      'content', next === 'dark' ? '#121618' : '#EEF1F1',
     );
   };
 

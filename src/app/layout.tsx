@@ -60,10 +60,10 @@ export default function RootLayout({
     <html lang="es" className={`${fontBody.variable} ${fontCartel.variable}`} suppressHydrationWarning>
       <head>
         {/* PWA: Color de la barra de estado del navegador/móvil */}
-        <meta name="theme-color" content="#FFFFFF" />
+        <meta name="theme-color" content="#EEF1F1" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem('eya-theme')==='dark'){document.documentElement.classList.add('dark');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content','#1C1F22');}}catch(e){}`,
+            __html: `try{if(localStorage.getItem('eya-theme')==='dark'){document.documentElement.classList.add('dark');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content','#121618');}}catch(e){}`,
           }}
         />
         {/* PWA: el manifest vive en src/app/manifest.json (Next lo sirve como

@@ -10,6 +10,9 @@ import { Home, ShoppingBag, Heart, User, ShoppingCart } from 'lucide-react';
 // Barra de navegación inferior — SOLO en celular (md:hidden). Por ahora solo para
 // el rol comprador; tienda/repartidor/admin siguen usando el menú lateral (Sheet)
 // hasta sus respectivas fases del rediseño.
+// Vidrio (9/11/2026): píldora de vidrio FLOTANTE (margen de 0,75rem a los costados y abajo,
+// más el área segura del celular). Ocupa 4rem + 0,75rem: el <main> del shell deja pb-28 y la
+// barra de carrito de la tienda pública se apoya en 4rem + 1,5rem.
 export function BottomNav() {
   const pathname = usePathname();
   const { userProfile } = useAuth();
@@ -25,7 +28,7 @@ export function BottomNav() {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden pb-[env(safe-area-inset-bottom)]">
+    <nav aria-label="Navegación principal" data-testid="bottom-nav" className="glass-bar fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex h-16 items-stretch rounded-[1.375rem] px-1 md:hidden">
       {tabs.map((tab) => (
         <Link
           key={tab.href}
@@ -40,12 +43,12 @@ export function BottomNav() {
               notaba cuál pestaña estaba abierta. */}
           <span
             className={cn(
-              'absolute top-0 h-[3px] w-8 rounded-b-full bg-primary transition-opacity duration-200',
+              'absolute inset-x-1 inset-y-1.5 rounded-2xl bg-primary/15 transition-opacity duration-200',
               tab.active ? 'opacity-100' : 'opacity-0',
             )}
           />
-          <tab.icon className={cn('h-5 w-5', tab.active && 'fill-primary/15')} aria-hidden="true" />
-          {tab.label}
+          <tab.icon className={cn('relative h-5 w-5', tab.active && 'fill-primary/15')} aria-hidden="true" />
+          <span className="relative">{tab.label}</span>
         </Link>
       ))}
 
@@ -60,7 +63,7 @@ export function BottomNav() {
         <span className="relative">
           <ShoppingCart className="h-5 w-5" />
           {totalItems > 0 && (
-            <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+            <span className="absolute -right-2.5 -top-2 flex h-[1.1rem] min-w-[1.1rem] items-center justify-center rounded-full bg-primary px-1 text-xs font-bold leading-none text-primary-foreground">
               {totalItems > 9 ? '9+' : totalItems}
             </span>
           )}

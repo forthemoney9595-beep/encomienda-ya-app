@@ -171,11 +171,19 @@ service cloud.firestore {
           // escribe el CLIENTE junto con manuallyPaused — lección TT: campo nuevo que
           // escribe el cliente = va al hasOnly de su regla.
           'pausedUntil',
+          // 'specialHours' (nov 2026): horario especial por fecha (fiestas: 24/12, 31/12).
+          // Mapa { 'YYYY-MM-DD': {closed, ranges} } que pisa al horario semanal ese día;
+          // lo escribe el dueño desde /my-store/edit (lección TT: campo nuevo del cliente =
+          // va al hasOnly). Forma mínima validada abajo (mapa, tope de fechas).
+          'specialHours',
           'productCategories', 'maxDiscountPercent'
           // 🔒 'payoutCbu' quitado (seguridad ago 2026): el CBU vive en el user doc del
           // dueño (privado), no en el store público. Se escribe por /api/withdrawals/request
           // y por la ficha admin, ambos sobre users/{ownerId}.
-        ])
+        ]) &&
+        (!('specialHours' in request.resource.data) ||
+          (request.resource.data.specialHours is map &&
+           request.resource.data.specialHours.size() <= 60))
       );
 
       // Borrar una tienda hace desaparecer su saldo del pasivo (el saldo se deriva de los

@@ -25,8 +25,9 @@ import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLA
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { StarRating } from '@/components/star-rating';
-import { PriceTag } from '@/components/price-tag';
-import { Awning } from '@/components/awning';
+import { PricePill } from '@/components/price-pill';
+import { CategoryTile } from '@/components/category-tile';
+import { Garland } from '@/components/garland';
 import { ImageLightbox } from '@/components/image-lightbox';
 import { format } from 'date-fns';
 import { fmtDate } from '@/lib/format-date';
@@ -303,7 +304,7 @@ export default function StorePublicPage() {
       },
       // 120px = header (56) + tira de chips; el -70% de abajo hace que se marque la
       // sección cuyo encabezado entra en el tercio superior de la pantalla.
-      { rootMargin: '-120px 0px -70% 0px', threshold: 0 },
+      { rootMargin: '-180px 0px -65% 0px', threshold: 0 },
     );
     sections.forEach(s => observer.observe(s));
     return () => observer.disconnect();
@@ -402,8 +403,8 @@ export default function StorePublicPage() {
       {/* BANNER — más bajo que antes (Rediseño 2, Tanda 0): en celular el primer producto
           aparecía recién después de una pantalla y media de cabecera. Sin velo degradé: el
           nombre ya no va encima de la foto. */}
-      <div className="relative -mx-4 sm:mx-0">
-        <div className="relative aspect-[3.2/1] sm:aspect-[4/1] sm:rounded-t-lg overflow-hidden">
+      <div className="relative">
+        <div className="relative aspect-[3.2/1] sm:aspect-[4/1] overflow-hidden rounded-card">
             <StoreImage
               src={store.imageUrl}
               name={store.name}
@@ -418,15 +419,16 @@ export default function StorePublicPage() {
         </div>
       </div>
 
-      {/* Franja de TOLDO del rubro (Rediseño 2): la firma visual de la tienda. */}
-      <Awning category={storeCategory} className="-mx-4 sm:mx-0 h-5 mb-6" />
 
-      {/* INFO — todo en dos renglones. La dirección y el horario de la semana viven en la
-          pestaña Info (antes se repetían en una tarjeta de tres bloques acá arriba). */}
-      <div className="px-4 sm:px-0 mb-6 space-y-2">
-          <div className="flex items-start justify-between gap-3">
-              <h1 className="font-headline text-4xl sm:text-5xl font-extrabold leading-none tracking-tight text-balance">{store.name}</h1>
-              <Button variant="outline" size="icon" onClick={handleShare} className="h-10 w-10 shrink-0" aria-label="Compartir tienda">
+      {/* INFO — tarjeta de vidrio que monta sobre el banner (rediseño en vidrio, 9/11/2026), con
+          el cuadradito del rubro al lado del nombre (reemplaza la franja de toldo). La dirección
+          y el horario de la semana viven en la pestaña Info. */}
+      <Card className="glass-strong relative z-[1] mx-2 -mt-8 mb-6 space-y-2 p-4 sm:mx-6 sm:p-5">
+          <Garland />
+          <div className="flex items-start gap-3">
+              <CategoryTile category={storeCategory} size="md" label={storeCategory ? formatCategoryLabel(storeCategory) : undefined} />
+              <h1 className="min-w-0 flex-1 self-center font-headline text-4xl sm:text-5xl font-extrabold leading-none tracking-tight text-balance break-words">{store.name}</h1>
+              <Button variant="outline" size="icon" onClick={handleShare} className="h-11 w-11 shrink-0" aria-label="Compartir tienda">
                   <Share2 className="h-4 w-4" />
               </Button>
           </div>
@@ -462,7 +464,7 @@ export default function StorePublicPage() {
                   </p>
               </div>
           )}
-      </div>
+      </Card>
 
       {/* El aviso de cerrado queda FUERA de las pestañas: tiene que verse siempre. */}
       {!storeStatus.isOpen && (
@@ -518,11 +520,11 @@ export default function StorePublicPage() {
               )}
           </div>
 
-      {/* NAVEGACIÓN POR CATEGORÍA — top-14 en TODOS los tamaños: el header del shell ahora
-          es sticky también en escritorio (antes ahí se volvía transparente, de ahí el
-          sm:top-0 original). */}
+      {/* NAVEGACIÓN POR CATEGORÍA — barra de vidrio pegada debajo del encabezado flotante
+          (top-[4.5rem] = margen de 0,5rem + 3,5rem del encabezado + 0,5rem de aire). Si cambia
+          el alto del encabezado del shell (app-content.tsx), cambiar acá y el scroll-mt. */}
       {groupedProducts.length > 1 && (
-          <div className="sticky top-14 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 py-3 mb-6 border-b sm:border-b-0">
+          <div className="glass-bar sticky top-[4.5rem] z-20 mb-6 rounded-card px-3 py-2.5">
               <div className="flex gap-4 overflow-x-auto no-scrollbar">
                   {groupedProducts.map(([category]) => {
                       const style = getCategoryStyle(category);
@@ -594,7 +596,7 @@ export default function StorePublicPage() {
             // barra de acento + contador + línea divisoria, y las filas dentro de un
             // contenedor propio — antes era solo un h2 suelto y el menú se leía como una
             // lista continua sin cortes.
-            <div key={category} id={categorySlug(category)} data-category-section={category} className="mb-12 scroll-mt-[8.5rem]">
+            <div key={category} id={categorySlug(category)} data-category-section={category} className="mb-12 scroll-mt-[10rem]">
                 <div className="flex items-center gap-3 mb-3">
                     <span aria-hidden className="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary to-primary/30" />
                     <h2 className="font-headline text-xl font-bold">{formatCategoryLabel(category)}</h2>
@@ -757,7 +759,7 @@ export default function StorePublicPage() {
     {showCartBar && (
         <button
             onClick={() => setCartSheetOpen(true)}
-            className="fixed inset-x-4 z-40 mx-auto flex max-w-md items-center justify-between rounded-full bg-primary px-5 py-3.5 text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 bottom-[calc(4rem+env(safe-area-inset-bottom)+12px)] md:bottom-6"
+            className="fixed inset-x-4 z-40 mx-auto flex max-w-md items-center justify-between rounded-full bg-primary px-5 py-3.5 text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 bottom-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] md:bottom-6"
         >
             <span className="flex items-center gap-2 font-semibold">
                 <ShoppingBag className="h-5 w-5" />
@@ -829,7 +831,7 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
                     <div className="flex justify-between items-start gap-2">
                         <CardTitle className="text-base line-clamp-1">{product.name}</CardTitle>
                         <span className="flex flex-col items-end gap-1 shrink-0">
-                            <PriceTag value={effectivePrice(product)} offer={!!product.discountPercent} className="text-base" />
+                            <PricePill value={effectivePrice(product)} offer={!!product.discountPercent} className="text-base" />
                             {!!product.discountPercent && (
                                 <span className="text-xs text-muted-foreground line-through">{money(product.price)}</span>
                             )}
@@ -860,7 +862,7 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
                 <h3 className="font-semibold line-clamp-1">{product.name}</h3>
                 {product.description && <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>}
                 <p className="mt-2 flex flex-wrap items-center gap-2">
-                    <PriceTag value={effectivePrice(product)} offer={!!product.discountPercent} className="text-lg" />
+                    <PricePill value={effectivePrice(product)} offer={!!product.discountPercent} className="text-lg" />
                     {!!product.discountPercent && (
                         <span className="text-sm text-muted-foreground line-through">{money(product.price)}</span>
                     )}
@@ -940,7 +942,7 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                         </DialogHeader>
                         <div className="flex items-center justify-between">
                             <span className="flex items-center gap-2">
-                                <PriceTag value={effectivePrice(product)} offer={!!product.discountPercent} className="text-2xl" />
+                                <PricePill value={effectivePrice(product)} offer={!!product.discountPercent} className="text-2xl" />
                                 {!!product.discountPercent && (
                                     <span className="text-sm text-muted-foreground line-through">{money(product.price)}</span>
                                 )}
