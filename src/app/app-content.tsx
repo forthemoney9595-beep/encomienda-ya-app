@@ -198,9 +198,11 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
     // sidebar con links de invitado), igual que cuando abre una tienda por link directo.
     // Por eso se quitó el early-return que le negaba el shell en la raíz.
 
-    // En cualquier otra página, o logueado, muestra el layout completo
+    // En cualquier otra página, o logueado, muestra el layout completo.
+    // flex-1 en el contenedor (9/11/2026): sin eso medía lo que su contenido y el ancho de la
+    // pantalla cambiaba de una solapa a otra (418 / 394 / 430 px en Pedidos de la tienda).
     return (
-        <div className="flex min-h-screen min-w-0">
+        <div className="flex min-h-screen min-w-0 flex-1">
             <Sidebar side="left" className="w-64" collapsible="icon">
                 <SidebarHeader>
                     <Link href="/" className="flex items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center">
