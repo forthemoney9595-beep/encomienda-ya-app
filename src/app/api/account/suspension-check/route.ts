@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ active: true, lifted: false, until: suspensionMillis(s.until) });
   } catch (e) {
-    console.error("❌ suspension-check:", e);
+    console.error("suspension-check:", e);
     Sentry.captureException(e, { tags: { route: "account/suspension-check" } });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

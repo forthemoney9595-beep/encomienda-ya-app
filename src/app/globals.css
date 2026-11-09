@@ -324,3 +324,13 @@ html:has([data-surface="admin"]) {
   background: hsl(var(--offer));
   color: hsl(var(--offer-foreground));
 }
+
+/* Ticket con muescas a los costados (código de entrega del pedido, Rediseño 2). */
+.ticket-notch {
+  -webkit-mask:
+    radial-gradient(circle 9px at 0 50%, transparent 9px, #000 9.5px) left / 51% 100% no-repeat,
+    radial-gradient(circle 9px at 100% 50%, transparent 9px, #000 9.5px) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle 9px at 0 50%, transparent 9px, #000 9.5px) left / 51% 100% no-repeat,
+    radial-gradient(circle 9px at 100% 50%, transparent 9px, #000 9.5px) right / 51% 100% no-repeat;
+}

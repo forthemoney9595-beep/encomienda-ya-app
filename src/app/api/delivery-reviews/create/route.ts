@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     // llevaba `link` y tocarla no navegaba a ningún lado.
     await notifyUser({
       userId: driverId,
-      title: "⭐ Nueva reseña",
+      title: "Nueva reseña",
       body: `${orderData.customerName || "Un cliente"} calificó tu entrega con ${ratingNum} estrella${ratingNum === 1 ? "" : "s"}.`,
       type: "delivery_review",
       link: "/delivery/reviews",
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, reviewId: reviewRef.id });
   } catch (error: any) {
-    console.error("❌ Error creando reseña de repartidor:", error);
+    console.error("Error creando reseña de repartidor:", error);
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
   }
 }

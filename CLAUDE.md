@@ -2565,6 +2565,50 @@ invitado, cliente, tienda y repartidor: sin desborde, sin emojis, sin degradé n
 147/147, typecheck y lint 0 errores. Pendiente para la Tanda 1 (tokens): el violeta como TEXTO
 sigue en 3,1-3,5:1 (la marca cambia a fucsia ahí).
 
+**Tandas 1-6 (9/11, misma rama `rediseno-toldo`, SIN subir: David lo revisa en local con
+`npm run dev` → http://localhost:3000).**
+- **T1 · base visual:** tokens nuevos en `globals.css` para los dos temas (`:root` claro =
+  default, `.dark` = pizarra), fucsia de marca `#B0145D` (claro) / `#FF8FC3` con texto oscuro
+  (oscuro) — el MISMO token sirve de texto y de relleno —, token propio **`offer`** (naranja de
+  ofertas, `bg-offer text-offer-foreground`; verde NUNCA para descuentos), Sofia Sans +
+  Sofia Sans Condensed por `next/font` (`--font-body`, `--font-cartel` → `font-body` /
+  `font-headline`), texto base 18 px (`html{font-size:112.5%}`; el admin queda en 100 % con
+  `html:has([data-surface="admin"])`), radio 0.625rem, `<Card>` sin sombra por defecto. El tema
+  arranca CLARO: el script del head solo agrega `dark` si `eya-theme === 'dark'`;
+  theme-color y manifest pasaron a blanco/fucsia.
+- **T2-T4 · toldo, etiqueta y fachada:** `category-style.ts` ganó `awning` (clases LITERALES
+  `.awn-*` en `globals.css`, rayas de colores fijos profundos sobre `--awn-paper`);
+  `components/awning.tsx` (`Awning`), `components/price-tag.tsx` (`PriceTag` con agujerito,
+  variante oferta; `TextTag`); `store-image.tsx` sin foto = **fachada** (toldo del rubro +
+  ícono, con nombre si `withName`). Inicio con baldosas de toldo, caja de oferta, "Los de la
+  cuadra" y saludo "¿Qué te traemos, Nombre?"; tienda pública con franja de toldo, título de
+  cartel, pestañas subrayadas, `PriceTag` en filas/tarjetas, agotados legibles (solo se
+  atenúa la foto) y botón + `data-testid="add-product"` de 44 px.
+- **T5 · pantallas del cliente:** carrito "Tu pedido" con etiquetas por línea; detalle de
+  producto con `PriceTag` y título de cartel.
+- **T6 · seguimiento, repartidor y voz:** el código de entrega es un **ticket** (`.ticket-notch`);
+  el estado en letra de cartel + barra de 5 tramos (`ol[aria-label="Pasos del pedido"]`,
+  `aria-current="step"`; los estados fraccionarios —"Listo para recoger" 2.3, "En camino" 2.7—
+  marcan el último tramo ALCANZADO con `Math.floor`, antes ninguno quedaba marcado; en celular
+  los nombres van `sr-only` y debajo "Paso N de 5 · X", porque 5 nombres no entran en 5
+  columnas a 430 px); recibo con puntos guía y `money()`. Tarjeta "En curso" del repartidor
+  para usar al sol con una mano: franja oscura, pasos 1-2, dirección de destino a 40 px,
+  "Ganás $X", botones de 56/64/72 px ("Navegar", "Ya lo retiré", "Ya lo entregué"). Voz: se
+  sacaron los emojis al principio/final de títulos y cuerpos de avisos (119 líneas en api,
+  orders, lib, components, my-store, delivery, profile, context; el admin y sus 🧪 quedan a
+  propósito; los íconos del mapa también); `notifications.tsx` y `forgot-password` sin paleta
+  cruda de Tailwind.
+- **Verificado:** `_pw-rediseno-t0` 33/33, `_pw-tanda2-visual` 24/24 (su chequeo de contraste
+  ahora toma el fondo heredado: los botones de borde tienen fondo transparente),
+  `_pw-tanda1-ui` 9/10 (placehold.co de siempre), **`_pw-rediseno-flow.js` 10/10** (pedido de
+  prueba por el camino real → tomado por el repartidor → tarjeta En curso y seguimiento del
+  cliente a 430 px, residuo cero), Vitest 147/147, typecheck y lint 0 errores, admin y e2e de
+  servidor (ver resultado del día en la bóveda). El "1 Issue" de Next en las capturas del
+  repartidor es el error de GPS de Chromium sin permiso de ubicación (entorno de prueba).
+- **Pendiente:** confirmar el nombre/marca (el fucsia es provisorio), revisar en el celular
+  real (APK) claro y oscuro, y paneles de tienda/admin con el lenguaje nuevo (el admin tiene
+  su superficie propia y no cambia).
+
 ## Fase SS-audit (ago 2026): auditoría exhaustiva pre-producción (protocolo 35 fases) + correcciones P1/P2
 Auditoría completa con un fleet de 8 agentes en paralelo (rutas/APIs · roles/autorización ·
 reglas de negocio/dinero · concurrencia/idempotencia · seguridad web · frontend/errores ·

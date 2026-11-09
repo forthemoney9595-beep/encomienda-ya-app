@@ -86,10 +86,10 @@ export async function POST(request: Request) {
 
     // Avisos (fuera de la tx; un fallo acá no revierte la toma).
     if (storeTarget) {
-      await notifyUser({ userId: storeTarget, title: "🛵 Repartidor en camino", body: `${driverName} aceptó el pedido y va a retirarlo.`, type: 'order_status', orderId, link: `/orders/${orderId}` });
+      await notifyUser({ userId: storeTarget, title: "Repartidor en camino", body: `${driverName} aceptó el pedido y va a retirarlo.`, type: 'order_status', orderId, link: `/orders/${orderId}` });
     }
     if (buyerId) {
-      await notifyUser({ userId: buyerId, title: "🛵 Repartidor Asignado", body: "Un repartidor está yendo a retirar tu pedido.", type: 'order_status', orderId, link: `/orders/${orderId}` });
+      await notifyUser({ userId: buyerId, title: "Repartidor Asignado", body: "Un repartidor está yendo a retirar tu pedido.", type: 'order_status', orderId, link: `/orders/${orderId}` });
     }
 
     return NextResponse.json({ success: true });
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
       const [status, msg] = map[error.message];
       return NextResponse.json({ error: msg }, { status });
     }
-    console.error("❌ Error tomando pedido:", error);
+    console.error("Error tomando pedido:", error);
     Sentry.captureException(error, { tags: { route: "orders/take" } });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

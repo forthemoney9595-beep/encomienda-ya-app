@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     if (orderData.storeOwnerId) {
       await notifyUser({
         userId: orderData.storeOwnerId,
-        title: "🔄 Buscando otro repartidor",
+        title: "Buscando otro repartidor",
         body: `${driverName} no pudo continuar con el pedido. Estamos avisando a otros repartidores.`,
         type: "order_status",
         orderId,
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     if (orderData.userId) {
       await notifyUser({
         userId: orderData.userId,
-        title: "🔄 Cambio de repartidor",
+        title: "Cambio de repartidor",
         body: "El repartidor no pudo continuar con tu pedido. Ya estamos buscando otro — no hace falta que hagas nada.",
         type: "order_status",
         orderId,
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
         const notifRef = adminDb.collection("notifications").doc();
         batch.set(notifRef, {
           userId: driverDoc.id,
-          title: "📦 Pedido Disponible",
+          title: "Pedido Disponible",
           body: `${orderData.storeName || "Una tienda"} tiene un pedido liberado. ¡Aceptalo!`,
           type: "delivery_request",
           orderId,
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
           await adminMessaging.sendEachForMulticast({
             tokens: uniq,
             notification: {
-              title: "📦 Pedido Disponible",
+              title: "Pedido Disponible",
               body: `${orderData.storeName || "Una tienda"} tiene un pedido liberado. ¡Aceptalo!`,
             },
             // Mismo tag que el broadcast original del pedido: el re-aviso REEMPLAZA a
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("❌ Error soltando pedido:", error);
+    console.error("Error soltando pedido:", error);
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
   }
 }

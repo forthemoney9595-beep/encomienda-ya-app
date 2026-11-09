@@ -87,7 +87,7 @@ export async function setAccountApproval(db: Firestore, opts: {
     const isStore = !!storeId || opts.role === 'store';
     await OrderService.sendNotification(
       db, userId,
-      approved ? '✅ ¡Tu cuenta fue aprobada!' : 'Tu solicitud fue revisada',
+      approved ? '¡Tu cuenta fue aprobada!' : 'Tu solicitud fue revisada',
       approved
         ? (isStore
             ? 'Tu tienda ya está publicada en EncomiendaYA. Cargá tus productos y horarios para empezar a vender.'

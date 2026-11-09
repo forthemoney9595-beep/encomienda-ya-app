@@ -931,7 +931,7 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                             </button>
                         </div>
                         <DialogHeader className="text-left pt-2">
-                            <DialogTitle className="text-xl">{product.name}</DialogTitle>
+                            <DialogTitle className="font-headline text-3xl font-extrabold leading-none">{product.name}</DialogTitle>
                             {product.description && (
                                 <DialogDescription className="text-sm text-foreground/80 pt-1">
                                     {product.description}
@@ -939,14 +939,14 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                             )}
                         </DialogHeader>
                         <div className="flex items-center justify-between">
-                            <span className="flex items-baseline gap-2">
+                            <span className="flex items-center gap-2">
+                                <PriceTag value={effectivePrice(product)} offer={!!product.discountPercent} className="text-2xl" />
                                 {!!product.discountPercent && (
-                                    <span className="text-sm text-muted-foreground line-through">${product.price}</span>
+                                    <span className="text-sm text-muted-foreground line-through">{money(product.price)}</span>
                                 )}
-                                <span className="text-2xl font-bold text-foreground">{money(effectivePrice(product))}</span>
                             </span>
                             {!outOfStock && product.stock != null && product.stock <= 3 && (
-                                <span className="text-xs font-medium text-destructive">Quedan {product.stock}</span>
+                                <span className="text-sm font-semibold text-warning">Quedan {product.stock}</span>
                             )}
                         </div>
                         {outOfStock ? (

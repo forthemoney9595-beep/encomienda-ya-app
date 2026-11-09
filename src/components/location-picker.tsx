@@ -35,7 +35,7 @@ export function LocationPicker({
   value,
   onChange,
   className,
-  hint = 'Tocá el mapa o arrastrá el pin 📍 hasta la entrada exacta.',
+  hint = 'Tocá el mapa o arrastrá el pin hasta la entrada exacta.',
 }: LocationPickerProps) {
   return (
     <div className="space-y-1.5">

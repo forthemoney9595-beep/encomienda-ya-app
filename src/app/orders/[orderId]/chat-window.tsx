@@ -126,7 +126,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                 await OrderService.sendNotification(
                     firestore,
                     recipient.id,
-                    `💬 Nuevo mensaje de ${messageData.senderName}`,
+                    `Nuevo mensaje de ${messageData.senderName}`,
                     text.trim(),
                     recipient.role,
                     order.id,

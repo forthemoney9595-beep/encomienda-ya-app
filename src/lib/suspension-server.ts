@@ -120,7 +120,7 @@ export async function applySuspension(opts: {
 
   await notifyUser({
     userId: uid,
-    title: role === 'store' ? '⚠️ Tu tienda fue suspendida' : '⚠️ Tu cuenta fue suspendida',
+    title: role === 'store' ? 'Tu tienda fue suspendida' : 'Tu cuenta fue suspendida',
     body: suspensionNoticeBody({ reason, detail, until: untilMs, role }) +
       (role === 'delivery' && activeOrders > 0 ? ` Los ${activeOrders} pedido(s) que ya llevás los podés terminar.` : ''),
     type: 'account_status',
@@ -207,7 +207,7 @@ export async function liftSuspension(opts: {
 
   if (!lifted) return { lifted: false };
 
-  const title = role === 'store' ? '✅ Tu tienda volvió a estar activa' : '✅ Tu cuenta volvió a estar activa';
+  const title = role === 'store' ? 'Tu tienda volvió a estar activa' : 'Tu cuenta volvió a estar activa';
   const why = cause === 'expired'
     ? 'Terminó el plazo de la suspensión.'
     : cause === 'appeal' ? 'Revisamos tu apelación y levantamos la suspensión.' : 'La administración levantó la suspensión.';
@@ -264,7 +264,7 @@ export async function createAppeal(opts: { uid: string; text: string }): Promise
   try {
     const admins = await adminDb.collection('roles_admin').limit(20).get();
     await Promise.all(admins.docs.map(a => notifyUser({
-      userId: a.id, title: `⚖️ Apelación de ${role === 'store' ? 'tienda' : 'repartidor'}: ${name}`,
+      userId: a.id, title: `Apelación de ${role === 'store' ? 'tienda' : 'repartidor'}: ${name}`,
       body: text.slice(0, 160), type: 'admin', link: '/admin/inbox',
     })));
   } catch (e) {

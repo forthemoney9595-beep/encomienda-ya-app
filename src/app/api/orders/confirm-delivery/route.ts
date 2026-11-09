@@ -123,7 +123,7 @@ export async function POST(request: Request) {
     if (order.userId) {
       notices.push(notifyUser({
         userId: order.userId,
-        title: "🏠 ¡Llegamos!",
+        title: "¡Llegamos!",
         body: "Tu pedido fue entregado. Disfrutalo — y no te olvides de calificar.",
         type: "order_status",
         orderId,
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     if (order.storeOwnerId) {
       notices.push(notifyUser({
         userId: order.storeOwnerId,
-        title: "✅ Pedido entregado",
+        title: "Pedido entregado",
         body: `El pedido de ${order.customerName || "un cliente"} fue entregado con éxito.`,
         type: "order_status",
         orderId,
@@ -144,7 +144,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("❌ Error confirmando entrega:", error);
+    console.error("Error confirmando entrega:", error);
     const Sentry = await import("@sentry/nextjs");
     Sentry.captureException(error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

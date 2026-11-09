@@ -17,8 +17,7 @@ import { useAuth } from '@/context/auth-context';
 import { useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection, serverTimestamp, query, where, getCountFromServer, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Progress } from '@/components/ui/progress';
-import { CircularProgress } from '@/components/ui/circular-progress';
+import { money } from '@/lib/format-money';
 import { CheckCircle, CookingPot, Bike, Home, Clock, Wallet, Ban, Star, Repeat, Phone, MapPin, Navigation, PackageCheck, DollarSign, BellRing, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -85,18 +84,22 @@ function BuyerDeliveryPin({ orderId, delivered, verified }: { orderId: string; d
     const { data } = useDoc<{ pin?: string }>(pinRef);
     if (!data?.pin) return null;
     return (
-        <div className="w-full rounded-xl border border-primary/30 bg-primary/10 p-3 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Código de entrega</p>
-            <p className="font-headline text-3xl font-bold tracking-[0.4em] pl-[0.4em]">{data.pin}</p>
-            {delivered ? (
-                verified
-                    ? <p className="text-xs font-semibold text-success mt-1">✓ Entrega verificada con este código</p>
-                    : <p className="text-xs font-semibold text-warning mt-1">Entregado SIN código (pedido anterior al sistema o resuelto por admin)</p>
-            ) : (
-                <p className="text-xs text-muted-foreground mt-1">
-                    Dáselo al repartidor <strong>solo cuando tengas tu pedido en la mano</strong>.
-                </p>
-            )}
+        // Rediseño 2 (Toldo): el código va en un TICKET con muescas, como el de la fila del
+        // almacén. Los números grandes en letra de cartel, separados por una línea punteada.
+        <div className="ticket-notch flex w-full items-center gap-3 rounded-md bg-muted px-4 py-3">
+            <div className="min-w-0 flex-1 text-left">
+                <p className="font-headline text-xl font-extrabold leading-tight">Tu código de entrega</p>
+                {delivered ? (
+                    verified
+                        ? <p className="text-sm font-semibold text-success">Entrega verificada con este código</p>
+                        : <p className="text-sm font-semibold text-warning">Entregado sin código (pedido anterior al sistema o resuelto por la administración)</p>
+                ) : (
+                    <p className="text-sm text-muted-foreground">
+                        Dáselo al repartidor <strong className="text-foreground">solo cuando tengas tu pedido en la mano</strong>.
+                    </p>
+                )}
+            </div>
+            <p className="shrink-0 border-l-2 border-dashed border-border pl-4 font-headline text-5xl font-extrabold leading-none tracking-[0.08em] tabular-nums">{data.pin}</p>
         </div>
     );
 }
@@ -159,8 +162,6 @@ const statusSteps: any = {
 
 function OrderProgress({ status, order, timeoutAt, showCountdown, countdownVariant = 'buyer' }: { status: any; order?: any; timeoutAt?: number | null; showCountdown?: boolean; countdownVariant?: 'buyer' | 'store' }) {
     const currentStatusInfo = statusSteps[status] || { step: 0, label: 'Desconocido', icon: Clock, description: '' };
-    const totalSteps = 4;
-    const progressValue = (currentStatusInfo.step / totalSteps) * 100;
 
     if (status === 'Cancelado' || status === 'Rechazado') {
         // Fase YY: quién/por qué terminó ("No confirmado a tiempo", "Cancelado por el cliente"...).
@@ -170,26 +171,37 @@ function OrderProgress({ status, order, timeoutAt, showCountdown, countdownVaria
     const steps = DISPLAY_STEPS;
     const CurrentIcon = currentStatusInfo.icon;
     return (
-        <div className="space-y-8">
-            <div className="flex items-center gap-4">
-                <CircularProgress value={progressValue} size={64} strokeWidth={6}>
-                    <CurrentIcon className="h-6 w-6 text-primary" />
-                </CircularProgress>
-                <div>
-                    <p className="font-headline font-bold text-lg">{currentStatusInfo.label}</p>
-                    <p className="text-sm text-muted-foreground">{Math.round(progressValue)}% del camino</p>
-                </div>
+        // Rediseño 2 (Toldo): el estado en letra de cartel y los pasos como una barra de
+        // tramos (hechos en tinta, el actual en azul "en camino"). Antes: anillo de progreso
+        // con porcentaje + barra + íconos, tres formas de decir lo mismo.
+        <div className="space-y-6">
+            <div className="flex items-center gap-3">
+                <CurrentIcon className="h-7 w-7 shrink-0 text-info" aria-hidden="true" />
+                <p className="font-headline text-3xl font-extrabold leading-none">{currentStatusInfo.label}</p>
             </div>
-            <div>
-                <Progress value={progressValue} className="h-2" />
-                <div className="mt-4 grid grid-cols-5 gap-2 text-center text-xs lg:text-xs">
-                    {steps.map((stepInfo:any) => (
-                        <div key={stepInfo.step} className={cn("flex flex-col items-center gap-1.5", currentStatusInfo.step >= stepInfo.step ? 'text-primary font-semibold' : 'text-muted-foreground')}>
-                            <stepInfo.icon className="h-5 w-5" /><span>{stepInfo.label}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <ol className="grid grid-cols-5 gap-1" aria-label="Pasos del pedido">
+                {steps.map((stepInfo:any) => {
+                    // Los estados intermedios ("Listo para recoger" 2.3, "En camino" 2.7) marcan
+                    // como actual el último tramo alcanzado; sin el floor ninguno quedaba marcado.
+                    const reached = Math.floor(currentStatusInfo.step);
+                    const done = reached > stepInfo.step;
+                    const now = reached === stepInfo.step;
+                    return (
+                        <li key={stepInfo.step} aria-current={now ? 'step' : undefined}
+                            className={cn('border-t-[5px] pt-1.5 text-sm font-semibold leading-tight',
+                                done ? 'border-foreground text-foreground' : now ? 'border-info text-info font-extrabold' : 'border-border text-muted-foreground')}>
+                            {/* En celular cinco nombres no entran en 5 columnas: la barra sola
+                                y debajo una línea con el paso actual. */}
+                            <span className="sr-only sm:not-sr-only">{stepInfo.label}</span>
+                        </li>
+                    );
+                })}
+            </ol>
+            {DISPLAY_STEPS[Math.floor(currentStatusInfo.step)] && (
+                <p className="-mt-4 text-sm font-semibold text-muted-foreground sm:hidden">
+                    Paso {Math.floor(currentStatusInfo.step) + 1} de {DISPLAY_STEPS.length} · {DISPLAY_STEPS[Math.floor(currentStatusInfo.step)].label}
+                </p>
+            )}
              {showCountdown && status === 'Pendiente de Confirmación' && <ConfirmCountdown timeoutAt={timeoutAt} variant={countdownVariant} />}
              <Alert><currentStatusInfo.icon className="h-4 w-4" /><AlertTitle>{currentStatusInfo.label}</AlertTitle><AlertDescription>{currentStatusInfo.description}{status === 'En preparación' && (<p className="mt-2 text-base font-bold text-primary">Entrega estimada: 25-40 min</p>)}</AlertDescription></Alert>
         </div>
@@ -338,7 +350,7 @@ export default function OrderTrackingPage() {
       const canAccessAsDriver = isDelivery && (!order.deliveryPersonId || order.deliveryPersonId === user?.uid);
 
       if (!isOwner && !isBuyer && !isAdmin && !canAccessAsDriver) {
-          console.warn("⛔ Acceso denegado a pedido:", orderId);
+          console.warn("Acceso denegado a pedido:", orderId);
           router.push('/orders'); 
       }
     } else if (!isLoading && !order && !orderLoading) {
@@ -457,7 +469,7 @@ export default function OrderTrackingPage() {
                 senderId: user!.uid,
                 senderName: myUserProfile.displayName || 'Tienda',
                 senderRole: 'store',
-                text: "🔔 ¡El pedido está listo para recoger! Pasa por el mostrador.",
+                text: "¡El pedido está listo para recoger! Pasa por el mostrador.",
                 createdAt: serverTimestamp(),
             };
             await addDoc(collection(firestore, 'order_chats', order.id, 'messages'), messageData);
@@ -468,7 +480,7 @@ export default function OrderTrackingPage() {
                 await OrderService.sendNotification(
                     firestore,
                     order.deliveryPersonId,
-                    "📦 ¡Pedido Listo!",
+                    "¡Pedido Listo!",
                     `La tienda ${order.storeName} ya tiene el pedido listo para retirar.`,
                     "delivery",
                     order.id,
@@ -704,19 +716,20 @@ export default function OrderTrackingPage() {
                                    return rated
                                      ? (<div className="flex items-center gap-1 text-sm text-warning"><Star className="h-4 w-4 fill-current" /><span className="font-bold">{rated}</span></div>)
                                      : (<Button variant="outline" size="sm" onClick={() => setReviewingItem(item)}><Star className="mr-2 h-4 w-4" /> Valorar</Button>);
-                                })()}<p className="font-semibold">${Math.round(item.price * item.quantity).toLocaleString('es-AR')}</p>
+                                })()}<p className="font-semibold tabular-nums">{money(item.price * item.quantity)}</p>
                             </div>
                         </div>
                     ))}
                     <Separator/>
                      {/* Formato es-AR sin decimales (Fase QQ): antes "$34000.00" — sin
                          separador de miles y con el punto donde va la coma. */}
-                     <div className="flex justify-between text-sm"><p>Subtotal</p><p>${Math.round(order.subtotal || (displayTotal - order.deliveryFee)).toLocaleString('es-AR')}</p></div>
-                     <div className="flex justify-between text-sm"><p>Envío</p><p>${Math.round(order.deliveryFee).toLocaleString('es-AR')}</p></div>
+                     {/* Boleta (Rediseño 2): renglones con puntos guía hasta el precio. */}
+                     <div className="flex items-baseline gap-2 text-base"><span>Productos</span><span aria-hidden="true" className="flex-1 -translate-y-1 border-b-2 border-dotted border-border" /><span className="tabular-nums">{money(order.subtotal || (displayTotal - order.deliveryFee))}</span></div>
+                     <div className="flex items-baseline gap-2 text-base"><span>Envío</span><span aria-hidden="true" className="flex-1 -translate-y-1 border-b-2 border-dotted border-border" /><span className="tabular-nums">{money(order.deliveryFee)}</span></div>
                      {(order.serviceFee || 0) > 0 && (
-                        <div className="flex justify-between text-sm"><p>Tarifa de Servicio</p><p>${Math.round(order.serviceFee || 0).toLocaleString('es-AR')}</p></div>
+                        <div className="flex items-baseline gap-2 text-base"><span>Tarifa de servicio</span><span aria-hidden="true" className="flex-1 -translate-y-1 border-b-2 border-dotted border-border" /><span className="tabular-nums">{money(order.serviceFee || 0)}</span></div>
                      )}
-                    <Separator/><div className="flex justify-between font-bold text-lg"><p>Total</p><p>${Math.round(displayTotal).toLocaleString('es-AR')}</p></div>
+                    <div className="flex items-baseline gap-2 border-t-2 border-foreground pt-2 font-headline text-2xl font-extrabold"><span>Total</span><span aria-hidden="true" className="flex-1" /><span className="tabular-nums">{money(displayTotal)}</span></div>
                      <Separator/>
 
                      {/* 🔒 Auditoría de privacidad (ago 2026, estándar Rappi): el teléfono del

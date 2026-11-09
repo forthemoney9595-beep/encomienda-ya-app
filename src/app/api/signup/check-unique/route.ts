@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const snap = await adminDb.collection("unique_ids").doc(`${type}_${digits}`).get();
     return NextResponse.json({ taken: snap.exists });
   } catch (error) {
-    console.error("❌ Error en check-unique:", error);
+    console.error("Error en check-unique:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

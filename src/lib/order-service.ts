@@ -212,7 +212,7 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
 
           switch (status) {
               case 'Pendiente de Pago':
-                  title = "✅ ¡Pedido Aceptado!";
+                  title = "¡Pedido Aceptado!";
                   message = `${storeName} confirmó stock. Entra para pagar.`;
                   break;
               case 'En preparación':
@@ -222,27 +222,27 @@ export const updateOrderStatus = async (db: Firestore, orderId: string, status: 
               case 'Listo para recoger':
                   // Fase PP: este case estaba COMENTADO — la transición era muda para el
                   // comprador (y es un hito que le importa: su pedido ya está armado).
-                  title = "🥡 ¡Tu pedido está listo!";
+                  title = "¡Tu pedido está listo!";
                   message = `${storeName} ya lo tiene preparado. Buscando un repartidor para llevártelo.`;
                   break;
               case 'En camino': // ✅ NUEVO: Cuando el delivery toma el viaje
-                  title = "🛵 Repartidor Asignado";
+                  title = "Repartidor Asignado";
                   message = "Un repartidor está yendo a retirar tu pedido.";
                   break;
               case 'En reparto':
-                  title = "🚀 ¡En Camino a tu casa!";
+                  title = "¡En Camino a tu casa!";
                   message = "El repartidor ya tiene tu pedido y va hacia ti.";
                   break;
               case 'Entregado':
-                  title = "🏠 ¡Llegamos!";
+                  title = "¡Llegamos!";
                   message = "Disfruta tu pedido. No olvides calificar.";
                   break;
               case 'Rechazado':
-                  title = "❌ Pedido Rechazado";
+                  title = "Pedido Rechazado";
                   message = `${storeName} no puede tomar tu pedido ahora.`;
                   break;
               case 'Cancelado':
-                  title = "🚫 Pedido Cancelado";
+                  title = "Pedido Cancelado";
                   message = "El pedido ha sido cancelado.";
                   break;
           }

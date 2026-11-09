@@ -256,7 +256,7 @@ export async function POST(request: Request) {
     if (totalWentUp && changeParts.length === 0) {
       changeParts.push('actualizó el precio de algún producto');
     }
-    const notifTitle = hasChanges ? "⚠️ Pedido confirmado con cambios" : "✅ Stock Confirmado";
+    const notifTitle = hasChanges ? "Pedido confirmado con cambios" : "Stock Confirmado";
     const notifBody = hasChanges
       ? `La tienda ${changeParts.join(" y ")}. Nuevo total: ${money(newTotal)}. Ya puedes pagar.`
       : "Puedes proceder al pago.";
@@ -272,7 +272,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, total: newTotal, removedCount: removedItems.length, adjustedCount: adjustedItems.length });
   } catch (error: any) {
-    console.error("❌ Error confirmando stock:", error);
+    console.error("Error confirmando stock:", error);
     Sentry.captureException(error, { tags: { route: "orders/confirm-stock" } });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

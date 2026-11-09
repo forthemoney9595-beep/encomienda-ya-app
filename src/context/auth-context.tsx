@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await persistFcmToken(uid, currentToken);
         }
     } catch (error) {
-        console.error("❌ Error configurando notificaciones:", error);
+        console.error("Error configurando notificaciones:", error);
     }
   };
 

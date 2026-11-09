@@ -71,11 +71,11 @@ export function ReviewDialog({ isOpen, setIsOpen, productName, title = 'Califica
           
           {/* Texto de calificación */}
           <p className="text-sm font-medium text-muted-foreground h-5">
-            {rating === 1 && "Malo 😡"}
-            {rating === 2 && "Regular 😕"}
-            {rating === 3 && "Bueno 🙂"}
-            {rating === 4 && "Muy bueno 😄"}
-            {rating === 5 && "Excelente 🤩"}
+            {rating === 1 && "Malo"}
+            {rating === 2 && "Regular"}
+            {rating === 3 && "Bueno"}
+            {rating === 4 && "Muy bueno"}
+            {rating === 5 && "Excelente"}
             {rating === 0 && hoverRating === 0 && "Selecciona una calificación"}
           </p>
           

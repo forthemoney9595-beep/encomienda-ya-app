@@ -229,7 +229,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
         toast({
             variant: "destructive",
             title: "Falta tu Ubicación",
-            description: "Usá '📍 Usar mi ubicación actual' o marcá tu casa en el mapa para que el delivery sepa dónde ir."
+            description: "Usá 'Usar mi ubicación actual' o marcá tu casa en el mapa para que el delivery sepa dónde ir."
         });
         return;
     }
@@ -433,7 +433,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                     {isLocating ? (
                         <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
                     ) : (
-                        <><Crosshair className="mr-2 h-4 w-4"/> 📍 Usar mi ubicación actual</>
+                        <><Crosshair className="mr-2 h-4 w-4"/> Usar mi ubicación actual</>
                     )}
                 </Button>
             )}
@@ -458,8 +458,8 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                     onChange={(c) => { setLocationCoords(c); setLocationStatus('success'); }}
                     className="h-44"
                     hint={locationCoords
-                        ? 'Verificá que el pin 📍 esté en tu entrada. Podés arrastrarlo o tocar el mapa para corregirlo.'
-                        : 'Tocá el mapa donde está tu casa para colocar el pin 📍.'}
+                        ? 'Verificá que el pin esté en tu entrada. Podés arrastrarlo o tocar el mapa para corregirlo.'
+                        : 'Tocá el mapa donde está tu casa para colocar el pin.'}
                 />
             ) : (
                 <button

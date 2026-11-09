@@ -138,7 +138,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
             if (created) {
               await orderDoc.ref.set({ paymentStatus: "reversed" }, { merge: true });
               summary.flagged++;
-              note(`⚠ ${orderDoc.id}: pago revertido en MP (${mpStatus}), detectado por conciliación`);
+              note(`${orderDoc.id}: pago revertido en MP (${mpStatus}), detectado por conciliación`);
             } else summary.ok++;
           } else summary.ok++;
         } else if (mpStatus !== "approved") {
@@ -149,7 +149,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
             orderId: orderDoc.id, paymentId: order.mpPaymentId, reason: "reconcile_mismatch",
             paidAmount: mpAmount, orderTotal: Number(order.total) || 0, mpStatus,
           });
-          if (created) { summary.flagged++; note(`⚠ ${orderDoc.id}: pagada acá pero MP dice "${mpStatus}"`); }
+          if (created) { summary.flagged++; note(`${orderDoc.id}: pagada acá pero MP dice "${mpStatus}"`); }
           else summary.ok++;
         } else {
           summary.ok++;
@@ -161,7 +161,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
             orderId: orderDoc.id, paymentId: order.mpPaymentId, reason: "reconcile_mismatch",
             paidAmount: 0, orderTotal: Number(order.total) || 0, mpStatus: "not_found",
           });
-          if (created) { summary.flagged++; note(`⚠ ${orderDoc.id}: el pago ${order.mpPaymentId} no existe en MP`); }
+          if (created) { summary.flagged++; note(`${orderDoc.id}: el pago ${order.mpPaymentId} no existe en MP`); }
         } else {
           summary.errors++;
           Sentry.captureException(e, { tags: { area: "reconcile-mp", direction: "A" }, extra: { orderId: orderDoc.id } });
@@ -206,7 +206,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
             orderId: String(orderId), paymentId: p.id, reason: "orphan_payment",
             paidAmount: Number(p.transaction_amount) || 0, orderTotal: 0, mpStatus: String(p.status),
           });
-          if (created) { summary.flagged++; note(`⚠ pago ${p.id}: cobrado en MP pero el pedido ${orderId} no existe`); }
+          if (created) { summary.flagged++; note(`pago ${p.id}: cobrado en MP pero el pedido ${orderId} no existe`); }
           else summary.ok++;
           continue;
         }
@@ -222,7 +222,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
               paidAmount, orderTotal, mpStatus: String(p.status),
               extra: { previousPaymentId: order.mpPaymentId },
             });
-            if (created) { summary.flagged++; note(`⚠ ${orderId}: doble pago detectado (${p.id})`); }
+            if (created) { summary.flagged++; note(`${orderId}: doble pago detectado (${p.id})`); }
             else summary.ok++;
           } else summary.ok++;
           continue;
@@ -236,7 +236,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
             orderId: String(orderId), paymentId: p.id, reason: "amount_mismatch",
             paidAmount, orderTotal, mpStatus: String(p.status),
           });
-          if (created) { summary.flagged++; note(`⚠ ${orderId}: pagó $${paidAmount} pero el pedido vale $${orderTotal}`); }
+          if (created) { summary.flagged++; note(`${orderId}: pagó $${paidAmount} pero el pedido vale $${orderTotal}`); }
           continue;
         }
         if (order.status !== "Pendiente de Pago") {
@@ -244,7 +244,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
             orderId: String(orderId), paymentId: p.id, reason: "unexpected_order_status",
             paidAmount, orderTotal, mpStatus: String(p.status), extra: { orderStatus: order.status },
           });
-          if (created) { summary.flagged++; note(`⚠ ${orderId}: pago aprobado con el pedido en "${order.status}"`); }
+          if (created) { summary.flagged++; note(`${orderId}: pago aprobado con el pedido en "${order.status}"`); }
           continue;
         }
 
@@ -260,13 +260,13 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
         }, { merge: true });
 
         summary.repaired++;
-        note(`🔧 ${orderId}: pago aprobado sin webhook — orden marcada pagada`);
+        note(`${orderId}: pago aprobado sin webhook — orden marcada pagada`);
 
         // Mismos avisos que hubiera mandado el webhook.
         if (order.userId) {
           await notifyUser({
             userId: order.userId, type: "payment_success", orderId: String(orderId),
-            title: "Pago Recibido ✅",
+            title: "Pago Recibido",
             body: "Tu pago se acreditó y la tienda ya está preparando tu pedido.",
           });
         }
@@ -274,7 +274,7 @@ export async function runReconciliation(source: "cron" | "manual", byUid?: strin
         if (targetStoreUser) {
           await notifyUser({
             userId: targetStoreUser, type: "order_paid", orderId: String(orderId),
-            title: "¡Pago Confirmado! 💰",
+            title: "¡Pago Confirmado!",
             body: `Orden #${String(orderId).substring(0, 6)} pagada por $${paidAmount.toLocaleString("es-AR")}. A cocinar.`,
           });
         }

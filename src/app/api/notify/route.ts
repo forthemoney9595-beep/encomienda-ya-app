@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         const userDoc = await adminDb.collection('users').doc(userId).get();
         
         if (!userDoc.exists) {
-            console.warn(`⚠️ Intento de notificar a usuario inexistente: ${userId}`);
+            console.warn(`Intento de notificar a usuario inexistente: ${userId}`);
             return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
         }
 
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
         tokens = [...new Set(tokens)];
 
         if (tokens.length === 0) {
-            console.log(`🔕 El usuario ${userId} no tiene dispositivos registrados para notificaciones.`);
+            console.log(`El usuario ${userId} no tiene dispositivos registrados para notificaciones.`);
             return NextResponse.json({ message: "Usuario sin tokens activos", success: false }, { status: 200 });
         }
 
@@ -118,20 +118,20 @@ export async function POST(request: Request) {
                         resp.error?.code === 'messaging/invalid-argument') {
                         failedTokens.push(badToken);
                     }
-                    console.error(`❌ Fallo al enviar a un token:`, resp.error);
+                    console.error(`Fallo al enviar a un token:`, resp.error);
                 }
             });
 
             // Opcional: Aquí podrías agregar lógica para borrar 'failedTokens' de la DB
             if (failedTokens.length > 0) {
-                console.log(`🧹 Se detectaron ${failedTokens.length} tokens inválidos para limpiar.`);
+                console.log(`Se detectaron ${failedTokens.length} tokens inválidos para limpiar.`);
                 // await adminDb.collection('users').doc(userId).update({
                 //    fcmTokens: admin.firestore.FieldValue.arrayRemove(...failedTokens)
                 // });
             }
         }
 
-        console.log(`🔔 Notificación enviada a ${userId}: ${response.successCount} éxitos, ${response.failureCount} fallos.`);
+        console.log(`Notificación enviada a ${userId}: ${response.successCount} éxitos, ${response.failureCount} fallos.`);
         
         return NextResponse.json({ 
             success: true, 
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
         });
 
     } catch (error: any) {
-        console.error("❌ Error CRÍTICO enviando Push:", error);
+        console.error("Error CRÍTICO enviando Push:", error);
         return NextResponse.json({ error: error.message || "Error interno del servidor" }, { status: 500 });
     }
 }

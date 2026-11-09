@@ -190,13 +190,13 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   // --- INTEGRACIÓN REAL MERCADOPAGO (Con Limpieza de Datos) ---
   const handleBuyerPayment = async () => {
     if (!order) {
-        console.error("❌ Error: No hay objeto 'order'");
+        console.error("Error: No hay objeto 'order'");
         return;
     }
     
     // Validación previa
     if (!order.id || !order.items || order.items.length === 0) {
-        console.error("❌ Error: Datos de orden incompletos", order);
+        console.error("Error: Datos de orden incompletos", order);
         toast({ variant: 'destructive', title: 'Error de datos', description: 'La orden está incompleta.' });
         return;
     }
@@ -236,12 +236,12 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
             toast({ title: "Redirigiendo a MercadoPago..." });
             window.location.href = data.url;
         } else {
-            console.error("❌ Respuesta Error API:", data);
+            console.error("Respuesta Error API:", data);
             throw new Error(data.error || "No se recibió URL de pago");
         }
 
     } catch(error: any) {
-        console.error("❌ Error Catch:", error);
+        console.error("Error Catch:", error);
         toast({ 
             variant: 'destructive', 
             title: 'Error de conexión', 

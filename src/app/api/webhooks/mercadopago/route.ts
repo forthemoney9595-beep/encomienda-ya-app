@@ -13,7 +13,7 @@ function verifyMpSignature(request: Request, rawBody: string, url: URL): boolean
   const secret = process.env.MP_WEBHOOK_SECRET;
   // Si no hay secret configurado, se omite la verificación (para desarrollo)
   if (!secret) {
-    console.warn("⚠️ [Webhook] MP_WEBHOOK_SECRET no configurado — verificación de firma omitida");
+    console.warn("[Webhook] MP_WEBHOOK_SECRET no configurado — verificación de firma omitida");
     return true;
   }
 
@@ -21,7 +21,7 @@ function verifyMpSignature(request: Request, rawBody: string, url: URL): boolean
   const xRequestId = request.headers.get("x-request-id");
 
   if (!xSignature) {
-    console.error("❌ [Webhook] Header x-signature ausente");
+    console.error("[Webhook] Header x-signature ausente");
     return false;
   }
 
@@ -70,14 +70,14 @@ export async function POST(request: Request) {
     // — un tercero no puede fabricar eso. Revisar este TODO antes de lanzar a
     // produccion real (puede requerir una app/credenciales nuevas de MP).
     if (!verifyMpSignature(request, rawBody, url)) {
-      console.warn("⚠️ [Webhook] Firma no coincide — se continua, la validacion real es la consulta a la API de MP");
+      console.warn("[Webhook] Firma no coincide — se continua, la validacion real es la consulta a la API de MP");
     }
 
     const queryId = url.searchParams.get("id") || url.searchParams.get("data.id");
     const paymentId = queryId || body?.data?.id;
     const type = body?.type || url.searchParams.get("topic") || url.searchParams.get("type");
 
-    console.log(`🔔 [Webhook] Notificación recibida. ID: ${paymentId}, Type: ${type}`);
+    console.log(`[Webhook] Notificación recibida. ID: ${paymentId}, Type: ${type}`);
 
     if (!paymentId || type !== "payment") {
         return NextResponse.json({ status: "ignored_not_payment" });
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
     if (!existingOrder.exists) {
       // ARQ-013: un 404 hace que MercadoPago REINTENTE el webhook indefinidamente. La orden
       // no va a aparecer por reintentar: se responde 200 "ignorado" y queda en Sentry.
-      console.error(`❌ [Webhook] Orden ${orderRefId} no encontrada — pago ${paymentId} ignorado.`);
+      console.error(`[Webhook] Orden ${orderRefId} no encontrada — pago ${paymentId} ignorado.`);
       Sentry.captureMessage(`Webhook MP: orden ${orderRefId} inexistente para el pago ${paymentId}`, { level: "warning" });
       return NextResponse.json({ status: "ignored_unknown_order" });
     }
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     // plataforma ya había devuelto. MP reenvía el webhook en estos casos.
     if (["refunded", "charged_back", "cancelled"].includes(String(paymentData.status))) {
       if (existingData.paymentStatus === "paid") {
-        console.error(`🚨 [Webhook] Pago REVERTIDO en MP (${paymentData.status}) para la orden ${orderRefId} que estaba pagada.`);
+        console.error(`[Webhook] Pago REVERTIDO en MP (${paymentData.status}) para la orden ${orderRefId} que estaba pagada.`);
         await flagIssue("payment_reversed");
         await ordersCollection.doc(orderRefId).set({ paymentStatus: "reversed" }, { merge: true });
       }
@@ -186,26 +186,26 @@ export async function POST(request: Request) {
     });
 
     if (outcome.type === "duplicate") {
-      console.error(`🚨 [Webhook] DOBLE PAGO en la orden ${orderRefId}: ya tenía ${outcome.previousPaymentId}, llegó ${paymentId}.`);
+      console.error(`[Webhook] DOBLE PAGO en la orden ${orderRefId}: ya tenía ${outcome.previousPaymentId}, llegó ${paymentId}.`);
       await flagIssue("duplicate_payment", { previousPaymentId: outcome.previousPaymentId });
       return NextResponse.json({ status: "duplicate_payment_flagged" });
     }
     if (outcome.type === "already") {
-      console.log(`ℹ️ [Webhook] Orden ${orderRefId} ya procesada — ignorando duplicado`);
+      console.log(`[Webhook] Orden ${orderRefId} ya procesada — ignorando duplicado`);
       return NextResponse.json({ status: "already_processed" });
     }
     if (outcome.type === "amount_mismatch") {
-      console.error(`❌ [Webhook] Monto pagado ($${paidAmount}) no coincide con el total de la orden ${orderRefId}. No se marca pagada, queda para revisión manual.`);
+      console.error(`[Webhook] Monto pagado ($${paidAmount}) no coincide con el total de la orden ${orderRefId}. No se marca pagada, queda para revisión manual.`);
       await flagIssue("amount_mismatch");
       return NextResponse.json({ status: "amount_mismatch_flagged_for_review" });
     }
     if (outcome.type === "unexpected_status") {
-      console.error(`❌ [Webhook] Orden ${orderRefId} no está "Pendiente de Pago" (está "${outcome.orderStatus}"). Pago recibido pero no se marca, queda para revisión manual.`);
+      console.error(`[Webhook] Orden ${orderRefId} no está "Pendiente de Pago" (está "${outcome.orderStatus}"). Pago recibido pero no se marca, queda para revisión manual.`);
       await flagIssue("unexpected_order_status", { orderStatus: outcome.orderStatus });
       return NextResponse.json({ status: "unexpected_order_status_flagged_for_review" });
     }
 
-    console.log(`✅ [Webhook] Pago Aprobado. Orden ${orderRefId} marcada pagada.`);
+    console.log(`[Webhook] Pago Aprobado. Orden ${orderRefId} marcada pagada.`);
 
     // ==========================================
     // 4. NOTIFICACIONES PUSH (LO QUE FALTABA)
@@ -216,7 +216,7 @@ export async function POST(request: Request) {
     if (targetStoreUser) {
         await notifyUser({
             userId: targetStoreUser,
-            title: "¡Pago Confirmado! 💰",
+            title: "¡Pago Confirmado!",
             body: `Orden #${orderRefId.substring(0,6)} pagada por $${Number(paymentData.transaction_amount).toLocaleString('es-AR')}. A cocinar.`,
             type: "order_paid",
             orderId: orderRefId,
@@ -227,7 +227,7 @@ export async function POST(request: Request) {
     if (buyerId) {
         await notifyUser({
             userId: buyerId,
-            title: "Pago Recibido ✅",
+            title: "Pago Recibido",
             body: "Tu pago se acreditó y la tienda ya está preparando tu pedido.",
             type: "payment_success",
             orderId: orderRefId,
@@ -241,19 +241,19 @@ export async function POST(request: Request) {
     try {
         await broadcastOrderToDrivers({
             orderId: orderRefId,
-            title: "📦 Nuevo Pedido Disponible",
+            title: "Nuevo Pedido Disponible",
             body: `${existingData.storeName || "Una tienda"} tiene un pedido pagado para entregar. ¡Tomalo!`,
         });
     } catch (e) {
         console.error("[Webhook] broadcast a repartidores falló:", e);
     }
 
-    console.log(`🚀 [Webhook] Orden ${orderRefId} procesada completamente.`);
+    console.log(`[Webhook] Orden ${orderRefId} procesada completamente.`);
 
     return NextResponse.json({ status: "success", orderId: orderRefId });
 
   } catch (error: any) {
-    console.error("❌ [Webhook] Error:", error);
+    console.error("[Webhook] Error:", error);
     // Un pago no encontrado (ID inválido/expirado) es esperable, no un fallo real —
     // no ensucia Sentry con ruido. Cualquier otro error sí (es plata real en juego).
     if (error.status === 404 || error.cause?.some((c: any) => c.code === 2000)) {

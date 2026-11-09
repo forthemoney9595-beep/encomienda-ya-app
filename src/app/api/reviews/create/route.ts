@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     if (ownerId) {
       await notifyUser({
         userId: ownerId,
-        title: "⭐ Nueva reseña",
+        title: "Nueva reseña",
         body: `${publicName(orderData.customerName, "Un cliente")} calificó tu tienda con ${ratingNum} estrella${ratingNum === 1 ? "" : "s"}.`,
         type: "store_review",
         link: "/my-store/reviews",
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, reviewId: reviewRef.id });
   } catch (error: any) {
-    console.error("❌ Error creando reseña:", error);
+    console.error("Error creando reseña:", error);
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
   }
 }

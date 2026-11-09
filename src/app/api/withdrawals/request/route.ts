@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     // en silencio — sin payoutCbu guardado, el cron de liquidación SALTEA a esta cuenta
     // para siempre y nadie se entera de por qué nunca le llega la liquidación automática.
     const reportCbuFail = (err: unknown) => {
-      console.error('⚠️ No se pudo guardar payoutCbu:', err);
+      console.error('No se pudo guardar payoutCbu:', err);
       Sentry.captureException(err, { tags: { route: 'withdrawals/request', stage: 'save-cbu' } });
     };
     // 🔒 Seguridad (auditoría ago 2026): el CBU se guarda SIEMPRE en el doc del usuario
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, withdrawalId: ref.id, amount: Math.round(amount) });
   } catch (error: any) {
-    console.error("❌ Error creando solicitud de retiro:", error);
+    console.error("Error creando solicitud de retiro:", error);
     Sentry.captureException(error, { tags: { route: "withdrawals/request" } });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

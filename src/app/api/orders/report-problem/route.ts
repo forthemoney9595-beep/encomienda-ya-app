@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       // ARQ-005: antes solo campanita — la tienda con la app cerrada no se enteraba.
       await notifyUser({
         userId: orderData.storeOwnerId,
-        title: "⚠️ Problema con la entrega",
+        title: "Problema con la entrega",
         body: `${driverName} reportó un problema con un pedido ya retirado. El admin fue avisado.`,
         type: "order_status",
         orderId,
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       for (const a of adminsSnap.docs) {
         await notifyUser({
           userId: a.id,
-          title: "🚨 Problema reportado en un reparto",
+          title: "Problema reportado en un reparto",
           body: `${driverName} reportó: "${reasonText}" — pedido de ${orderData.storeName || 'una tienda'} ya retirado. Requiere tu decisión.`,
           type: "order_status",
           orderId,
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("❌ Error reportando problema:", error);
+    console.error("Error reportando problema:", error);
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
   }
 }

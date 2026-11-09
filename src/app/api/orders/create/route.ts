@@ -123,12 +123,12 @@ export async function POST(request: Request) {
       const existing = await idemRef.get();
       if (existing.exists) {
         const d = existing.data()!;
-        console.log(`ℹ️ [API Segura] Pedido duplicado detectado (fast-path): ${d.orderId}`);
+        console.log(`[API Segura] Pedido duplicado detectado (fast-path): ${d.orderId}`);
         return NextResponse.json({ orderId: d.orderId, total: d.total, duplicate: true });
       }
     }
 
-    console.log(`🛡️ [API Segura] Iniciando proceso para usuario: ${userId}`);
+    console.log(`[API Segura] Iniciando proceso para usuario: ${userId}`);
 
     // 1. Obtener la Tienda
     const storeDoc = await adminDb.collection("stores").doc(storeId).get();
@@ -411,14 +411,14 @@ export async function POST(request: Request) {
     if (ownerId) {
         await notifyUser({
             userId: ownerId,
-            title: "🔔 Nueva Solicitud",
+            title: "Nueva Solicitud",
             body: `Tienes un pedido nuevo de ${safeShippingInfo.name} (${money(finalTotal)}). Revisa el stock.`,
             type: "order_request",
             orderId: newOrderRef.id,
         });
     }
 
-    console.log(`✅ [API Éxito] Orden ${newOrderRef.id} creada y notificada.`);
+    console.log(`[API Éxito] Orden ${newOrderRef.id} creada y notificada.`);
 
     return NextResponse.json({ orderId: newOrderRef.id, total: finalTotal });
 
@@ -431,10 +431,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error?.message === "__DUPLICATE_ORDER__") {
-      console.log(`ℹ️ [API Segura] Pedido duplicado detectado (carrera en tx): ${error.duplicateOrderId}`);
+      console.log(`[API Segura] Pedido duplicado detectado (carrera en tx): ${error.duplicateOrderId}`);
       return NextResponse.json({ orderId: error.duplicateOrderId, total: error.duplicateTotal, duplicate: true });
     }
-    console.error("❌ [API Error Global]:", error);
+    console.error("[API Error Global]:", error);
     Sentry.captureException(error, { tags: { route: "orders/create" } });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

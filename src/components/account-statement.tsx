@@ -117,7 +117,7 @@ export function AccountStatement({
 
         {capReached && (
           <p className="text-xs text-warning">
-            ⚠ Se cargó el máximo de pedidos de la ventana — los totales cubren esos
+            Se cargó el máximo de pedidos de la ventana — los totales cubren esos
             movimientos, no todo el histórico.
           </p>
         )}

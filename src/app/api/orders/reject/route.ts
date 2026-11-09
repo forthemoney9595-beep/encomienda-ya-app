@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       unitsReturned: stockResult.unitsReturned,
     });
   } catch (error: any) {
-    console.error("❌ Error rechazando pedido:", error);
+    console.error("Error rechazando pedido:", error);
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
   }
 }

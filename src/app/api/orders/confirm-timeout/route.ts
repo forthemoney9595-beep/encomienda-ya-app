@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       status: result.status,
     });
   } catch (error) {
-    console.error('❌ Error en confirm-timeout:', error);
+    console.error('Error en confirm-timeout:', error);
     Sentry.captureException(error, { tags: { route: 'orders/confirm-timeout' }, extra: { orderId } });
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }

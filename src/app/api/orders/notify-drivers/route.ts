@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     // botón del panel los escribía (desde el cliente) y el camino del detalle no.
     const { notified, pushed } = await broadcastOrderToDrivers({
       orderId,
-      title: "📦 ¡Pedido Listo para Retirar!",
+      title: "¡Pedido Listo para Retirar!",
       body: `${storeName} tiene un pedido listo en mostrador. ¡Aceptalo rápido!`,
       markReady: true,
     });
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ notified, pushed });
   } catch (error: any) {
-    console.error("❌ [Notify Drivers] Error:", error);
+    console.error("[Notify Drivers] Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

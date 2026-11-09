@@ -10,6 +10,7 @@ import { Badge } from "./ui/badge";
 import Image from "next/image";
 import { ScrollArea } from "./ui/scroll-area";
 import { getPlaceholderImage } from "@/lib/placeholder-images";
+import { PriceTag } from "@/components/price-tag";
 // ✅ Importamos el nuevo diálogo de pago
 import { CheckoutDialog } from "@/components/checkout-dialog";
 
@@ -38,8 +39,8 @@ export function Cart({ hideTriggerWhenEmpty = false }: { hideTriggerWhenEmpty?: 
         )}
         <SheetContent className="flex flex-col w-full sm:max-w-md">
           <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-                <ShoppingBag className="h-5 w-5" /> Mi Carrito ({totalItems})
+            <SheetTitle className="flex items-center gap-2 font-headline text-3xl font-extrabold">
+                Tu pedido <span className="font-body text-base font-normal text-muted-foreground">({totalItems})</span>
             </SheetTitle>
           </SheetHeader>
           
@@ -63,16 +64,16 @@ export function Cart({ hideTriggerWhenEmpty = false }: { hideTriggerWhenEmpty?: 
                         <p className="text-sm text-muted-foreground">{money(item.price)}</p>
                         <div className="mt-2 flex items-center gap-2">
                             <Button variant="outline" size="icon" className="h-9 w-9" aria-label={`Quitar uno de ${item.name}`} onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                            <Minus className="h-3 w-3" />
+                            <Minus className="h-4 w-4" />
                             </Button>
-                            <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                            <span className="w-6 text-center font-headline text-lg font-extrabold tabular-nums">{item.quantity}</span>
                             <Button variant="outline" size="icon" className="h-9 w-9" aria-label={`Agregar uno de ${item.name}`} onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                            <Plus className="h-3 w-3" />
+                            <Plus className="h-4 w-4" />
                             </Button>
                         </div>
                         </div>
                         <div className="text-right flex flex-col justify-between h-full">
-                            <p className="font-bold text-sm">{money(item.price * item.quantity)}</p>
+                            <PriceTag value={item.price * item.quantity} className="text-base" />
                             <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:bg-destructive/10 self-end" aria-label={`Sacar ${item.name} del carrito`} onClick={() => removeFromCart(item.id)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
@@ -84,8 +85,8 @@ export function Cart({ hideTriggerWhenEmpty = false }: { hideTriggerWhenEmpty?: 
             ) : (
                 <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
                 <ShoppingCart className="h-16 w-16 mb-4 opacity-20" />
-                <p className="text-lg font-medium">Tu carrito está vacío.</p>
-                <p className="text-sm">¡Explora las tiendas y añade algo rico!</p>
+                <p className="font-headline text-2xl font-extrabold text-foreground">Todavía no agregaste nada</p>
+                <p className="text-sm">Entrá a una tienda y tocá el + de lo que quieras.</p>
                 <Button variant="link" onClick={() => setIsOpen(false)} className="mt-4">
                     Ver Tiendas
                 </Button>

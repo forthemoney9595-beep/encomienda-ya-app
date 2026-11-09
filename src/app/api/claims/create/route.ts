@@ -231,7 +231,7 @@ export async function POST(request: Request) {
     // individual.
     await notifyUser({
       userId: callerUid,
-      title: "📋 Recibimos tu reclamo",
+      title: "Recibimos tu reclamo",
       body: "Vamos a revisarlo y te avisamos por acá qué resolvimos.",
       type: "order_status",
       orderId,
@@ -242,7 +242,7 @@ export async function POST(request: Request) {
     if (String(error?.message || "").includes("ya tiene un reclamo")) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    console.error("❌ Error creando reclamo:", error);
+    console.error("Error creando reclamo:", error);
     Sentry.captureException(error, { tags: { area: "claims-create" } });
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
   }

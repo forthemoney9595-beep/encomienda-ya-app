@@ -87,7 +87,7 @@ export function Notifications() {
 
         setLocalNotifications(notifs);
     }, (error) => {
-        console.error("❌ [Notificaciones] Error escuchando:", error);
+        console.error("[Notificaciones] Error escuchando:", error);
     });
 
     return () => unsubscribe();
@@ -199,14 +199,14 @@ export function Notifications() {
 
   const getIcon = (type: string) => {
       switch(type) {
-          case 'payout_received': return <Wallet className="h-4 w-4 text-green-600" />;
+          case 'payout_received': return <Wallet className="h-4 w-4 text-success" />;
           case 'order_paid': 
-          case 'payment_success': return <DollarSign className="h-4 w-4 text-green-600" />;
-          case 'order_status': return <Package className="h-4 w-4 text-blue-500" />;
-          case 'success': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-          case 'alert': return <AlertCircle className="h-4 w-4 text-yellow-500" />;
-          case 'delivery': return <Truck className="h-4 w-4 text-orange-500" />;
-          default: return <Info className="h-4 w-4 text-gray-500" />;
+          case 'payment_success': return <DollarSign className="h-4 w-4 text-success" />;
+          case 'order_status': return <Package className="h-4 w-4 text-info" />;
+          case 'success': return <CheckCircle2 className="h-4 w-4 text-success" />;
+          case 'alert': return <AlertCircle className="h-4 w-4 text-warning" />;
+          case 'delivery': return <Truck className="h-4 w-4 text-offer" />;
+          default: return <Info className="h-4 w-4 text-muted-foreground" />;
       }
   }
 
@@ -224,7 +224,7 @@ export function Notifications() {
         <Button variant="ghost" size="icon" className="relative" aria-label={unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : "Notificaciones"}>
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-600 text-xs text-white font-bold animate-pulse">
+            <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-destructive text-xs text-white font-bold animate-pulse">
                 {unreadCount}
             </span>
           )}
@@ -237,7 +237,7 @@ export function Notifications() {
                 <div className="flex items-center gap-2">
                     {unreadCount > 0 && <Badge variant="secondary" className="text-xs h-5">{unreadCount} nuevas</Badge>}
                     {localNotifications.length > 0 && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500" onClick={handleClearAll} title="Borrar todas">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={handleClearAll} title="Borrar todas">
                             <Trash2 className="h-4 w-4" />
                         </Button>
                     )}
@@ -245,7 +245,7 @@ export function Notifications() {
             </div>
 
             {permissionStatus === 'default' && (
-                // OJO: nada de bg-blue-50/text-blue-700 — son colores de tema claro y en el
+                // OJO: nada de bg-info/10/text-info — son colores de tema claro y en el
                 // tema oscuro el botón se veía gris lavado, como deshabilitado (captura de
                 // la prueba del APK, 15/8). Tokens semánticos del tema, como el resto.
                 <Button
@@ -258,7 +258,7 @@ export function Notifications() {
             )}
             {permissionStatus === 'granted' && registrationError && (
                 <div className="w-full mt-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-xs leading-snug text-warning">
-                    ⚠️ Permiso OK, pero el registro del dispositivo falla: {registrationError}
+                    Permiso OK, pero el registro del dispositivo falla: {registrationError}
                 </div>
             )}
             {permissionStatus === 'denied' && (
@@ -268,12 +268,12 @@ export function Notifications() {
                 <button
                     onClick={() => toast({
                         title: "Cómo desbloquear los avisos",
-                        description: "En el celular: abrí Chrome → entrá a encomienda-ya-app.vercel.app → tocá el candado 🔒 junto a la dirección → Permisos → Notificaciones → Permitir. Después cerrá y reabrí la app. En PC: mismo candado junto a la dirección.",
+                        description: "En el celular: abrí Chrome → entrá a encomienda-ya-app.vercel.app → tocá el candado junto a la dirección → Permisos → Notificaciones → Permitir. Después cerrá y reabrí la app. En PC: mismo candado junto a la dirección.",
                         duration: 15000,
                     })}
                     className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-xs text-warning hover:bg-warning/20 transition-colors"
                 >
-                    🔕 Avisos bloqueados en este dispositivo — tocá para ver cómo activarlos
+                    Avisos bloqueados en este dispositivo — tocá para ver cómo activarlos
                 </button>
             )}
         </div>

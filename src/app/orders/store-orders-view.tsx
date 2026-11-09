@@ -207,7 +207,7 @@ export default function StoreOrdersView() {
             await OrderService.sendNotification(
                 firestore,
                 order.deliveryPersonId,
-                "🔔 Pedido Listo",
+                "Pedido Listo",
                 "El pedido ya está listo para retirar en mostrador.",
                 "delivery",
                 order.id,

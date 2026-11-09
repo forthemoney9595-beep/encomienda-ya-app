@@ -90,7 +90,7 @@ export async function GET(request: Request) {
         // `link` y tocarla no llevaba a ningún lado.
         await notifyUser({
           userId: ownerId,
-          title: "💰 Liquidación generada",
+          title: "Liquidación generada",
           body: `Tu liquidación de ${money(Math.floor(availableBalance))} fue generada. El admin la procesará pronto.`,
           type: "payout",
           link: "/my-store/wallet",
@@ -148,7 +148,7 @@ export async function GET(request: Request) {
         // (la de tiendas sí — asimetría pura) y su campanita no navegaba a ningún lado.
         await notifyUser({
           userId: driverDoc.id,
-          title: "💰 Liquidación generada",
+          title: "Liquidación generada",
           body: `Tu liquidación de ${money(Math.floor(availableBalance))} fue generada. El admin la procesará pronto.`,
           type: "payout",
           link: "/delivery/earnings",
@@ -167,7 +167,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     // Tanda B: un cron que falla en silencio = liquidaciones que no se generan y nadie
     // se entera hasta que alguien reclama su plata.
-    console.error("❌ [Cron] Error en generate-settlements:", error);
+    console.error("[Cron] Error en generate-settlements:", error);
     Sentry.captureException(error, { tags: { route: "cron/generate-settlements" } });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

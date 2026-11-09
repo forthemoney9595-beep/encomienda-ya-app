@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     // El comprador recibe la explicación, no un silencio.
     await notifyUser({
       userId: claim.userId,
-      title: action === "reject" ? "📋 Revisamos tu reclamo" : "✅ Tu reclamo fue resuelto",
+      title: action === "reject" ? "Revisamos tu reclamo" : "Tu reclamo fue resuelto",
       body: action === "reject"
         ? `No pudimos aprobarlo esta vez: ${noteText}`
         : noteText,
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("❌ Error resolviendo reclamo:", error);
+    console.error("Error resolviendo reclamo:", error);
     Sentry.captureException(error, { tags: { area: "claims-resolve" } });
     return NextResponse.json({ error: error.message || "Error interno" }, { status: 500 });
   }

@@ -132,7 +132,7 @@ export async function POST(request: Request) {
         // campanita; con la app cerrada el comprador no se enteraba).
         await notifyUser({
             userId,
-            title: '🚫 Pedido cancelado',
+            title: 'Pedido cancelado',
             body: cancelledByAdmin
                 ? `La administración canceló tu pedido #${orderId.substring(0, 6)}.${reasonSuffix} Si ya lo habías pagado, te contactamos por el reembolso.`
                 : 'Tu pedido fue cancelado correctamente.',
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
         if (order.deliveryPersonId) {
             await notifyUser({
                 userId: order.deliveryPersonId,
-                title: '🚫 Pedido cancelado',
+                title: 'Pedido cancelado',
                 body: `El pedido de ${order.storeName || 'la tienda'} que tenías asignado fue cancelado. No hace falta que vayas.`,
                 type: 'order_status',
                 orderId,
@@ -156,7 +156,7 @@ export async function POST(request: Request) {
         if (storeOwnerId) {
             await notifyUser({
                 userId: storeOwnerId,
-                title: cancelledByAdmin ? '❌ Pedido cancelado por la administración' : '❌ Pedido cancelado por el cliente',
+                title: cancelledByAdmin ? 'Pedido cancelado por la administración' : 'Pedido cancelado por el cliente',
                 body: cancelledByAdmin
                     ? `La administración canceló el pedido #${orderId.substring(0, 6)} de ${order.customerName || 'un cliente'}.${reasonSuffix}`
                     : `El cliente ${order.customerName || ''} canceló el pedido #${orderId.substring(0, 6)}.`,
@@ -165,11 +165,11 @@ export async function POST(request: Request) {
             });
         }
 
-        console.log(`✅ Orden ${orderId} cancelada por comprador ${userId}`);
+        console.log(`Orden ${orderId} cancelada por comprador ${userId}`);
         return NextResponse.json({ success: true });
 
     } catch (error: any) {
-        console.error('❌ Error cancelando orden:', error);
+        console.error('Error cancelando orden:', error);
         Sentry.captureException(error, { tags: { route: 'orders/cancel' } });
         return NextResponse.json({ error: 'Error interno' }, { status: 500 });
     }

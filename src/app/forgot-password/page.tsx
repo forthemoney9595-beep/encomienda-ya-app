@@ -59,9 +59,9 @@ export default function ForgotPasswordPage() {
         <CardContent className="space-y-4">
           
           {isSent ? (
-            <div className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-lg text-center space-y-3 animate-in fade-in zoom-in duration-300">
-                <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <CheckCircle2 className="h-6 w-6 text-green-600" />
+            <div className="bg-success/10 border border-success/30 text-success p-6 rounded-lg text-center space-y-3 animate-in fade-in zoom-in duration-300">
+                <div className="mx-auto w-12 h-12 bg-success/15 rounded-full flex items-center justify-center">
+                    <CheckCircle2 className="h-6 w-6 text-success" />
                 </div>
                 <h3 className="font-semibold text-lg">¡Correo Enviado!</h3>
                 <p className="text-sm text-muted-foreground">

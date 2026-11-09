@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     // 1. Verificar Token
     const accessToken = process.env.MP_ACCESS_TOKEN;
     if (!accessToken) {
-        console.error("❌ [Checkout API] Error: MP_ACCESS_TOKEN no definido");
+        console.error("[Checkout API] Error: MP_ACCESS_TOKEN no definido");
         return NextResponse.json({ error: "Error de configuración del servidor (Token)" }, { status: 500 });
     }
 
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
             });
         }
 
-        console.log(`✅ [Checkout API] ${mpItems.length} item(s) tomados de la orden ${orderId} (incluye envío y tarifa de servicio)`);
+        console.log(`[Checkout API] ${mpItems.length} item(s) tomados de la orden ${orderId} (incluye envío y tarifa de servicio)`);
 
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
@@ -140,11 +140,11 @@ export async function POST(request: Request) {
         });
 
         const urlToReturn = result.init_point;
-        console.log(`✅ [Checkout API] Preferencia creada para orden ${orderId}`);
+        console.log(`[Checkout API] Preferencia creada para orden ${orderId}`);
         return NextResponse.json({ url: urlToReturn });
 
     } catch (error: any) {
-        console.error("❌ [Checkout API] Error Catch:", error);
+        console.error("[Checkout API] Error Catch:", error);
         Sentry.captureException(error, { tags: { route: "checkout" } });
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

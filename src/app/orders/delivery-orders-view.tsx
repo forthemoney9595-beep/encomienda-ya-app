@@ -42,6 +42,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SuspensionNotice } from '@/components/suspension-notice';
+import { cn } from '@/lib/utils';
+import { money } from '@/lib/format-money';
 
 const RELEASE_REASONS = ['Se me rompió el vehículo', 'Emergencia personal', 'No pude ubicar la dirección'];
 const PROBLEM_REASONS = ['El cliente no responde', 'Dirección incorrecta/inaccesible', 'El cliente rechazó el pedido', 'El cliente no tiene el código de entrega'];
@@ -248,7 +250,7 @@ export default function DeliveryOrdersView() {
         // ya escucha status === 'En reparto') — solo faltaba avisarle que ya salió.
         if (order.userId) {
           OrderService.sendNotification(
-            firestore, order.userId, "🚀 ¡En Camino a tu casa!",
+            firestore, order.userId, "¡En Camino a tu casa!",
             "El repartidor ya tiene tu pedido y va hacia ti.", "order_status", order.id, user
           ).catch(console.error);
         }
@@ -256,7 +258,7 @@ export default function DeliveryOrdersView() {
         // del local — el retiro era mudo para quien preparó el pedido.
         if ((order as any).storeOwnerId) {
           OrderService.sendNotification(
-            firestore, (order as any).storeOwnerId, "📦 Pedido retirado",
+            firestore, (order as any).storeOwnerId, "Pedido retirado",
             `El repartidor retiró el pedido de ${order.customerName || 'un cliente'} y va en camino.`, "order_status", order.id, user
           ).catch(console.error);
         }
@@ -394,7 +396,7 @@ export default function DeliveryOrdersView() {
                         </div>
                     </div>
                     <Badge className="bg-success text-success-foreground hover:bg-success/90">
-                        +${order.deliveryFee}
+                        +{money(order.deliveryFee || 0)}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -469,42 +471,45 @@ export default function DeliveryOrdersView() {
                 </div>
             ) : (
                 myActiveOrders?.map(order => (
-                    <Card key={order.id} className={`border-l-4 shadow-md ${order.paymentMethod === 'Efectivo' ? 'border-l-warning ring-2 ring-warning/20' : 'border-l-info'}`}>
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                                <div className="space-y-1">
-                                    <Badge variant="secondary" className="animate-pulse bg-info/15 text-info uppercase">
-                                        {order.status}
-                                    </Badge>
-                                    <CardTitle className="mt-1 text-lg">{order.storeName}</CardTitle>
-                                </div>
-                                <div className="text-right">
-                                    <span className="font-bold text-lg block">${order.total}</span>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="pb-2 space-y-4">
-                            
-                            {/* Mensajes de Estado */}
-                            {(order.status === 'En camino' || order.status === 'Aceptado' || order.status === 'Listo para recoger') && (
-                                <div className="p-3 bg-info/10 text-foreground rounded-lg text-sm flex items-center gap-2 border border-info/30">
-                                    <MapPin className="h-4 w-4 text-info"/>
-                                    <strong>Paso 1:</strong> Dirígete a la tienda para retirar.
-                                </div>
-                            )}
-                            {order.status === 'En reparto' && (
-                                <div className="p-3 bg-primary/10 text-foreground rounded-lg text-sm flex items-center gap-2 border border-primary/30">
-                                    <Navigation className="h-4 w-4 text-primary"/>
-                                    <strong>Paso 2:</strong> Estás llevando el pedido al cliente.
-                                </div>
-                            )}
+                    // Rediseño 2 (Toldo): pensado para usarse al sol y con una mano. Los dos
+                    // pasos claros (retirar, entregar), la dirección GRANDE en letra de cartel
+                    // y botones de 56-72 px. Sin borde lateral ni insignia que late.
+                    <Card key={order.id} className={`overflow-hidden border-2 ${order.paymentMethod === 'Efectivo' ? 'border-warning' : 'border-foreground'}`}>
+                        <div className="flex items-center justify-between gap-3 bg-foreground px-4 py-2.5 text-background">
+                            <span className="font-headline text-lg font-extrabold">Pedido en curso</span>
+                            <span className="truncate font-headline text-lg font-extrabold">{order.storeName}</span>
+                        </div>
+                        <CardContent className="space-y-0 p-0">
+                            {(() => {
+                                const picked = order.status === 'En reparto';
+                                return (
+                                    <>
+                                        <div className={cn('flex gap-3 border-b px-4 py-3', picked && 'text-muted-foreground')}>
+                                            <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-lg border-2 border-foreground font-headline text-lg font-extrabold', picked && 'bg-foreground text-background')}>
+                                                {picked ? <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> : '1'}
+                                            </span>
+                                            <div className="min-w-0">
+                                                <p className="font-headline text-xl font-extrabold leading-tight text-foreground">{picked ? 'Retiraste en ' : 'Retirá en '}{order.storeName}</p>
+                                                <p className="text-sm">{cleanAddress(order.storeAddress)}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3 border-b px-4 py-3">
+                                            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border-2 border-foreground font-headline text-lg font-extrabold">2</span>
+                                            <div className="min-w-0">
+                                                <p className="font-headline text-xl font-extrabold leading-tight">Llevalo a {order.customerName}</p>
+                                                <p className="my-1 break-words font-headline text-4xl font-extrabold leading-none tracking-tight">{custAddress(order) || 'Cargando dirección…'}</p>
+                                                <p className="text-sm text-muted-foreground">Al entregar, pedile su código de 4 números.</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-baseline justify-between border-b px-4 py-3">
+                                            <span className="text-base">Ganás por este envío</span>
+                                            <span className="font-headline text-3xl font-extrabold text-success tabular-nums">{money(order.deliveryFee || 0)}</span>
+                                        </div>
+                                    </>
+                                );
+                            })()}
+                            <div className="space-y-3 p-4">
 
-                            <div className="p-3 bg-muted/50 rounded-lg border space-y-1">
-                                <p className="text-xs text-muted-foreground uppercase font-bold">Destino Final:</p>
-                                <p className="text-sm font-medium">{custAddress(order) || 'Cargando dirección…'}</p>
-                                <p className="text-xs text-muted-foreground">Cliente: {order.customerName}</p>
-                            </div>
-                            
                             {/* ALERTA DE COBRO EN EFECTIVO */}
                             {order.paymentMethod === 'Efectivo' && order.status === 'En reparto' && (
                                 <div className="p-4 bg-warning/10 rounded-lg border-2 border-warning flex items-start gap-3 animate-in fade-in zoom-in">
@@ -512,9 +517,9 @@ export default function DeliveryOrdersView() {
                                         <DollarSign className="h-6 w-6 text-warning" />
                                     </div>
                                     <div>
-                                        <p className="font-bold text-warning uppercase text-sm">¡COBRAR AL CLIENTE!</p>
+                                        <p className="font-bold text-warning uppercase text-sm">Cobrar al cliente</p>
                                         <p className="text-sm text-foreground font-medium">
-                                            Debes recibir <span className="text-lg font-bold">${order.total}</span> en efectivo.
+                                            Tenés que recibir <span className="text-lg font-bold">{money(order.total || 0)}</span> en efectivo.
                                         </p>
                                     </div>
                                 </div>
@@ -525,10 +530,11 @@ export default function DeliveryOrdersView() {
                                 <div className="p-3 bg-success/10 rounded-lg border border-success/30 flex items-center gap-3">
                                     <CheckCircle2 className="h-5 w-5 text-success" />
                                     <p className="text-sm text-foreground font-medium">
-                                        Pedido pagado online. <strong>Solo entregar.</strong>
+                                        Pagado por MercadoPago: <strong>no cobrás nada</strong>.
                                     </p>
                                 </div>
                             )}
+                            </div>
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
                             {/* NAVEGAR CON GOOGLE MAPS (Fase RR): deep link a la app de mapas del
@@ -539,28 +545,28 @@ export default function DeliveryOrdersView() {
                                 const dest = goingToStore ? order.storeCoords : custCoords(order);
                                 if (!isValidCoords(dest)) return null;
                                 return (
-                                    <Button asChild variant="outline" className="w-full h-11 border-info/40 text-info hover:bg-info/10 hover:text-info">
+                                    <Button asChild variant="outline" className="w-full h-14 border-2 border-foreground text-base font-bold">
                                         <a href={gmapsDirectionsUrl(dest)} target="_blank" rel="noopener noreferrer">
                                             <Navigation className="mr-2 h-4 w-4" />
-                                            Navegar {goingToStore ? 'a la tienda' : 'al cliente'} (Google Maps)
+                                            Navegar {goingToStore ? 'a la tienda' : 'al cliente'}
                                         </a>
                                     </Button>
                                 );
                             })()}
 
-                            <Button variant="secondary" className="w-full h-10" onClick={() => goToDetails(order.id)}>
-                                <MapIcon className="mr-2 h-4 w-4" /> Ver Detalles / Mapa / Chat
+                            <Button variant="secondary" className="w-full h-12" onClick={() => goToDetails(order.id)}>
+                                <MapIcon className="mr-2 h-4 w-4" /> Ver detalle, mapa y chat
                             </Button>
 
                             {/* ✅ BOTONES DE FLUJO */}
                             {(order.status === 'En camino' || order.status === 'Aceptado' || order.status === 'Listo para recoger') ? (
-                                <Button className="w-full h-12 bg-info hover:bg-info/90 text-info-foreground" onClick={() => handlePickupOrder(order)}>
-                                    <PackageCheck className="mr-2 h-5 w-5" /> Ya retiré el pedido
+                                <Button className="w-full h-16 bg-primary font-headline text-2xl font-extrabold text-primary-foreground hover:bg-primary/90" onClick={() => handlePickupOrder(order)}>
+                                    <PackageCheck className="mr-2 h-6 w-6" aria-hidden="true" /> Ya lo retiré
                                 </Button>
                             ) : (
-                                <Button className={`w-full text-lg h-12 ${order.paymentMethod === 'Efectivo' ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : 'bg-success hover:bg-success/90 text-success-foreground'}`} onClick={() => handleFinishDeliveryClick(order)}>
+                                <Button className={`w-full h-[4.5rem] font-headline text-2xl font-extrabold ${order.paymentMethod === 'Efectivo' ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : 'bg-success hover:bg-success/90 text-success-foreground'}`} onClick={() => handleFinishDeliveryClick(order)}>
                                     <CheckCircle2 className="mr-2 h-5 w-5" />
-                                    {order.paymentMethod === 'Efectivo' ? 'Ya cobré y Entregué' : 'Confirmar Entrega'}
+                                    {order.paymentMethod === 'Efectivo' ? 'Ya cobré y lo entregué' : 'Ya lo entregué'}
                                 </Button>
                             )}
 

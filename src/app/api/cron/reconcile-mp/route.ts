@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     try {
       unconfirmed = await sweepUnconfirmedOrders();
     } catch (e) {
-      console.error("❌ [Cron] barrido de pedidos sin confirmar:", e);
+      console.error("[Cron] barrido de pedidos sin confirmar:", e);
       Sentry.captureException(e, { tags: { route: "cron/reconcile-mp", step: "confirm-timeout-sweep" } });
     }
     console.log(`[Cron] reconcile-mp: ${JSON.stringify(summary)} · meses actualizados: ${updated.join(", ") || "ninguno"} · días: ${daily.updated.length}/${daily.checked} · sin confirmar cancelados: ${unconfirmed.cancelled}/${unconfirmed.checked}`);
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     }
     return NextResponse.json({ status: "ok", ...summary, monthsUpdated: updated, daysUpdated: daily.updated.length, daysChecked: daily.checked, unconfirmedCancelled: unconfirmed.cancelled, unconfirmedChecked: unconfirmed.checked, suspensionsLifted: suspensions.lifted, suspensionsChecked: suspensions.checked });
   } catch (error: any) {
-    console.error("❌ [Cron] Error en reconcile-mp:", error);
+    console.error("[Cron] Error en reconcile-mp:", error);
     Sentry.captureException(error, { tags: { route: "cron/reconcile-mp" } });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   } catch (e) {
     const known = suspensionErrorResponse(e);
     if (known) return NextResponse.json({ error: known.error }, { status: known.status });
-    console.error("❌ account/appeal:", e);
+    console.error("account/appeal:", e);
     Sentry.captureException(e, { tags: { route: "account/appeal" } });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

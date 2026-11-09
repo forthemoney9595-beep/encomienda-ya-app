@@ -98,7 +98,7 @@ export async function applyConfirmTimeout(orderId: string, opts: { config?: Conf
     if (ownerId) {
       await notifyUser({
         userId: ownerId,
-        title: '⏰ Pedido esperando confirmación',
+        title: 'Pedido esperando confirmación',
         body: `El pedido #${shortId} de ${o.customerName || 'un cliente'} espera que lo confirmes. Si no lo confirmás antes de las ${fmtDate(outcome.timeoutAt, 'time')}, se cancela solo.`,
         type: 'order_request',
         orderId,
@@ -117,7 +117,7 @@ export async function applyConfirmTimeout(orderId: string, opts: { config?: Conf
 
   await notifyUser({
     userId: o.userId,
-    title: '🚫 Pedido cancelado',
+    title: 'Pedido cancelado',
     body: `${o.storeName || 'La tienda'} no confirmó tu pedido a tiempo, así que lo cancelamos. No se te cobró nada.`,
     type: 'order_cancelled',
     orderId,
@@ -126,13 +126,13 @@ export async function applyConfirmTimeout(orderId: string, opts: { config?: Conf
   if (ownerId) {
     await notifyUser({
       userId: ownerId,
-      title: '❌ Pedido cancelado: no se confirmó a tiempo',
+      title: 'Pedido cancelado: no se confirmó a tiempo',
       body: `El pedido #${shortId} de ${o.customerName || 'un cliente'} se canceló porque no lo confirmaste en ${config.timeoutMinutes} minutos. Si no podés atender, pausá la tienda desde tu panel.`,
       type: 'order_cancelled',
       orderId,
     });
   }
-  console.log(`⏱️ Pedido ${orderId} cancelado por falta de confirmación (${opts.source || 'api'}).`);
+  console.log(`Pedido ${orderId} cancelado por falta de confirmación (${opts.source || 'api'}).`);
   return outcome;
 }
 
