@@ -12,7 +12,6 @@ import { AuthProvider } from '@/context/auth-context';
 // ✅ CORRECCIÓN FINAL: Importación de ChatListener desde '@/components/'
 import { ChatListener } from '@/components/chat-listener'; 
 import { AppContent } from './app-content';
-import { DevPreviewPanel } from '@/components/dev-preview-panel';
 
 // 🚀 METADATOS OPTIMIZADOS PARA SEO Y REDES SOCIALES
 export const metadata: Metadata = {
@@ -92,8 +91,6 @@ export default function RootLayout({
             </CartProvider>
           </AuthProvider>
         <Toaster />
-        {/* SOLO servidor local (9/11): elegir color de marca y sonido. Borrar al decidir. */}
-        {process.env.NODE_ENV === 'development' && <DevPreviewPanel />}
       </body>
     </html>
   );

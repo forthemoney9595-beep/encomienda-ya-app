@@ -1,20 +1,22 @@
 // Sonidos de aviso sintetizados con la Web Audio API (sin archivos que descargar).
-// 9/11: David pidió cambiar el sonido ("se lo siente muy feo"). Estos son los candidatos;
-// en el servidor local se prueban desde el panel de vista previa (dev-preview-panel.tsx).
-// Cuando elija uno, queda como DEFAULT_SOUND y el panel se borra.
+// 9/11/2026: David pidió cambiar el pitido ("se lo siente muy feo") y eligió MARIMBA como
+// predeterminado. Cada usuario puede elegir otro o silenciarlos en Perfil → Apariencia
+// (sound-picker.tsx). La elección se guarda en ESTE dispositivo (localStorage), igual que
+// el tema claro/oscuro. Nota: con la app cerrada, la notificación push suena con el tono
+// del celular; esto controla los avisos con la app abierta (pedido nuevo, chat, estados).
 
-export type SoundId = 'beep' | 'campanita' | 'marimba' | 'gota' | 'timbre';
+export type SoundId = 'marimba' | 'campanita' | 'gota' | 'timbre' | 'silencio';
 
 export const SOUND_OPTIONS: { id: SoundId; label: string; hint: string }[] = [
-  { id: 'beep', label: 'El de ahora', hint: 'Dos pitidos agudos' },
-  { id: 'campanita', label: 'Campanita', hint: 'Dos golpes de campana, suben' },
   { id: 'marimba', label: 'Marimba', hint: 'Tres notas de madera, cálidas' },
+  { id: 'campanita', label: 'Campanita', hint: 'Dos golpes de campana' },
   { id: 'gota', label: 'Gota', hint: 'Dos gotas cortas, muy suave' },
   { id: 'timbre', label: 'Timbre de almacén', hint: 'Ding-dong de puerta de negocio' },
+  { id: 'silencio', label: 'Silencio', hint: 'Sin sonido (los avisos se siguen viendo)' },
 ];
 
-export const DEFAULT_SOUND: SoundId = 'beep';
-const DEV_KEY = 'eya-dev-sound';
+export const DEFAULT_SOUND: SoundId = 'marimba';
+const STORAGE_KEY = 'eya-sound';
 
 type Partial = { ratio: number; gain: number; decay: number };
 
@@ -76,34 +78,31 @@ function render(ctx: AudioContext, out: AudioNode, id: SoundId): number {
       note(ctx, out, { freq: 659.25, at: t, type: 'triangle', partials: CHIME });         // Mi5
       note(ctx, out, { freq: 523.25, at: t + 0.38, type: 'triangle', partials: CHIME });  // Do5
       return 1.5;
-    case 'beep':
     default:
-      [880, 1175].forEach((f, i) => note(ctx, out, { freq: f, at: t + i * 0.18, partials: [{ ratio: 1, gain: 1, decay: 0.16 }] }));
-      return 0.5;
+      return 0;
   }
 }
 
-/** El sonido elegido. En el servidor local se puede pisar desde el panel de vista previa. */
+/** El sonido elegido en este dispositivo (o el predeterminado). */
 export function currentSound(): SoundId {
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      const v = localStorage.getItem(DEV_KEY) as SoundId | null;
-      if (v && SOUND_OPTIONS.some((o) => o.id === v)) return v;
-    } catch { /* sin storage */ }
-  }
+  try {
+    const v = localStorage.getItem(STORAGE_KEY) as SoundId | null;
+    if (v && SOUND_OPTIONS.some((o) => o.id === v)) return v;
+  } catch { /* sin storage (modo privado, etc.) */ }
   return DEFAULT_SOUND;
 }
 
-export function setDevSound(id: SoundId) {
-  try { localStorage.setItem(DEV_KEY, id); } catch { /* sin storage */ }
+export function saveSound(id: SoundId) {
+  try { localStorage.setItem(STORAGE_KEY, id); } catch { /* sin storage */ }
 }
 
 /** Suena un aviso. No rompe si el navegador no tiene audio o bloquea el autoplay. */
 export function playSound(id: SoundId = currentSound()) {
+  if (id === 'silencio') return;
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const master = ctx.createGain();
-    master.gain.value = id === 'beep' ? 0.3 : 0.22;
+    master.gain.value = 0.22;
     master.connect(ctx.destination);
     const dur = render(ctx, master, id);
     setTimeout(() => ctx.close().catch(() => {}), (dur + 0.3) * 1000);

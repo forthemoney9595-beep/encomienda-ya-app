@@ -3547,14 +3547,18 @@ exacta sigue apareciendo recién al tomar el pedido (Fase UU / AUTHZ-001 intacta
   daba "Pedido ya tomado" siendo suyo), `pickedUpAt` también desde el botón del detalle
   (`updateOrderStatus`), la tienda firma el chat con el nombre del local, y avisos del pago de
   prueba sin emojis. `_pw-gps-reconnect.js` 9/9.
-- **Sonido y color, a elegir por David:** sonidos sintetizados nuevos en `src/lib/notify-sounds.ts`
-  (campanita, marimba, gota, timbre; `beep.ts` y el chat delegan ahí — el mp3 del chat ya no se
-  usa). Panel `src/components/dev-preview-panel.tsx`, montado SOLO con `NODE_ENV=development`
-  (botón "Probar color y sonido"): cambia el color de marca en vivo (violeta, índigo, marino,
-  bordó, petróleo vs. el fucsia) y prueba los sonidos. **Cuando elija:** fijar el color en
-  `globals.css` (`--primary`, `--ring`, `--cat-brand`, `--sidebar-*`, `--primary-ink`,
-  `.awn-brand`, `manifest.json`), poner `DEFAULT_SOUND`, borrar el panel y su línea en
-  `layout.tsx`, y `public/sounds/notify.mp3`.
+- **Color de marca y sonido — ELEGIDOS por David el 9/11: PETRÓLEO y MARIMBA.** Marca
+  `191 78% 26%` (#0F6376, texto blanco 6,85:1) en claro y `186 55% 62%` (#69C9D3, texto oscuro
+  8,6:1) en la pizarra; reemplaza al fucsia provisorio en `--primary`/`--ring`/`--chart-1`/
+  `--cat-brand`/`--sidebar-*`/`--primary-ink`, `.awn-brand`, el pin del LocationPicker y
+  `theme_color` del manifest. El rubro **Salud** se corrió a un verde agua más verde
+  (`--cat-pharma` 162 75% 26% / 158 55% 55%, `.awn-pharma` #117456) para no confundirse con la
+  marca (~29° de diferencia de tono). **Sonido = opción de cada usuario** (el color NO: la marca es
+  una sola): `src/lib/notify-sounds.ts` (marimba por defecto, campanita, gota, timbre de almacén,
+  silencio; se guarda por dispositivo en `localStorage.eya-sound`) + `src/components/sound-picker.tsx`
+  en Perfil → Apariencia. `beep.ts` y el chat suenan por ahí; el mp3 y el panel de prueba se
+  borraron. Con la app CERRADA el push suena con el tono del celular (no se controla desde la web).
+  Verificado `_pw-petroleo.js` 25/25, `_pw-tanda2-visual` 24/24, `_pw-rediseno-t0` 33/33.
 
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de

@@ -8,10 +8,11 @@
   /* ── Rediseño 2 · dirección "Toldo" (aprobada por David el 9/11/2026) ─────────────
      Claro POR DEFECTO, tinta casi negra sobre blanco, líneas de tinta, radios chicos.
      Un solo token de marca sirve para TEXTO y para RELLENO en los dos temas (en claro
-     fucsia #B0145D con texto blanco; en la pizarra rosa #FF8FC3 con texto oscuro), así
-     `text-primary` deja de dar 3,1-3,5:1 como pasaba con el violeta (auditoría 9/11).
-     El fucsia es provisorio: se confirma con el nombre nuevo (cambiar --primary,
-     --ring, --cat-brand y --sidebar-accent alcanza). Semánticos: verde = plata/éxito,
+     PETRÓLEO #0F6376 con texto blanco, 7:1; en la pizarra petróleo claro #69C9D3 con
+     texto oscuro). Elegido por David el 9/11/2026 entre violeta, índigo, marino, bordó y
+     petróleo (el fucsia provisorio no le gustó). Para cambiarlo: --primary, --ring,
+     --chart-1, --cat-brand, --sidebar-accent*, --sidebar-ring, --primary-ink (admin),
+     .awn-brand, el pin de location-picker-map.tsx y theme_color del manifest. Semánticos: verde = plata/éxito,
      rojo = error, ámbar = aviso/rating, azul = en tránsito; --offer = OFERTAS. */
   :root {
     --background: 0 0% 100%;
@@ -20,7 +21,7 @@
     --card-foreground: 20 6% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 20 6% 10%;
-    --primary: 332 80% 38%;
+    --primary: 191 78% 26%;
     --primary-foreground: 0 0% 100%;
     --secondary: 60 7% 94%;
     --secondary-foreground: 20 6% 10%;
@@ -40,9 +41,9 @@
     --offer-foreground: 0 0% 100%;
     --border: 43 10% 85%;
     --input: 43 10% 80%;
-    --ring: 332 80% 38%;
+    --ring: 191 78% 26%;
     --radius: 0.625rem;
-    --chart-1: 332 80% 38%;
+    --chart-1: 191 78% 26%;
     --chart-2: 174 80% 25%;
     --chart-3: 217 74% 43%;
     --chart-4: 38 100% 26%;
@@ -51,27 +52,27 @@
     --sidebar-foreground: 20 6% 10%;
     --sidebar-primary: 20 6% 10%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 332 60% 94%;
-    --sidebar-accent-foreground: 332 80% 30%;
+    --sidebar-accent: 191 50% 93%;
+    --sidebar-accent-foreground: 191 78% 22%;
     --sidebar-border: 43 10% 85%;
-    --sidebar-ring: 332 80% 38%;
+    --sidebar-ring: 191 78% 26%;
 
     /* Familias de RUBRO (4 familias, los rubros son TONOS dentro de cada una). Sobre
        blanco necesitan menos luz para leerse como texto (todas ≥ 4,5:1 sobre blanco).
        Mapa: lib/category-style.ts. Las claves se conservan por compat de clases. */
-    --cat-brand: 332 80% 38%;   /* marca — SOLO "Todas" */
+    --cat-brand: 191 78% 26%;   /* marca — SOLO "Todas" */
     --cat-food: 18 89% 39%;     /* COMIDA: naranja quemado */
     --cat-fast: 14 85% 35%;
     --cat-drink: 24 86% 37%;
     --cat-kiosk: 34 100% 24%;   /* ALMACÉN: dorado oscuro */
     --cat-market: 38 100% 26%;
-    --cat-pharma: 174 80% 25%;  /* SALUD: verde agua */
+    --cat-pharma: 162 75% 26%;  /* SALUD: verde agua (más verde desde el 9/11 para no confundirse con la marca petróleo) */
     --cat-cloth: 224 66% 41%;   /* ROPA Y HOGAR: azul */
     --cat-home: 218 70% 36%;
     --cat-other: 230 55% 45%;
   }
 
-  /* Oscuro "pizarra": gris pizarra, tiza clara, marca en rosa con texto oscuro. */
+  /* Oscuro "pizarra": gris pizarra, tiza clara, marca en petróleo claro con texto oscuro. */
   .dark {
     --background: 210 10% 12%;
     --foreground: 38 30% 94%;
@@ -79,7 +80,7 @@
     --card-foreground: 38 30% 94%;
     --popover: 210 9% 16%;
     --popover-foreground: 38 30% 94%;
-    --primary: 332 100% 78%;
+    --primary: 186 55% 62%;
     --primary-foreground: 210 10% 12%;
     --secondary: 210 8% 20%;
     --secondary-foreground: 38 30% 94%;
@@ -99,8 +100,8 @@
     --offer-foreground: 210 10% 12%;
     --border: 213 9% 25%;
     --input: 213 9% 30%;
-    --ring: 332 100% 78%;
-    --chart-1: 332 100% 78%;
+    --ring: 186 55% 62%;
+    --chart-1: 186 55% 62%;
     --chart-2: 167 60% 57%;
     --chart-3: 43 96% 56%;
     --chart-4: 220 100% 78%;
@@ -109,18 +110,18 @@
     --sidebar-foreground: 38 30% 94%;
     --sidebar-primary: 38 30% 94%;
     --sidebar-primary-foreground: 210 12% 9%;
-    --sidebar-accent: 332 30% 20%;
-    --sidebar-accent-foreground: 332 100% 82%;
+    --sidebar-accent: 191 30% 18%;
+    --sidebar-accent-foreground: 186 60% 74%;
     --sidebar-border: 213 9% 20%;
-    --sidebar-ring: 332 100% 78%;
+    --sidebar-ring: 186 55% 62%;
 
-    --cat-brand: 332 100% 78%;
+    --cat-brand: 186 55% 62%;
     --cat-food: 23 100% 69%;
     --cat-fast: 18 95% 64%;
     --cat-drink: 28 100% 72%;
     --cat-kiosk: 40 85% 57%;
     --cat-market: 44 85% 62%;
-    --cat-pharma: 167 60% 57%;
+    --cat-pharma: 158 55% 55%;
     --cat-cloth: 222 100% 79%;
     --cat-home: 215 90% 72%;
     --cat-other: 228 80% 80%;
@@ -241,7 +242,7 @@ html:has([data-surface="admin"]) {
   --warning-ink: 32 95% 30%;
   --info-ink: 221 83% 42%;
   --destructive-ink: 0 72% 42%;
-  --primary-ink: 332 80% 34%;
+  --primary-ink: 191 78% 22%;
   --cat-food-ink: 24 90% 36%;
 }
 .dark [data-surface="admin"] {
@@ -254,7 +255,7 @@ html:has([data-surface="admin"]) {
   --warning-ink: 40 95% 62%;
   --info-ink: 217 91% 74%;
   --destructive-ink: 0 80% 74%;
-  --primary-ink: 332 100% 84%;
+  --primary-ink: 186 60% 74%;
   --cat-food-ink: 25 92% 66%;
 }
 
@@ -283,13 +284,13 @@ html:has([data-surface="admin"]) {
     radial-gradient(circle at 6.5px 0, var(--c) 6.5px, transparent 7px) 0 0 / 26px 7px repeat-x,
     radial-gradient(circle at 19.5px 0, var(--p) 6.5px, transparent 7px) 0 0 / 26px 7px repeat-x;
 }
-.awn-brand { --c: #B0145D; }
+.awn-brand { --c: #0F6376; }
 .awn-food { --c: #BD3F0B; }
 .awn-fast { --c: #A8320F; }
 .awn-drink { --c: #B8501A; }
 .awn-kiosk { --c: #7A4A00; }
 .awn-market { --c: #875600; }
-.awn-pharma { --c: #0D7266; }
+.awn-pharma { --c: #117456; }
 .awn-cloth { --c: #2347AC; }
 .awn-home { --c: #1F4F8F; }
 .awn-other { --c: #3B4FA8; }

@@ -14,7 +14,7 @@ import { TINOGASTA_CENTER, type GeoCoords } from '@/lib/geo';
 const pinIcon = L.divIcon({
   className: 'custom-icon',
   html: `<div style="
-      background-color: #B0145D;
+      background-color: #0F6376;
       width: 34px;
       height: 34px;
       border-radius: 50%;

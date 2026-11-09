@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { SoundPicker } from '@/components/sound-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -318,8 +319,8 @@ export default function ProfilePage() {
                         </TabsList>
 
                         <TabsContent value="info">
-                            {/* Apariencia (Rediseño D4, 19/8): tema claro pensado para
-                                usuarios mayores — el oscuro sigue siendo el default. */}
+                            {/* Apariencia: tema claro (default desde el Rediseño 2) u oscuro, y
+                                el sonido de los avisos (9/11/2026). Ambos por dispositivo. */}
                             <Card className="mb-4">
                                 <CardHeader>
                                     <CardTitle>Apariencia</CardTitle>
@@ -330,6 +331,13 @@ export default function ProfilePage() {
                                     <p className="mt-2 text-xs text-muted-foreground">
                                         El modo claro puede leerse más cómodo con mucha luz o para la vista cansada.
                                     </p>
+                                    <div className="mt-6">
+                                        <p className="text-sm font-semibold">Sonido de los avisos</p>
+                                        <p className="mb-3 text-xs text-muted-foreground">
+                                            Suena con la app abierta: pedido nuevo, mensajes del chat y cambios de estado. Tocá uno para escucharlo.
+                                        </p>
+                                        <SoundPicker />
+                                    </div>
                                 </CardContent>
                             </Card>
                             <Card>
