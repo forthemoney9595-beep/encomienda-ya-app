@@ -454,7 +454,7 @@ export default function ProductManagementPage() {
                                    <TableRow key={p.id}>
                                        <TableCell className="font-mono text-xs">{p.id}</TableCell>
                                        <TableCell>
-                                           {p.name ? p.name : <span className="text-destructive font-bold">⚠️ SIN NOMBRE</span>}
+                                           {p.name ? p.name : <span className="text-destructive font-bold">Sin nombre</span>}
                                        </TableCell>
                                        <TableCell>
                                            <Button variant="destructive" size="sm" onClick={() => handleDelete(p)}>
@@ -587,7 +587,7 @@ export default function ProductManagementPage() {
               <CardHeader className="p-4 pb-2">
                 <div className="flex justify-between items-start">
                   <CardTitle className={`text-lg line-clamp-1 ${!product.name ? 'text-destructive italic' : ''}`} title={product.name}>
-                      {product.name || '⚠️ Sin Nombre'}
+                      {product.name || 'Sin nombre'}
                   </CardTitle>
                   <span className="flex flex-col items-end">
                     {!!product.discountPercent && (
@@ -655,7 +655,7 @@ export default function ProductManagementPage() {
 
             {!editingProduct && (
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
-                💡 <strong className="text-foreground">¿Querés armar un combo?</strong> Creá un producto
+                <strong className="text-foreground">¿Querés armar un combo?</strong> Creá un producto
                 con el precio total del combo (ej: <em>&ldquo;Combo Pizza + Gaseosa&rdquo;</em>) y elegí la categoría
                 <strong> &ldquo;Combos&rdquo;</strong>. Aparece con su propia sección en tu tienda.
               </div>

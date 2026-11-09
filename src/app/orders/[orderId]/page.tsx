@@ -67,7 +67,7 @@ function DriverSignal({ lastUpdate }: { lastUpdate?: string }) {
     }
     return (
         <p className="text-xs text-warning">
-            ⚠️ Última señal del repartidor hace {min} min — puede haber perdido conexión.
+            Última señal del repartidor hace {min} min — puede haber perdido conexión.
         </p>
     );
 }
@@ -588,7 +588,7 @@ export default function OrderTrackingPage() {
                             <div className="p-4 space-y-3 text-center">
                                 <p className="text-foreground mb-2">Este pedido está listo o preparándose. ¿Quieres llevarlo?</p>
                                 <Button className="w-full bg-success hover:bg-success/90 text-success-foreground shadow-md transition-all hover:scale-[1.02]" size="lg" onClick={handleAcceptOrder} disabled={isAccepting}>
-                                    {isAccepting ? "Aceptando..." : "✅ Aceptar y Asignarme este Pedido"}
+                                    {isAccepting ? "Tomando el pedido..." : "Tomar este pedido"}
                                 </Button>
                             </div>
                         </div>

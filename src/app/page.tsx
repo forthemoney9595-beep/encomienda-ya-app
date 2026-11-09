@@ -8,13 +8,11 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, CollectionReference, query, where } from 'firebase/firestore';
 import { normalizeSchedule, getStoreOpenStatus, isStorePaused } from '@/lib/store-hours';
-import { ShoppingBag, Search, Filter, Heart, Zap, ArrowRight, type LucideIcon } from 'lucide-react';
+import { ShoppingBag, Search, Heart, Zap, ArrowRight, type LucideIcon } from 'lucide-react';
 import { StoreCard, type StoreCardStore } from '@/components/store-card';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StoreCardSkeleton } from '@/components/store-card-skeleton';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -100,13 +98,13 @@ const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, coun
           key={cat}
           onClick={() => setSelectedCategory(cat)}
           aria-pressed={isActive}
-          className="flex flex-col items-center gap-1.5 shrink-0 transition-transform duration-300 ease-spring"
+          className="flex flex-col items-center gap-1.5 shrink-0"
         >
           <div className={cn(
-            'h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-300 ease-spring ring-2',
+            'h-14 w-14 rounded-2xl flex items-center justify-center transition-colors ring-2',
             isActive
-              ? cn('scale-105 shadow-glow ring-offset-2 ring-offset-background', style.solid, style.ring)
-              : cn('ring-transparent hover:scale-105', style.bg),
+              ? cn('ring-offset-2 ring-offset-background', style.solid, style.ring)
+              : cn('ring-transparent', style.bg),
           )}>
             <Icon className={cn('h-6 w-6', isActive ? '' : style.text)} />
           </div>
@@ -125,38 +123,41 @@ const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, coun
 interface FilterBarProps {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  minRating: string;
-  setMinRating: (rating: string) => void;
 }
 
-// El <Select> de categoría se sacó a propósito: duplicaba exactamente lo que hacen los
-// chips de arriba. Los chips son la única fuente de verdad del rubro.
-const FilterBar = ({ searchTerm, setSearchTerm, minRating, setMinRating }: FilterBarProps) => (
-  <div className="flex flex-col sm:flex-row gap-3 mb-6">
-    <div className="relative flex-1">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-      <Input
-        placeholder="Buscar una tienda..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="pl-10 w-full h-11 rounded-xl bg-card"
-      />
-    </div>
-    <Select value={minRating} onValueChange={setMinRating}>
-      <SelectTrigger className="w-full sm:w-[190px] h-11 rounded-xl bg-card">
-        <Filter className="h-4 w-4 mr-2 text-primary" />
-        <SelectValue placeholder="Calificación" />
-      </SelectTrigger>
-      <SelectContent>
-        {[5, 4, 3, 2, 1, 0].map(rating => (
-          <SelectItem key={rating} value={String(rating)}>
-            {rating === 0 ? 'Todas las calif.' : `${rating}+ Estrellas`}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+// UN solo buscador en el inicio (Rediseño 2, Tanda 0). Se fueron el <Select> de categoría
+// (duplicaba los chips) y el de calificación ("Todas las calif.": con pocas tiendas no
+// filtraba nada útil y sumaba una barra más). En el inicio el buscador global del
+// encabezado no se muestra, para no tener dos buscadores apilados.
+const FilterBar = ({ searchTerm, setSearchTerm }: FilterBarProps) => (
+  <div className="relative mb-6">
+    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+    <Input
+      type="search"
+      aria-label="Buscar una tienda"
+      placeholder="Buscar una tienda..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      className="pl-10 w-full h-12 rounded-xl bg-card"
+    />
   </div>
 );
+
+// Primer nombre con mayúscula inicial: el perfil a veces guarda "david" y el saludo decía
+// "Hola, david".
+function firstName(full?: string | null): string {
+  const first = (full || '').trim().split(/\s+/)[0];
+  if (!first) return 'te damos la bienvenida';
+  return first.charAt(0).toLocaleUpperCase('es-AR') + first.slice(1);
+}
+
+// "Comida" y "Comida rápida" eran dos chips para lo mismo. El chip agrupa por esta clave;
+// el rubro guardado en cada tienda no cambia.
+function chipKey(category?: string): string {
+  if (!category) return '';
+  const n = category.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  return n.includes('comida') ? 'comida' : category;
+}
 
 // Banner de promos ROTATIVO (slider, pedido de David 19/8): recorre todas las tiendas
 // con descuento activo cada 5s, la mejor oferta primero, y se puede ARRASTRAR con el
@@ -187,14 +188,16 @@ function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscou
 
   const slide = (offer: (typeof offers)[number]) => (
     <Link href={`/stores/${offer.id}`} className="block" draggable={false}>
-      <div className="flex items-center justify-between gap-3 rounded-2xl bg-cat-food px-4 py-3.5">
+      {/* Naranja de OFERTAS con texto oscuro: el blanco sobre este naranja daba 2,2-2,6:1
+          (auditoría Impeccable 9/11). El oscuro se lee en los dos temas. */}
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-cat-food px-4 py-3.5 text-black">
         <div className="min-w-0">
-          <p className="line-clamp-1 font-headline text-base font-bold text-white">
+          <p className="line-clamp-1 font-headline text-base font-bold">
             Hasta -{offer.maxDiscountPercent}% en {offer.name}
           </p>
-          <p className="text-xs text-white/85">Ofertas de hoy · tocá para verlas</p>
+          <p className="text-sm">Ofertas de hoy · tocá para verlas</p>
         </div>
-        <ArrowRight className="h-5 w-5 shrink-0 text-white" />
+        <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
       </div>
     </Link>
   );
@@ -239,12 +242,11 @@ function HomeContent() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
-  const [minRating, setMinRating] = useState('0');
 
   useEffect(() => {
       const categoryParam = searchParams.get('category');
       if (categoryParam) {
-          setSelectedCategory(categoryParam);
+          setSelectedCategory(chipKey(categoryParam));
       }
   }, [searchParams]);
 
@@ -283,16 +285,14 @@ function HomeContent() {
       .map(store => ({ store, status: storeOpenState(store), isFav: favoriteIds.has(store.id) }));
   }, [rawStores, favoriteIds]);
 
-  const hasFilters = !!searchTerm || selectedCategory !== 'Todas' || minRating !== '0';
+  const hasFilters = !!searchTerm || selectedCategory !== 'Todas';
 
   const filteredStores = useMemo(() => {
-    const minRatingValue = parseFloat(minRating);
     const list = hasFilters
       ? decorated.filter(({ store }) => {
           const matchesSearch = store.name.toLowerCase().includes(searchTerm.toLowerCase());
-          const matchesCategory = selectedCategory === 'Todas' || store.category === selectedCategory;
-          const matchesRating = (store.rating || 0) >= minRatingValue;
-          return matchesSearch && matchesCategory && matchesRating;
+          const matchesCategory = selectedCategory === 'Todas' || chipKey(store.category) === selectedCategory;
+          return matchesSearch && matchesCategory;
         })
       : [...decorated];
 
@@ -303,7 +303,7 @@ function HomeContent() {
       if (a.isFav !== b.isFav) return a.isFav ? -1 : 1;
       return (b.store.rating || 0) - (a.store.rating || 0);
     });
-  }, [decorated, hasFilters, searchTerm, selectedCategory, minRating]);
+  }, [decorated, hasFilters, searchTerm, selectedCategory]);
 
   // Secciones del modo "explorar" — todas son particiones en memoria de `decorated`,
   // cero lecturas nuevas a Firestore.
@@ -326,14 +326,15 @@ function HomeContent() {
   // Los rubros salen de las tiendas APROBADAS, no de rawStores: si no, una tienda pendiente
   // de aprobación aportaba su rubro al chip y ese chip después daba 0 resultados.
   const categories = useMemo(() => {
-    const unique = new Set(decorated.map(d => d.store.category).filter(Boolean));
+    const unique = new Set(decorated.map(d => chipKey(d.store.category)).filter(Boolean));
     return ['Todas', ...Array.from(unique).filter(c => c !== 'Todas')];
   }, [decorated]);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { Todas: decorated.length };
     decorated.forEach(({ store }) => {
-      if (store.category) counts[store.category] = (counts[store.category] || 0) + 1;
+      const k = chipKey(store.category);
+      if (k) counts[k] = (counts[k] || 0) + 1;
     });
     return counts;
   }, [decorated]);
@@ -359,7 +360,7 @@ function HomeContent() {
                 address: store.address,
                 addedAt: new Date() 
             });
-            toast({ description: "Agregado a favoritos ❤️" });
+            toast({ description: "Guardada en tus favoritas." });
         }
     } catch (error) {
         console.error("Error fav:", error);
@@ -415,13 +416,9 @@ function HomeContent() {
     return (
       <div className="container mx-auto animate-in fade-in duration-500 pt-4">
         {/* Bienvenida compacta con CTA de registro (no el hero gigante de antes) */}
-        <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/40 p-5 sm:p-6 mb-6">
-          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
-            <div className="absolute -left-10 -top-16 h-52 w-52 rounded-full bg-primary/25 blur-3xl animate-float" />
-            <div className="absolute -right-12 -bottom-20 h-56 w-56 rounded-full bg-cat-kiosk/20 blur-3xl animate-float" style={{ animationDelay: '2.5s' }} />
-          </div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight">
-            Tu ciudad, <span className="text-gradient">en la puerta de tu casa</span> 🛵
+        <div className="mb-6">
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight text-balance">
+            Tu ciudad, en la puerta de tu casa
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Mirá las tiendas de Tinogasta. Creá tu cuenta gratis cuando quieras pedir.
@@ -451,8 +448,6 @@ function HomeContent() {
         <FilterBar
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
-          minRating={minRating}
-          setMinRating={setMinRating}
         />
 
         {promoBanner}
@@ -475,8 +470,8 @@ function HomeContent() {
               <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
               <p className="text-lg font-medium">No encontramos tiendas</p>
               {hasFilters && (
-                <Button variant="link" onClick={() => { setSearchTerm(''); setSelectedCategory('Todas'); setMinRating('0'); }} className="mt-2">
-                  Limpiar Filtros
+                <Button variant="link" onClick={() => { setSearchTerm(''); setSelectedCategory('Todas'); }} className="mt-2">
+                  Limpiar filtros
                 </Button>
               )}
             </div>
@@ -488,8 +483,8 @@ function HomeContent() {
         <footer className="py-8 mt-6 text-center text-xs text-muted-foreground border-t space-y-3">
           {/* Puertas de NEGOCIO (captación de oferta): un marketplace vive de sus tiendas */}
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
-            <Link href="/signup/store" className="font-medium text-foreground hover:text-primary">🏪 Registrá tu tienda</Link>
-            <Link href="/signup/delivery" className="font-medium text-foreground hover:text-primary">🛵 Sumate como repartidor</Link>
+            <Link href="/signup/store" className="font-medium text-foreground hover:text-primary">Registrá tu tienda</Link>
+            <Link href="/signup/delivery" className="font-medium text-foreground hover:text-primary">Sumate como repartidor</Link>
           </div>
           <div className="flex justify-center gap-4">
             <Link href="/terms" className="underline hover:text-foreground">Términos</Link>
@@ -515,26 +510,14 @@ function HomeContent() {
 
   return (
     <div className="container mx-auto animate-in fade-in duration-500">
-      {/* HERO — con globos difuminados detrás (decorativos, no interactivos) */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/40 p-5 sm:p-6 mb-6">
-        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
-          <div className="absolute -left-10 -top-16 h-52 w-52 rounded-full bg-primary/25 blur-3xl animate-float" />
-          <div className="absolute -right-12 -bottom-20 h-56 w-56 rounded-full bg-cat-kiosk/20 blur-3xl animate-float" style={{ animationDelay: '2.5s' }} />
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Avatar className="h-14 w-14 ring-2 ring-primary/40 ring-offset-2 ring-offset-background">
-            <AvatarImage src={userProfile?.profileImageUrl} alt={userProfile?.displayName} />
-            <AvatarFallback className="bg-primary/15 text-primary font-bold text-lg">
-              {(userProfile?.displayName || 'I').charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight">
-              Hola, <span className="text-gradient">{((userProfile?.displayName || userProfile?.name || '').trim().split(' ')[0]) || 'Invitado'}</span> 👋
-            </h1>
-            <p className="text-sm text-muted-foreground">¿Qué se te antoja hoy?</p>
-          </div>
+      {/* SALUDO — sin globos difuminados, sin degradé en el nombre y sin emoji
+          (Rediseño 2, Tanda 0: eran las tres señas de "hecho con IA" más visibles). */}
+      <div className="mb-6">
+        <div className="min-w-0">
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold leading-tight text-balance">
+            Hola, {firstName(userProfile?.displayName || userProfile?.name)}
+          </h1>
+          <p className="text-base text-muted-foreground">¿Qué se te antoja hoy?</p>
         </div>
 
         {/* Mini-stats: todo derivado del array ya cargado, cero lecturas extra */}
@@ -560,8 +543,6 @@ function HomeContent() {
       <FilterBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
-        minRating={minRating}
-        setMinRating={setMinRating}
       />
 
       {promoBanner}
@@ -590,11 +571,10 @@ function HomeContent() {
              <div className="col-span-full text-center py-12 opacity-70">
                 <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                 <p className="text-lg font-medium">No encontramos tiendas</p>
-                <p className="text-sm">Intenta cambiar los filtros de búsqueda.</p>
-                {/* Botón para limpiar filtros si no hay resultados */}
+                <p className="text-sm">Probá con otra palabra o sacá el filtro de rubro.</p>
                 {hasFilters && (
-                    <Button variant="link" onClick={() => { setSearchTerm(''); setSelectedCategory('Todas'); setMinRating('0'); }} className="mt-2">
-                        Limpiar Filtros
+                    <Button variant="link" onClick={() => { setSearchTerm(''); setSelectedCategory('Todas'); }} className="mt-2">
+                        Limpiar filtros
                     </Button>
                 )}
             </div>

@@ -530,8 +530,10 @@ export function GlobalSearchTrigger({ onClick, className }: { onClick: () => voi
         className,
       )}
     >
-      <Search className="h-4 w-4" />
-      <span className="hidden sm:inline">{placeholder}</span>
+      <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+      {/* Antes el texto se ocultaba en el celular y quedaba una caja vacía que no se
+          entendía como buscador (auditoría de diseño 9/11). */}
+      <span className="truncate">{placeholder}</span>
       <kbd className="ml-auto hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs sm:inline">
         ⌘K
       </kbd>

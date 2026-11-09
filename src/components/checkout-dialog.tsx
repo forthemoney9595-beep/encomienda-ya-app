@@ -351,11 +351,11 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 <div className="mx-auto w-16 h-16 bg-success/15 rounded-full flex items-center justify-center mb-4 animate-in zoom-in duration-300">
                     <CheckCircle2 className="h-8 w-8 text-success" />
                 </div>
-                <DialogTitle className="text-2xl font-bold text-success">¡Solicitud Enviada!</DialogTitle>
+                <DialogTitle className="text-2xl font-bold text-success">Pedido enviado</DialogTitle>
                 <DialogDescription>
-                    Pedido enviado a <strong>{storeName}</strong>.
+                    <strong>{storeName}</strong> está revisando que tenga todo.
                     <br/>
-                    Esperando confirmación de stock.
+                    Cuando confirme, te avisamos para que pagues.
                 </DialogDescription>
             </DialogContent>
         </Dialog>
@@ -369,9 +369,12 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
           y el footer con el total es fijo. */}
       <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-2">
-          <DialogTitle>Solicitar Disponibilidad</DialogTitle>
+          {/* Rediseño 2, Tanda 0: "Solicitar Disponibilidad" / "Solicitar a Tienda" eran
+              palabras del sistema. El cliente hace un pedido; que la tienda confirme antes de
+              cobrar se explica en la bajada. */}
+          <DialogTitle>Tu pedido a {storeName}</DialogTitle>
           <DialogDescription>
-            Confirmar stock con <span className="font-semibold text-primary">{storeName}</span>
+            Primero la tienda confirma que tiene todo. Recién ahí pagás.
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto px-6 pb-4 min-h-0">
@@ -561,7 +564,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
             {isProcessing ? (
                 <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Enviando...</>
             ) : (
-                `Solicitar a Tienda`
+                'Hacer el pedido'
             )}
           </Button>
         </DialogFooter>

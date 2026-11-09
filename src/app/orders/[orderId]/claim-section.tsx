@@ -124,7 +124,7 @@ export function ClaimSection({ order }: { order: Order }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo enviar el reclamo.');
-      toast({ title: '📋 Reclamo enviado', description: 'Lo vamos a revisar y te avisamos qué resolvimos.' });
+      toast({ title: 'Reclamo enviado', description: 'Lo vamos a revisar y te avisamos qué resolvimos.' });
       setOpen(false);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message });

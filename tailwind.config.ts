@@ -121,7 +121,10 @@ export default {
         'glow-sm': '0 4px 14px -4px hsl(var(--primary) / 0.5)',
       },
       transitionTimingFunction: {
-        spring: 'cubic-bezier(.34,1.56,.64,1)',
+        // Sin rebote (Rediseño 2, Tanda 0): la curva vieja .34,1.56 pasaba del destino y
+        // volvía, una de las señas de "hecho con IA" que marcó la auditoría. Mismo nombre
+        // para no tocar a quien la usa; ahora es una salida suave.
+        spring: 'cubic-bezier(.2,.8,.2,1)',
       },
       keyframes: {
         'accordion-down': {

@@ -19,7 +19,6 @@ import { setDoc, deleteDoc } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLAY_ORDER, isStorePaused, pausedUntilMs, type WeeklySchedule } from '@/lib/store-hours';
@@ -398,9 +397,11 @@ export default function StorePublicPage() {
         ]}
       />
 
-      {/* BANNER */}
-      <div className="relative -mx-4 sm:mx-0 mb-6">
-        <div className="relative aspect-[2.5/1] sm:aspect-[3.5/1] sm:rounded-2xl overflow-hidden">
+      {/* BANNER — más bajo que antes (Rediseño 2, Tanda 0): en celular el primer producto
+          aparecía recién después de una pantalla y media de cabecera. Sin velo degradé: el
+          nombre ya no va encima de la foto. */}
+      <div className="relative -mx-4 sm:mx-0 mb-4">
+        <div className="relative aspect-[3.2/1] sm:aspect-[4/1] sm:rounded-2xl overflow-hidden">
             <StoreImage
               src={store.imageUrl}
               name={store.name}
@@ -411,97 +412,50 @@ export default function StorePublicPage() {
               priority
               initialsClassName="text-5xl"
             />
-            {/* Velo inferior para que el nombre se lea sobre cualquier foto */}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
         </div>
       </div>
 
-      {/* INFO */}
-      <div className="px-4 sm:px-0 mb-8 space-y-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight">{store.name}</h1>
-                  <Badge variant={storeStatus.isOpen ? "default" : "destructive"} className={`gap-1 ${storeStatus.isOpen ? 'bg-success hover:bg-success/90 text-success-foreground' : ''}`}>
-                      {storeStatus.isOpen ? <Clock className="h-3 w-3" /> : <Info className="h-3 w-3" />}
-                      {storeStatus.label}
-                  </Badge>
-              </div>
-              <Button variant="outline" size="sm" onClick={handleShare} className="shrink-0">
-                  <Share2 className="h-4 w-4 mr-2" /> Compartir
+      {/* INFO — todo en dos renglones. La dirección y el horario de la semana viven en la
+          pestaña Info (antes se repetían en una tarjeta de tres bloques acá arriba). */}
+      <div className="px-4 sm:px-0 mb-6 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+              <h1 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight">{store.name}</h1>
+              <Button variant="outline" size="icon" onClick={handleShare} className="h-10 w-10 shrink-0" aria-label="Compartir tienda">
+                  <Share2 className="h-4 w-4" />
               </Button>
           </div>
 
-          {/* Rubro en el color de su FAMILIA (Rediseño 19/8) — mismo lenguaje que el home */}
-          {storeCategory && (
-              <p className={cn('text-sm font-bold -mt-1', getCategoryStyle(storeCategory).text)}>
-                  {formatCategoryLabel(storeCategory)}
-              </p>
-          )}
-
-          <p className="text-muted-foreground max-w-2xl">{store.description || 'Sin descripción disponible.'}</p>
-
-          {/* Franja naranja de OFERTAS (naranja intenso = ofertas en el sistema de familias) */}
-          {(store.maxDiscountPercent || 0) > 0 && (
-              <div className="flex items-center gap-2.5 rounded-xl bg-cat-food px-4 py-3">
-                  <BadgePercent className="h-5 w-5 shrink-0 text-white" />
-                  <p className="text-sm font-bold text-white">
-                      Hasta -{store.maxDiscountPercent}% en productos seleccionados — mirá los marcados abajo
-                  </p>
-              </div>
-          )}
-
-          {/* Tarjeta de info: rating clickeable + dirección + horario, con más jerarquía que una línea de texto suelta */}
-          <div className="rounded-xl border bg-card divide-y sm:divide-y-0 sm:divide-x sm:flex">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              {storeCategory && (
+                  <span className={cn('font-bold', getCategoryStyle(storeCategory).text)}>{formatCategoryLabel(storeCategory)}</span>
+              )}
+              <span className={cn('font-semibold', storeStatus.isOpen ? 'text-success' : 'text-muted-foreground')}>
+                  {storeStatus.label}{storeStatus.isOpen && (store.weeklySchedule || store.schedule) && storeStatus.timeRange ? ` · ${storeStatus.timeRange}` : ''}
+              </span>
               {(store.rating || 0) > 0 ? (
-                  <button
-                      onClick={scrollToReviews}
-                      className="flex items-center gap-2 p-3 sm:flex-1 text-left hover:bg-muted/40 transition-colors group"
-                  >
-                      <div className="h-9 w-9 rounded-lg bg-warning/15 text-warning flex items-center justify-center shrink-0">
-                          <Star className="h-[18px] w-[18px] fill-current" />
-                      </div>
-                      <div className="min-w-0">
-                          <p className="font-semibold text-sm flex items-center gap-1">
-                              {store.rating?.toFixed(1)}
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
-                          </p>
-                          <p className="text-xs text-muted-foreground">{store.ratingCount || 0} reseña{store.ratingCount === 1 ? '' : 's'}</p>
-                      </div>
+                  <button onClick={scrollToReviews} className="inline-flex min-h-[36px] items-center gap-1 font-semibold hover:underline underline-offset-4">
+                      <Star className="h-4 w-4 fill-warning text-warning" aria-hidden="true" />
+                      {store.rating?.toFixed(1).replace('.', ',')}
+                      <span className="font-normal text-muted-foreground">({store.ratingCount || 0})</span>
                   </button>
               ) : (
-                  <div className="flex items-center gap-2 p-3 sm:flex-1">
-                      <div className="h-9 w-9 rounded-lg bg-muted text-muted-foreground flex items-center justify-center shrink-0">
-                          <Star className="h-[18px] w-[18px]" />
-                      </div>
-                      <p className="text-xs text-muted-foreground">Todavía sin reseñas</p>
-                  </div>
-              )}
-
-              {store.address && (
-                  <div className="flex items-center gap-2 p-3 sm:flex-1 min-w-0">
-                      <div className="h-9 w-9 rounded-lg bg-info/15 text-info flex items-center justify-center shrink-0">
-                          <MapPin className="h-[18px] w-[18px]" />
-                      </div>
-                      <div className="min-w-0">
-                          <p className="font-semibold text-sm truncate">{cleanAddress(store.address)}</p>
-                          <p className="text-xs text-muted-foreground">Dirección</p>
-                      </div>
-                  </div>
-              )}
-
-              {(store.weeklySchedule || store.schedule) && (
-                  <div className="flex items-center gap-2 p-3 sm:flex-1 min-w-0">
-                      <div className="h-9 w-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
-                          <Clock className="h-[18px] w-[18px]" />
-                      </div>
-                      <div className="min-w-0">
-                          <p className="font-semibold text-sm truncate">{storeStatus.timeRange}</p>
-                          <p className="text-xs text-muted-foreground">Horario de hoy</p>
-                      </div>
-                  </div>
+                  <span className="text-muted-foreground">Sin reseñas todavía</span>
               )}
           </div>
 
+          {store.description && <p className="text-sm text-muted-foreground max-w-2xl line-clamp-2">{store.description}</p>}
+
+          {/* OFERTAS en naranja (color de ofertas del sistema). Antes era texto blanco sobre
+              naranja: 2,6:1, ilegible (auditoría Impeccable 9/11). Ahora fondo suave + texto
+              del tema. */}
+          {(store.maxDiscountPercent || 0) > 0 && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-cat-food/40 bg-cat-food/10 px-3 py-2.5">
+                  <BadgePercent className="h-5 w-5 shrink-0 text-cat-food" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-foreground">
+                      Hasta -{store.maxDiscountPercent}% en productos marcados
+                  </p>
+              </div>
+          )}
       </div>
 
       {/* El aviso de cerrado queda FUERA de las pestañas: tiene que verse siempre. */}
@@ -509,8 +463,8 @@ export default function StorePublicPage() {
           <div className="bg-destructive/10 border border-destructive/30 text-foreground p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
               <p className="font-semibold">
                   {storeStatus.paused
-                      ? (pausedUntilMs(store) ? `⏸️ Este local pausó los pedidos hasta las ${fmtDate(pausedUntilMs(store), 'time')}.` : '⏸️ Este local pausó temporalmente los pedidos.')
-                      : '🔴 Este local se encuentra cerrado en este momento.'}
+                      ? (pausedUntilMs(store) ? `Este local pausó los pedidos hasta las ${fmtDate(pausedUntilMs(store), 'time')}.` : 'Este local pausó los pedidos por un rato.')
+                      : 'Este local está cerrado ahora.'}
               </p>
               <p className="text-sm">
                   {storeStatus.paused
@@ -531,7 +485,7 @@ export default function StorePublicPage() {
             <TabsTrigger
               key={t.v}
               value={t.v}
-              className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-brand-gradient data-[state=active]:text-white data-[state=active]:shadow-glow-sm"
+              className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
               {t.label}
             </TabsTrigger>
@@ -573,12 +527,12 @@ export default function StorePublicPage() {
                               key={category}
                               onClick={() => scrollToCategory(category)}
                               aria-current={isActive ? 'true' : undefined}
-                              className="flex flex-col items-center gap-1.5 shrink-0 transition-all duration-300 ease-spring"
+                              className="flex flex-col items-center gap-1.5 shrink-0"
                           >
                               <div className={cn(
-                                  'h-11 w-11 rounded-2xl flex items-center justify-center transition-all duration-300 ease-spring ring-2',
+                                  'h-11 w-11 rounded-2xl flex items-center justify-center transition-colors ring-2',
                                   isActive
-                                    ? cn('scale-110 shadow-glow ring-offset-2 ring-offset-background', style.solid, style.ring)
+                                    ? cn('ring-offset-2 ring-offset-background', style.solid, style.ring)
                                     : cn('ring-transparent opacity-80 hover:opacity-100', style.bg),
                               )}>
                                   <Icon className={cn('h-5 w-5', isActive ? '' : style.text)} />
@@ -857,9 +811,10 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
                             Quedan {product.stock}
                         </span>
                     )}
-                    {/* Descuento en violeta de marca (Rediseño 19/8): el verde queda para éxito/abierto */}
+                    {/* Descuento en el naranja de OFERTAS con texto oscuro (se lee en los dos temas;
+                        el degradé violeta con texto blanco daba 3,9:1). El verde queda para éxito. */}
                     {!!product.discountPercent && (
-                        <span className="absolute bottom-2 left-2 bg-brand-gradient text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm">
+                        <span className="absolute bottom-2 left-2 bg-cat-food text-black text-xs font-bold px-2 py-1 rounded-full">
                             -{product.discountPercent}%
                         </span>
                     )}
@@ -897,11 +852,11 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
                 <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>
                 <p className="mt-1.5 flex items-center gap-2">
                     {!!product.discountPercent && (
-                        <span className="text-xs text-muted-foreground line-through">${product.price}</span>
+                        <span className="text-xs text-muted-foreground line-through">{money(product.price)}</span>
                     )}
                     <span className="font-bold text-foreground">{money(effectivePrice(product))}</span>
                     {!!product.discountPercent && (
-                        <span className="rounded-full bg-brand-gradient px-1.5 py-0.5 text-xs font-bold text-white">-{product.discountPercent}%</span>
+                        <span className="rounded-full bg-cat-food px-1.5 py-0.5 text-xs font-bold text-black">-{product.discountPercent}%</span>
                     )}
                 </p>
                 {outOfStock ? (

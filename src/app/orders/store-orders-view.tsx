@@ -129,7 +129,7 @@ export default function StoreOrdersView() {
           if (!res.ok) throw new Error(data.error || 'Error al notificar');
 
           if (data.notified > 0) {
-              toast({ title: "📢 Alerta Masiva Enviada", description: `Se notificó a ${data.notified} repartidores.` });
+              toast({ title: "Repartidores avisados", description: `Se notificó a ${data.notified} repartidores.` });
           } else {
               toast({ variant: "destructive", title: "No hay repartidores", description: "No se encontraron repartidores registrados." });
           }
@@ -286,11 +286,11 @@ export default function StoreOrdersView() {
                     action = () => handleNotifyDriver(order);
                     
                     if (order.readyForPickup) {
-                        label = "📢 Reenviar Alerta a Repartidores"; 
+                        label = "Volver a avisar a los repartidores"; 
                         icon = Megaphone;
                         isDisabled = false; 
                     } else {
-                        label = "✅ ¡Pedido Listo! Llamar Repartidor";
+                        label = "Pedido listo: avisar a los repartidores";
                         icon = Utensils;
                         isDisabled = false;
                     }
@@ -300,7 +300,7 @@ export default function StoreOrdersView() {
                     // la tienda puede re-avisar; con repartidor, es informativo.
                     if (!order.deliveryPersonId) {
                         action = () => handleNotifyDriver(order);
-                        label = "📢 Reenviar Alerta a Repartidores";
+                        label = "Volver a avisar a los repartidores";
                         icon = Megaphone;
                         isDisabled = false;
                     } else {

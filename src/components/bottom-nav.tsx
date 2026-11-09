@@ -40,11 +40,11 @@ export function BottomNav() {
               notaba cuál pestaña estaba abierta. */}
           <span
             className={cn(
-              'absolute top-0 h-[3px] w-8 rounded-b-full bg-brand-gradient transition-opacity duration-300',
+              'absolute top-0 h-[3px] w-8 rounded-b-full bg-primary transition-opacity duration-200',
               tab.active ? 'opacity-100' : 'opacity-0',
             )}
           />
-          <tab.icon className={cn('h-5 w-5 transition-transform duration-300 ease-spring', tab.active && 'scale-110 fill-primary/15')} />
+          <tab.icon className={cn('h-5 w-5', tab.active && 'fill-primary/15')} aria-hidden="true" />
           {tab.label}
         </Link>
       ))}

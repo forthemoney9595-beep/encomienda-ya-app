@@ -13,15 +13,19 @@ import { getPlaceholderImage } from "@/lib/placeholder-images";
 // ✅ Importamos el nuevo diálogo de pago
 import { CheckoutDialog } from "@/components/checkout-dialog";
 
-export function Cart() {
+export function Cart({ hideTriggerWhenEmpty = false }: { hideTriggerWhenEmpty?: boolean } = {}) {
   const { cart, totalItems, totalPrice, removeFromCart, updateQuantity, clearCart, isCartSheetOpen: isOpen, setCartSheetOpen: setIsOpen } = useCart();
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false); // Controla el modal de pago (Dialog)
+  // El panel se sigue abriendo desde el contexto (barra flotante de la tienda pública)
+  // aunque el botón del encabezado no esté.
+  const showTrigger = !hideTriggerWhenEmpty || totalItems > 0;
 
   return (
     <>
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        {showTrigger && (
         <SheetTrigger asChild>
-          <Button variant="outline" size="icon" className="relative">
+          <Button variant="outline" size="icon" className="relative h-10 w-10">
             <ShoppingCart className="h-5 w-5" />
             {totalItems > 0 && (
               <Badge className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full p-1 text-xs">
@@ -31,6 +35,7 @@ export function Cart() {
             <span className="sr-only">Abrir carrito</span>
           </Button>
         </SheetTrigger>
+        )}
         <SheetContent className="flex flex-col w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
@@ -88,7 +93,7 @@ export function Cart() {
             )}
           </div>
 
-          {/* FE-C-004: era SheetFooter, que en celular es flex-col-reverse y ponía "Iniciar Pago" ANTES del subtotal */}
+          {/* FE-C-004: era SheetFooter, que en celular es flex-col-reverse y ponía el botón de seguir ANTES del subtotal */}
           {cart.length > 0 && (
             <div className="border-t pt-4 space-y-4">
                 <div className="space-y-1">
@@ -110,10 +115,10 @@ export function Cart() {
                             setIsCheckoutOpen(true); // Abrimos el modal de pago
                         }}
                     >
-                        Iniciar Pago
+                        Continuar
                     </Button>
                     <Button variant="ghost" size="sm" onClick={clearCart} className="text-muted-foreground">
-                        Vaciar Carrito
+                        Vaciar carrito
                     </Button>
                 </div>
             </div>

@@ -55,13 +55,14 @@ export function StoreCard({
     >
       <Card
         className={cn(
-          'relative flex h-full flex-col overflow-hidden border-transparent transition-all duration-300',
-          'hover:-translate-y-1 hover:border-primary/30 hover:shadow-glow',
+          'relative flex h-full flex-col overflow-hidden border-transparent transition-colors',
+          'hover:border-primary/30',
         )}
       >
-        {/* Rediseño visual (19/8, "Mezcla de David"): badge de descuento junto al nombre,
-            rubro en el color de su FAMILIA + "Llega en...", fila de detalles con el
-            estado en texto (verde "Abierto"), y botón "Ver menú y pedir". */}
+        {/* Badge de descuento junto al nombre, rubro en el color de su FAMILIA + "Llega
+            en...", y fila de detalles con el estado en texto. Rediseño 2 (Tanda 0): sin el
+            botón "Ver menú y pedir" (la tarjeta entera ya navega: era un botón violeta por
+            tienda), sin brillo ni salto al pasar el mouse. */}
         <div className={cn(
           // Fila en celular, tarjeta apilada de sm en adelante. Un solo markup: evita
           // duplicar el DOM con `sm:hidden` / `hidden sm:block`.
@@ -90,7 +91,7 @@ export function StoreCard({
             <div className="flex items-center gap-2">
               <h3 className="line-clamp-1 font-headline text-sm font-bold sm:text-base">{store.name}</h3>
               {(store.maxDiscountPercent || 0) > 0 && (
-                <span className="shrink-0 rounded-full bg-brand-gradient px-2 py-0.5 text-xs font-bold text-white shadow-glow-sm">
+                <span className="shrink-0 rounded-full bg-cat-food px-2 py-0.5 text-xs font-bold text-black">
                   Hasta -{store.maxDiscountPercent}%
                 </span>
               )}
@@ -121,22 +122,13 @@ export function StoreCard({
           </div>
         </div>
 
-        {/* CTA de la tarjeta — la tarjeta entera ya navega; esto le da la acción obvia.
-            Compacto a pedido (19/8): h-9 + 13px, y la pill más ANGOSTA que la tarjeta
-            (px-4) con aire vertical (my-2 en la foto) para que no toque la imagen. */}
-        <div className="px-4 pb-3 sm:pb-3.5">
-          <div className="flex h-9 items-center justify-center rounded-lg bg-primary text-[13px] font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90">
-            Ver menú y pedir
-          </div>
-        </div>
-
         {/* Favorito */}
         {!hideFavorite && (
         <button
           type="button"
           onClick={(e) => onToggleFavorite(e, store)}
           aria-label={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-          className="absolute right-1.5 top-1.5 z-10 rounded-full bg-background/70 p-1.5 backdrop-blur-sm transition-all hover:scale-110 hover:bg-background sm:right-2 sm:top-2"
+          className="absolute right-1 top-1 z-10 grid h-10 w-10 place-items-center rounded-full bg-background/80 transition-colors hover:bg-background"
         >
           <Heart className={cn('h-4 w-4 transition-colors', isFavorite ? 'fill-primary text-primary' : 'text-muted-foreground')} />
         </button>

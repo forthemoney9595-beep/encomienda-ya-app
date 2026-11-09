@@ -250,7 +250,7 @@ export default function SignupBuyerPage() {
                   el 95% de quien llega acá es cliente; comercios y repartidores tienen
                   su puerta sin ensuciar el camino principal. */}
               <div className="mt-4 w-full rounded-lg border bg-muted/30 p-3 text-center text-xs space-y-1">
-                <p>🏪 ¿Tenés un comercio? <Link href="/signup/store" className="text-primary underline">Registrá tu tienda</Link></p>
+                <p>¿Tenés un comercio? <Link href="/signup/store" className="text-primary underline">Registrá tu tienda</Link></p>
                 <p>🛵 ¿Querés repartir? <Link href="/signup/delivery" className="text-primary underline">Sumate como repartidor</Link></p>
               </div>
 

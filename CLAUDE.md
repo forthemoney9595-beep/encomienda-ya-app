@@ -2526,6 +2526,45 @@ galería PNG en `Diseños/`). **D1-D3 implementadas y en producción**; D4 pendi
   oscuro default. Revisión fina de paneles tienda/repartidor/admin en claro: durante
   la prueba. Queda D5 opcional (modo fácil para mayores).
 
+## Rediseño 2 (nov 2026) — dirección ELEGIDA: E "Toldo" + reglas de tamaño de D
+Salió de la auditoría Impeccable (13/20, "aspecto hecho con IA") y de dos rondas de
+exploración (seis direcciones, bóveda → [[Dirección visual (09-11)]] y
+[[Auditoría técnica de interfaz (09-11)]]). **David eligió el 9/11: E "Toldo"** (cartelería del
+almacén de barrio: cada tienda con un toldo a rayas del color de su rubro, también las sin
+foto; precios en etiqueta con agujerito; letra de cartel Sofia Sans Condensed + Sofia Sans;
+claro por defecto, oscuro "pizarra"; radios chicos y líneas de 2 px) **con las reglas de
+tamaño de D** (texto base 18 px, nada tocable por debajo de 48 px). El fucsia de marca
+(`#B0145D`) es provisorio: se confirma junto con el nombre nuevo. Reemplaza a la "Mezcla de
+David" de agosto (violeta + degradés) cuando se implemente; las 4 familias por rubro y los
+semánticos (verde plata, rojo error, amarillo rating, naranja ofertas) se conservan. El panel
+admin queda afuera (tiene su superficie propia). Plan por tandas en la nota de la bóveda:
+Tanda 0 (sacar el ruido, sirve para cualquier color) → base → toldo y etiqueta → rubros sin
+foto → pantallas del cliente → seguimiento → repartidor y voz. Plugin `impeccable` disponible
+para auditar cada tanda (registro apagado; ver "Equipo de agentes").
+Prototipo navegable aprobado: [claude.ai/artifact/8WZJ1yrdwWSvCG1CpyJxGS](https://claude.ai/artifact/8WZJ1yrdwWSvCG1CpyJxGS)
+(copia en la bóveda, `Diseños/Dirección visual 2026-11/prototipo-toldo-interactivo.html`).
+
+**Tanda 0 · sacar el ruido (9/11, rama `rediseno-toldo`, SIN subir: David la prueba en local
+primero).** Sirve para cualquier color de marca. Inicio: saludo sin globos difuminados, sin
+degradé y sin emoji, con el nombre en mayúscula (`firstName()`); UN solo buscador (la lupa
+del encabezado se oculta en `/`; fuera el filtro "Todas las calif."); "Comida" y "Comida
+rápida" en un chip (`chipKey()`, el rubro guardado no cambia); tarjeta de tienda sin el botón
+"Ver menú y pedir" ni brillo al pasar el mouse; banner y etiquetas de oferta en naranja con
+texto OSCURO (el blanco daba 2,2-2,6:1). Tienda pública: banner más bajo, nombre + rubro +
+estado + rating en dos renglones (dirección y semana completa quedan en la pestaña Info) → el
+menú arranca a ~700 px en celular. Checkout: "Tu pedido a X" / "Hacer el pedido" (adiós
+"Solicitar Disponibilidad"), y el botón del carrito pasó de "Iniciar Pago" a "Continuar".
+Encabezado: la lupa muestra su texto también en celular; el carrito VACÍO no aparece para
+tienda y repartidor (`Cart hideTriggerWhenEmpty`: sigue montado porque abre el panel desde la
+tienda pública). Global: fuera `.text-gradient`, `ease-spring` sin rebote
+(`cubic-bezier(.2,.8,.2,1)`, mismo nombre), indicador de la barra de abajo y pestañas sin
+degradé, y emojis fuera de pantallas y avisos chicos (los TÍTULOS de las push quedan para la
+tanda de voz: tocan rutas del servidor). Verificado `_pw-rediseno-t0.js` 33/33 (430 px,
+invitado, cliente, tienda y repartidor: sin desborde, sin emojis, sin degradé ni brillos),
+`_pw-tanda2-visual` 24/24, `_pw-tanda1-ui` 9/10 (la falla conocida de placehold.co), Vitest
+147/147, typecheck y lint 0 errores. Pendiente para la Tanda 1 (tokens): el violeta como TEXTO
+sigue en 3,1-3,5:1 (la marca cambia a fucsia ahí).
+
 ## Fase SS-audit (ago 2026): auditoría exhaustiva pre-producción (protocolo 35 fases) + correcciones P1/P2
 Auditoría completa con un fleet de 8 agentes en paralelo (rutas/APIs · roles/autorización ·
 reglas de negocio/dinero · concurrencia/idempotencia · seguridad web · frontend/errores ·

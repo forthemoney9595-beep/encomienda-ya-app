@@ -383,8 +383,8 @@ export default function EditStorePage() {
                 onChange={(c) => setCoords({ latitude: c.latitude, longitude: c.longitude })}
                 className="h-56"
                 hint={coords
-                    ? 'Arrastrá el pin 📍 hasta la entrada de tu local — es a donde va a llegar el repartidor.'
-                    : 'Tocá el mapa donde está tu local para colocar el pin 📍.'}
+                    ? 'Arrastrá el pin hasta la entrada de tu local: ahí va a llegar el repartidor.'
+                    : 'Tocá el mapa donde está tu local para colocar el pin.'}
             />
           </div>
         </CardContent>

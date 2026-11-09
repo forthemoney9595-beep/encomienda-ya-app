@@ -124,7 +124,7 @@ export default function OrderMap({ order }: OrderMapProps) {
                 2026): el pin ya dice todo lo que el mapa necesita decir. */}
             <Marker position={customerPos} icon={customerIcon}>
                 <Popup>
-                    <strong>📍 Punto de Entrega</strong>
+                    <strong>Punto de entrega</strong>
                 </Popup>
             </Marker>
 

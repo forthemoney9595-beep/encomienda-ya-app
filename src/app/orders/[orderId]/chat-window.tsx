@@ -240,7 +240,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                     <div className="text-center py-10 text-muted-foreground text-sm italic">
                         <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-20"/>
                         <p>Inicia la conversación</p>
-                        <p className="text-xs opacity-70">Los mensajes enviarán una notificación 🔔</p>
+                        <p className="text-xs opacity-70">Cada mensaje le llega como aviso a la otra persona.</p>
                     </div>
                 )}
             </CardContent>

@@ -153,10 +153,8 @@
      Utilidades del lenguaje "vibrante": se usan en el home, la tienda pública y el
      shell para no repetir las mismas combinaciones de clases en cada archivo. */
 
-  /* Texto con degradé de marca (violeta -> fucsia). Mismo look que el h1 de la landing. */
-  .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-fuchsia-400;
-  }
+  /* `.text-gradient` (texto con degradé violeta → fucsia) se eliminó en el Rediseño 2,
+     Tanda 0: era la seña de "hecho con IA" más visible del inicio y ya nada la usaba. */
 
   /* Superficie translúcida con desenfoque, para barras sticky y overlays sobre imágenes. */
   .glass {

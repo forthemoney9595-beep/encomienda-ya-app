@@ -158,7 +158,11 @@ function EmailVerificationBanner({ user }: { user: any }) {
 }
 
 function AppContentLayout({ children }: { children: React.ReactNode }) {
-    const { user, loading } = useAuth();
+    const { user, userProfile, loading } = useAuth();
+    // Tienda y repartidor también pueden comprar como clientes (Fase RR octies), así que el
+    // carrito sigue montado (abre el panel desde la tienda pública), pero su botón del
+    // encabezado se oculta mientras está vacío: era un ícono sin uso en su panel de trabajo.
+    const isWorkerRole = userProfile?.role === 'store' || userProfile?.role === 'delivery';
     const pathname = usePathname();
     const [searchOpen, setSearchOpen] = useState(false);
     useGlobalSearchShortcut(setSearchOpen);
@@ -235,9 +239,11 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                         antes no había forma de colapsarlo desde ahí. */}
                     <SidebarTrigger variant="outline" className="h-9 w-9 shrink-0 rounded-full" />
 
-                    {/* SOLO PARA USUARIOS LOGUEADOS */}
-                    {user && !loading && (
-                        <GlobalSearchTrigger onClick={() => setSearchOpen(true)} className="h-9 w-full max-w-xs sm:max-w-sm" />
+                    {/* SOLO PARA USUARIOS LOGUEADOS. En el inicio no se muestra: ahí ya está el
+                        buscador de tiendas y quedaban dos apilados (Rediseño 2, Tanda 0). El ⌘K
+                        sigue funcionando con el atajo de teclado. */}
+                    {user && !loading && !isLandingPage && (
+                        <GlobalSearchTrigger onClick={() => setSearchOpen(true)} className="h-10 w-full max-w-xs sm:max-w-sm" />
                     )}
 
                     <div className="ml-auto flex items-center gap-2 sm:gap-4">
@@ -246,7 +252,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                         {user && !loading && (
                             <>
                                 <Notifications />
-                                <Cart />
+                                <Cart hideTriggerWhenEmpty={isWorkerRole} />
                             </>
                         )}
 

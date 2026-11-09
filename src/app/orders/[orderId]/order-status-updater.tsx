@@ -113,7 +113,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
           const res = await authedFetch('/api/orders/notify-drivers', appUser, { orderId: order.id });
           const data = await res.json();
           if (res.ok && data.notified > 0) {
-            toast({ title: '📢 Repartidores avisados', description: `Se notificó a ${data.notified} repartidor(es).` });
+            toast({ title: 'Repartidores avisados', description: `Se notificó a ${data.notified} repartidor(es).` });
           }
         } catch (e) {
           console.error('No se pudo avisar a los repartidores:', e);

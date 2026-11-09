@@ -390,7 +390,7 @@ export default function ProfilePage() {
                                                 {/* BOTÓN GPS */}
                                                 <div className="flex items-center justify-between bg-muted p-2 rounded border">
                                                     <span className="text-sm text-muted-foreground ml-2">
-                                                        {tempCoords ? "✅ Ubicación marcada" : "📍 Ubicación exacta (Recomendado)"}
+                                                        {tempCoords ? "Ubicación marcada" : "Ubicación exacta (recomendado)"}
                                                     </span>
                                                     <Button
                                                         type="button"
@@ -414,8 +414,8 @@ export default function ProfilePage() {
                                                     onChange={(c) => setTempCoords(c)}
                                                     className="h-44"
                                                     hint={tempCoords
-                                                        ? 'Arrastrá el pin 📍 hasta la entrada exacta de tu casa.'
-                                                        : 'Tocá el mapa donde está tu casa para colocar el pin 📍 (o usá "Detectar").'}
+                                                        ? 'Arrastrá el pin hasta la entrada exacta de tu casa.'
+                                                        : 'Tocá el mapa donde está tu casa para colocar el pin (o usá "Detectar").'}
                                                 />
 
                                                 <div className="flex justify-end gap-2 pt-2">
@@ -549,7 +549,7 @@ export default function ProfilePage() {
                                                                         <img src={displayUrl} alt={label} className="w-full h-full object-contain rounded-md" />
                                                                     ) : (
                                                                         <div className="flex h-full w-full items-center justify-center text-center text-xs text-muted-foreground px-2">
-                                                                            {loadingLicenseUrls ? 'Cargando...' : '✅ Imagen cargada (se verá al guardar)'}
+                                                                            {loadingLicenseUrls ? 'Cargando...' : 'Imagen cargada (se verá al guardar)'}
                                                                         </div>
                                                                     )}
                                                                     <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => set('')}>
@@ -571,7 +571,7 @@ export default function ProfilePage() {
                                                 })}
                                             </div>
                                             <p className="text-xs text-muted-foreground">
-                                                💡 La selfie sirve para confirmar que el documento es tuyo. Sostenelo junto a tu cara.
+                                                La selfie sirve para confirmar que el documento es tuyo. Sostenelo junto a tu cara.
                                             </p>
                                         </div>
 
