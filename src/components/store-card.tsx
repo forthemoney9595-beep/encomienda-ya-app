@@ -91,7 +91,7 @@ export function StoreCard({
             <div className="flex items-center gap-2">
               <h3 className="line-clamp-1 font-headline text-sm font-bold sm:text-base">{store.name}</h3>
               {(store.maxDiscountPercent || 0) > 0 && (
-                <span className="shrink-0 rounded-full bg-cat-food px-2 py-0.5 text-xs font-bold text-black">
+                <span className="shrink-0 rounded-full bg-offer px-2 py-0.5 text-xs font-bold text-offer-foreground">
                   Hasta -{store.maxDiscountPercent}%
                 </span>
               )}

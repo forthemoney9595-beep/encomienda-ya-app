@@ -115,16 +115,16 @@ function SystemChip() {
 }
 
 function useTheme() {
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
   useEffect(() => {
-    try { setTheme(localStorage.getItem('eya-theme') === 'light' ? 'light' : 'dark'); } catch { /* noop */ }
+    try { setTheme(localStorage.getItem('eya-theme') === 'dark' ? 'dark' : 'light'); } catch { /* noop */ }
   }, []);
   const toggle = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
     try { localStorage.setItem('eya-theme', next); } catch { /* noop */ }
     document.documentElement.classList.toggle('dark', next === 'dark');
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#8B5CF6' : '#F6F5FA');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#1C1F22' : '#FFFFFF');
   };
   return { theme, toggle };
 }

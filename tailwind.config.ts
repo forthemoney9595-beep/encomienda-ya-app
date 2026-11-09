@@ -14,8 +14,10 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['"Inter"', 'sans-serif'],
-        headline: ['"Lexend"', 'sans-serif'],
+        // Rediseño 2 (Toldo): Sofia Sans para el texto y Sofia Sans Condensed (letra de cartel)
+        // para títulos, cargadas con next/font en layout.tsx (antes Inter + Lexend por <link>).
+        body: ['var(--font-body)', 'system-ui', 'sans-serif'],
+        headline: ['var(--font-cartel)', 'var(--font-body)', 'system-ui', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {
@@ -50,6 +52,12 @@ export default {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
           ink: 'hsl(var(--destructive-ink))', // texto sobre card/soft (solo bajo [data-surface=admin])
+        },
+        // OFERTAS (Rediseño 2): naranja propio con su texto; antes se usaba el color de la
+        // familia comida, que no servía de fondo con texto en los dos temas.
+        offer: {
+          DEFAULT: 'hsl(var(--offer))',
+          foreground: 'hsl(var(--offer-foreground))',
         },
         success: {
           DEFAULT: 'hsl(var(--success))',

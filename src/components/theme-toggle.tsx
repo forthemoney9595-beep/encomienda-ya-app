@@ -18,9 +18,9 @@ export function ThemeToggle() {
 
   useEffect(() => {
     try {
-      setTheme(localStorage.getItem('eya-theme') === 'light' ? 'light' : 'dark');
+      setTheme(localStorage.getItem('eya-theme') === 'dark' ? 'dark' : 'light');
     } catch {
-      setTheme('dark');
+      setTheme('light');
     }
   }, []);
 
@@ -29,7 +29,7 @@ export function ThemeToggle() {
     try { localStorage.setItem('eya-theme', next); } catch {}
     document.documentElement.classList.toggle('dark', next === 'dark');
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
-      'content', next === 'dark' ? '#8B5CF6' : '#F6F5FA',
+      'content', next === 'dark' ? '#1C1F22' : '#FFFFFF',
     );
   };
 

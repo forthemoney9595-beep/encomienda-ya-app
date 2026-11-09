@@ -449,8 +449,8 @@ export default function StorePublicPage() {
               naranja: 2,6:1, ilegible (auditoría Impeccable 9/11). Ahora fondo suave + texto
               del tema. */}
           {(store.maxDiscountPercent || 0) > 0 && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-cat-food/40 bg-cat-food/10 px-3 py-2.5">
-                  <BadgePercent className="h-5 w-5 shrink-0 text-cat-food" aria-hidden="true" />
+              <div className="flex items-center gap-2.5 rounded-xl border border-offer/40 bg-offer/10 px-3 py-2.5">
+                  <BadgePercent className="h-5 w-5 shrink-0 text-offer" aria-hidden="true" />
                   <p className="text-sm font-semibold text-foreground">
                       Hasta -{store.maxDiscountPercent}% en productos marcados
                   </p>
@@ -814,7 +814,7 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
                     {/* Descuento en el naranja de OFERTAS con texto oscuro (se lee en los dos temas;
                         el degradé violeta con texto blanco daba 3,9:1). El verde queda para éxito. */}
                     {!!product.discountPercent && (
-                        <span className="absolute bottom-2 left-2 bg-cat-food text-black text-xs font-bold px-2 py-1 rounded-full">
+                        <span className="absolute bottom-2 left-2 bg-offer text-offer-foreground text-xs font-bold px-2 py-1 rounded-full">
                             -{product.discountPercent}%
                         </span>
                     )}
@@ -856,7 +856,7 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
                     )}
                     <span className="font-bold text-foreground">{money(effectivePrice(product))}</span>
                     {!!product.discountPercent && (
-                        <span className="rounded-full bg-cat-food px-1.5 py-0.5 text-xs font-bold text-black">-{product.discountPercent}%</span>
+                        <span className="rounded-full bg-offer px-1.5 py-0.5 text-xs font-bold text-offer-foreground">-{product.discountPercent}%</span>
                     )}
                 </p>
                 {outOfStock ? (

@@ -8,8 +8,8 @@
   "display": "standalone",
   "orientation": "portrait",
   "lang": "es-AR",
-  "background_color": "#151523",
-  "theme_color": "#8B5CF6",
+  "background_color": "#FFFFFF",
+  "theme_color": "#B0145D",
   "categories": ["food", "shopping"],
   "icons": [
     {

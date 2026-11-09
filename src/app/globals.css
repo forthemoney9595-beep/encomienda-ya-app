@@ -5,130 +5,139 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Rediseño 2 · dirección "Toldo" (aprobada por David el 9/11/2026) ─────────────
+     Claro POR DEFECTO, tinta casi negra sobre blanco, líneas de tinta, radios chicos.
+     Un solo token de marca sirve para TEXTO y para RELLENO en los dos temas (en claro
+     fucsia #B0145D con texto blanco; en la pizarra rosa #FF8FC3 con texto oscuro), así
+     `text-primary` deja de dar 3,1-3,5:1 como pasaba con el violeta (auditoría 9/11).
+     El fucsia es provisorio: se confirma con el nombre nuevo (cambiar --primary,
+     --ring, --cat-brand y --sidebar-accent alcanza). Semánticos: verde = plata/éxito,
+     rojo = error, ámbar = aviso/rating, azul = en tránsito; --offer = OFERTAS. */
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 20 6% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 20 6% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 258 90% 66%;
+    --popover-foreground: 20 6% 10%;
+    --primary: 332 80% 38%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142 71% 45%;
-    --success-foreground: 150 30% 10%;
-    --info: 217 91% 60%;
+    --secondary: 60 7% 94%;
+    --secondary-foreground: 20 6% 10%;
+    --muted: 60 7% 94%;
+    --muted-foreground: 33 5% 32%;
+    --accent: 60 7% 94%;
+    --accent-foreground: 20 6% 10%;
+    --destructive: 0 73% 43%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 143 71% 27%;
+    --success-foreground: 0 0% 100%;
+    --info: 217 74% 43%;
     --info-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 20 14% 4%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 258 90% 66%;
-    --radius: 1rem;
-    --chart-1: 258 90% 66%;
-    --chart-2: 173 95% 42%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 210 40% 98%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 258 90% 66%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217 32.6% 17.5%;
-    --sidebar-ring: 258 90% 66%;
+    --warning: 26 94% 34%;
+    --warning-foreground: 0 0% 100%;
+    --offer: 17 90% 38%;
+    --offer-foreground: 0 0% 100%;
+    --border: 43 10% 85%;
+    --input: 43 10% 80%;
+    --ring: 332 80% 38%;
+    --radius: 0.625rem;
+    --chart-1: 332 80% 38%;
+    --chart-2: 174 80% 25%;
+    --chart-3: 217 74% 43%;
+    --chart-4: 38 100% 26%;
+    --chart-5: 18 89% 39%;
+    --sidebar-background: 60 7% 96%;
+    --sidebar-foreground: 20 6% 10%;
+    --sidebar-primary: 20 6% 10%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 332 60% 94%;
+    --sidebar-accent-foreground: 332 80% 30%;
+    --sidebar-border: 43 10% 85%;
+    --sidebar-ring: 332 80% 38%;
 
-    /* Familias de RUBRO en TEMA CLARO (Rediseño D4, 19/8): mismos matices que en
-       .dark pero más profundos — sobre blanco, un color necesita menos luz para
-       leerse como texto. OJO: estos tokens existían SOLO en .dark; sin este bloque,
-       activar el modo claro dejaba chips/banners/placeholders SIN pintar (la trampa
-       silenciosa de Tailwind de la Fase AA). Mapa de familias: lib/category-style.ts. */
-    --cat-brand: 258 80% 56%;   /* violeta — SOLO "Todas"/marca */
-    --cat-food: 24 90% 48%;     /* COMIDA: naranja base */
-    --cat-fast: 15 84% 46%;     /*   tono profundo */
-    --cat-drink: 30 86% 44%;    /*   tono claro */
-    --cat-kiosk: 40 82% 40%;    /* ALMACÉN: dorado profundo */
-    --cat-market: 44 88% 42%;   /*   dorado base */
-    --cat-pharma: 168 78% 32%;  /* SALUD: verde agua */
-    --cat-cloth: 218 78% 48%;   /* ROPA/HOGAR: azul base */
-    --cat-home: 212 78% 42%;    /*   azul profundo */
-    --cat-other: 226 62% 52%;   /*   azul claro (fallback) */
+    /* Familias de RUBRO (4 familias, los rubros son TONOS dentro de cada una). Sobre
+       blanco necesitan menos luz para leerse como texto (todas ≥ 4,5:1 sobre blanco).
+       Mapa: lib/category-style.ts. Las claves se conservan por compat de clases. */
+    --cat-brand: 332 80% 38%;   /* marca — SOLO "Todas" */
+    --cat-food: 18 89% 39%;     /* COMIDA: naranja quemado */
+    --cat-fast: 14 85% 35%;
+    --cat-drink: 24 86% 37%;
+    --cat-kiosk: 34 100% 24%;   /* ALMACÉN: dorado oscuro */
+    --cat-market: 38 100% 26%;
+    --cat-pharma: 174 80% 25%;  /* SALUD: verde agua */
+    --cat-cloth: 224 66% 41%;   /* ROPA Y HOGAR: azul */
+    --cat-home: 218 70% 36%;
+    --cat-other: 230 55% 45%;
   }
 
-  /* Tema oscuro tipo "app moderna": fondo indigo profundo + tarjetas elevadas
-     mas claras (asi se despegan del fondo), acento violeta, esquinas redondeadas
-     (--radius) y sombras suaves. */
+  /* Oscuro "pizarra": gris pizarra, tiza clara, marca en rosa con texto oscuro. */
   .dark {
-    --background: 240 24% 11%;
-    --foreground: 0 0% 98%;
-    --card: 240 19% 16%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 19% 16%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 258 90% 62%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 15% 22%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 15% 20%;
-    --muted-foreground: 240 10% 68%;
-    --accent: 240 15% 22%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 72% 62%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 142 69% 48%;
-    --success-foreground: 240 24% 11%;
-    --info: 217 91% 64%;
-    --info-foreground: 0 0% 100%;
-    --warning: 38 95% 56%;
-    --warning-foreground: 20 14% 4%;
-    --border: 240 15% 24%;
-    --input: 240 15% 24%;
-    --ring: 258 90% 62%;
-    --chart-1: 258 90% 62%;
-    --chart-2: 173 80% 50%;
-    --chart-3: 38 95% 56%;
-    --chart-4: 217 91% 64%;
-    --chart-5: 340 75% 60%;
-    --sidebar-background: 240 26% 9%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 0 0% 98%;
-    --sidebar-primary-foreground: 240 26% 9%;
-    --sidebar-accent: 258 90% 66%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 240 15% 20%;
-    --sidebar-ring: 258 90% 66%;
+    --background: 210 10% 12%;
+    --foreground: 38 30% 94%;
+    --card: 210 9% 16%;
+    --card-foreground: 38 30% 94%;
+    --popover: 210 9% 16%;
+    --popover-foreground: 38 30% 94%;
+    --primary: 332 100% 78%;
+    --primary-foreground: 210 10% 12%;
+    --secondary: 210 8% 20%;
+    --secondary-foreground: 38 30% 94%;
+    --muted: 210 8% 19%;
+    --muted-foreground: 35 7% 68%;
+    --accent: 210 8% 20%;
+    --accent-foreground: 38 30% 94%;
+    --destructive: 0 100% 77%;
+    --destructive-foreground: 210 10% 12%;
+    --success: 142 71% 62%;
+    --success-foreground: 210 10% 12%;
+    --info: 220 100% 78%;
+    --info-foreground: 210 10% 12%;
+    --warning: 43 96% 56%;
+    --warning-foreground: 210 10% 12%;
+    --offer: 23 100% 69%;
+    --offer-foreground: 210 10% 12%;
+    --border: 213 9% 25%;
+    --input: 213 9% 30%;
+    --ring: 332 100% 78%;
+    --chart-1: 332 100% 78%;
+    --chart-2: 167 60% 57%;
+    --chart-3: 43 96% 56%;
+    --chart-4: 220 100% 78%;
+    --chart-5: 23 100% 69%;
+    --sidebar-background: 210 12% 9%;
+    --sidebar-foreground: 38 30% 94%;
+    --sidebar-primary: 38 30% 94%;
+    --sidebar-primary-foreground: 210 12% 9%;
+    --sidebar-accent: 332 30% 20%;
+    --sidebar-accent-foreground: 332 100% 82%;
+    --sidebar-border: 213 9% 20%;
+    --sidebar-ring: 332 100% 78%;
 
-    /* Escala de RUBROS v2 — FAMILIAS de color (Rediseño visual, 19/8, decisión de
-       David: "un color para todo lo que es comida"). De 10 matices sueltos a 4
-       familias; dentro de una familia los rubros se distinguen por TONO (mismo matiz,
-       distinta luz), nunca por otro color. Violeta = SOLO la marca (nunca un rubro);
-       los semánticos siguen aparte (verde=éxito, rojo=error, ámbar=aviso) y el
-       naranja intenso además significa OFERTAS. Mapa completo: bóveda → Rediseño
-       visual / lib/category-style.ts. Las claves se conservan por compat de clases. */
-    --cat-brand: 258 90% 66%;   /* violeta — SOLO "Todas"/marca */
-    /* Familia COMIDA — naranja (restaurante, pizzería, rotisería, rápida, heladería, bebidas) */
-    --cat-food: 25 92% 58%;     /* naranja base */
-    --cat-fast: 16 86% 54%;     /* naranja profundo (tono) */
-    --cat-drink: 32 88% 62%;    /* naranja claro (tono) */
-    /* Familia ALMACÉN — dorado (almacén, supermercado, kiosco) */
-    --cat-kiosk: 42 86% 52%;    /* dorado profundo (tono) */
-    --cat-market: 46 90% 58%;   /* dorado base */
-    /* Familia SALUD — verde agua (farmacia) */
-    --cat-pharma: 165 75% 45%;
-    /* Familia ROPA Y HOGAR — azul (ropa, hogar/electro, otros) */
-    --cat-cloth: 220 85% 62%;   /* azul base */
-    --cat-home: 212 80% 55%;    /* azul profundo (tono) */
-    --cat-other: 228 70% 68%;   /* azul claro (tono, fallback) */
+    --cat-brand: 332 100% 78%;
+    --cat-food: 23 100% 69%;
+    --cat-fast: 18 95% 64%;
+    --cat-drink: 28 100% 72%;
+    --cat-kiosk: 40 85% 57%;
+    --cat-market: 44 85% 62%;
+    --cat-pharma: 167 60% 57%;
+    --cat-cloth: 222 100% 79%;
+    --cat-home: 215 90% 72%;
+    --cat-other: 228 80% 80%;
   }
 }
+
+/* Texto base de 18 px en la app del cliente, la tienda y el repartidor (regla de tamaño
+   de la dirección "Vecina", aprobada junto con el Toldo): todo lo medido en rem crece
+   12,5 %, incluidos los botones, que así superan los 44-48 px recomendados. El panel
+   admin queda en 16 px: es denso a propósito y no lo usa el público. */
+html {
+  font-size: 112.5%;
+}
+html:has([data-surface="admin"]) {
+  font-size: 100%;
+}
+
 
 @layer base {
   * {
@@ -232,7 +241,7 @@
   --warning-ink: 32 95% 30%;
   --info-ink: 221 83% 42%;
   --destructive-ink: 0 72% 42%;
-  --primary-ink: 258 85% 56%;
+  --primary-ink: 332 80% 34%;
   --cat-food-ink: 24 90% 36%;
 }
 .dark [data-surface="admin"] {
@@ -245,6 +254,6 @@
   --warning-ink: 40 95% 62%;
   --info-ink: 217 91% 74%;
   --destructive-ink: 0 80% 74%;
-  --primary-ink: 258 95% 76%;
+  --primary-ink: 332 100% 84%;
   --cat-food-ink: 25 92% 66%;
 }

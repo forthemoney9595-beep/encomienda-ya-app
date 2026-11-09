@@ -190,7 +190,7 @@ function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscou
     <Link href={`/stores/${offer.id}`} className="block" draggable={false}>
       {/* Naranja de OFERTAS con texto oscuro: el blanco sobre este naranja daba 2,2-2,6:1
           (auditoría Impeccable 9/11). El oscuro se lee en los dos temas. */}
-      <div className="flex items-center justify-between gap-3 rounded-2xl bg-cat-food px-4 py-3.5 text-black">
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-offer px-4 py-3.5 text-offer-foreground">
         <div className="min-w-0">
           <p className="line-clamp-1 font-headline text-base font-bold">
             Hasta -{offer.maxDiscountPercent}% en {offer.name}
@@ -222,7 +222,7 @@ function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscou
             aria-label={`Ver oferta ${i + 1} de ${offers.length}`}
             className={cn(
               'h-1.5 rounded-full transition-all duration-300',
-              i === index ? 'w-5 bg-cat-food' : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60',
+              i === index ? 'w-5 bg-offer' : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60',
             )}
           />
         ))}
@@ -454,7 +454,7 @@ function HomeContent() {
 
         {/* "Con descuento" sí (es vidriera pura, cero datos personales); "Tus favoritas" no. */}
         {!hasFilters && discountedStores.length > 0 && (
-          <StoreRow title="Con descuento" icon={Zap} accent="text-cat-food">
+          <StoreRow title="Con descuento" icon={Zap} accent="text-offer">
             {discountedStores.map((d, i) => renderCard(d, i, 'carousel'))}
           </StoreRow>
         )}
@@ -550,7 +550,7 @@ function HomeContent() {
       {/* Secciones destacadas — solo en modo "explorar" (sin filtros activos). Con filtros
           se muestra una única grilla de resultados, si no la página confunde. */}
       {!hasFilters && discountedStores.length > 0 && (
-        <StoreRow title="Con descuento" icon={Zap} accent="text-cat-food">
+        <StoreRow title="Con descuento" icon={Zap} accent="text-offer">
           {discountedStores.map((d, i) => renderCard(d, i, 'carousel'))}
         </StoreRow>
       )}

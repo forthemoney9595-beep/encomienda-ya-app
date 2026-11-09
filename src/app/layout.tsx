@@ -1,5 +1,11 @@
 import type { Metadata } from 'next';
+import { Sofia_Sans, Sofia_Sans_Condensed } from 'next/font/google';
 import './globals.css';
+
+// Rediseño 2 (Toldo): letras servidas por next/font (se alojan con la app, sin pedido extra
+// a Google en cada carga, mejor en celulares de gama baja que el <link> de antes).
+const fontBody = Sofia_Sans({ subsets: ['latin'], weight: ['400', '600', '700'], variable: '--font-body', display: 'swap' });
+const fontCartel = Sofia_Sans_Condensed({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-cartel', display: 'swap' });
 import { Toaster } from '@/components/ui/toaster';
 import { CartProvider } from '@/context/cart-context';
 import { AuthProvider } from '@/context/auth-context';
@@ -47,17 +53,17 @@ export default function RootLayout({
 }>) {
 
   return (
-    // Rediseño D4 (19/8): el `dark` dejó de estar forzado — el tema se elige en Perfil
-    // (localStorage 'eya-theme', default oscuro = la identidad de siempre). El script
-    // de abajo aplica la clase ANTES del primer paint para que no haya parpadeo;
-    // suppressHydrationWarning porque la clase la pone el script, no el server.
-    <html lang="es" className="dark" suppressHydrationWarning>
+    // El tema se elige en Perfil (localStorage 'eya-theme'). Rediseño 2 (Toldo): el
+    // default pasó a CLARO (se lee mejor al sol y es lo que pidió la dirección elegida);
+    // quien eligió oscuro a mano lo conserva. El script aplica la clase ANTES del primer
+    // paint para que no haya parpadeo; suppressHydrationWarning porque la pone el script.
+    <html lang="es" className={`${fontBody.variable} ${fontCartel.variable}`} suppressHydrationWarning>
       <head>
         {/* PWA: Color de la barra de estado del navegador/móvil */}
-        <meta name="theme-color" content="#8B5CF6" />
+        <meta name="theme-color" content="#FFFFFF" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem('eya-theme')==='light'){document.documentElement.classList.remove('dark');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content','#F6F5FA');}}catch(e){}`,
+            __html: `try{if(localStorage.getItem('eya-theme')==='dark'){document.documentElement.classList.add('dark');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content','#1C1F22');}}catch(e){}`,
           }}
         />
         {/* PWA: el manifest vive en src/app/manifest.json (Next lo sirve como
@@ -70,9 +76,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="EncomiendaYA" />
 
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet" />
         {/* leaflet.css se importa UNA vez desde globals.css (PERF-010): acá estaba duplicado desde unpkg, bloqueando el primer paint en TODAS las rutas. */}
       </head>
       <body className="font-body antialiased">
