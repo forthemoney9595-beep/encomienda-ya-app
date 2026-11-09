@@ -5,18 +5,19 @@
 //   deliveryFee        → la base de siempre (config/platform.deliveryFee)
 //   deliveryIncludedKm → km cubiertos por la base (default 5 — todo el casco urbano)
 //   deliveryFeePerKm   → $ por km extra (default 0 = DESACTIVADO, envío fijo como siempre)
-//   maxDeliveryDistanceKm → cerco anti-disparate (default 50 km): un pin que quedó en
-//     otra provincia por un error de GPS se rechaza en el create con mensaje claro.
-//     A propósito GENEROSO: Santa Rosa (~10 km) y los parajes cercanos entran sobrados;
-//     esto solo frena lo absurdo, no define zona de reparto.
+//   maxDeliveryDistanceKm → distancia máxima de entrega (default 35 km POR RUTA, 9/11/2026:
+//     entran todos los parajes del valle hasta Costa de los Reyes ~31 km; quedan afuera
+//     Fiambalá ~49 km y los lugares que en recta parecen cerca pero por ruta son viajes de
+//     horas). También frena el pin que el GPS mandó a otra provincia.
 //
-// La distancia es LÍNEA RECTA (haversine) — la misma que ve el repartidor en su tarjeta.
-// El camino real por calle es algo más largo: calibrar $porKm sabiendo eso.
+// La distancia la decide /api/orders/create: POR RUTA (Google Routes) y, si Google no
+// responde, LÍNEA RECTA (haversine). El checkout estima con la recta (gratis, al instante),
+// que siempre es igual o menor que la ruta.
 
 import { distanceMeters, isValidCoords } from "./geo";
 
 export const DEFAULT_INCLUDED_KM = 5;
-export const DEFAULT_MAX_DISTANCE_KM = 50;
+export const DEFAULT_MAX_DISTANCE_KM = 35;
 
 export interface DeliveryPricingConfig {
   deliveryFee?: number;          // base

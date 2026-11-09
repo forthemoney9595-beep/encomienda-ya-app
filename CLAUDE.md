@@ -3496,6 +3496,63 @@ corre porque hoy hay 1 pedido real trabado).
 Términos con el abogado/contador (el borrador legal lo pide); y, si se suma un segundo admin,
 exigir que la apelación la resuelva otra persona.
 
+## Distancia por ruta, zonas y hora estimada (9/11/2026, rama `rediseno-toldo`, SIN subir)
+Salió de la pregunta de David "¿es bueno que el repartidor sepa a dónde va antes de aceptar?".
+Respuesta al estándar Rappi/PedidosYa: sí, pero APROXIMADO (zona + km + minutos); la dirección
+exacta sigue apareciendo recién al tomar el pedido (Fase UU / AUTHZ-001 intactas).
+- **Google Routes API** (`src/lib/route-distance-server.ts`, solo servidor): distancia y tiempo
+  POR RUTA en moto (`TWO_WHEELER`), UNA llamada por pedido en `/api/orders/create` (nunca desde
+  el checkout mientras se mueve el pin: multiplicaría las consultas). Timeout 4 s; sin clave,
+  429 (tope diario), error o red caída → `null` y el pedido sigue con la línea recta. Nunca
+  menos que la recta (`Math.max`): si el pin cae lejos de una calle, Google engancha el destino
+  a la calle más cercana. **Clave:** `GOOGLE_MAPS_API_KEY` en `.env.local` (restringida a Routes
+  API, sin restricción de aplicación porque la usa solo el servidor). **Cuota topeada en Google
+  Cloud:** ComputeRoutes per day = 300, ComputeRouteMatrix per day = 100. Plan de pago por uso
+  del proyecto Blaze (no un plan de suscripción): ~10.000 consultas gratis/mes. **OJO al subir:
+  cargar `GOOGLE_MAPS_API_KEY` en las env vars de Vercel**; sin ella todo cae a línea recta (no
+  rompe). Si el volumen pasa ~300 pedidos/día, subir la cuota diaria.
+- **Zonas** (`src/lib/delivery-zones.ts`, puro): lista de parajes con su punto de
+  OpenStreetMap (place=town/village/hamlet del Departamento Tinogasta, bajados por Overpass);
+  `zoneForPoint()` = "Tinogasta" a menos de 2,5 km de la plaza, el paraje más cercano a menos de
+  4 km, o "Cerca de X". Se guarda como TEXTO en el pedido (`deliveryZone`), nunca coordenadas.
+  Dentro del pueblo OSM no tiene barrios cargados. Para sumar un paraje: agregarlo a `ZONES`.
+- **Campos nuevos del pedido** (escritos por el servidor): `deliveryZone`,
+  `deliveryDistanceSource` ('route' | 'line'), `deliveryDurationS`; `deliveryDistanceM` ahora
+  es por ruta cuando hay. Tipos en `order-service.ts`.
+- **Distancia máxima: 35 km POR RUTA** (`DEFAULT_MAX_DISTANCE_KM`, antes 50 en línea recta;
+  `config/platform` no tenía valor propio). Entran todos los parajes del valle hasta Costa de los
+  Reyes (~31 km); quedan afuera Fiambalá (~49) y los lugares que en recta parecen cerca y por ruta
+  son viajes de horas (La Isla: 33 km en recta, 60 por ruta; Vinquis: 36 vs 94). El envío por km
+  (apagado: `deliveryFeePerKm` 0) también usa la distancia por ruta; el checkout estima con la
+  recta y lo rotula "desde … se ajusta por ruta".
+- **UI:** `src/components/delivery-trip-info.tsx` — `DeliveryTripInfo` ("Entregar en Santa Rosa ·
+  5,0 km por ruta · ~11 min en moto") en la tarjeta de Disponibles y en "Solicitud de Entrega"
+  del detalle; `ArrivalEstimate` para el comprador ("Cuando salga de la tienda, el viaje tarda
+  ~X min" → "Llega en ~X min" con `pickedUpAt` + duración, sin seguir el GPS en vivo). Zona y
+  distancia por ruta también en la ficha admin del pedido; texto de "Distancia máxima" en
+  `/admin/settings` actualizado.
+- **Verificado:** prueba real contra Google (35 consultas el 9/11: tabla de parajes con km por
+  ruta y minutos), Vitest 157/157 (10 nuevos en `delivery-zones.test.ts`, con fetch simulado para
+  los caminos de falla), `_e2e-route-zone.js` **15/15** (pedido a Santa Rosa: zona, ruta ≥ recta,
+  tiempo, envío intacto, sin coords en el doc público; repartidor ve zona/km/minutos y NO la
+  dirección; cliente ve las dos frases de hora estimada; La Isla rechazada por ruta), regresión
+  stock 13/13, price-freeze 5/5, `_pw-rediseno-flow` 10/10, typecheck y lint 0 errores.
+- **Misma tanda (prueba real de David):** el GPS del repartidor ahora se RECONECTA solo si el
+  permiso se habilita tarde (antes el watch quedaba muerto hasta el siguiente cambio de estado;
+  `location-tracker.tsx`: reintento por `permissions.onchange` y al volver a la app, avisos
+  deduplicados a nivel módulo), botón de tomar pedido bloqueado durante el pedido (el doble toque
+  daba "Pedido ya tomado" siendo suyo), `pickedUpAt` también desde el botón del detalle
+  (`updateOrderStatus`), la tienda firma el chat con el nombre del local, y avisos del pago de
+  prueba sin emojis. `_pw-gps-reconnect.js` 9/9.
+- **Sonido y color, a elegir por David:** sonidos sintetizados nuevos en `src/lib/notify-sounds.ts`
+  (campanita, marimba, gota, timbre; `beep.ts` y el chat delegan ahí — el mp3 del chat ya no se
+  usa). Panel `src/components/dev-preview-panel.tsx`, montado SOLO con `NODE_ENV=development`
+  (botón "Probar color y sonido"): cambia el color de marca en vivo (violeta, índigo, marino,
+  bordó, petróleo vs. el fucsia) y prueba los sonidos. **Cuando elija:** fijar el color en
+  `globals.css` (`--primary`, `--ring`, `--cat-brand`, `--sidebar-*`, `--primary-ink`,
+  `.awn-brand`, `manifest.json`), poner `DEFAULT_SOUND`, borrar el panel y su línea en
+  `layout.tsx`, y `public/sounds/notify.mp3`.
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

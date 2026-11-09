@@ -10,6 +10,8 @@ import { normalizeSchedule, getStoreOpenStatus, nowInArgentina, isStorePaused } 
 import { money } from "@/lib/format-money";
 import { isValidCoords } from "@/lib/geo";
 import { deliveryDistanceMeters, computeDeliveryFee, isBeyondDeliveryLimit } from "@/lib/delivery-pricing";
+import { getRouteDistance } from "@/lib/route-distance-server";
+import { zoneForPoint } from "@/lib/delivery-zones";
 
 // ✅ CONFIGURACIÓN CENTRALIZADA DE PRECIO (Tinogasta)
 // Valor fallback si config/platform.deliveryFee no está configurado en Firestore
@@ -179,13 +181,19 @@ export async function POST(request: Request) {
 
     const storeCoords = storeData?.coords || storeData?.location || null;
 
-    // 🚧 Cerco anti-disparate + envío según distancia (Fase RR ter, delivery-pricing.ts).
-    // La distancia es tienda→cliente en línea recta; sin coords de alguno de los dos se
-    // cobra la base y no se rechaza nada (nunca castigar la falta de dato).
-    const deliveryDistM = deliveryDistanceMeters(storeCoords, safeCustomerCoords);
+    // 🚧 Cerco + envío según distancia (Fase RR ter, delivery-pricing.ts).
+    // 9/11/2026: la distancia es POR RUTA (Google Routes, en moto) — en los parajes la línea
+    // recta engañaba (La Isla: 33 km en recta, 60 por ruta). Si Google no responde, queda la
+    // línea recta de siempre. Nunca menos que la recta: si el pin cayó lejos de una calle,
+    // Google "engancha" el destino a la calle más cercana y podría dar una ruta más corta.
+    // Sin coords de alguno de los dos se cobra la base y no se rechaza nada.
+    const lineDistM = deliveryDistanceMeters(storeCoords, safeCustomerCoords);
+    const route = lineDistM != null ? await getRouteDistance(storeCoords, safeCustomerCoords) : null;
+    const deliveryDistM = route && lineDistM != null ? Math.max(route.distanceM, lineDistM) : lineDistM;
+    const deliveryZone = zoneForPoint(safeCustomerCoords);
     if (isBeyondDeliveryLimit(deliveryDistM, platformConfig)) {
       return NextResponse.json(
-        { error: "Tu ubicación quedó muy lejos de la zona de entrega. Revisá el pin en el mapa — puede que el GPS haya marcado otro lugar." },
+        { error: "Tu ubicación queda fuera de la zona de entrega de esta tienda. Revisá el pin en el mapa: puede que el GPS haya marcado otro lugar." },
         { status: 400 },
       );
     }
@@ -334,6 +342,12 @@ export async function POST(request: Request) {
             // Distancia tienda→cliente (línea recta, metros) denormalizada para que el pool
             // muestre "≈ X km" SIN exponer las coords del cliente. `null` si falta algún dato.
             deliveryDistanceM: (typeof deliveryDistM === 'number' && isFinite(deliveryDistM)) ? Math.round(deliveryDistM) : null,
+            // 9/11: de dónde sale esa distancia ('route' = Google por ruta, 'line' = recta),
+            // el tiempo de viaje en moto (para "llega en ~X min") y la zona aproximada que el
+            // repartidor ve antes de aceptar (texto; nunca las coordenadas).
+            deliveryDistanceSource: deliveryDistM == null ? null : (route ? 'route' : 'line'),
+            deliveryDurationS: route ? route.durationS : null,
+            deliveryZone,
 
             deliveryPersonId: null as string | null,
             readyForPickup: false,

@@ -237,7 +237,8 @@ export default function AdminOrderDetailPage() {
             <dl className="space-y-1.5 text-sm">
               <Row label={<span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden="true" /> Dirección</span>} value={address || <span className="text-muted-foreground">no disponible</span>} />
               <Row label="Teléfono del cliente" value={o.customerPhoneNumber || <span className="text-muted-foreground">—</span>} />
-              <Row label="Distancia tienda → cliente" value={typeof o.deliveryDistanceM === 'number' ? `≈ ${(o.deliveryDistanceM / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 })} km` : '—'} />
+              <Row label="Zona" value={o.deliveryZone || <span className="text-muted-foreground">—</span>} />
+              <Row label="Distancia tienda → cliente" value={typeof o.deliveryDistanceM === 'number' ? `${o.deliveryDistanceSource === 'route' ? '' : '≈ '}${(o.deliveryDistanceM / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 })} km ${o.deliveryDistanceSource === 'route' ? 'por ruta' : 'en línea recta'}${typeof o.deliveryDurationS === 'number' ? ` · ~${Math.max(1, Math.ceil(o.deliveryDurationS / 60))} min en moto` : ''}` : '—'} />
               {!priv && <p className="text-xs text-muted-foreground">Pedido anterior a la colección order_private: los datos de contacto vienen del propio documento.</p>}
             </dl>
           </Section>

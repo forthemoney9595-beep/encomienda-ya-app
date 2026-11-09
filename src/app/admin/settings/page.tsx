@@ -83,7 +83,7 @@ function AdminSettingsPage() {
           configData?.deliveryFee !== localConfig.deliveryFee ? `envío: $${configData?.deliveryFee ?? '—'} → $${localConfig.deliveryFee}` : null,
           configData?.deliveryFeePerKm !== localConfig.deliveryFeePerKm ? `envío $/km: $${configData?.deliveryFeePerKm ?? 0} → $${localConfig.deliveryFeePerKm ?? 0}` : null,
           configData?.deliveryIncludedKm !== localConfig.deliveryIncludedKm ? `km incluidos: ${configData?.deliveryIncludedKm ?? 5} → ${localConfig.deliveryIncludedKm ?? 5}` : null,
-          configData?.maxDeliveryDistanceKm !== localConfig.maxDeliveryDistanceKm ? `distancia máx: ${configData?.maxDeliveryDistanceKm ?? 50}km → ${localConfig.maxDeliveryDistanceKm ?? 50}km` : null,
+          configData?.maxDeliveryDistanceKm !== localConfig.maxDeliveryDistanceKm ? `distancia máx: ${configData?.maxDeliveryDistanceKm ?? 35}km → ${localConfig.maxDeliveryDistanceKm ?? 35}km` : null,
           configData?.defaultCommissionRate !== localConfig.defaultCommissionRate ? `comisión default: ${configData?.defaultCommissionRate ?? '—'}% → ${localConfig.defaultCommissionRate}%` : null,
           configData?.settlementDayOfWeek !== localConfig.settlementDayOfWeek ? `día liquidación: ${localConfig.settlementDayOfWeek}` : null,
           configData?.claimWindowHours !== localConfig.claimWindowHours ? `ventana de reclamo: ${configData?.claimWindowHours ?? '—'}h → ${localConfig.claimWindowHours}h` : null,
@@ -174,14 +174,15 @@ function AdminSettingsPage() {
 
           <div className="space-y-2">
             <Label htmlFor="maxKm" className="text-sm font-semibold">Distancia máxima de entrega (km)</Label>
-            <Input id="maxKm" type="number" min={CONFIG_RANGES.maxDeliveryDistanceKm.min} max={CONFIG_RANGES.maxDeliveryDistanceKm.max} value={shown(localConfig.maxDeliveryDistanceKm, 50)}
+            <Input id="maxKm" type="number" min={CONFIG_RANGES.maxDeliveryDistanceKm.min} max={CONFIG_RANGES.maxDeliveryDistanceKm.max} value={shown(localConfig.maxDeliveryDistanceKm, 35)}
               onChange={(e) => setLocalConfig({ ...localConfig, maxDeliveryDistanceKm: numOrNaN(e) })}
               className="border-primary/30" />
             <p className="text-xs text-muted-foreground">
-              Cerco anti-error: si el pin del cliente queda a más de esto de la tienda, el pedido
-              se rechaza con un aviso para revisar el mapa. Es a propósito GENEROSO (default 50 km
-              — Santa Rosa y los parajes cercanos entran sobrados): frena al GPS que marcó otra
-              provincia, no define la zona de reparto.
+              Medida POR RUTA (en moto) desde la tienda. Si el cliente queda más lejos, el pedido se
+              rechaza con un aviso para revisar el mapa. Con 35 km (default) entran todos los parajes
+              del valle hasta Costa de los Reyes (~31 km); quedan afuera Fiambalá (~49 km) y los
+              lugares que parecen cerca pero por ruta son viajes de horas. Si Google no responde, se
+              mide en línea recta.
             </p>
           </div>
 

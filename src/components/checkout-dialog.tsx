@@ -533,9 +533,11 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
              <div className="flex justify-between text-muted-foreground">
                 <span>
                     Envío
-                    {/* Con tarifa por km activa, mostrar la distancia que lo explica */}
+                    {/* Con tarifa por km activa: el checkout estima con la línea recta (gratis, al
+                        instante); el monto final lo calcula el servidor con la distancia POR RUTA
+                        al crear el pedido (9/11), y puede ser algo mayor. Por eso "desde". */}
                     {(globalConfig?.deliveryFeePerKm ?? 0) > 0 && deliveryDistM != null && (
-                        <span className="text-xs"> (≈ {formatDistance(deliveryDistM)})</span>
+                        <span className="text-xs"> (desde, ≈ {formatDistance(deliveryDistM)}; se ajusta por ruta)</span>
                     )}
                 </span>
                 <span>{money(shippingCost)}</span>

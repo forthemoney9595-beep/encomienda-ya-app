@@ -30,6 +30,7 @@ import { ChatWindow } from './chat-window';
 import { ClaimSection } from './claim-section';
 import { LocationTracker } from '@/components/location-tracker';
 import { gmapsDirectionsUrl, isValidCoords } from '@/lib/geo';
+import { DeliveryTripInfo, ArrivalEstimate } from '@/components/delivery-trip-info';
 import { publicName } from '@/lib/public-name';
 import { describeOrderEnding } from '@/lib/confirm-timeout';
 import { useConfirmTimeoutWatcher } from '@/hooks/use-confirm-timeout';
@@ -598,6 +599,14 @@ export default function OrderTrackingPage() {
                                 <span className="bg-success text-success-foreground px-3 py-1 rounded-full font-bold text-sm">+${Math.round(order.deliveryFee).toLocaleString('es-AR')}</span>
                             </div>
                             <div className="p-4 space-y-3 text-center">
+                                {/* Zona + km por ruta + minutos (9/11): sin la dirección exacta. */}
+                                <DeliveryTripInfo
+                                    className="text-left"
+                                    zone={order.deliveryZone}
+                                    distanceM={order.deliveryDistanceM}
+                                    durationS={order.deliveryDurationS}
+                                    source={order.deliveryDistanceSource ?? (typeof order.deliveryDistanceM === 'number' ? 'line' : null)}
+                                />
                                 <p className="text-foreground mb-2">Este pedido está listo o preparándose. ¿Quieres llevarlo?</p>
                                 <Button className="w-full bg-success hover:bg-success/90 text-success-foreground shadow-md transition-all hover:scale-[1.02]" size="lg" onClick={handleAcceptOrder} disabled={isAccepting}>
                                     {isAccepting ? "Tomando el pedido..." : "Tomar este pedido"}
@@ -782,6 +791,10 @@ export default function OrderTrackingPage() {
                             <Bike className="h-4 w-4 text-warning" />
                             Tu repartidor: <span className="font-semibold">{publicName(order.deliveryPersonName)}</span>
                         </p>
+                    )}
+                    {/* "Llega en ~X min" (9/11): tiempo en moto calculado por Google al crear. */}
+                    {isBuyer && (
+                        <ArrivalEstimate status={order.status} durationS={order.deliveryDurationS} pickedUpAt={order.pickedUpAt as never} />
                     )}
                     {/* Señal del repartidor (Fase RR): visible mientras hay tracking activo. */}
                     {(order.status === 'En camino' || order.status === 'En reparto') && (

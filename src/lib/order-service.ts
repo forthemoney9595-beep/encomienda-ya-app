@@ -68,6 +68,11 @@ export interface Order {
   customerCoords?: { latitude: number; longitude: number };
   // Distancia tienda→cliente (metros) denormalizada para el pool, sin exponer coords.
   deliveryDistanceM?: number | null;
+  // 9/11/2026: origen de esa distancia ('route' = Google por ruta, 'line' = recta), tiempo
+  // del viaje en moto (segundos) y zona aproximada del cliente (texto, nunca coords).
+  deliveryDistanceSource?: 'route' | 'line' | null;
+  deliveryDurationS?: number | null;
+  deliveryZone?: string | null;
   deliveryRating?: number;
   deliveryReview?: string;
   deliveryReviewed?: boolean;

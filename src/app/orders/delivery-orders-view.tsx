@@ -7,6 +7,7 @@ import { collection, query, where, doc, updateDoc, serverTimestamp, getDoc } fro
 import { OrderService, MAX_ACTIVE_ORDERS, DRIVER_ACTIVE_STATUSES } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { gmapsDirectionsUrl, distanceMeters, formatDistance, isValidCoords } from '@/lib/geo';
+import { DeliveryTripInfo } from '@/components/delivery-trip-info';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
 import { LocationTracker } from '@/components/location-tracker';
 import { ConfirmDeliveryDialog } from '@/components/confirm-delivery-dialog';
@@ -77,6 +78,11 @@ interface Order {
   // Distancia tienda→cliente (metros, línea recta) denormalizada: la muestra el pool SIN
   // exponer las coords del cliente.
   deliveryDistanceM?: number | null;
+  // 9/11/2026: origen de esa distancia ('route' = Google por ruta, 'line' = recta), tiempo
+  // del viaje en moto (segundos) y zona aproximada del cliente (texto, nunca coords).
+  deliveryDistanceSource?: 'route' | 'line' | null;
+  deliveryDurationS?: number | null;
+  deliveryZone?: string | null;
 }
 
 export default function DeliveryOrdersView() {
@@ -422,23 +428,21 @@ export default function DeliveryOrdersView() {
                     {/* 🔒 La dirección EXACTA del cliente ya no se muestra antes de tomar el
                         pedido (auditoría de privacidad ago 2026, estándar Rappi): para decidir
                         alcanza con la tienda + la distancia de abajo. Al aceptar se ve todo. */}
-                    {/* Distancia estimada del viaje (Fase RR) — ayuda a decidir si tomarlo.
-                        Línea recta a propósito: sin servicio de routing, y en un pueblo en
-                        grilla la aproximación alcanza para comparar pedidos entre sí. */}
+                    {/* Zona + km por ruta + minutos en moto (9/11/2026): lo que hace falta
+                        para decidir si tomarlo, sin la dirección exacta. Pedidos legacy sin
+                        distancia guardada: fallback a la recta con las coords embebidas. */}
                     {(() => {
-                      // Distancia en el POOL: sale de deliveryDistanceM (denormalizado, sin
-                      // exponer las coords del cliente). Fallback a coords solo para pedidos
-                      // legacy que todavía las traen embebidas.
                       const distM = typeof order.deliveryDistanceM === 'number'
                         ? order.deliveryDistanceM
                         : (isValidCoords(order.storeCoords) && isValidCoords(order.customerCoords)
                             ? distanceMeters(order.storeCoords!, order.customerCoords!) : null);
-                      if (distM == null) return null;
                       return (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 pl-8">
-                            <Truck className="h-3.5 w-3.5" />
-                            ≈ {formatDistance(distM)} de la tienda al cliente (línea recta)
-                        </p>
+                        <DeliveryTripInfo
+                          zone={order.deliveryZone}
+                          distanceM={distM}
+                          durationS={order.deliveryDurationS}
+                          source={order.deliveryDistanceSource ?? (distM != null ? 'line' : null)}
+                        />
                       );
                     })()}
                 </CardContent>
