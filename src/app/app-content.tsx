@@ -164,7 +164,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
     // Tienda y repartidor también pueden comprar como clientes (Fase RR octies), así que el
     // carrito sigue montado (abre el panel desde la tienda pública), pero su botón del
     // encabezado se oculta mientras está vacío: era un ícono sin uso en su panel de trabajo.
-    const isWorkerRole = userProfile?.role === 'store' || userProfile?.role === 'delivery';
+    const isWorkerRole = userProfile?.role === 'store' || userProfile?.role === 'delivery' || userProfile?.role === 'admin';
     const pathname = usePathname();
     const [searchOpen, setSearchOpen] = useState(false);
     useGlobalSearchShortcut(setSearchOpen);
@@ -253,7 +253,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                     <Link
                         href="/"
                         className={cn(
-                            'flex min-w-0 items-center gap-1.5 truncate font-headline text-xl font-extrabold leading-none md:hidden',
+                            'flex min-h-11 min-w-0 items-center gap-1.5 truncate font-headline text-xl font-extrabold leading-none md:hidden',
                             user && !loading && !isLandingPage && 'hidden',
                         )}
                     >
@@ -264,7 +264,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                         buscador de tiendas y quedaban dos apilados (Rediseño 2, Tanda 0). El ⌘K
                         sigue funcionando con el atajo de teclado. */}
                     {user && !loading && !isLandingPage && (
-                        <GlobalSearchTrigger onClick={() => setSearchOpen(true)} className="h-10 w-full max-w-xs sm:max-w-sm" />
+                        <GlobalSearchTrigger onClick={() => setSearchOpen(true)} className="h-10 w-full min-w-0 max-w-xs sm:max-w-sm" />
                     )}
 
                     <div className="ml-auto flex items-center gap-2 sm:gap-4">

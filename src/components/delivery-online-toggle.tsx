@@ -54,6 +54,8 @@ export function DeliveryOnlineToggle({ className, variant = 'inline' }: { classN
       checked={isOnline}
       onCheckedChange={handleToggle}
       data-testid="driver-online-switch"
+      id="driver-online-switch"
+      className="mx-2 scale-[1.35]"
     />
   );
 
@@ -66,14 +68,14 @@ export function DeliveryOnlineToggle({ className, variant = 'inline' }: { classN
       >
         <Garland />
         <DriverPulseDot on={isOnline} />
-        <div className="min-w-0 flex-1">
+        <label htmlFor="driver-online-switch" className="min-w-0 flex-1 cursor-pointer py-1">
           <p className="font-headline text-[1.6rem] font-extrabold leading-none">
             {isOnline ? 'Estás disponible' : 'No disponible'}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {isOnline ? 'Te avisamos con un sonido cuando haya un pedido.' : 'No te llegan avisos de pedidos nuevos.'}
           </p>
-        </div>
+        </label>
         {sw}
       </section>
     );
@@ -83,7 +85,7 @@ export function DeliveryOnlineToggle({ className, variant = 'inline' }: { classN
     <div className={className}>
       <div className="flex items-center gap-2.5">
         <DriverPulseDot on={isOnline} />
-        <span className="text-sm font-semibold">{isOnline ? 'Disponible' : 'No disponible'}</span>
+        <label htmlFor="driver-online-switch" className="flex min-h-11 cursor-pointer items-center text-sm font-semibold">{isOnline ? 'Disponible' : 'No disponible'}</label>
         {sw}
       </div>
     </div>

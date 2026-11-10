@@ -389,12 +389,14 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                     );
                 })}
             </div>
-            <div className="flex w-full gap-3">
+            {/* flex-wrap: con "Confirmar con cambios" los dos botones no entran en 430 px
+                (QA 10/11: la página quedaba en 469 px). Confirmar pasa arriba y ocupa todo. */}
+            <div className="flex w-full flex-wrap-reverse gap-3">
                  <Button
                     onClick={() => handleUpdateStatus('Rechazado')}
                     disabled={isUpdating}
                     variant="outline"
-                    className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                    className="min-w-[9rem] flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
                  >
                     <XCircle className="mr-2 h-4 w-4" />
                     Sin Stock (todo)
@@ -402,7 +404,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                 <Button
                     onClick={handleConfirmStock}
                     disabled={isUpdating || allItemsUnchecked}
-                    className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
+                    className="min-w-[12rem] flex-1 bg-success hover:bg-success/90 text-success-foreground"
                     title={allItemsUnchecked ? 'Destildaste todos los productos -- usá "Sin Stock (todo)"' : undefined}
                 >
                     {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}

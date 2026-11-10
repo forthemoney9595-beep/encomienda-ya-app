@@ -3617,6 +3617,52 @@ oscuro "pizarra", semánticos (naranja ofertas con texto oscuro, verde plata), 1
   (línea de tinta del Toldo) en el inicio; puntitos del slider de promos < 36 px; las tarjetas
   de cada pantalla todavía con bordes/`bg-card` propios donde los pasaban.
 
+## Rediseño en vidrio — tandas por rol (10/11/2026, rama `rediseno-toldo`)
+Cinco agentes en paralelo sobre la base de arriba, con dueño de archivos disjunto. Modelos que
+eligió David en el prototipo: Tienda **A "Pizarra"**, Repartidor **A "Caja"**, Admin **A "Lista"**.
+- **Caminos únicos nuevos (lección R1):** `src/lib/store-confirm-order.ts`
+  (`confirmStoreOrder`) es la ÚNICA llamada a `/api/orders/confirm-stock` del cliente: la usan
+  la comanda de `/my-store`, la pestaña Nuevos de `store-orders-view` y `order-status-updater`.
+  `src/hooks/driver-take-order.ts` (`useDriverTakeOrder`, `useDriverPoolSound`) = tomar pedido
+  desde `/delivery` y `/orders` con las mismas guardas (antidoble-toque, no propio, aprobado/
+  suspendido, `MAX_ACTIVE_ORDERS`, `/api/orders/take`). El botón del DETALLE del pedido sigue con
+  su handler propio pero contra la misma API (el servidor hace cumplir todas las guardas).
+- **Tienda:** `/my-store` con hero de vidrio (`CategoryTile` + `Garland` + `StorePauseControl
+  variant="inset"`), tablero 2x2 (`store-count-up.tsx`, "…" mientras carga), **comanda que se
+  imprime** (`store-comanda.tsx` + `.module.css`; el papel redefine los tokens CLAROS adentro;
+  suena con `playSound()` solo con pedidos que no estaban en la carga inicial),
+  `HolidayHoursCard` montada. `/orders` de la tienda controlado por `?tab=pending|active|history`
+  con píldora (`store-tabs.tsx`). Descuento de producto en naranja `bg-offer` (era verde).
+- **Repartidor:** `/delivery` = disponibilidad (`DeliveryOnlineToggle variant="card"`), "Caja de
+  hoy" y "Para tomar" con `driver-job-card.tsx` (sin dirección del cliente: privacidad UU);
+  `driver-tabs.tsx`. Bug viejo corregido: analíticas y reseñas armaban la consulta sin `ready` en
+  las dependencias → quedaban vacías para siempre ($0 / rating 0).
+- **Comprador:** `buyer-motion.tsx` (`SlidingPill` — mide dos veces porque Radix marca la pestaña
+  activa un cuadro después —, `useBumpKey`, `GlassBone`, `DIALOG_CLOSE_BIG`) + `.module.css`;
+  `BuyerOrdersView showHeader`; ticket del PIN con `data-testid="delivery-pin"` (se fue
+  `.ticket-notch`); detalle de producto sobre fondo sólido a propósito (blur sobre overlay pesa).
+- **Comunes:** `auth-screen.tsx` (`AuthScreen`, `largeFields` 48 px, `GoogleButton`…);
+  `main-nav.tsx` con un solo `<Link>` por ítem y `aria-current`; `global-error.tsx` importa
+  `globals.css` y respeta el tema guardado.
+- **Admin:** ninguna página usa ya `PageHeader`; `src/components/admin/admin-list.tsx`
+  (`GlassSearch`, `SlidingChips`, `ListCard`, `ListRow`, `PersonTile`, `RowIconButton`); los
+  `confirm()` nativos que quedaban pasaron a `ConfirmDialog`; badges verdes suaves con
+  `text-[hsl(142_80%_20%)] dark:text-success-ink` en claro (el `-ink` daba 4,21:1 sobre
+  `bg-success/15`; si se baja `--success-ink` claro a ~142 80% 20% se pueden sacar).
+- **Compartidos (coordinador):** X de cerrar de `Dialog`/`Sheet` a 44 px; menú lateral móvil en
+  `glass-strong` (`ui/sidebar.tsx`, rama `isMobile`); Privacidad corregida (la tienda NO recibe
+  el teléfono desde la Fase UU).
+- **Trampas encontradas:** (1) una variante arbitraria `[&+&]:before:` genera `::before::before`
+  y Tailwind deja de parsear TODO el CSS (`/login` 500) — no combinar `[&…]` con `before:`;
+  (2) con varios agentes guardando, el dev server de Turbopack entra en bucle de HMR
+  `"type":"restart"` y recarga la página cada ~2 s: reiniciar el server; para Playwright,
+  `_pw-hmr-quiet.js <script>` filtra solo esos mensajes con `routeWebSocket`.
+- **Verificado por tanda:** comprador 164/164, tienda 49/50 + comanda e2e 31/31, repartidor
+  90/90, comunes 335/348 (las fallas eran de piezas compartidas, corregidas después), admin
+  2556/2556; regresiones `_pw-admin-t1` 82/82, `_pw-tanda-a` 40/40, `_pw-tanda-b` 42/42,
+  confirm-vs-cancel 19/19, adjust-qty 19/19, pin 15/15.
+- **Pendiente de contenido (decide David):** teléfono y mail de soporte siguen simulados.
+
 ## Equipo de agentes, skills y emulador (oct 2026)
 Pedido del usuario ("ponerle todas las pilas para lanzar a real"): además del plan de
 lanzamiento en la bóveda ([[🚀 Plan para lanzar a real (20-10)]]), el repo tiene ahora:

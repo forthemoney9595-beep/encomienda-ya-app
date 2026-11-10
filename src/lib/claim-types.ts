@@ -213,8 +213,12 @@ export function computeClaimRiskSignals(input: {
     });
   }
   if (typeof input.accountCreatedMs === 'number' && Number.isFinite(input.accountCreatedMs)) {
-    const ageDays = (input.nowMs - input.accountCreatedMs) / 86_400_000;
-    if (ageDays >= 0 && ageDays < NEW_ACCOUNT_DAYS) {
+    // Tolerancia de 10 min hacia "el futuro": la hora de Auth y el reloj del servidor pueden
+    // estar desfasados unos segundos; sin esto una cuenta recién creada daba edad negativa y
+    // la señal no salía (lo encontró el QA del 10/11 con el reloj de la PC atrasado ~7 s).
+    const ageDays = Math.max(0, (input.nowMs - input.accountCreatedMs) / 86_400_000);
+    const skewOk = input.nowMs - input.accountCreatedMs >= -10 * 60_000;
+    if (skewOk && ageDays < NEW_ACCOUNT_DAYS) {
       const d = Math.floor(ageDays);
       out.push({
         code: 'new_account',

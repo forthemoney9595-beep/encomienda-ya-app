@@ -10,7 +10,7 @@ export default function PrivacyPage() {
         className="glass-strong prose prose-slate max-w-none rounded-card p-5 dark:prose-invert sm:p-10 prose-headings:font-headline prose-headings:tracking-tight prose-h1:text-[2.1rem] prose-h1:leading-tight prose-h2:mt-10 prose-h2:text-2xl prose-a:font-semibold prose-a:text-primary prose-a:underline-offset-4 prose-li:my-1 prose-p:leading-relaxed"
       >
       <h1>Política de Privacidad</h1>
-      <p className="text-muted-foreground text-sm">Última actualización: abril de 2025</p>
+      <p className="text-muted-foreground text-sm">Última actualización: noviembre de 2026</p>
 
       <h2>1. Responsable del Tratamiento</h2>
       <p>
