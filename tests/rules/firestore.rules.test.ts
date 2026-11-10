@@ -408,3 +408,27 @@ describe.skipIf(!HAS_EMULATOR)('firestore.rules — horario especial por fecha (
     await assertFails(updateDoc(doc(asOwner(), 'stores', 'store-1'), { rating: 5 }));
   });
 });
+
+describe.skipIf(!HAS_EMULATOR)('firestore.rules — config/public (nov 2026)', () => {
+  // Espejo de lo que puede leer cualquiera, incluso sin cuenta (la decoración de Navidad).
+  // El resto de config sigue exigiendo sesión, y nadie sin admin full escribe.
+  let env9: RulesTestEnvironment;
+  beforeAll(async () => {
+    env9 = await initializeTestEnvironment({ projectId: PROJECT + '-9', firestore: { rules: readFileSync(resolve(__dirname, '../../firestore.rules'), 'utf8') } });
+  });
+  afterAll(async () => { await env9?.cleanup(); });
+  it('el invitado lee config/public pero no config/platform; nadie sin admin escribe', async () => {
+    await env9.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'config', 'public'), { christmasMode: 'on' });
+      await setDoc(doc(ctx.firestore(), 'config', 'platform'), { deliveryFee: 2000, christmasMode: 'on' });
+      await setDoc(doc(ctx.firestore(), 'users', BUYER), { role: 'buyer', email: 'b@test' });
+    });
+    const anon = env9.unauthenticatedContext().firestore();
+    const buyer = env9.authenticatedContext(BUYER).firestore();
+    await assertSucceeds(getDoc(doc(anon, 'config', 'public')));
+    await assertFails(getDoc(doc(anon, 'config', 'platform')));
+    await assertSucceeds(getDoc(doc(buyer, 'config', 'platform')));
+    await assertFails(setDoc(doc(anon, 'config', 'public'), { christmasMode: 'off' }));
+    await assertFails(setDoc(doc(buyer, 'config', 'public'), { christmasMode: 'off' }));
+  });
+});

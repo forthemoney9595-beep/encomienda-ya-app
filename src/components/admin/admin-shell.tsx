@@ -301,6 +301,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0 lg:hidden" aria-label="Abrir menú" onClick={() => setDrawerOpen(true)} data-testid="open-drawer">
             <Menu className="h-5 w-5" aria-hidden="true" />
           </Button>
+          {/* En celular/tablet el menú lateral (donde vive la estrellita) está oculto. */}
+          <SeasonStar className="h-4 w-4 lg:hidden" />
           <Button type="button" variant="ghost" size="icon" className="hidden h-9 w-9 shrink-0 lg:inline-flex" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'} onClick={toggleCollapsed} data-testid="toggle-sidebar">
             {collapsed ? <PanelLeftOpen className="h-5 w-5" aria-hidden="true" /> : <PanelLeftClose className="h-5 w-5" aria-hidden="true" />}
           </Button>
@@ -325,7 +327,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent side="left" data-surface="admin" className="glass-strong inset-y-2 left-2 h-auto w-72 overflow-y-auto rounded-card bg-[var(--glass-strong)] p-0" data-testid="admin-drawer">
           <SheetHeader className="h-14 justify-center border-b border-border px-4 text-left">
-            <SheetTitle className="text-base">Menú</SheetTitle>
+            <SheetTitle className="flex items-center gap-1.5 text-base">Menú<SeasonStar className="h-4 w-4" /></SheetTitle>
           </SheetHeader>
           <AdminNavList onNavigate={() => setDrawerOpen(false)} />
           <div className="border-t border-border p-3">

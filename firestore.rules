@@ -69,7 +69,10 @@ service cloud.firestore {
     // 1. CONFIGURACIÓN GLOBAL — cambiar fees/día de liquidación/mantenimiento es una
     // decisión de negocio, no una tarea operativa: exige admin 'full'.
     match /config/{configDoc} {
-      allow read: if isSignedIn();
+      // config/public = espejo de lo que puede leer cualquiera, sin cuenta (hoy solo la
+      // decoración de Navidad; lo escribe /admin/settings). El resto (fees, liquidación,
+      // mantenimiento) sigue exigiendo estar logueado.
+      allow read: if isSignedIn() || configDoc == 'public';
       allow write: if isFullAdmin();
     }
 

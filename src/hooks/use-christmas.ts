@@ -20,9 +20,14 @@ import { isChristmasActive, normalizeChristmasMode, type ChristmasMode } from '@
  */
 export function useChristmas(): { active: boolean; mode: ChristmasMode } {
   const { user } = useAuth();
+  // `config/public` lo puede leer CUALQUIERA (también el invitado): ahí guarda Ajustes el
+  // modo de Navidad desde el 10/11. `config/platform` queda de respaldo para los logueados
+  // mientras el espejo público no exista (hasta el próximo "Guardar" en Ajustes).
+  const publicRef = useMemoFirebase(() => doc(db, 'config', 'public'), []);
+  const { data: pub } = useDoc<{ christmasMode?: unknown }>(publicRef);
   const ref = useMemoFirebase(() => (user ? doc(db, 'config', 'platform') : null), [user]);
   const { data } = useDoc<{ christmasMode?: unknown }>(ref);
-  const configMode = normalizeChristmasMode(data?.christmasMode);
+  const configMode = normalizeChristmasMode(pub?.christmasMode ?? data?.christmasMode);
 
   // SOLO en desarrollo: `localStorage['eya-xmas-preview'] = 'on' | 'off'` pisa la config para
   // poder mirar la decoración en noviembre sin escribir `config/platform` (lo usan los

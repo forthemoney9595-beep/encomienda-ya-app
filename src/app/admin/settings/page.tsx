@@ -87,6 +87,12 @@ function AdminSettingsPage() {
     setIsSaving(true);
     try {
       await setDoc(doc(firestore, 'config', 'platform'), localConfig, { merge: true });
+      // Espejo PÚBLICO de lo que puede leer cualquiera, incluso sin cuenta (`config/public`,
+      // regla `read: true`): hoy solo la decoración de Navidad. `config/platform` exige
+      // estar logueado, así que sin este espejo el invitado nunca veía "Siempre"/"Apagada".
+      await setDoc(doc(firestore, 'config', 'public'), {
+        christmasMode: normalizeChristmasMode(localConfig.christmasMode),
+      }, { merge: true });
       // Cambiar fees o el día de liquidación afecta plata de todas las tiendas y
       // repartidores -- antes no quedaba registro de quién lo cambió ni cuándo.
       if (adminUser) {
