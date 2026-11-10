@@ -275,7 +275,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         data-collapsed={collapsed ? '1' : '0'}
         className={cn('glass sticky top-2 my-2 ml-2 hidden h-[calc(100vh-1rem)] shrink-0 flex-col overflow-y-auto rounded-card transition-[width] duration-200 lg:flex', collapsed ? 'w-16' : 'w-60')}
       >
-        <div className={cn('flex h-14 items-center gap-2 border-b border-border px-4', collapsed && 'justify-center px-0')}>
+        <div className={cn('flex h-14 shrink-0 items-center gap-2 border-b border-border px-4', collapsed && 'justify-center px-0')}>
           <Link href="/admin" className="flex items-center gap-2" aria-label="EncomiendaYA · Centro de control">
             <Logo />
             {!collapsed && (

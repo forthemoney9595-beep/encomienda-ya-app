@@ -21,6 +21,7 @@ import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { getAuth, signOut, sendEmailVerification } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { SeasonStar } from '@/components/garland';
+import { useChristmas } from '@/hooks/use-christmas';
 import { cn } from '@/lib/utils';
 
 // Definición de tipo para el contexto con las propiedades extendidas
@@ -159,6 +160,15 @@ function EmailVerificationBanner({ user }: { user: any }) {
     );
 }
 
+// Navidad (10/11/2026): en el encabezado del celular aparece el logo con el gorro de Papá Noel
+// delante del nombre, SOLO en temporada (fuera de temporada no se renderiza y el encabezado
+// queda igual que siempre).
+function SeasonLogo() {
+    const { active } = useChristmas();
+    if (!active) return null;
+    return <Logo className="h-7 w-7 shrink-0" />;
+}
+
 function AppContentLayout({ children }: { children: React.ReactNode }) {
     const { user, userProfile, loading } = useAuth();
     // Tienda y repartidor también pueden comprar como clientes (Fase RR octies), así que el
@@ -257,7 +267,7 @@ function AppContentLayout({ children }: { children: React.ReactNode }) {
                             user && !loading && !isLandingPage && 'hidden',
                         )}
                     >
-                        EncomiendaYA<SeasonStar />
+                        <SeasonLogo />EncomiendaYA<SeasonStar />
                     </Link>
 
                     {/* SOLO PARA USUARIOS LOGUEADOS. En el inicio no se muestra: ahí ya está el

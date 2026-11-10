@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { CategoryTile } from '@/components/category-tile';
 import { Pill } from '@/components/price-pill';
 import { SlidingPill, useScrollActiveIntoRow } from '@/components/buyer-motion';
+import { FestiveHeader, ChristmasBow } from '@/components/christmas-decor';
 
 // --- TIPOS ---
 interface Store {
@@ -231,10 +232,16 @@ function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscou
     </Link>
   );
 
-  if (offers.length === 1) return <div className="mb-6">{slide(offers[0])}</div>;
+  // Navidad: moño en la esquina de arriba a la derecha, por FUERA del carrusel (el visor de
+  // embla recorta) y lejos de la flecha (que va centrada a la derecha). Fuera de temporada
+  // ChristmasBow no renderiza nada y el contenedor queda igual.
+  const bow = <ChristmasBow size="sm" className="-right-1.5 -top-3 rotate-12" />;
+
+  if (offers.length === 1) return <div className="relative mb-6">{slide(offers[0])}{bow}</div>;
 
   return (
-    <div className="mb-6">
+    <div className="relative mb-6">
+      {bow}
       <Carousel setApi={setApi} opts={{ loop: true }}>
         <CarouselContent>
           {offers.map(o => (
@@ -453,12 +460,12 @@ function HomeContent() {
     return (
       <div className="container mx-auto animate-in fade-in duration-500 pt-4">
         {/* Bienvenida compacta con CTA de registro (no el hero gigante de antes) */}
-        <div className="mb-6">
+        <FestiveHeader className="mb-6">
           <h1 className="font-headline text-4xl sm:text-5xl font-extrabold leading-none tracking-tight text-balance">
-            Lo de tu barrio, en la puerta de tu casa
+            Las tiendas de Tinogasta, a un toque
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Mirá las tiendas de Tinogasta. Creá tu cuenta gratis cuando quieras pedir.
+            Comida, almacén, farmacia y más. Creá tu cuenta gratis cuando quieras pedir.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href="/signup/buyer">
@@ -474,7 +481,7 @@ function HomeContent() {
               <strong className="text-foreground">{openCount}</strong> abiertas ahora
             </span>
           </div>
-        </div>
+        </FestiveHeader>
 
         <CategoryChips
           categories={categories}
@@ -549,7 +556,7 @@ function HomeContent() {
     <div className="container mx-auto animate-in fade-in duration-500">
       {/* SALUDO — sin globos difuminados, sin degradé en el nombre y sin emoji
           (Rediseño 2, Tanda 0: eran las tres señas de "hecho con IA" más visibles). */}
-      <div className="mb-6">
+      <FestiveHeader className="mb-6">
         <div className="min-w-0">
           <h1 className="font-headline text-4xl sm:text-5xl font-extrabold leading-none tracking-tight text-balance">
             {firstName(userProfile?.displayName || userProfile?.name)
@@ -569,7 +576,7 @@ function HomeContent() {
             <span><strong className="text-foreground">{discountedStores.length}</strong> con descuento</span>
           )}
         </div>
-      </div>
+      </FestiveHeader>
 
       <CategoryChips
         categories={categories}

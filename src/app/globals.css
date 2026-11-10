@@ -429,3 +429,36 @@ html:has([data-surface="admin"]) {
     animation: none !important;
   }
 }
+
+/* Navidad ilustrada (components/christmas-decor.tsx): Papá Noel sube desde el borde de la
+   cabecera una sola vez y saluda con la mano cada 5 s; el moño lleva una sombrita. Solo
+   transform (barato en GPU); todo quieto con "reducir movimiento". */
+.santa-peek {
+  transform-origin: 50% 100%;
+  animation: santa-rise 0.9s cubic-bezier(.2,.8,.2,1) 0.3s both;
+}
+.santa-arm {
+  transform-box: fill-box;
+  transform-origin: 70% 100%;
+  animation: santa-wave 5s ease-in-out 1.2s infinite;
+}
+.xmas-bow {
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.25));
+}
+@keyframes santa-rise {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes santa-wave {
+  0%, 40%, 100% { transform: rotate(0deg); }
+  8% { transform: rotate(-16deg); }
+  16% { transform: rotate(10deg); }
+  24% { transform: rotate(-14deg); }
+  32% { transform: rotate(6deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .santa-peek,
+  .santa-arm {
+    animation: none !important;
+  }
+}
