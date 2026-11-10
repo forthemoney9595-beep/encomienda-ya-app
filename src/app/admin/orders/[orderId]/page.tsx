@@ -44,7 +44,7 @@ type OrderDoc = Order & Record<string, unknown> & {
 
 function Section({ title, children, action, className }: { title: React.ReactNode; children: React.ReactNode; action?: React.ReactNode; className?: string }) {
   return (
-    <section className={`min-w-0 overflow-hidden rounded-lg border border-border bg-card ${className ?? ''}`}>
+    <section className={`min-w-0 overflow-hidden glass rounded-card ${className ?? ''}`}>
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5"><h2 className="text-sm font-semibold">{title}</h2>{action}</div>
       <div className="p-4">{children}</div>
     </section>

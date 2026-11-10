@@ -6,7 +6,6 @@ import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/lib/fire
 import { doc, collection, query, orderBy, where, limit } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardFooter, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Store as StoreIcon, MapPin, Star, Plus, Minus, Package, Clock, Info, Share2, MessageSquare, ChevronRight, ChevronLeft, Search, X, ShoppingBag, Home, Heart, BadgePercent } from 'lucide-react';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { StoreImage } from '@/components/store-image';
@@ -21,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { cn } from '@/lib/utils';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
-import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLAY_ORDER, isStorePaused, pausedUntilMs, type WeeklySchedule } from '@/lib/store-hours';
+import { normalizeSchedule, getStoreOpenStatus, formatRanges, DAY_LABELS, DISPLAY_ORDER, isStorePaused, pausedUntilMs, upcomingSpecialDays, formatSpecialDay, type WeeklySchedule } from '@/lib/store-hours';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { StarRating } from '@/components/star-rating';
@@ -33,6 +32,7 @@ import { format } from 'date-fns';
 import { fmtDate } from '@/lib/format-date';
 import { es } from 'date-fns/locale';
 import { publicName } from '@/lib/public-name';
+import { SlidingPill, useBumpKey, useScrollActiveIntoRow, buyerMotion, DIALOG_CLOSE_BIG, DIALOG_SHELL, GlassBone } from '@/components/buyer-motion';
 
 interface StoreData {
   name: string;
@@ -111,6 +111,11 @@ export default function StorePublicPage() {
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  // Vidrio (9/11/2026): píldoras que se deslizan en las pestañas y en la barra de categorías.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const catRowRef = useRef<HTMLDivElement>(null);
+  useScrollActiveIntoRow(catRowRef, '[aria-current="true"]', activeCategory);
+  const cartBumpKey = useBumpKey(cartStoreId === storeId ? totalItems : 0);
 
   // Las flechas del carrusel de destacados quedan deshabilitadas cuando no hay a dónde
   // desplazar (ej: solo 2 productos destacados que ya entran completos en pantalla) --
@@ -468,7 +473,7 @@ export default function StorePublicPage() {
 
       {/* El aviso de cerrado queda FUERA de las pestañas: tiene que verse siempre. */}
       {!storeStatus.isOpen && (
-          <div className="bg-destructive/10 border border-destructive/30 text-foreground p-4 rounded-lg mb-8 text-center animate-in fade-in slide-in-from-top-2">
+          <div className="mb-8 rounded-card border border-destructive/30 bg-destructive/10 p-4 text-center text-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2">
               <p className="font-semibold">
                   {storeStatus.paused
                       ? (pausedUntilMs(store) ? `Este local pausó los pedidos hasta las ${fmtDate(pausedUntilMs(store), 'time')}.` : 'Este local pausó los pedidos por un rato.')
@@ -483,8 +488,11 @@ export default function StorePublicPage() {
       )}
 
       {/* PESTAÑAS — antes las reseñas quedaban al fondo de todo el scroll del menú. */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="px-4 sm:px-0">
-        <TabsList className="mb-6 h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        {/* Vidrio (9/11/2026): control segmentado de vidrio; la píldora de la marca se desliza
+            hasta la pestaña elegida (antes, un subrayado que saltaba). */}
+        <TabsList ref={tabsRef} className="glass relative mb-6 grid h-auto w-full grid-cols-3 gap-1 rounded-full p-1 sm:max-w-md">
+          <SlidingPill containerRef={tabsRef} activeSelector='[data-state="active"]' activeKey={activeTab + (reviews?.length ?? 0)} className="rounded-full bg-primary shadow-sm" />
           {[
             { v: 'menu', label: 'Menú' },
             { v: 'info', label: 'Info' },
@@ -493,7 +501,7 @@ export default function StorePublicPage() {
             <TabsTrigger
               key={t.v}
               value={t.v}
-              className="rounded-none border-b-4 border-transparent px-0 pb-2 pt-1 font-headline text-lg font-bold text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              className="relative z-[1] min-h-[44px] rounded-full px-3 font-headline text-lg font-bold text-muted-foreground transition-colors duration-200 hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
             >
               {t.label}
             </TabsTrigger>
@@ -501,18 +509,20 @@ export default function StorePublicPage() {
         </TabsList>
 
         <TabsContent value="menu" className="mt-0">
-          <div className="relative max-w-md mb-6">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div className="relative mb-6 max-w-md">
+              <Search className="absolute left-4 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
+                  type="search"
+                  aria-label={`Buscar en ${store.name}`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder={`Buscar en ${store.name}...`}
-                  className="pl-9 pr-9"
+                  className="h-12 rounded-full border-[color:var(--glass-line)] bg-[color:var(--glass-strong)] pl-11 pr-12 shadow-[var(--glass-shadow)] [backdrop-filter:blur(var(--glass-blur))_saturate(1.5)]"
               />
               {searchTerm && (
                   <button
                       onClick={() => setSearchTerm('')}
-                      className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                      className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
                       aria-label="Limpiar búsqueda"
                   >
                       <X className="h-4 w-4" />
@@ -524,8 +534,12 @@ export default function StorePublicPage() {
           (top-[4.5rem] = margen de 0,5rem + 3,5rem del encabezado + 0,5rem de aire). Si cambia
           el alto del encabezado del shell (app-content.tsx), cambiar acá y el scroll-mt. */}
       {groupedProducts.length > 1 && (
-          <div className="glass-bar sticky top-[4.5rem] z-20 mb-6 rounded-card px-3 py-2.5">
-              <div className="flex gap-4 overflow-x-auto no-scrollbar">
+          <div className="glass-bar sticky top-[4.5rem] z-20 mb-6 rounded-full p-1.5">
+              {/* Vidrio (9/11/2026): píldoras en una fila; la de la marca se desliza hasta la
+                  categoría que se está mirando (scroll-spy) y la fila se corre sola para
+                  dejarla a la vista. */}
+              <div ref={catRowRef} role="group" aria-label="Categorías del menú" className="relative flex gap-1 overflow-x-auto no-scrollbar">
+                  <SlidingPill containerRef={catRowRef} activeSelector='[aria-current="true"]' activeKey={activeCategory} className="rounded-full bg-primary" />
                   {groupedProducts.map(([category]) => {
                       const style = getCategoryStyle(category);
                       const Icon = style.icon;
@@ -535,20 +549,13 @@ export default function StorePublicPage() {
                               key={category}
                               onClick={() => scrollToCategory(category)}
                               aria-current={isActive ? 'true' : undefined}
-                              className="flex flex-col items-center gap-1.5 shrink-0"
+                              className={cn(
+                                  'relative z-[1] flex min-h-[44px] shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold whitespace-nowrap transition-colors duration-200',
+                                  isActive ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                              )}
                           >
-                              <div className={cn(
-                                  'h-11 w-11 rounded-2xl flex items-center justify-center transition-colors ring-2',
-                                  isActive
-                                    ? cn('ring-offset-2 ring-offset-background', style.solid, style.ring)
-                                    : cn('ring-transparent opacity-80 hover:opacity-100', style.bg),
-                              )}>
-                                  <Icon className={cn('h-5 w-5', isActive ? '' : style.text)} />
-                              </div>
-                              <span className={cn(
-                                'text-xs font-medium whitespace-nowrap',
-                                isActive ? 'text-foreground' : 'text-muted-foreground',
-                              )}>{formatCategoryLabel(category)}</span>
+                              <Icon className={cn('h-4 w-4', isActive ? '' : style.text)} aria-hidden="true" />
+                              {formatCategoryLabel(category)}
                           </button>
                       );
                   })}
@@ -558,16 +565,16 @@ export default function StorePublicPage() {
 
       {/* DESTACADOS — carrusel horizontal (swipe en celular, flechas en desktop) */}
       {featuredProducts.length > 0 && (
-        <div className="mb-10 px-4 sm:px-0">
+        <div className="mb-10">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="font-headline text-xl font-bold flex items-center gap-2">
                     <Star className="h-5 w-5 text-warning fill-current" /> Recomendados
                 </h2>
                 <div className="hidden sm:flex gap-2">
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => featuredApi?.scrollPrev()} disabled={!canScrollPrev}>
+                    <Button variant="outline" size="icon" className="glass h-10 w-10 rounded-full border-[color:var(--glass-line)] bg-[color:var(--glass)]" onClick={() => featuredApi?.scrollPrev()} disabled={!canScrollPrev} aria-label="Ver destacados anteriores">
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => featuredApi?.scrollNext()} disabled={!canScrollNext}>
+                    <Button variant="outline" size="icon" className="glass h-10 w-10 rounded-full border-[color:var(--glass-line)] bg-[color:var(--glass)]" onClick={() => featuredApi?.scrollNext()} disabled={!canScrollNext} aria-label="Ver más destacados">
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
@@ -586,9 +593,10 @@ export default function StorePublicPage() {
 
       {/* MENU COMPLETO, AGRUPADO POR CATEGORÍA */}
       {search && visibleProducts.length === 0 ? (
-        <div className="text-center py-12 bg-muted/10 rounded-lg border border-dashed">
+        <div className="glass rounded-card py-12 text-center">
+            <Search className="mx-auto mb-3 h-10 w-10 text-muted-foreground/60" aria-hidden="true" />
             <p className="text-muted-foreground">Sin resultados para &quot;{searchTerm}&quot;.</p>
-            <button onClick={() => setSearchTerm('')} className="text-sm text-primary underline mt-2">Limpiar búsqueda</button>
+            <Button variant="link" onClick={() => setSearchTerm('')} className="mt-1 min-h-[44px]">Limpiar búsqueda</Button>
         </div>
       ) : products.length > 0 ? (
         groupedProducts.map(([category, items]) => (
@@ -596,14 +604,14 @@ export default function StorePublicPage() {
             // barra de acento + contador + línea divisoria, y las filas dentro de un
             // contenedor propio — antes era solo un h2 suelto y el menú se leía como una
             // lista continua sin cortes.
-            <div key={category} id={categorySlug(category)} data-category-section={category} className="mb-12 scroll-mt-[10rem]">
-                <div className="flex items-center gap-3 mb-3">
-                    <span aria-hidden className="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary to-primary/30" />
-                    <h2 className="font-headline text-xl font-bold">{formatCategoryLabel(category)}</h2>
-                    <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">{items.length}</span>
-                    <div className="flex-1 border-t border-border/60" />
+            <div key={category} id={categorySlug(category)} data-category-section={category} className="mb-10 scroll-mt-[10rem]">
+                {/* Vidrio (9/11/2026): cada categoría es UNA tarjeta de vidrio con su título
+                    arriba (antes, barra degradé + caja con borde). */}
+                <div className="mb-3 flex items-center gap-2.5 px-1">
+                    <h2 className="font-headline text-2xl font-extrabold leading-none">{formatCategoryLabel(category)}</h2>
+                    <span className="glass rounded-full px-2.5 py-0.5 text-sm font-semibold text-muted-foreground">{items.length}</span>
                 </div>
-                <div className="rounded-2xl border bg-card/60 px-4">
+                <div className="glass rounded-card px-4">
                     {items.map(product => (
                         <ProductRow key={product.id} product={product} onAdd={handleAddToCart} onOpenDetail={setDetailProduct} isDisabled={!storeStatus.isOpen} />
                     ))}
@@ -611,45 +619,51 @@ export default function StorePublicPage() {
             </div>
         ))
       ) : (
-        <div className="text-center py-12 bg-muted/10 rounded-lg border border-dashed">
+        <div className="glass rounded-card py-12 text-center">
+            <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground/60" aria-hidden="true" />
             <p className="text-muted-foreground">Esta tienda aún no tiene productos disponibles.</p>
         </div>
       )}
         </TabsContent>
 
         {/* --- INFO --- */}
-        <TabsContent value="info" className="mt-0 space-y-6">
+        <TabsContent value="info" className="mt-0 grid gap-4 md:grid-cols-2">
           {store.description && (
-            <div>
-              <h3 className="font-headline text-lg font-bold mb-2">Sobre la tienda</h3>
+            <Card className="p-5 md:col-span-2">
+              <h3 className="font-headline text-xl font-extrabold mb-2">Sobre la tienda</h3>
               <p className="text-muted-foreground">{store.description}</p>
-            </div>
+            </Card>
           )}
-          <div>
-            <h3 className="font-headline text-lg font-bold mb-2 flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-info" /> Dirección
+          <Card className="p-5 md:self-start">
+            <h3 className="font-headline text-xl font-extrabold mb-2 flex items-center gap-2.5">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-info/10"><MapPin className="h-4 w-4 text-info" aria-hidden="true" /></span> Dirección
             </h3>
             <p className="text-muted-foreground">{cleanAddress(store.address)}</p>
-          </div>
-          <div>
-            <h3 className="font-headline text-lg font-bold mb-2 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-primary" /> Horarios
+          </Card>
+          <Card className="p-5 md:row-span-2">
+            <h3 className="font-headline text-xl font-extrabold mb-3 flex items-center gap-2.5">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/10"><Clock className="h-4 w-4 text-primary" aria-hidden="true" /></span> Horarios
             </h3>
+            {/* Fechas especiales (feriados/fiestas) de los próximos 14 días, arriba de la semana. */}
+            {(() => { const special = upcomingSpecialDays(store, new Date(), 14); if (special.length === 0) return null;
+              return (<p data-testid="special-hours-info" className="mb-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm"><span className="font-semibold">Horario especial:</span>{' '}{special.map(formatSpecialDay).join(' · ')}</p>); })()}
             {/* Semana completa: hasta ahora la página solo mostraba el horario de HOY.
-                Se arma con los helpers que ya expone store-hours.ts. */}
+                Se arma con los helpers que ya expone store-hours.ts. Sin semanal (pero quizás
+                con fechas especiales) normalizeSchedule devuelve alwaysOpen: no se listan
+                siete días "00:00-24:00". */}
             {(() => {
               const weekly = normalizeSchedule(store);
-              if (!weekly) return <p className="text-sm text-muted-foreground">Siempre abierta.</p>;
+              if (!weekly || weekly.alwaysOpen) return <p className="text-sm text-muted-foreground">Siempre abierta.</p>;
               const todayIdx = new Date().getDay();
               return (
-                <ul className="max-w-md text-sm">
+                <ul className="text-sm">
                   {DISPLAY_ORDER.map(idx => {
                     const day = weekly[idx];
                     const isToday = idx === todayIdx;
                     return (
                       <li key={idx} className={cn(
-                        'flex justify-between gap-4 border-b border-border/40 py-1.5',
-                        isToday && 'font-semibold text-foreground',
+                        'flex justify-between gap-4 border-b border-border/40 px-2 py-2 last:border-0',
+                        isToday && 'rounded-xl border-transparent bg-primary/10 font-semibold text-foreground',
                       )}>
                         <span className={cn(!isToday && 'text-muted-foreground')}>
                           {DAY_LABELS[idx]}{isToday && ' (hoy)'}
@@ -663,10 +677,12 @@ export default function StorePublicPage() {
                 </ul>
               );
             })()}
+          </Card>
+          <div className="md:col-span-1">
+            <Button variant="outline" onClick={handleShare} className="glass h-12 gap-2 rounded-full border-[color:var(--glass-line)] bg-[color:var(--glass)] px-5">
+              <Share2 className="h-4 w-4" /> Compartir tienda
+            </Button>
           </div>
-          <Button variant="outline" onClick={handleShare} className="gap-2">
-            <Share2 className="h-4 w-4" /> Compartir tienda
-          </Button>
         </TabsContent>
 
         {/* --- RESEÑAS --- */}
@@ -676,13 +692,14 @@ export default function StorePublicPage() {
               <MessageSquare className="h-5 w-5 text-primary" /> Reseñas de la tienda
           </h2>
           {(!reviews || reviews.length === 0) ? (
-              <div className="text-center py-10 bg-muted/10 rounded-lg border border-dashed">
+              <div className="glass rounded-card py-10 text-center">
+                  <MessageSquare className="mx-auto mb-3 h-10 w-10 text-muted-foreground/60" aria-hidden="true" />
                   <p className="text-muted-foreground">Todavía no hay reseñas. Sé el primero en calificar después de tu pedido.</p>
               </div>
           ) : (
-              <div className="space-y-4">
-                  {reviews.slice(0, 10).map(review => (
-                      <Card key={review.id}>
+              <div className="grid gap-4 md:grid-cols-2">
+                  {reviews.slice(0, 10).map((review, i) => (
+                      <Card key={review.id} className="stagger-in" style={{ animationDelay: `${Math.min(i, 6) * 45}ms` }}>
                           <CardContent className="py-4 space-y-2">
                               <div className="flex items-center justify-between">
                                   <span className="font-medium text-sm">{publicName(review.userName)}</span>
@@ -695,7 +712,7 @@ export default function StorePublicPage() {
                               )}
                               {review.comment && <p className="text-sm text-foreground">{review.comment}</p>}
                               {review.ownerReply && (
-                                  <div className="mt-2 bg-muted/30 border-l-2 border-primary/40 rounded-r-md p-3">
+                                  <div className="mt-2 rounded-xl bg-primary/[0.07] p-3">
                                       <p className="text-xs font-semibold text-primary mb-1">Respuesta de la tienda</p>
                                       <p className="text-sm text-muted-foreground">{review.ownerReply}</p>
                                   </div>
@@ -712,12 +729,12 @@ export default function StorePublicPage() {
       {/* MÁS TIENDAS DEL MISMO RUBRO — permite saltar de tienda en tienda sin volver al
           inicio. Se oculta si no hay otras (no tiene sentido una fila de uno). */}
       {relatedStores.length > 0 && (
-        <div className="mb-10 px-4 sm:px-0">
-          <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
-            <StoreIcon className="h-5 w-5 text-primary" /> Más de {formatCategoryLabel(storeCategory ?? '')}
+        <div className="mb-10">
+          <h2 className="font-headline text-2xl font-extrabold mb-3 flex items-center gap-3">
+            <CategoryTile category={storeCategory} size="sm" /> Más de {formatCategoryLabel(storeCategory ?? '')}
           </h2>
           <div className="min-w-0">
-            <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+            <div className="-mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-4 pt-1 no-scrollbar [&>a]:snap-start">
               {relatedStores.map((s: any, i: number) => {
                 // Mismo criterio que el inicio: la pausa manual se evalúa aparte del horario.
                 const st = isStorePaused(s)
@@ -756,35 +773,52 @@ export default function StorePublicPage() {
     {/* BARRA DE CARRITO FLOTANTE — solo si el carrito activo es el de esta tienda.
         bottom-nav (celular, solo compradores) ocupa 4rem + safe-area, por eso el
         offset en mobile; en desktop no hay bottom-nav, así que va pegada abajo. */}
+    {/* Vidrio (9/11/2026): la barra es de vidrio (antes un bloque petróleo macizo) con la
+        bolsa en un círculo de la marca que LATE cada vez que se agrega algo, y el botón
+        "Ver carrito" en píldora de la marca. Entra desde abajo la primera vez. */}
     {showCartBar && (
         <button
             onClick={() => setCartSheetOpen(true)}
-            className="fixed inset-x-4 z-40 mx-auto flex max-w-md items-center justify-between rounded-full bg-primary px-5 py-3.5 text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 bottom-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] md:bottom-6"
+            data-testid="store-cart-bar"
+            className={cn('glass-bar fixed inset-x-3 z-40 mx-auto flex max-w-md items-center gap-3 rounded-full py-2 pl-2 pr-2 text-foreground transition-transform active:scale-[0.98] motion-reduce:active:scale-100 bottom-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] md:bottom-6', buyerMotion.rise)}
         >
-            <span className="flex items-center gap-2 font-semibold">
-                <ShoppingBag className="h-5 w-5" />
-                {totalItems} {totalItems === 1 ? 'producto' : 'productos'}
+            <span key={cartBumpKey} className={cn('relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground', cartBumpKey > 0 && buyerMotion.bump)}>
+                <ShoppingBag className="h-5 w-5" aria-hidden="true" />
+                <span className="absolute -right-1 -top-1 grid h-6 min-w-[1.5rem] place-items-center rounded-full border-2 border-[color:var(--glass-line)] bg-offer px-1 text-xs font-extrabold text-offer-foreground tabular-nums">{totalItems}</span>
             </span>
-            <span className="font-bold">Ver carrito · {money(totalPrice)}</span>
+            <span className="min-w-0 flex-1 text-left">
+                <span className="block text-sm leading-tight text-muted-foreground">{totalItems} {totalItems === 1 ? 'producto' : 'productos'}</span>
+                <span className="block font-headline text-xl font-extrabold leading-tight tabular-nums">{money(totalPrice)}</span>
+            </span>
+            <span className="shrink-0 rounded-full bg-primary px-4 py-2.5 font-bold text-primary-foreground">Ver carrito</span>
         </button>
     )}
     </>
   );
 }
 
+// Carga en vidrio (9/11/2026): misma silueta que la página (banner, tarjeta del local,
+// pestañas y una categoría) para que nada salte al llegar los datos.
 function LoadingSkeleton() {
     return (
-      <div className="container mx-auto space-y-8 py-8">
-        <div className="flex items-center gap-4">
-            <Skeleton className="h-20 w-20 rounded-full" />
-            <div className="space-y-2">
-                <Skeleton className="h-8 w-64" />
-                <Skeleton className="h-4 w-48" />
+      <div className="container mx-auto space-y-6 py-4" aria-busy="true" aria-label="Cargando la tienda">
+        <GlassBone className="aspect-[3.2/1] w-full rounded-card sm:aspect-[4/1]" />
+        <Card className="mx-2 -mt-12 space-y-3 p-4 sm:mx-6">
+            <div className="flex items-center gap-3">
+                <GlassBone className="h-[3.125rem] w-[3.125rem] rounded-[1rem]" />
+                <GlassBone className="h-9 w-2/3" />
             </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64 w-full" />)}
-        </div>
+            <GlassBone className="h-4 w-1/2" />
+        </Card>
+        <GlassBone className="h-12 w-full rounded-full sm:max-w-md" />
+        <Card className="space-y-4 p-4">
+            {[1, 2, 3].map(i => (
+                <div key={i} className="flex items-center gap-4">
+                    <div className="flex-1 space-y-2"><GlassBone className="h-5 w-2/3" /><GlassBone className="h-4 w-1/2" /><GlassBone className="h-7 w-20 rounded-full" /></div>
+                    <GlassBone className="h-24 w-24 rounded-2xl" />
+                </div>
+            ))}
+        </Card>
       </div>
     );
 }
@@ -801,17 +835,17 @@ function StoreNotFound({ router }: { router: any }) {
 function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: { product: Product, onAdd: (p: Product) => void, onOpenDetail: (p: Product) => void, isFeatured?: boolean, isDisabled?: boolean }) {
     const outOfStock = product.stock != null && product.stock <= 0;
     return (
-        <Card className={`flex flex-col overflow-hidden border ${isFeatured ? 'border-warning/40' : ''}`}>
-            <button type="button" onClick={() => onOpenDetail(product)} className="text-left">
-                <div className={`relative h-40 w-full bg-muted flex items-center justify-center overflow-hidden ${(isDisabled || outOfStock) ? 'opacity-50 grayscale' : ''}`}>
+        <Card className="flex h-full flex-col overflow-hidden">
+            <button type="button" onClick={() => onOpenDetail(product)} data-testid="product-open-detail" className="text-left">
+                <div className={`relative h-40 w-full bg-foreground/[0.05] flex items-center justify-center overflow-hidden ${(isDisabled || outOfStock) ? 'opacity-50 grayscale' : ''}`}>
                     {product.imageUrl ? (
                         <img loading="lazy" decoding="async" src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
                         <Package className="h-10 w-10 text-muted-foreground/50" />
                     )}
                     {isFeatured && (
-                        <span className="absolute top-2 right-2 bg-foreground text-background text-xs font-bold px-2 py-1 rounded-full">
-                            POPULAR
+                        <span className="glass-strong absolute top-2 right-2 rounded-full px-2.5 py-1 text-xs font-bold">
+                            Popular
                         </span>
                     )}
                     {!outOfStock && product.stock != null && product.stock <= 3 && (
@@ -829,7 +863,7 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
                 </div>
                 <CardHeader className="p-4 pb-0">
                     <div className="flex justify-between items-start gap-2">
-                        <CardTitle className="text-base line-clamp-1">{product.name}</CardTitle>
+                        <CardTitle className="font-headline text-xl font-extrabold leading-tight line-clamp-1">{product.name}</CardTitle>
                         <span className="flex flex-col items-end gap-1 shrink-0">
                             <PricePill value={effectivePrice(product)} offer={!!product.discountPercent} className="text-base" />
                             {!!product.discountPercent && (
@@ -837,12 +871,12 @@ function ProductCard({ product, onAdd, onOpenDetail, isFeatured, isDisabled }: {
                             )}
                         </span>
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1 h-8">{product.description}</p>
+                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1 min-h-[2.5rem]">{product.description}</p>
                 </CardHeader>
             </button>
             <CardFooter className="p-4 mt-auto">
                 {outOfStock ? (
-                    <Button className="w-full" size="sm" disabled>Sin stock</Button>
+                    <Button className="h-11 w-full rounded-full" disabled>Sin stock</Button>
                 ) : (
                     <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} maxQuantity={product.stock ?? undefined} />
                 )}
@@ -857,9 +891,9 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
         // Rediseño 2 (Toldo): precio en etiqueta de góndola. Antes TODA la fila se atenuaba
         // (opacity-60) cuando no había stock y el texto quedaba en 2,5-3,4:1: ahora solo se
         // apaga la foto y el aviso se lee. "Quedan N" va en ámbar (aviso), no en rojo (error).
-        <div className="flex items-center gap-4 py-4 border-b last:border-0">
-            <button type="button" onClick={() => onOpenDetail(product)} className="flex-1 min-w-0 text-left">
-                <h3 className="font-semibold line-clamp-1">{product.name}</h3>
+        <div className="flex items-center gap-4 py-4 border-b border-border/60 last:border-0">
+            <button type="button" onClick={() => onOpenDetail(product)} data-testid="product-open-detail" className="flex-1 min-w-0 text-left">
+                <h3 className="font-headline text-xl font-bold leading-tight line-clamp-1">{product.name}</h3>
                 {product.description && <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{product.description}</p>}
                 <p className="mt-2 flex flex-wrap items-center gap-2">
                     <PricePill value={effectivePrice(product)} offer={!!product.discountPercent} className="text-lg" />
@@ -874,7 +908,7 @@ function ProductRow({ product, onAdd, onOpenDetail, isDisabled }: { product: Pro
                 ) : null}
             </button>
             <div className="relative h-24 w-24 shrink-0">
-                <button type="button" onClick={() => onOpenDetail(product)} className={cn('h-24 w-24 rounded-lg bg-muted border overflow-hidden flex items-center justify-center', (isDisabled || outOfStock) && 'opacity-50 grayscale')}>
+                <button type="button" onClick={() => onOpenDetail(product)} aria-label={`Ver ${product.name}`} className={cn('h-24 w-24 rounded-2xl bg-foreground/[0.05] overflow-hidden flex items-center justify-center', (isDisabled || outOfStock) && 'opacity-50 grayscale')}>
                     {product.imageUrl ? (
                         <img loading="lazy" decoding="async" src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
@@ -898,13 +932,13 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
     const [showFullImage, setShowFullImage] = useState(false);
     return (
         <Dialog open={!!product} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-md">
+            <DialogContent className={cn('flex max-h-[92vh] max-w-md flex-col gap-0 overflow-hidden p-0', DIALOG_SHELL, DIALOG_CLOSE_BIG)}>
                 {product && (
                     <>
                         {/* object-CONTAIN a propósito (pedido de la prueba: "que las imágenes
                             se vean completas"): acá se ve la foto ENTERA sin recortes; el
                             click la agranda a pantalla casi completa (ImageLightbox). */}
-                        <div className="relative -mx-6 -mt-6 h-64 w-[calc(100%+3rem)] bg-muted/60 flex items-center justify-center overflow-hidden rounded-t-lg">
+                        <div className="relative h-64 w-full shrink-0 bg-foreground/[0.05] flex items-center justify-center overflow-hidden">
                             {product.imageUrl ? (
                                 <img
                                     loading="lazy"
@@ -919,20 +953,22 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                                 <Package className="h-16 w-16 text-muted-foreground/50" />
                             )}
                             {!!product.discountPercent && (
-                                <span className="absolute bottom-3 left-3 bg-success text-success-foreground text-xs font-bold px-2 py-1 rounded-full shadow-sm">
-                                    -{product.discountPercent}%
+                                // Naranja de OFERTAS (antes verde: verde NUNCA para descuentos).
+                                <span className="absolute bottom-3 left-3 rounded-full bg-offer px-2.5 py-1 text-sm font-extrabold text-offer-foreground shadow-sm">
+                                    −{product.discountPercent}%
                                 </span>
                             )}
                             <button
                                 type="button"
                                 onClick={onToggleFavorite}
                                 aria-label={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-                                className="absolute top-3 right-3 h-9 w-9 rounded-full bg-background/80 backdrop-blur-sm shadow-sm flex items-center justify-center hover:scale-110 transition-transform"
+                                className="glass-strong absolute left-3 top-3 grid h-11 w-11 place-items-center rounded-full transition-transform active:scale-90 motion-reduce:active:scale-100"
                             >
                                 <Heart className={cn('h-[18px] w-[18px]', isFavorite ? 'fill-primary text-primary' : 'text-foreground')} />
                             </button>
                         </div>
-                        <DialogHeader className="text-left pt-2">
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-5">
+                        <DialogHeader className="text-left">
                             <DialogTitle className="font-headline text-3xl font-extrabold leading-none">{product.name}</DialogTitle>
                             {product.description && (
                                 <DialogDescription className="text-sm text-foreground/80 pt-1">
@@ -951,11 +987,15 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
                                 <span className="text-sm font-semibold text-warning">Quedan {product.stock}</span>
                             )}
                         </div>
+                        </div>
+                        {/* Pie fijo con la acción: siempre a la vista aunque la descripción sea larga. */}
+                        <div className="shrink-0 border-t border-border/60 bg-popover px-6 py-4">
                         {outOfStock ? (
-                            <Button className="w-full" disabled>Sin stock</Button>
+                            <Button className="h-12 w-full rounded-full" disabled>Sin stock</Button>
                         ) : (
-                            <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} maxQuantity={product.stock ?? undefined} />
+                            <QuantityControl product={product} onAdd={onAdd} isDisabled={isDisabled} maxQuantity={product.stock ?? undefined} size="lg" />
                         )}
+                        </div>
                         <ImageLightbox
                             src={showFullImage ? product.imageUrl || null : null}
                             alt={product.name}
@@ -970,7 +1010,7 @@ function ProductDetailDialog({ product, onClose, onAdd, isDisabled, isFavorite, 
 
 // Botón "Agregar" / píldora de cantidad — refleja si el producto ya está en el carrito
 // (antes "Agregar" no cambiaba nunca, sin importar cuántas unidades ya tuvieras en el carrito).
-function QuantityControl({ product, onAdd, isDisabled, variant = 'full', maxQuantity }: { product: Product, onAdd: (p: Product) => void, isDisabled?: boolean, variant?: 'full' | 'compact', maxQuantity?: number }) {
+function QuantityControl({ product, onAdd, isDisabled, variant = 'full', maxQuantity, size = 'md' }: { product: Product, onAdd: (p: Product) => void, isDisabled?: boolean, variant?: 'full' | 'compact', maxQuantity?: number, size?: 'md' | 'lg' }) {
     const { cart, updateQuantity, removeFromCart } = useCart();
     const quantity = cart.find(i => i.id === product.id)?.quantity || 0;
     const atMax = maxQuantity != null && quantity >= maxQuantity;
@@ -985,33 +1025,33 @@ function QuantityControl({ product, onAdd, isDisabled, variant = 'full', maxQuan
                     onClick={() => onAdd(product)}
                     disabled={isDisabled}
                     aria-label={`Agregar ${product.name}`}
-                    data-testid="add-product" className="h-11 w-11 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50"
+                    data-testid="add-product" className="grid h-11 w-11 place-items-center rounded-full bg-primary text-primary-foreground shadow-md ring-4 ring-[color:var(--glass-line)] transition-transform active:scale-90 disabled:opacity-50 motion-reduce:active:scale-100"
                 >
                     <Plus className="h-5 w-5" aria-hidden="true" />
                 </button>
             );
         }
         return (
-            <div className="flex items-center gap-0.5 bg-primary text-primary-foreground rounded-lg px-0.5 h-11">
-                <button onClick={dec} disabled={isDisabled} aria-label={`Quitar uno de ${product.name}`} className="h-10 w-9 flex items-center justify-center"><Minus className="h-4 w-4" /></button>
-                <span className="font-headline text-base font-extrabold w-4 text-center tabular-nums">{quantity}</span>
-                <button onClick={inc} disabled={isDisabled || atMax} aria-label={`Agregar uno de ${product.name}`} className="h-10 w-9 flex items-center justify-center disabled:opacity-50"><Plus className="h-4 w-4" /></button>
+            <div className="flex h-11 items-center gap-0.5 rounded-full bg-primary px-0.5 text-primary-foreground shadow-md ring-4 ring-[color:var(--glass-line)] motion-safe:animate-in motion-safe:zoom-in-90 motion-safe:duration-200">
+                <button onClick={dec} disabled={isDisabled} aria-label={`Quitar uno de ${product.name}`} className="flex h-10 w-9 items-center justify-center rounded-full"><Minus className="h-4 w-4" /></button>
+                <span key={quantity} className={cn('w-4 text-center font-headline text-base font-extrabold tabular-nums', buyerMotion.tick)}>{quantity}</span>
+                <button onClick={inc} disabled={isDisabled || atMax} aria-label={`Agregar uno de ${product.name}`} className="flex h-10 w-9 items-center justify-center rounded-full disabled:opacity-50"><Plus className="h-4 w-4" /></button>
             </div>
         );
     }
 
     if (quantity === 0) {
         return (
-            <Button onClick={() => onAdd(product)} className="w-full" size="sm" disabled={isDisabled}>
+            <Button onClick={() => onAdd(product)} className={cn('w-full rounded-full', size === 'lg' ? 'h-12 text-lg' : 'h-11')} disabled={isDisabled}>
                 {isDisabled ? 'Cerrado' : <><Plus className="h-4 w-4 mr-1" /> Agregar</>}
             </Button>
         );
     }
     return (
-        <div className="flex items-center justify-between w-full rounded-md border border-primary/30 bg-primary/10">
-            <button onClick={dec} disabled={isDisabled} className="h-9 w-10 flex items-center justify-center text-primary disabled:opacity-50"><Minus className="h-4 w-4" /></button>
-            <span className="font-bold text-sm text-foreground">{quantity} en el carrito</span>
-            <button onClick={inc} disabled={isDisabled || atMax} className="h-9 w-10 flex items-center justify-center text-primary disabled:opacity-50"><Plus className="h-4 w-4" /></button>
+        <div className={cn('flex w-full items-center justify-between rounded-full border border-primary/30 bg-primary/10 p-0.5', size === 'lg' ? 'h-12' : 'h-11')}>
+            <button onClick={dec} disabled={isDisabled} aria-label={`Quitar uno de ${product.name}`} className="grid h-10 w-11 place-items-center rounded-full text-primary hover:bg-primary/10 disabled:opacity-50"><Minus className="h-4 w-4" /></button>
+            <span className="text-sm font-bold text-foreground"><span key={quantity} className={buyerMotion.tick}>{quantity}</span> en el carrito</span>
+            <button onClick={inc} disabled={isDisabled || atMax} aria-label={`Agregar uno de ${product.name}`} className="grid h-10 w-11 place-items-center rounded-full text-primary hover:bg-primary/10 disabled:opacity-50"><Plus className="h-4 w-4" /></button>
         </div>
     );
 }

@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminAuthGuard from '../admin-auth-guard';
-import PageHeader from '@/components/page-header';
+import { AdminPage } from '@/components/admin/admin-page';
+import { SlidingChips } from '@/components/admin/admin-list';
+import { EmptyState } from '@/components/admin/empty-state';
+import { useConfirm } from '@/components/admin/confirm-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +31,7 @@ function AdminCommunicationsPage() {
   const { user } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const confirmDialog = useConfirm();
 
   const [target, setTarget] = useState<'all' | 'stores' | 'drivers' | 'user'>('all');
   const [userId, setUserId] = useState('');
@@ -93,7 +97,7 @@ function AdminCommunicationsPage() {
       return;
     }
     const label = target === 'all' ? 'todos' : target === 'stores' ? 'todas las tiendas' : target === 'drivers' ? 'todos los repartidores' : 'este usuario';
-    if (!confirm(`¿Enviar notificación a "${label}"?`)) return;
+    if (!(await confirmDialog({ title: `¿Enviar el aviso a "${label}"?`, description: 'Sale como push y campanita. No se puede deshacer.', confirmLabel: 'Enviar' })).ok) return;
     // Destino del link al tocar el aviso.
     const link = linkKind === 'orders' ? '/orders'
       : linkKind === 'order' && linkOrderId.trim() ? `/orders/${linkOrderId.trim()}`
@@ -117,34 +121,30 @@ function AdminCommunicationsPage() {
   };
 
   return (
-    <div className="container mx-auto pb-20 space-y-6 max-w-2xl">
-      <PageHeader title="Comunicaciones" description="Enviar notificaciones a los usuarios de la plataforma." />
-
-      <Card>
+    <AdminPage title="Avisos" subtitle="Notificaciones push + campanita para los usuarios de la plataforma.">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
+      <Card className="min-w-0">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-primary" /> Nueva notificación</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-lg"><Bell className="h-5 w-5 text-primary-ink" aria-hidden="true" /> Nueva notificación</CardTitle>
           <CardDescription>Se envía como push + campanita in-app. Máximo 5 envíos por hora.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Destino</label>
-            <div className="flex gap-2 flex-wrap">
-              {(['all', 'stores', 'drivers', 'user'] as const).map(t => (
-                <button key={t} onClick={() => setTarget(t)}
-                  className={cn('px-3 py-1.5 rounded-full text-sm font-medium transition-all',
-                    target === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
-                  )}>
-                  {t === 'all' ? 'Todos' : t === 'stores' ? 'Todas las tiendas' : t === 'drivers' ? 'Todos los repartidores' : 'Un usuario'}
-                </button>
-              ))}
-            </div>
+            <p className="text-sm font-medium" id="comm-target-label">Destino</p>
+            <SlidingChips
+              chips={(['all', 'stores', 'drivers', 'user'] as const).map(t => ({ value: t, label: t === 'all' ? 'Todos' : t === 'stores' ? 'Todas las tiendas' : t === 'drivers' ? 'Todos los repartidores' : 'Un usuario' }))}
+              value={target}
+              onChange={setTarget}
+              label="Destino del aviso"
+              testId="comm-target"
+            />
             {target === 'user' && (
               <div className="space-y-2">
-                <Input placeholder="Buscar usuario por email (prefijo)..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+                <Input placeholder="Buscar usuario por email (prefijo)…" aria-label="Buscar usuario por email" className="min-h-[44px]" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
                 {userSearch.trim() && (
-                  <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
+                  <div className="glass max-h-48 divide-y divide-foreground/10 overflow-y-auto rounded-card">
                     {userResults.map((u: any) => (
-                      <button key={u.id} className={cn('w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors',
+                      <button type="button" key={u.id} className={cn('min-h-[44px] w-full px-3 py-2 text-left text-sm transition-colors hover:bg-admin-row-hover',
                         userId === u.id ? 'bg-primary/10 font-medium' : ''
                       )} onClick={() => { setUserId(u.id); setUserSearch(u.email || u.displayName || ''); }}>
                         {u.displayName || u.name || '(sin nombre)'} — {u.email}
@@ -160,37 +160,34 @@ function AdminCommunicationsPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">¿A dónde lleva el aviso?</label>
-            <div className="flex gap-2 flex-wrap">
-              {([['home', 'Inicio'], ['orders', 'Sus pedidos'], ['order', 'Un pedido puntual']] as const).map(([k, lbl]) => (
-                <button key={k} onClick={() => setLinkKind(k)} type="button"
-                  className={cn('px-3 py-1.5 rounded-full text-sm font-medium transition-all',
-                    linkKind === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
-                  )}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
+            <p className="text-sm font-medium">¿A dónde lleva el aviso?</p>
+            <SlidingChips
+              chips={([['home', 'Inicio'], ['orders', 'Sus pedidos'], ['order', 'Un pedido puntual']] as const).map(([k, lbl]) => ({ value: k, label: lbl }))}
+              value={linkKind}
+              onChange={setLinkKind}
+              label="A dónde lleva el aviso"
+              testId="comm-link"
+            />
             {linkKind === 'order' && (
-              <Input placeholder="Pegá el ID del pedido (ej. para avisar de un reembolso)" value={linkOrderId} onChange={e => setLinkOrderId(e.target.value.trim())} />
+              <Input placeholder="Pegá el ID del pedido (ej. para avisar de un reembolso)" aria-label="ID del pedido" className="min-h-[44px]" value={linkOrderId} onChange={e => setLinkOrderId(e.target.value.trim())} />
             )}
             <p className="text-xs text-muted-foreground">Al tocar la notificación, el usuario va ahí. &quot;Sus pedidos&quot; abre la lista de cada uno.</p>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Título <span className="text-muted-foreground">({title.length}/60)</span></label>
-            <Input maxLength={60} value={title} onChange={e => setTitle(e.target.value)} placeholder="Ej: Actualización importante" />
+            <label htmlFor="comm-title" className="text-sm font-medium">Título <span className="text-muted-foreground">({title.length}/60)</span></label>
+            <Input id="comm-title" className="min-h-[44px]" maxLength={60} value={title} onChange={e => setTitle(e.target.value)} placeholder="Ej: Actualización importante" />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Mensaje <span className="text-muted-foreground">({body.length}/160)</span></label>
-            <Textarea maxLength={160} value={body} onChange={e => setBody(e.target.value)} placeholder="Ej: Hoy operamos con horario reducido hasta las 20hs." rows={3} />
+            <label htmlFor="comm-body" className="text-sm font-medium">Mensaje <span className="text-muted-foreground">({body.length}/160)</span></label>
+            <Textarea id="comm-body" maxLength={160} value={body} onChange={e => setBody(e.target.value)} placeholder="Ej: Hoy operamos con horario reducido hasta las 20hs." rows={3} />
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <Button onClick={handleSend} disabled={sending || !title.trim() || !body.trim() || remaining === 0} className="gap-2">
-              {sending ? <><span className="animate-spin">⋯</span> Enviando...</> : <><Send className="h-4 w-4" /> Enviar notificación</>}
+            <Button onClick={handleSend} disabled={sending || !title.trim() || !body.trim() || remaining === 0} className="min-h-[44px] gap-2">
+              {sending ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Enviando…</> : <><Send className="h-4 w-4" aria-hidden="true" /> Enviar notificación</>}
             </Button>
-            <span className={cn('text-xs', remaining === 0 ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+            <span className={cn('text-xs', remaining === 0 ? 'text-destructive-ink font-medium' : 'text-muted-foreground')}>
               {remaining === 0
                 ? 'Alcanzaste el límite de 5 envíos por hora.'
                 : `Te quedan ${remaining} de ${HOURLY_LIMIT} envíos esta hora.`}
@@ -200,22 +197,20 @@ function AdminCommunicationsPage() {
       </Card>
 
       {/* ── Historial de envíos ── */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <History className="h-5 w-5 text-muted-foreground" /> Últimos envíos
+            <History className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> Últimos envíos
           </CardTitle>
           <CardDescription>Qué se comunicó, a quién y cuándo. Tocá &quot;Reusar&quot; para volver a cargar ese mensaje en el formulario.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {loadingHistory && <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
           {!loadingHistory && history.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-lg">
-              Todavía no se envió ninguna comunicación.
-            </p>
+            <EmptyState compact icon={History} title="Todavía no se envió ningún aviso" />
           )}
           {history.map(h => (
-            <div key={h.id} className="flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5">
+            <div key={h.id} className="flex items-start justify-between gap-3 rounded-xl border border-foreground/10 bg-foreground/[0.02] px-3 py-2.5">
               <div className="min-w-0 space-y-0.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium truncate">{h.title}</span>
@@ -229,7 +224,7 @@ function AdminCommunicationsPage() {
                 </p>
               </div>
               <Button
-                variant="outline" size="sm" className="shrink-0 gap-1.5"
+                variant="outline" size="sm" className="min-h-[40px] shrink-0 gap-1.5" aria-label={`Reusar el aviso «${h.title || ''}»`}
                 onClick={() => {
                   setTitle(h.title || '');
                   setBody(h.body || '');
@@ -237,13 +232,14 @@ function AdminCommunicationsPage() {
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
               >
-                <RotateCcw className="h-3.5 w-3.5" /> Reusar
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Reusar
               </Button>
             </div>
           ))}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </AdminPage>
   );
 }
 

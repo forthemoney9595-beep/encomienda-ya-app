@@ -3,14 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Eye, Car, FileText, Phone, Mail, ExternalLink } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Eye, Car, FileText, Phone, Mail, ExternalLink, Bike, Star, AlertTriangle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getPlaceholderImage } from '@/lib/placeholder-images';
-import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { PersonnelActions } from './personnel-actions';
+import { ListCard, ListRow, PersonTile, RowIconButton } from '@/components/admin/admin-list';
+import { SOFT_BADGE } from '@/components/admin/status-badge';
+import { EmptyState } from '@/components/admin/empty-state';
 import {
   Dialog,
   DialogContent,
@@ -46,15 +45,12 @@ interface DeliveryPersonnelListProps {
     onSuspend: (driver: DeliveryPersonnel) => void;
 }
 
-const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'Activo': return 'secondary';
-      case 'Pendiente': return 'default';
-      case 'Inactivo':
-      case 'Suspendido':
-      case 'Rechazado': return 'destructive';
-      default: return 'outline';
-    }
+const DRIVER_STATE: Record<string, { label: string; tone: keyof typeof SOFT_BADGE }> = {
+  Activo: { label: 'Activo', tone: 'success' },
+  Pendiente: { label: 'Pendiente', tone: 'warning' },
+  Suspendido: { label: 'Suspendido', tone: 'destructive' },
+  Rechazado: { label: 'Rechazado', tone: 'neutral' },
+  Inactivo: { label: 'Inactivo', tone: 'neutral' },
 };
 
 export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDelete, onSuspend }: DeliveryPersonnelListProps) {
@@ -86,82 +82,71 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Personal de Reparto</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Vehículo</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {personnel.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">No se encontró personal.</TableCell>
-                </TableRow>
-              ) : (
-                personnel.map((driver) => (
-                  <TableRow key={driver.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarImage src={driver.profileImageUrl || getPlaceholderImage(driver.id, 40, 40)} alt={driver.name} />
-                            <AvatarFallback>{driver.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">{driver.name}</span>
-                        </div>
-                      </TableCell>
-                    <TableCell className="capitalize">
-                        {/* ✅ CORRECCIÓN: Lógica ultra-segura para renderizar texto siempre */}
-                        {(() => {
-                            if (typeof driver.vehicle === 'string') return driver.vehicle;
-                            if (typeof driver.vehicle === 'object' && driver.vehicle !== null) return driver.vehicle.type;
-                            return 'Sin datos';
-                        })()}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">{driver.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right flex justify-end gap-2 items-center">
-                      <Button variant="ghost" size="icon" onClick={() => setSelectedDriver(driver)} title="Ver Ficha Técnica">
-                          <Eye className="h-4 w-4 text-info" />
-                      </Button>
-                      {/* Tanda B: la lista nunca enlazaba a la ficha COMPLETA del
-                          repartidor (métricas, CBU, estado de cuenta) — solo se llegaba
-                          por el ⌘K o desde Finanzas. */}
-                      <Button asChild variant="ghost" size="icon" title="Ficha completa (métricas, billetera, estado de cuenta)">
-                          <Link href={`/admin/delivery/${driver.id}`}>
-                              <ExternalLink className="h-4 w-4 text-primary" />
-                          </Link>
-                      </Button>
+      {personnel.length === 0 ? (
+        <ListCard>
+          <EmptyState icon={Bike} title="No se encontró personal con ese filtro" />
+        </ListCard>
+      ) : (
+        <ListCard testId="drivers-list">
+          {personnel.map((driver, i) => {
+            const st = DRIVER_STATE[driver.status] ?? { label: driver.status || '—', tone: 'neutral' as const };
+            const v = driver.vehicle;
+            const vehicle = typeof v === 'string' ? v : (v && typeof v === 'object') ? [v.type, v.plate].filter(Boolean).join(' · ') : '';
+            const online = (driver as any).isOnline !== false;
+            return (
+              <ListRow
+                key={driver.id}
+                index={i}
+                testId="driver-row"
+                highlight={driver.status === 'Pendiente' ? 'warning' : undefined}
+                leading={<PersonTile role="delivery" photo={driver.profileImageUrl} />}
+                title={driver.name || driver.email || 'Sin nombre'}
+                href={`/admin/delivery/${driver.id}`}
+                subtitle={
+                  <span className="block truncate">
+                    <span className="capitalize">{vehicle || 'Sin vehículo cargado'}</span>
+                    <span className="hidden md:inline"> · {driver.email}</span>
+                  </span>
+                }
+                meta={
+                  <>
+                    <span className={cn('inline-flex h-[22px] items-center whitespace-nowrap rounded-full px-2 text-xs font-semibold', SOFT_BADGE[st.tone])} data-testid="driver-state">{st.label}</span>
+                    {driver.status === 'Activo' ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={cn('h-2 w-2 rounded-full', online ? 'bg-success' : 'bg-muted-foreground/60')} aria-hidden="true" />
+                        {online ? 'Disponible' : 'No disponible'}
+                      </span>
+                    ) : driver.rating ? (
+                      <span className="inline-flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-warning text-warning" aria-hidden="true" /><span className="font-semibold tabular-nums text-foreground">{Number(driver.rating).toFixed(1).replace('.', ',')}</span></span>
+                    ) : null}
+                  </>
+                }
+                actions={
+                  <>
+                    <RowIconButton label="Ver ficha técnica" onClick={() => setSelectedDriver(driver)}><Eye className="h-4 w-4" aria-hidden="true" /></RowIconButton>
+                    {/* Tanda B: la lista nunca enlazaba a la ficha COMPLETA del repartidor
+                        (métricas, CBU, estado de cuenta) — solo se llegaba por el ⌘K o Finanzas. */}
+                    <RowIconButton label="Ficha completa (métricas, billetera, estado de cuenta)" className="hidden sm:inline-flex" href={`/admin/delivery/${driver.id}`}><ExternalLink className="h-4 w-4" aria-hidden="true" /></RowIconButton>
+                    <PersonnelActions
+                      driver={driver as any}
+                      onStatusUpdate={onStatusUpdate}
+                      onEdit={onEdit as any}
+                      onDelete={onDelete}
+                      onSuspend={onSuspend}
+                    />
+                  </>
+                }
+              >
+                <span className={cn('mt-1 inline-flex h-[22px] items-center rounded-full px-2 text-xs font-semibold min-[380px]:hidden', SOFT_BADGE[st.tone])}>{st.label}</span>
+              </ListRow>
+            );
+          })}
+        </ListCard>
+      )}
 
-                      <PersonnelActions 
-                        driver={driver as any} 
-                        onStatusUpdate={onStatusUpdate}
-                        onEdit={onEdit as any}
-                        onDelete={onDelete}
-                        onSuspend={onSuspend}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* 📄 MODAL DE DETALLES DEL CONDUCTOR */}
+      {/* Modal de detalles del conductor */}
       <Dialog open={!!selectedDriver} onOpenChange={(open) => !open && setSelectedDriver(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" data-surface="admin">
             <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                     <Avatar className="h-8 w-8">
@@ -203,7 +188,7 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
 
                 <div className="bg-muted/30 p-3 rounded-lg border">
                     <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
-                        <FileText className="h-4 w-4 text-info" /> Licencia de Conducir
+                        <FileText className="h-4 w-4 text-info-ink" /> Licencia de Conducir
                     </h4>
                     {(selectedDriver?.licenseUrl || selectedDriver?.licenseBackUrl || selectedDriver?.licenseSelfieUrl) ? (
                         <div className="grid grid-cols-2 gap-2">
@@ -218,7 +203,7 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                                 <div key={label} className="space-y-1">
                                     <p className="text-xs text-muted-foreground text-center">{label}</p>
                                     {!has ? (
-                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-xs text-destructive text-center px-1">Falta</div>
+                                        <div className="h-24 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-xs text-destructive-ink text-center px-1">Falta</div>
                                     ) : url ? (
                                         <a href={url} target="_blank" rel="noreferrer" className="block relative h-24 rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition">
                                             <img src={url} alt={label} className="h-full w-full object-cover" />
@@ -232,8 +217,8 @@ export function DeliveryPersonnelList({ personnel, onStatusUpdate, onEdit, onDel
                             ))}
                         </div>
                     ) : (
-                        <p className="text-sm text-destructive italic flex items-center gap-1">
-                            ⚠️ No ha subido fotos de licencia.
+                        <p className="text-sm text-destructive-ink italic flex items-center gap-1">
+                            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" /> No subió fotos de licencia.
                         </p>
                     )}
                 </div>

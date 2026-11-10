@@ -97,7 +97,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store, onSuspend 
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent>
+      <DialogContent data-surface="admin">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Tienda' : 'Nueva Tienda'}</DialogTitle>
           <DialogDescription>
@@ -140,7 +140,7 @@ export function ManageStoreDialog({ isOpen, setIsOpen, onSave, store, onSuspend 
                           <div className="space-y-2" data-testid="store-status-locked">
                             <p className="text-sm">{isSuspended ? 'Suspendida' : 'Aprobada'}</p>
                             {!isSuspended && onSuspend && (
-                              <Button type="button" size="sm" variant="outline" className="h-9 text-destructive" onClick={onSuspend} data-testid="dialog-suspend">
+                              <Button type="button" size="sm" variant="outline" className="h-9 text-destructive-ink" onClick={onSuspend} data-testid="dialog-suspend">
                                 Suspender…
                               </Button>
                             )}

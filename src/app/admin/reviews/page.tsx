@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminAuthGuard from '../admin-auth-guard';
-import PageHeader from '@/components/page-header';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { AdminPage } from '@/components/admin/admin-page';
+import { GlassSearch, ListCard, ListRow, SlidingChips } from '@/components/admin/admin-list';
+import { EmptyState } from '@/components/admin/empty-state';
+import { useConfirm } from '@/components/admin/confirm-dialog';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { useCountFromServer } from '@/lib/firebase-aggregate';
@@ -16,7 +16,7 @@ import { logAdminAction } from '@/lib/admin-audit';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Star, Trash2, Search, Loader2, MessageSquare } from 'lucide-react';
+import { Star, Trash2, Loader2, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { publicName } from '@/lib/public-name';
 
@@ -29,7 +29,7 @@ function Stars({ rating }: { rating: number }) {
   return (
     <div className="flex gap-0.5">
       {[1,2,3,4,5].map(s => (
-        <Star key={s} className={cn('h-3.5 w-3.5', rating >= s ? 'fill-warning text-warning' : 'text-muted-foreground/30')} />
+        <Star key={s} aria-hidden="true" className={cn('h-3.5 w-3.5', rating >= s ? 'fill-warning text-warning' : 'text-muted-foreground/30')} />
       ))}
     </div>
   );
@@ -53,6 +53,7 @@ function AdminReviewsPage() {
   const { user } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const confirmDialog = useConfirm();
   const [search, setSearch] = useState('');
   const [ratingFilter, setRatingFilter] = useState<RatingFilter>('all');
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -126,7 +127,7 @@ function AdminReviewsPage() {
 
   const handleDelete = async (reviewId: string, storeName: string) => {
     if (!user || !firestore) return;
-    if (!confirm(`¿Eliminar esta reseña de "${storeName}"? Esta acción recalculará el rating de la tienda.`)) return;
+    if (!(await confirmDialog({ title: `¿Eliminar esta reseña de "${storeName}"?`, description: 'Se recalcula el rating de la tienda. No se puede deshacer.', tone: 'destructive', confirmLabel: 'Eliminar reseña' })).ok) return;
     setDeleting(reviewId);
     try {
       const res = await authedFetch('/api/admin/delete-review', user, { reviewId });
@@ -145,20 +146,20 @@ function AdminReviewsPage() {
   };
 
   return (
-    <div className="container mx-auto pb-20 space-y-6">
-      <PageHeader
-        title="Moderación de Reseñas"
-        description={`${totalReviews ?? 0} reseñas en la plataforma.`}
-      />
-
+    <AdminPage
+      title="Reseñas"
+      subtitle={<span><b className="tabular-nums text-foreground">{totalReviews === null ? '…' : (totalReviews ?? 0).toLocaleString('es-AR')}</b> reseñas en la plataforma · moderación</span>}
+    >
       {/* Aviso de críticas pendientes: lo primero que quiere ver quien modera. */}
       {(badCount ?? 0) > 0 && ratingFilter !== 'bad' && (
         <button
+          type="button"
           onClick={() => setRatingFilter('bad')}
-          className="flex w-full items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-left transition-colors hover:bg-destructive/10"
+          className="glass flex min-h-[52px] w-full items-center justify-between gap-3 rounded-card border-destructive/40 p-4 text-left transition-colors hover:bg-destructive/10"
+          data-testid="bad-reviews-alert"
         >
-          <span className="flex items-center gap-2 text-sm font-semibold text-destructive">
-            <Star className="h-4 w-4 fill-current" />
+          <span className="flex items-center gap-2 text-sm font-semibold text-destructive-ink">
+            <Star className="h-4 w-4 fill-current" aria-hidden="true" />
             {badCount} reseña{badCount === 1 ? '' : 's'} de 1-2 estrellas
           </span>
           <span className="shrink-0 text-xs text-muted-foreground">Ver solo esas →</span>
@@ -166,91 +167,87 @@ function AdminReviewsPage() {
       )}
 
       <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por cliente, tienda o contenido..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {RATING_FILTERS.map(({ k, label }) => (
-            <button key={k} onClick={() => setRatingFilter(k)}
-              className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-                ratingFilter === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70')}>
-              {label}{k === 'bad' && (badCount ?? 0) > 0 ? ` (${badCount})` : ''}
-            </button>
-          ))}
-        </div>
+        <GlassSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por cliente, tienda o contenido"
+          label="Buscar reseñas"
+          testId="reviews-search"
+          hint="Busca solo en las reseñas ya cargadas (Firestore no busca texto). El filtro por estrellas sí abarca toda la base."
+        />
+        <SlidingChips
+          chips={RATING_FILTERS.map(f => ({ value: f.k, label: f.label, ...(f.k === 'bad' ? { count: badCount ?? null } : f.k === 'all' ? { count: totalReviews ?? null } : {}) }))}
+          value={ratingFilter}
+          onChange={setRatingFilter}
+          label="Filtrar reseñas por estrellas"
+          testId="reviews-chips"
+        />
       </div>
 
-      {isLoading && (
-        <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-      )}
-
-      {!isLoading && displayed.length === 0 && (
-        <Card>
-          <CardContent className="text-center py-12 text-muted-foreground">
-            No hay reseñas{search ? ' que coincidan con la búsqueda' : ' todavía'}.
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="space-y-3">
-        {displayed.map(review => (
-          <Card key={review.id} className="shadow-sm">
-            <CardContent className="pt-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1 flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Stars rating={review.rating} />
-                    <span className="text-xs font-semibold">{review.rating}/5</span>
-                    <Badge variant="outline" className="text-xs">
-                      {review.storeName || review.storeId?.slice(0,8) || 'Tienda'}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</span>
-                  </div>
-                  <p className="text-sm font-medium">{publicName(review.userName)}</p>
-                  {review.comment && (
-                    <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{review.comment}&rdquo;</p>
-                  )}
-                  {review.ownerReply && (
-                    <div className="mt-2 pl-3 border-l-2 border-primary/30">
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <MessageSquare className="h-3 w-3" /> Respuesta de la tienda:
-                      </p>
-                      <p className="text-xs text-muted-foreground italic">{review.ownerReply}</p>
-                    </div>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0"
-                  disabled={deleting === review.id}
-                  onClick={() => handleDelete(review.id, review.storeName || 'esta tienda')}
-                  title="Eliminar reseña"
-                >
-                  {deleting === review.id
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Trash2 className="h-4 w-4" />}
-                </Button>
+      <ListCard testId="reviews-list">
+        {isLoading ? (
+          <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Cargando reseñas" /></div>
+        ) : displayed.length === 0 ? (
+          <EmptyState icon={Star} title={`No hay reseñas${search ? ' que coincidan con la búsqueda' : ' todavía'}`} />
+        ) : displayed.map((review, i) => (
+          <ListRow
+            key={review.id}
+            index={i}
+            testId="review-row"
+            className="items-start"
+            highlight={review.rating <= 2 ? 'destructive' : undefined}
+            leading={
+              <span className={cn('mt-0.5 grid h-[2.25rem] w-[2.25rem] shrink-0 place-items-center rounded-[0.75rem] text-sm font-bold tabular-nums', review.rating <= 2 ? 'bg-destructive/15 text-[hsl(0_75%_36%)] dark:text-destructive-ink' : 'bg-warning/15 text-warning-ink')} aria-label={`${review.rating} de 5 estrellas`}>
+                {review.rating}★
+              </span>
+            }
+            title={publicName(review.userName)}
+            subtitle={
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <Stars rating={review.rating} />
+                <span className="font-medium text-foreground">{review.storeName || review.storeId?.slice(0, 8) || 'Tienda'}</span>
+                <span>· {formatDate(review.createdAt)}</span>
+              </span>
+            }
+            actions={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive-ink"
+                disabled={deleting === review.id}
+                onClick={() => handleDelete(review.id, review.storeName || 'esta tienda')}
+                title="Eliminar reseña"
+                aria-label={`Eliminar reseña de ${publicName(review.userName)}`}
+              >
+                {deleting === review.id
+                  ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  : <Trash2 className="h-4 w-4" aria-hidden="true" />}
+              </Button>
+            }
+          >
+            {review.comment && (
+              <p className="mt-1.5 text-sm leading-relaxed text-foreground/90">&ldquo;{review.comment}&rdquo;</p>
+            )}
+            {review.ownerReply && (
+              <div className="mt-2 border-l-2 border-primary/40 pl-3">
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <MessageSquare className="h-3 w-3" aria-hidden="true" /> Respuesta de la tienda:
+                </p>
+                <p className="text-xs italic text-muted-foreground">{review.ownerReply}</p>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </ListRow>
         ))}
-      </div>
+      </ListCard>
 
       {hasMore && !search.trim() && (
         <div className="flex justify-center">
-          <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cargando...</> : 'Cargar más'}
+          <Button variant="outline" className="min-h-[44px]" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />Cargando…</> : 'Cargar más'}
           </Button>
         </div>
       )}
-    </div>
+    </AdminPage>
   );
 }
 

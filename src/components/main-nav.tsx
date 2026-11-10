@@ -28,11 +28,88 @@ import {
   Tag,
   AlertTriangle,
   MessageSquareWarning,
-  ChevronDown
+  ChevronDown,
+  UserPlus,
+  type LucideIcon,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
+import { CategoryTile } from '@/components/category-tile';
+import { formatCategoryLabel } from '@/lib/category-style';
+
+// Menú lateral en vidrio (rediseño 9/11/2026). Cada opción es UN link (antes era un <Button>
+// adentro de un <Link>: dos elementos tocables anidados, que el lector de pantalla anunciaba
+// dos veces) de 44 px de alto, redondeado, y la opción de la página actual lleva la píldora de
+// la marca con aria-current="page". Con el menú de escritorio colapsado a íconos, el texto
+// queda solo para el lector de pantalla y los títulos de sección se ocultan.
+
+/** Una opción del menú. `tone` colorea solo el ícono (puertas de negocio del invitado). */
+function NavItem({
+  href,
+  icon: Icon,
+  label,
+  active,
+  badge = 0,
+  cta,
+  iconClassName,
+  leading,
+}: {
+  href: string;
+  icon?: LucideIcon;
+  label: string;
+  active?: boolean;
+  badge?: number;
+  /** Botón de acción (crear cuenta): relleno de marca aunque no sea la página actual. */
+  cta?: boolean;
+  iconClassName?: string;
+  /** Reemplaza al ícono (cuadradito del rubro). */
+  leading?: React.ReactNode;
+}) {
+  const filled = active || cta;
+  return (
+    <Link
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      title={label}
+      className={cn(
+        'relative flex min-h-11 items-center gap-3 rounded-2xl px-3 text-[0.95rem] font-semibold outline-none transition-[background-color,color,box-shadow] duration-200',
+        'focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+        'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0',
+        filled
+          ? 'bg-primary text-primary-foreground shadow-[0_6px_16px_-8px_hsl(var(--primary)/0.7)]'
+          : 'text-sidebar-foreground hover:bg-foreground/[0.06]',
+      )}
+    >
+      {leading ?? (Icon && <Icon className={cn('h-5 w-5 shrink-0', !filled && iconClassName)} aria-hidden="true" />)}
+      <span className="min-w-0 flex-1 py-2 leading-tight group-data-[collapsible=icon]:sr-only">{label}</span>
+      {badge > 0 && (
+        <span
+          className={cn(
+            'inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-bold text-destructive-foreground',
+            'group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-right-1 group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:h-5 group-data-[collapsible=icon]:min-w-5',
+            filled && 'ring-2 ring-primary-foreground/80',
+          )}
+        >
+          {badge}
+          <span className="sr-only"> pendientes</span>
+        </span>
+      )}
+    </Link>
+  );
+}
+
+/** Grupo con título chico (o sin título). */
+function NavGroup({ title, children }: { title?: string; children: React.ReactNode }) {
+  return (
+    <div className="px-3 py-1.5 group-data-[collapsible=icon]:px-1.5">
+      {title && (
+        <h2 className="mb-1.5 px-3 text-xs font-bold uppercase tracking-[0.08em] text-muted-foreground group-data-[collapsible=icon]:hidden">
+          {title}
+        </h2>
+      )}
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
 
 // Sección colapsable del menú admin -- antes eran 10 links sueltos bajo un solo título
 // "Supervisión". El estado abierto/cerrado se guarda en localStorage por sección para que
@@ -52,10 +129,10 @@ function NavSection({ id, title, defaultOpen = true, children }: { id: string; t
   };
 
   return (
-    <Collapsible open={open} onOpenChange={handleOpenChange} className="px-3 py-1">
-      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+    <Collapsible open={open} onOpenChange={handleOpenChange} className="px-3 py-1 group-data-[collapsible=icon]:px-1.5">
+      <CollapsibleTrigger className="flex min-h-9 w-full items-center justify-between rounded-xl px-3 text-xs font-bold uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden">
         {title}
-        <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
+        <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', open && 'rotate-180')} aria-hidden="true" />
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-1 pt-1">
         {children}
@@ -121,71 +198,40 @@ export function MainNav({
       .map((s: any) => s.category as string))
   ).slice(0, 8);
 
-  const NavBadge = ({ count }: { count: number }) => (
-    count > 0
-      ? <span className="ml-auto inline-flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-xs font-bold h-5 min-w-[20px] px-1.5">{count}</span>
-      : null
-  );
+  const is = (p: string) => pathname === p;
+  const starts = (p: string) => pathname.startsWith(p);
+
+  // Rubros reales con su cuadradito de color (mismo lenguaje que el inicio).
+  const renderExplore = () =>
+    buyerCategories.length > 0 && (
+      <NavGroup title="Explorar tiendas">
+        {buyerCategories.map((cat) => (
+          <NavItem
+            key={cat}
+            href={`/?category=${encodeURIComponent(cat)}`}
+            label={formatCategoryLabel(cat)}
+            leading={<CategoryTile category={cat} size="sm" className="h-8 w-8 rounded-[0.6rem]" />}
+          />
+        ))}
+      </NavGroup>
+    );
 
   // Menú del INVITADO (Opción A): explora la vidriera + CTA de registro. Va antes del
   // guard de abajo porque un invitado no tiene userProfile pero SÍ tiene que ver menú.
   if (isGuest) {
     return (
-      <nav className={cn('pb-12 relative', className)} {...props}>
-        <div className="space-y-4 py-4">
-          <div className="px-3 py-2 space-y-1">
-            <Link href="/">
-              <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
-                <Home className="mr-2 h-4 w-4" /> Inicio
-              </Button>
-            </Link>
-            <Link href="/signup/buyer">
-              <Button className="w-full justify-start">
-                <ShoppingBag className="mr-2 h-4 w-4" /> Crear cuenta
-              </Button>
-            </Link>
-          </div>
-          {buyerCategories.length > 0 && (
-            <div className="px-3 py-2">
-              <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Explorar Tiendas
-              </h2>
-              <div className="space-y-1">
-                {buyerCategories.map((cat) => {
-                  const style = getCategoryStyle(cat);
-                  const Icon = style.icon;
-                  return (
-                    <Link key={cat} href={`/?category=${encodeURIComponent(cat)}`}>
-                      <Button variant="ghost" className="w-full justify-start gap-2">
-                        <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md', style.bg)}>
-                          <Icon className={cn('h-3.5 w-3.5', style.text)} />
-                        </span>
-                        {formatCategoryLabel(cat)}
-                      </Button>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+      <nav aria-label="Menú principal" className={cn('relative pb-12', className)} {...props}>
+        <div className="space-y-3 py-3">
+          <NavGroup>
+            <NavItem href="/" icon={Home} label="Inicio" active={is('/')} />
+            <NavItem href="/signup/buyer" icon={UserPlus} label="Crear cuenta" cta />
+          </NavGroup>
+          {renderExplore()}
           {/* Puertas de negocio: captación de tiendas y repartidores */}
-          <div className="px-3 py-2">
-            <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Para negocios
-            </h2>
-            <div className="space-y-1">
-              <Link href="/signup/store">
-                <Button variant="ghost" className="w-full justify-start">
-                  <Store className="mr-2 h-4 w-4 text-info" /> Registrá tu tienda
-                </Button>
-              </Link>
-              <Link href="/signup/delivery">
-                <Button variant="ghost" className="w-full justify-start">
-                  <Bike className="mr-2 h-4 w-4 text-warning" /> Sumate como repartidor
-                </Button>
-              </Link>
-            </div>
-          </div>
+          <NavGroup title="Para negocios">
+            <NavItem href="/signup/store" icon={Store} label="Registrá tu tienda" iconClassName="text-info" />
+            <NavItem href="/signup/delivery" icon={Bike} label="Sumate como repartidor" iconClassName="text-warning" />
+          </NavGroup>
         </div>
       </nav>
     );
@@ -194,44 +240,18 @@ export function MainNav({
   if (!userProfile) {
     return null;
   }
-  
-  // 👮‍♂️ ADMIN LINKS — agrupados en secciones colapsables (antes 10 links sueltos bajo
-  // un solo título "Supervisión", sin jerarquía ni forma de compactar el menú).
+
+  // ADMIN — agrupado en secciones colapsables (antes 10 links sueltos bajo un solo título
+  // "Supervisión", sin jerarquía ni forma de compactar el menú). Desde la Tanda T1 el admin
+  // tiene su propio shell y solo ve este menú si navega la app como cliente.
   const renderAdminLinks = () => (
     <>
       <NavSection id="operacion" title="Operación">
-        <Link href="/admin">
-          <Button variant={pathname === '/admin' || pathname === '/admin/dashboard' ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <LayoutDashboard className="mr-2 h-4 w-4" />
-            Dashboard
-          </Button>
-        </Link>
-        <Link href="/admin/orders">
-          <Button variant={pathname.startsWith('/admin/orders') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <ShoppingBag className="mr-2 h-4 w-4" />
-            Gestión Pedidos
-          </Button>
-        </Link>
-        <Link href="/admin/stores">
-          <Button variant={pathname.startsWith('/admin/stores') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <Store className="mr-2 h-4 w-4" />
-            Gestión Tiendas
-            <NavBadge count={pendingStoresCount} />
-          </Button>
-        </Link>
-        <Link href="/admin/delivery">
-          <Button variant={pathname.startsWith('/admin/delivery') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <Bike className="mr-2 h-4 w-4" />
-            Gestión Repartidores
-            <NavBadge count={pendingDriversCount} />
-          </Button>
-        </Link>
-        <Link href="/admin/users">
-          <Button variant={pathname.startsWith('/admin/users') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <Users className="mr-2 h-4 w-4" />
-            Gestión Usuarios
-          </Button>
-        </Link>
+        <NavItem href="/admin" icon={LayoutDashboard} label="Dashboard" active={is('/admin') || is('/admin/dashboard')} />
+        <NavItem href="/admin/orders" icon={ShoppingBag} label="Gestión Pedidos" active={starts('/admin/orders')} />
+        <NavItem href="/admin/stores" icon={Store} label="Gestión Tiendas" active={starts('/admin/stores')} badge={pendingStoresCount} />
+        <NavItem href="/admin/delivery" icon={Bike} label="Gestión Repartidores" active={starts('/admin/delivery')} badge={pendingDriversCount} />
+        <NavItem href="/admin/users" icon={Users} label="Gestión Usuarios" active={starts('/admin/users')} />
       </NavSection>
 
       {/* Finanzas y Pagos / Comunicaciones / Configuración: mueven plata, mandan broadcast
@@ -240,276 +260,96 @@ export function MainNav({
           solo revisión/triage (no mueve plata por sí sola), visible a cualquier nivel. */}
       <NavSection id="finanzas" title="Finanzas">
         {isFullAdmin && (
-          <Link href="/admin/finances">
-            <Button variant={pathname.startsWith('/admin/finances') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <DollarSign className="mr-2 h-4 w-4" />
-              Finanzas y Pagos
-              <NavBadge count={pendingWithdrawalsCount} />
-            </Button>
-          </Link>
+          <NavItem href="/admin/finances" icon={DollarSign} label="Finanzas y Pagos" active={starts('/admin/finances')} badge={pendingWithdrawalsCount} />
         )}
-        <Link href="/admin/payment-issues">
-          <Button variant={pathname.startsWith('/admin/payment-issues') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <AlertTriangle className="mr-2 h-4 w-4" />
-            Discrepancias de Pago
-          </Button>
-        </Link>
+        <NavItem href="/admin/payment-issues" icon={AlertTriangle} label="Discrepancias de Pago" active={starts('/admin/payment-issues')} />
       </NavSection>
 
       <NavSection id="confianza" title="Confianza y Seguridad">
-        <Link href="/admin/claims">
-          <Button variant={pathname.startsWith('/admin/claims') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <MessageSquareWarning className="mr-2 h-4 w-4" />
-            Reclamos de Clientes
-          </Button>
-        </Link>
-        <Link href="/admin/reviews">
-          <Button variant={pathname.startsWith('/admin/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Moderación Reseñas
-          </Button>
-        </Link>
-        <Link href="/admin/incidents">
-          <Button variant={pathname.startsWith('/admin/incidents') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <Shield className="mr-2 h-4 w-4" />
-            Incidentes de Repartidor
-          </Button>
-        </Link>
-        <Link href="/admin/audit-log">
-          <Button variant={pathname.startsWith('/admin/audit-log') ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <Shield className="mr-2 h-4 w-4" />
-            Log de Acciones
-          </Button>
-        </Link>
+        <NavItem href="/admin/claims" icon={MessageSquareWarning} label="Reclamos de Clientes" active={starts('/admin/claims')} />
+        <NavItem href="/admin/reviews" icon={MessageSquare} label="Moderación Reseñas" active={starts('/admin/reviews')} />
+        <NavItem href="/admin/incidents" icon={Shield} label="Incidentes de Repartidor" active={starts('/admin/incidents')} />
+        <NavItem href="/admin/audit-log" icon={Shield} label="Log de Acciones" active={starts('/admin/audit-log')} />
       </NavSection>
 
       {isFullAdmin && (
         <NavSection id="comunicacion" title="Comunicación">
-          <Link href="/admin/communications">
-            <Button variant={pathname.startsWith('/admin/communications') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Bell className="mr-2 h-4 w-4" />
-              Comunicaciones
-            </Button>
-          </Link>
+          <NavItem href="/admin/communications" icon={Bell} label="Comunicaciones" active={starts('/admin/communications')} />
         </NavSection>
       )}
 
       {isFullAdmin && (
         <NavSection id="sistema" title="Sistema">
-          <Link href="/admin/settings">
-            <Button variant={pathname.startsWith('/admin/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Settings className="mr-2 h-4 w-4" />
-              Configuración
-            </Button>
-          </Link>
+          <NavItem href="/admin/settings" icon={Settings} label="Configuración" active={starts('/admin/settings')} />
         </NavSection>
       )}
 
-      <div className="px-3 py-2">
-        <Link href="/">
-          <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <Home className="mr-2 h-4 w-4" />
-            Ir al Inicio (App)
-          </Button>
-        </Link>
-      </div>
+      <NavGroup>
+        <NavItem href="/" icon={Home} label="Ir al Inicio (App)" active={is('/')} />
+      </NavGroup>
     </>
   );
 
-  // 🏪 STORE LINKS (Corregido)
-  const renderStoreLinks = () => (
-    <>
-      <div className="px-3 py-2">
-        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
-          Operaciones
-        </h2>
-        <div className="space-y-1">
-          <Link href="/orders">
-            <Button variant={pathname === '/orders' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <ListOrdered className="mr-2 h-4 w-4" />
-              Gestionar Pedidos
-            </Button>
-          </Link>
-          <Link href="/my-store/products">
-            <Button variant={pathname === '/my-store/products' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Package className="mr-2 h-4 w-4" />
-              Gestionar Productos
-            </Button>
-          </Link>
-          <Link href="/my-store/categories">
-            <Button variant={pathname === '/my-store/categories' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Tag className="mr-2 h-4 w-4" />
-              Categorías
-            </Button>
-          </Link>
-          <Link href="/my-store">
-             <Button variant={pathname === '/my-store' || pathname === '/my-store/edit' ? 'secondary' : 'ghost'} className="w-full justify-start">
-               <Store className="mr-2 h-4 w-4" />
-               Mi Tienda
-             </Button>
-          </Link>
-          <Link href="/my-store/reviews">
-            <Button variant={pathname === '/my-store/reviews' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Star className="mr-2 h-4 w-4" />
-              Reseñas
-            </Button>
-          </Link>
-        </div>
-      </div>
-      <div className="px-3 py-2">
-        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
-          Finanzas
-        </h2>
-        <div className="space-y-1">
-          {/* ✅ NUEVO: Enlace a Billetera */}
-          <Link href="/my-store/wallet">
-            <Button variant={pathname.startsWith('/my-store/wallet') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Wallet className="mr-2 h-4 w-4" />
-              Mi Billetera
-            </Button>
-          </Link>
-          <Link href="/my-store/analytics">
-            <Button variant={pathname === '/my-store/analytics' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Analíticas
-            </Button>
-          </Link>
-        </div>
-      </div>
-      {renderClientSection()}
-    </>
-  );
-
-  // 🛒 BUYER LINKS
-  const renderBuyerLinks = () => (
-    <>
-      <div className="px-3 py-2">
-        <div className="space-y-1">
-          <Link href="/">
-            <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Home className="mr-2 h-4 w-4" />
-              Principal
-            </Button>
-          </Link>
-          <Link href="/orders">
-            <Button variant={pathname === '/orders' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <ShoppingBag className="mr-2 h-4 w-4" />
-              Mis Pedidos
-            </Button>
-          </Link>
-          <Link href="/favorites">
-            <Button variant={pathname === '/favorites' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Heart className="mr-2 h-4 w-4" />
-              Mis Favoritos
-            </Button>
-          </Link>
-        </div>
-      </div>
-      {buyerCategories.length > 0 && (
-        <div className="px-3 py-2">
-          <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Explorar Tiendas
-          </h2>
-          <div className="space-y-1">
-            {buyerCategories.map((cat) => {
-              const style = getCategoryStyle(cat);
-              const Icon = style.icon;
-              return (
-                <Link key={cat} href={`/?category=${encodeURIComponent(cat)}`}>
-                  <Button variant="ghost" className="w-full justify-start gap-2">
-                    {/* Ícono con el color del rubro: mismo lenguaje visual que los chips
-                        del inicio y los del menú de una tienda (antes era monocromo). */}
-                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md', style.bg)}>
-                      <Icon className={cn('h-3.5 w-3.5', style.text)} />
-                    </span>
-                    {formatCategoryLabel(cat)}
-                  </Button>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </>
-  );
-
-  // 🛒 Sección "Como cliente" — compartida por tienda y repartidor (ago 2026): pueden
+  // Sección "Como cliente" — compartida por tienda y repartidor (ago 2026): pueden
   // comprar como cualquier vecino (decisión de producto), con las guardas server-side:
   // la tienda no puede comprarse a sí misma y el repartidor no puede llevar su propio
   // pedido. Sus compras viven en /my-purchases porque /orders es su panel OPERATIVO.
   const renderClientSection = () => (
-    <div className="px-3 py-2">
-      <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Como cliente
-      </h2>
-      <div className="space-y-1">
-        <Link href="/">
-          <Button variant={pathname === '/' ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <Home className="mr-2 h-4 w-4" />
-            Tiendas
-          </Button>
-        </Link>
-        <Link href="/my-purchases">
-          <Button variant={pathname === '/my-purchases' ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <ShoppingBag className="mr-2 h-4 w-4" />
-            Mis Compras
-          </Button>
-        </Link>
-        <Link href="/favorites">
-          <Button variant={pathname === '/favorites' ? 'secondary' : 'ghost'} className="w-full justify-start">
-            <Heart className="mr-2 h-4 w-4" />
-            Mis Favoritos
-          </Button>
-        </Link>
-      </div>
-    </div>
+    <NavGroup title="Como cliente">
+      <NavItem href="/" icon={Home} label="Tiendas" active={is('/')} />
+      <NavItem href="/my-purchases" icon={ShoppingBag} label="Mis Compras" active={is('/my-purchases')} />
+      <NavItem href="/favorites" icon={Heart} label="Mis Favoritos" active={is('/favorites')} />
+    </NavGroup>
   );
 
-  // 🛵 DELIVERY LINKS (Corregido)
+  // TIENDA — "Mi Tienda" (el resumen, a donde lleva el login) va primero, como "Mi Panel"
+  // del repartidor.
+  const renderStoreLinks = () => (
+    <>
+      <NavGroup title="Operaciones">
+        <NavItem href="/my-store" icon={Store} label="Mi Tienda" active={is('/my-store') || is('/my-store/edit')} />
+        <NavItem href="/orders" icon={ListOrdered} label="Gestionar Pedidos" active={is('/orders')} />
+        <NavItem href="/my-store/products" icon={Package} label="Gestionar Productos" active={is('/my-store/products')} />
+        <NavItem href="/my-store/categories" icon={Tag} label="Categorías" active={is('/my-store/categories')} />
+        <NavItem href="/my-store/reviews" icon={Star} label="Reseñas" active={is('/my-store/reviews')} />
+      </NavGroup>
+      <NavGroup title="Finanzas">
+        <NavItem href="/my-store/wallet" icon={Wallet} label="Mi Billetera" active={starts('/my-store/wallet')} />
+        <NavItem href="/my-store/analytics" icon={BarChart3} label="Analíticas" active={is('/my-store/analytics')} />
+      </NavGroup>
+      {renderClientSection()}
+    </>
+  );
+
+  // COMPRADOR
+  const renderBuyerLinks = () => (
+    <>
+      <NavGroup>
+        <NavItem href="/" icon={Home} label="Principal" active={is('/')} />
+        <NavItem href="/orders" icon={ShoppingBag} label="Mis Pedidos" active={is('/orders')} />
+        <NavItem href="/favorites" icon={Heart} label="Mis Favoritos" active={is('/favorites')} />
+      </NavGroup>
+      {renderExplore()}
+    </>
+  );
+
+  // REPARTIDOR
   const renderDeliveryLinks = () => (
     <>
-      <div className="px-3 py-2">
-        <div className="space-y-1">
-          <Link href="/delivery">
-            <Button variant={pathname === '/delivery' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <LayoutDashboard className="mr-2 h-4 w-4" />
-              Mi Panel
-            </Button>
-          </Link>
-          <Link href="/orders">
-            <Button variant={pathname === '/orders' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Bike className="mr-2 h-4 w-4" />
-              Panel de Entregas
-            </Button>
-          </Link>
-          {/* ✅ CORREGIDO: Apunta a la nueva página de ganancias */}
-          <Link href="/delivery/earnings">
-            <Button variant={pathname.startsWith('/delivery/earnings') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Wallet className="mr-2 h-4 w-4" />
-              Mis Ganancias
-            </Button>
-          </Link>
-          <Link href="/delivery/reviews">
-            <Button variant={pathname.startsWith('/delivery/reviews') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Star className="mr-2 h-4 w-4" />
-              Mis Reseñas
-            </Button>
-          </Link>
-          <Link href="/delivery/analytics">
-            <Button variant={pathname.startsWith('/delivery/analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Analíticas
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <NavGroup title="Trabajo">
+        <NavItem href="/delivery" icon={LayoutDashboard} label="Mi Panel" active={is('/delivery')} />
+        <NavItem href="/orders" icon={Bike} label="Panel de Entregas" active={is('/orders')} />
+        <NavItem href="/delivery/earnings" icon={Wallet} label="Mis Ganancias" active={starts('/delivery/earnings')} />
+        <NavItem href="/delivery/reviews" icon={Star} label="Mis Reseñas" active={starts('/delivery/reviews')} />
+        <NavItem href="/delivery/analytics" icon={BarChart3} label="Analíticas" active={starts('/delivery/analytics')} />
+      </NavGroup>
       {renderClientSection()}
     </>
   );
 
   return (
-    <nav className={cn("pb-12 relative", className)} {...props}>
-      <div className="space-y-4 py-4 pt-4"> 
+    <nav aria-label="Menú principal" className={cn('relative pb-12', className)} {...props}>
+      <div className="space-y-3 py-3">
         {userProfile.role === 'admin' && renderAdminLinks()}
         {userProfile.role === 'store' && renderStoreLinks()}
         {userProfile.role === 'buyer' && renderBuyerLinks()}

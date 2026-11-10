@@ -17,9 +17,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthScreen, AuthSteps, authButton } from '@/components/auth-screen';
+import { cn } from '@/lib/utils';
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { useToast } from '@/hooks/use-toast';
@@ -34,7 +34,7 @@ import { setSignupInProgress } from '@/lib/signup-flag';
 
 const formSchema = z.object({
   name: z.string().min(5, "Ingresá tu nombre y apellido completos."),
-  email: z.string().email("Por favor ingresa un correo electrónico válido."),
+  email: z.string().email("Ingresá un correo electrónico válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
   phoneNumber: z.string().min(8, "Ingresá un teléfono válido (con código de área).").regex(/^[0-9+\s-]+$/, "Solo números, espacios, + y -."),
   dni: z.string().regex(/^\d{7,8}$/, "El DNI debe tener 7 u 8 números, sin puntos."),
@@ -47,7 +47,7 @@ const formSchema = z.object({
     return age >= 18;
   }, "Tenés que ser mayor de 18 años para ser repartidor."),
   vehicleType: z.enum(["motocicleta", "automovil", "bicicleta"], {
-    required_error: "Debes seleccionar un tipo de vehículo.",
+    required_error: "Elegí con qué vas a repartir.",
   }),
   plate: z.string(),
 }).refine(
@@ -194,233 +194,226 @@ export default function SignupDeliveryPage() {
 
   // ── Paso 2: documentos obligatorios ──
   if (createdUser) {
+    const uploadedCount = requiredDocs.filter(d => !!docPaths[d.key]).length;
     return (
-      <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center py-10">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl flex items-center gap-2">
-              <ShieldCheck className="h-6 w-6 text-primary" /> Último paso: tus documentos
-            </CardTitle>
-            <CardDescription>
-              Para aprobar tu cuenta necesitamos verificar quién sos{isBike ? '' : ' y el vehículo con el que vas a trabajar'}.
-              Las fotos son privadas: solo las ve el equipo de aprobación.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {requiredDocs.map(({ key, label }) => (
-              <div key={key} className="space-y-1.5">
-                <Label className="flex items-center gap-1.5">
-                  {docPaths[key] && <CheckCircle2 className="h-4 w-4 text-success" />}
-                  {label} <span className="text-destructive">*</span>
-                </Label>
-                <ImageUpload
-                  ownerId={createdUser.uid}
-                  folder="licenses"
-                  variant="banner"
-                  storeRawPath
-                  onImageUploaded={(path) => setDocPaths(prev => ({ ...prev, [key]: path }))}
-                />
-              </div>
-            ))}
-          </CardContent>
-          <CardFooter className="flex flex-col gap-2">
-            <Button className="w-full" onClick={handleFinishDocs} disabled={!allDocsUploaded || savingDocs}>
-              {savingDocs ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Guardando…</> : "Enviar solicitud"}
-            </Button>
-            {!allDocsUploaded && (
-              <p className="text-xs text-muted-foreground text-center">
-                Subí las {requiredDocs.length} fotos para poder enviar la solicitud.
+      <AuthScreen
+        testId="signup-delivery-docs"
+        size="lg"
+        eyebrow={<AuthSteps current={2} total={2} label="Tus documentos" />}
+        title="Último paso: tus documentos"
+        description={<>Para aprobar tu cuenta necesitamos verificar quién sos{isBike ? '' : ' y el vehículo con el que vas a trabajar'}. Las fotos son privadas: solo las ve el equipo de aprobación.</>}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {requiredDocs.map(({ key, label }) => (
+            <div key={key} className="space-y-2">
+              <p className="flex items-center gap-1.5 text-[0.95rem] font-semibold">
+                {docPaths[key]
+                  ? <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" />
+                  : <span className="h-5 w-5 rounded-full border-2 border-foreground/20" aria-hidden="true" />}
+                {label} <span className="text-destructive" aria-hidden="true">*</span>
+                {docPaths[key] && <span className="sr-only">(subida)</span>}
               </p>
-            )}
-          </CardFooter>
-        </Card>
-      </div>
+              <ImageUpload
+                ownerId={createdUser.uid}
+                folder="licenses"
+                variant="banner"
+                storeRawPath
+                label={label}
+                onImageUploaded={(path) => setDocPaths(prev => ({ ...prev, [key]: path }))}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 space-y-2">
+          <Button className={authButton} onClick={handleFinishDocs} disabled={!allDocsUploaded || savingDocs}>
+            {savingDocs ? <><Loader2 className="h-5 w-5 animate-spin" />Guardando…</> : "Enviar solicitud"}
+          </Button>
+          <p className="text-center text-sm text-muted-foreground" aria-live="polite">
+            {allDocsUploaded
+              ? 'Listo: ya podés enviar la solicitud.'
+              : 'Subiste ' + uploadedCount + ' de ' + requiredDocs.length + ' fotos. Hacen falta todas para enviar la solicitud.'}
+          </p>
+        </div>
+      </AuthScreen>
     );
   }
 
+  const VEHICLES = [
+    { value: 'motocicleta' as const, label: 'Moto', Icon: Bike },
+    { value: 'automovil' as const, label: 'Auto', Icon: Car },
+    { value: 'bicicleta' as const, label: 'Bici', Icon: Bike },
+  ];
+
   // ── Paso 1: datos de la cuenta ──
   return (
-    <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center">
-      <Card className="w-full max-w-sm">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} method="post" action="#">
-            <CardHeader>
-              <CardTitle className="text-2xl">Conviértete en Repartidor</CardTitle>
-              <CardDescription>
-                Regístrate para empezar a ganar dinero haciendo entregas.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre y apellido</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej. Juan Pérez" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Correo Electrónico</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="nombre@ejemplo.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contraseña</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="phoneNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Teléfono / WhatsApp</FormLabel>
-                    <FormControl>
-                      <Input type="tel" placeholder="Ej. 3834123456" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="dni"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>DNI</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Sin puntos" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="birthDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fecha de nacimiento</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <FormField
-                control={form.control}
-                name="cuil"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>CUIT / CUIL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej. 20-12345678-9" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="vehicleType"
-                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>Tipo de Vehículo</FormLabel>
-                    <FormControl>
-                        <div className="grid grid-cols-3 gap-2">
-                            <Button
-                                type="button"
-                                variant={field.value === 'motocicleta' ? 'secondary' : 'outline'}
-                                onClick={() => field.onChange('motocicleta')}
-                                className="flex-col h-16"
-                            >
-                                <Bike className="mb-1" />
-                                Motocicleta
-                            </Button>
-                            <Button
-                                type="button"
-                                variant={field.value === 'automovil' ? 'secondary' : 'outline'}
-                                onClick={() => field.onChange('automovil')}
-                                className="flex-col h-16"
-                            >
-                                <Car className="mb-1" />
-                                Automóvil
-                            </Button>
-                            <Button
-                                type="button"
-                                variant={field.value === 'bicicleta' ? 'secondary' : 'outline'}
-                                onClick={() => field.onChange('bicicleta')}
-                                className="flex-col h-16"
-                            >
-                                <Bike className="mb-1" />
-                                Bicicleta
-                            </Button>
-                        </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {vehicleType && vehicleType !== 'bicicleta' && (
-                <FormField
-                  control={form.control}
-                  name="plate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Patente del vehículo</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ej. AB 123 CD" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+    <AuthScreen
+      testId="signup-delivery-card"
+      eyebrow={<AuthSteps current={1} total={2} label="Tus datos" />}
+      title="Sumate como repartidor"
+      description="Registrate para ganar plata llevando pedidos. En el paso siguiente subís tus documentos."
+      footer={
+        <>
+          <p>
+            ¿Ya tenés una cuenta?{" "}
+            <Link href="/login" className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline">Iniciá sesión</Link>
+          </p>
+          {/* Tanda B: solo el alta de comprador mostraba el consentimiento legal. */}
+          <p className="text-sm">
+            Al registrarte aceptás nuestros{' '}
+            <Link href="/terms" className="font-semibold underline underline-offset-4">Términos</Link> y la{' '}
+            <Link href="/privacy" className="font-semibold underline underline-offset-4">Política de Privacidad</Link>.
+          </p>
+        </>
+      }
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} method="post" action="#" className="grid gap-4">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nombre y apellido</FormLabel>
+                <FormControl>
+                  <Input autoComplete="name" placeholder="Ej. Juan Pérez" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Correo electrónico</FormLabel>
+                <FormControl>
+                  <Input type="email" autoComplete="email" inputMode="email" placeholder="nombre@ejemplo.com" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Contraseña</FormLabel>
+                <FormControl>
+                  <Input type="password" autoComplete="new-password" placeholder="Al menos 6 caracteres" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="phoneNumber"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Teléfono / WhatsApp</FormLabel>
+                <FormControl>
+                  <Input type="tel" autoComplete="tel" inputMode="tel" placeholder="Ej. 3834123456" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="dni"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>DNI</FormLabel>
+                  <FormControl>
+                    <Input inputMode="numeric" placeholder="Sin puntos" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </CardContent>
-            <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={!hydrated || isSubmitting}>
-                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creando cuenta...</> : "Continuar → subir documentos"}
-              </Button>
-              <div className="mt-4 text-center text-sm">
-                ¿Ya tienes una cuenta?{" "}
-                <Link href="/login" className="underline">
-                  Iniciar Sesión
-                </Link>
-              </div>
-              {/* Tanda B: solo el alta de comprador mostraba el consentimiento legal. */}
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Al registrarte aceptás nuestros{' '}
-                <Link href="/terms" className="underline">Términos</Link> y{' '}
-                <Link href="/privacy" className="underline">Política de Privacidad</Link>.
-              </p>
-            </CardFooter>
-          </form>
-        </Form>
-      </Card>
-    </div>
+            />
+            <FormField
+              control={form.control}
+              name="birthDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fecha de nacimiento</FormLabel>
+                  <FormControl>
+                    <Input type="date" autoComplete="bday" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <FormField
+            control={form.control}
+            name="cuil"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>CUIT / CUIL</FormLabel>
+                <FormControl>
+                  <Input inputMode="numeric" placeholder="Ej. 20-12345678-9" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="vehicleType"
+            render={({ field }) => (
+              <FormItem className="space-y-2">
+                <FormLabel>¿Con qué vas a repartir?</FormLabel>
+                <FormControl>
+                  <div className="grid grid-cols-3 gap-2" role="group" aria-label="Tipo de vehículo">
+                    {VEHICLES.map(({ value, label, Icon }) => {
+                      const on = field.value === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => field.onChange(value)}
+                          className={cn(
+                            'flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 text-base font-semibold transition-[background-color,border-color,transform] duration-200 active:scale-[0.97] motion-reduce:transition-none',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                            on ? 'border-primary bg-primary/10 text-foreground' : 'border-foreground/10 bg-background/50 text-muted-foreground hover:bg-primary/5',
+                          )}
+                        >
+                          <Icon className={cn('h-6 w-6', on && 'text-primary')} aria-hidden="true" />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {vehicleType && vehicleType !== 'bicicleta' && (
+            <FormField
+              control={form.control}
+              name="plate"
+              render={({ field }) => (
+                <FormItem className="animate-in fade-in-0 slide-in-from-top-1 duration-300 motion-reduce:animate-none">
+                  <FormLabel>Patente del vehículo</FormLabel>
+                  <FormControl>
+                    <Input autoCapitalize="characters" placeholder="Ej. AB 123 CD" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+          <Button type="submit" className={authButton + ' mt-1'} disabled={!hydrated || isSubmitting}>
+            {isSubmitting ? <><Loader2 className="h-5 w-5 animate-spin" />Creando cuenta...</> : "Seguir: subir documentos"}
+          </Button>
+        </form>
+      </Form>
+    </AuthScreen>
   );
 }

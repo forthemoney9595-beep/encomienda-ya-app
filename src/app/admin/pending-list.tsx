@@ -90,7 +90,7 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
         <CardHeader className="flex flex-row items-center justify-between pb-2 bg-muted/10">
           <CardTitle className="text-lg font-medium">{title}</CardTitle>
           <div className="bg-muted p-2 rounded-full shadow-sm">
-            <Icon className="h-5 w-5 text-warning" />
+            <Icon className="h-5 w-5 text-warning-ink" />
           </div>
         </CardHeader>
         <CardContent className="pt-4">
@@ -114,21 +114,21 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                       {/* Requisito de aprobación: no aprobar cuentas sin mail verificado */}
                       {emailVerified[user.id] !== undefined && (
                         emailVerified[user.id] ? (
-                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-xs font-medium">✉️ Mail verificado</span>
+                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink px-2 py-0.5 text-xs font-medium">✉️ Mail verificado</span>
                         ) : (
-                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 text-xs font-medium">⚠️ Sin verificar — no aprobar</span>
+                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning-ink px-2 py-0.5 text-xs font-medium">⚠️ Sin verificar — no aprobar</span>
                         )
                       )}
                     </div>
                   </div>
                   <div className="flex space-x-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-9 w-9 text-info hover:bg-info/10" aria-label={`Ver solicitud de ${user.name || "usuario"}`} onClick={() => setSelectedUser(user)}>
+                    <Button size="icon" variant="ghost" className="h-9 w-9 text-info-ink hover:bg-info/10" aria-label={`Ver solicitud de ${user.name || "usuario"}`} onClick={() => setSelectedUser(user)}>
                       <Eye className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="outline" className="h-9 w-9 text-success hover:text-success hover:bg-success/10 border-success/30" aria-label={`Aprobar a ${user.name || "usuario"}`} onClick={() => onApprove(user.id, user.name || 'Usuario')}>
+                    <Button size="icon" variant="outline" className="h-9 w-9 text-[hsl(142_80%_20%)] dark:text-success-ink hover:text-success hover:bg-success/10 border-success/30" aria-label={`Aprobar a ${user.name || "usuario"}`} onClick={() => onApprove(user.id, user.name || 'Usuario')}>
                       <Check className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="outline" className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" aria-label={`Rechazar a ${user.name || "usuario"}`} onClick={() => onReject(user.id, user.name || 'Usuario')}>
+                    <Button size="icon" variant="outline" className="h-9 w-9 text-destructive-ink hover:text-destructive hover:bg-destructive/10 border-destructive/30" aria-label={`Rechazar a ${user.name || "usuario"}`} onClick={() => onReject(user.id, user.name || 'Usuario')}>
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -140,7 +140,7 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
       </Card>
 
       <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" data-surface="admin">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Avatar className="h-6 w-6">
@@ -171,7 +171,7 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                 </div>
                 <div className="bg-muted/30 p-3 rounded-lg border">
                   <h4 className="font-semibold text-sm flex items-center gap-2 mb-2">
-                    <FileText className="h-4 w-4 text-info" /> Licencia de conducir
+                    <FileText className="h-4 w-4 text-info-ink" /> Licencia de conducir
                   </h4>
                   {(selectedUser.licenseUrl || selectedUser.licenseBackUrl || selectedUser.licenseSelfieUrl) ? (
                     <div className="grid grid-cols-2 gap-2">
@@ -187,7 +187,7 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                         <div key={label} className="space-y-1">
                           <p className="text-xs text-muted-foreground text-center">{label}</p>
                           {!has ? (
-                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-xs text-destructive text-center px-1">Falta</div>
+                            <div className="h-20 rounded-md border border-dashed bg-muted/50 flex items-center justify-center text-xs text-destructive-ink text-center px-1">Falta</div>
                           ) : url ? (
                             <a href={url} target="_blank" rel="noreferrer" className="block relative h-20 rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition">
                               <img src={url} alt={label} className="h-full w-full object-cover" />
@@ -200,7 +200,7 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                         </div>
                       ))}
                     </div>
-                  ) : <p className="text-sm text-destructive">⚠️ No subió fotos de licencia.</p>}
+                  ) : <p className="text-sm text-destructive-ink">⚠️ No subió fotos de licencia.</p>}
                 </div>
               </>
             )}
@@ -214,7 +214,7 @@ export function PendingList({ title, icon: Icon, users, onApprove, onReject, isL
                 </div>
                 <div className="grid gap-2 text-sm">
                   <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" /> {selectedUser.address || 'Sin dirección'}</div>
-                  <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-success" />
+                  <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-success-ink" />
                     {(selectedUser.weeklySchedule || selectedUser.schedule) ? describeSchedule(selectedUser) : 'Horario no definido'}
                   </div>
                 </div>

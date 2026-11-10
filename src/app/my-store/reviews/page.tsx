@@ -53,17 +53,17 @@ function ReviewReplyForm({ review, storeId }: { review: Review; storeId: string 
 
   if (review.ownerReply && !isOpen) {
     return (
-      <div className="mt-3 bg-muted/30 border-l-2 border-primary/40 rounded-r-md p-3">
-        <p className="text-xs font-semibold text-primary mb-1">Tu respuesta</p>
+      <div className="mt-3 rounded-2xl bg-primary/[0.07] p-3 ring-1 ring-primary/20">
+        <p className="mb-1 text-sm font-bold text-primary">Tu respuesta</p>
         <p className="text-sm text-muted-foreground">{review.ownerReply}</p>
-        <Button variant="link" size="sm" className="h-auto p-0 mt-1" onClick={() => setIsOpen(true)}>Editar</Button>
+        <Button variant="link" className="mt-1 h-11 px-0" onClick={() => setIsOpen(true)}>Editar</Button>
       </div>
     );
   }
 
   if (!isOpen) {
     return (
-      <Button variant="outline" size="sm" className="mt-3" onClick={() => setIsOpen(true)}>
+      <Button variant="outline" className="mt-3 h-11 rounded-full bg-transparent px-5" onClick={() => setIsOpen(true)}>
         <MessageSquare className="mr-2 h-4 w-4" /> Responder
       </Button>
     );
@@ -114,8 +114,8 @@ export default function StoreReviewsPage() {
       <PageHeader title="Reseñas de mi tienda" description="Lo que tus clientes opinan después de recibir su pedido." />
 
       <Card>
-        <CardContent className="flex items-center gap-4 py-5">
-          <div className="text-3xl font-bold text-warning">{(store?.rating || 0).toFixed(1)}</div>
+        <CardContent className="flex items-center gap-4 p-5">
+          <div className="font-headline text-6xl font-extrabold leading-none text-warning tabular-nums">{(store?.rating || 0).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
           <div>
             <StarRating rating={Math.round(store?.rating || 0)} />
             <p className="text-sm text-muted-foreground mt-1">{store?.ratingCount || 0} reseña{store?.ratingCount === 1 ? '' : 's'}</p>
@@ -124,7 +124,7 @@ export default function StoreReviewsPage() {
       </Card>
 
       {(!reviews || reviews.length === 0) ? (
-        <div className="text-center py-12 bg-muted/10 rounded-lg border border-dashed">
+        <div className="glass rounded-card px-4 py-12 text-center">
           <p className="text-muted-foreground">Todavía no tenés reseñas. Aparecerán acá cuando un cliente califique un pedido entregado.</p>
         </div>
       ) : (
@@ -133,15 +133,15 @@ export default function StoreReviewsPage() {
             <Card key={review.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{publicName(review.userName)}</CardTitle>
+                  <CardTitle className="font-headline text-xl font-extrabold">{publicName(review.userName)}</CardTitle>
                   <StarRating rating={review.rating} />
                 </div>
                 {review.createdAt?.seconds && (
-                  <p className="text-xs text-muted-foreground">{format(new Date(review.createdAt.seconds * 1000), "d MMM yyyy, HH:mm", { locale: es })}</p>
+                  <p className="text-sm text-muted-foreground">{format(new Date(review.createdAt.seconds * 1000), "d MMM yyyy, HH:mm", { locale: es })}</p>
                 )}
               </CardHeader>
               <CardContent>
-                {review.comment && <p className="text-sm text-foreground">{review.comment}</p>}
+                {review.comment && <p className="text-base text-foreground">{review.comment}</p>}
                 {storeId && <ReviewReplyForm review={review} storeId={storeId} />}
               </CardContent>
             </Card>

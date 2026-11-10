@@ -40,7 +40,7 @@ export default function AdminSystemPage() {
         <KpiCard label="Versión desplegada" value={sha ? sha.slice(0, 7) : 'local'} format="text" hint={sha ? 'commit de Vercel' : 'dev server'} />
       </KpiRow>
 
-      <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4">
+      <section className="min-w-0 overflow-hidden glass rounded-card p-4">
         <h2 className="flex items-center gap-2 font-semibold"><Activity className="h-4 w-4" aria-hidden="true" /> Configuración vigente</h2>
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Tarifa de servicio</dt><dd className="tabular-nums">{config?.serviceFee ?? '—'} %</dd></div>

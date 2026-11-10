@@ -7,7 +7,7 @@ import { app } from '@/lib/firebase';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthScreen, authButton } from '@/components/auth-screen';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, Mail, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
@@ -17,6 +17,8 @@ export default function ForgotPasswordPage() {
   const hydrated = useHydrated();
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  // Error junto al campo además del toast (el toast se va solo y no siempre se lee).
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,6 +43,7 @@ export default function ForgotPasswordPage() {
       if (error.code === 'auth/user-not-found') message = "No encontramos ninguna cuenta con este correo.";
       if (error.code === 'auth/invalid-email') message = "El formato del correo no es válido.";
       
+      setErrorMsg(message);
       toast({ variant: "destructive", title: "Error", description: message });
     } finally {
       setIsLoading(false);
@@ -48,60 +51,64 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Recuperar Acceso</CardTitle>
-          <CardDescription className="text-center">
-            Ingresa tu email y te enviaremos un enlace mágico para crear una nueva contraseña.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          
-          {isSent ? (
-            <div className="bg-success/10 border border-success/30 text-success p-6 rounded-lg text-center space-y-3 animate-in fade-in zoom-in duration-300">
-                <div className="mx-auto w-12 h-12 bg-success/15 rounded-full flex items-center justify-center">
-                    <CheckCircle2 className="h-6 w-6 text-success" />
-                </div>
-                <h3 className="font-semibold text-lg">¡Correo Enviado!</h3>
-                <p className="text-sm text-muted-foreground">
-                    Hemos enviado las instrucciones a <strong>{email}</strong>. 
-                    <br/>Revisa tu carpeta de Spam si no lo ves en unos minutos.
-                </p>
-                <Button variant="outline" className="mt-4 w-full" onClick={() => { setIsSent(false); setEmail(''); }}>
-                    Probar con otro correo
-                </Button>
+    <AuthScreen
+      testId="forgot-card"
+      title="Recuperá tu acceso"
+      description="Escribí el correo de tu cuenta y te mandamos un enlace para crear una contraseña nueva."
+      footer={
+        <Link href="/login" className="inline-flex min-h-11 items-center gap-2 font-semibold text-muted-foreground transition-colors hover:text-primary">
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" /> Volver a iniciar sesión
+        </Link>
+      }
+    >
+      {isSent ? (
+        <div
+          role="status"
+          className="space-y-3 rounded-2xl border border-success/30 bg-success/10 p-5 text-center animate-in fade-in-0 zoom-in-95 duration-300 motion-reduce:animate-none"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-success text-success-foreground">
+            <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
+          </div>
+          <h2 className="font-headline text-2xl font-bold text-foreground">Te mandamos el correo</h2>
+          <p className="text-base text-muted-foreground">
+            Lo enviamos a <strong className="break-all text-foreground">{email}</strong>. Si en unos minutos no lo ves, revisá la carpeta de spam.
+          </p>
+          <Button variant="outline" className={authButton + ' bg-background/60'} onClick={() => { setIsSent(false); setEmail(''); }}>
+            Probar con otro correo
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} method="post" action="#" className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Correo electrónico</Label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="ejemplo@correo.com"
+                className="!pl-12"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setErrorMsg(null); }}
+                required
+                aria-invalid={!!errorMsg}
+                aria-describedby={errorMsg ? 'forgot-error' : undefined}
+              />
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} method="post" action="#" className="space-y-4">
-                <div className="space-y-2">
-                <Label htmlFor="email">Correo Electrónico</Label>
-                <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                        id="email" 
-                        type="email" 
-                        placeholder="ejemplo@correo.com" 
-                        className="pl-9"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required 
-                    />
-                </div>
-                </div>
-                <Button type="submit" className="w-full" disabled={!hydrated || isLoading}>
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Enviar Enlace de Recuperación"}
-                </Button>
-            </form>
+          </div>
+          {errorMsg && (
+            <p id="forgot-error" role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+              {errorMsg}
+            </p>
           )}
-
-        </CardContent>
-        <CardFooter className="flex justify-center border-t pt-4 mt-2">
-          <Link href="/login" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Volver al inicio de sesión
-          </Link>
-        </CardFooter>
-      </Card>
-    </div>
+          <Button type="submit" className={authButton} disabled={!hydrated || isLoading}>
+            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+            Enviar el enlace
+          </Button>
+        </form>
+      )}
+    </AuthScreen>
   );
 }

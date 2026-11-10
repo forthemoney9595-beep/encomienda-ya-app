@@ -67,7 +67,7 @@ export function LiabilityPanel() {
   const circuitDebt = data ? overpaid.reduce((s, r) => s + r.debt, 0) : null;
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card" data-testid="liability-panel">
+    <section className="min-w-0 overflow-hidden glass rounded-card" data-testid="liability-panel">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 font-semibold"><Wallet className="h-4 w-4 text-primary-ink" aria-hidden="true" /> Pasivo real</h2>

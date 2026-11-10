@@ -19,7 +19,9 @@ import { updateProfile } from 'firebase/auth';
 import { User, Phone, Trash2, Loader2, Store, Bike, FileText, Car, Plus, MapPin, LocateFixed, CheckCircle2, Save, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { largeFields } from '@/components/auth-screen';
+import { Garland } from '@/components/garland';
 import { ImageUpload } from '@/components/image-upload';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -249,91 +251,109 @@ export default function ProfilePage() {
     };
 
     const getRoleBadge = (role?: string) => {
+        // Píldoras con texto sobre relleno sólido del token (contraste AA en los dos temas).
+        const base = 'inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-sm font-semibold';
         switch(role) {
-            case 'store': return <Badge className="bg-info text-info-foreground gap-1"><Store className="h-3 w-3"/> Tienda</Badge>;
-            case 'delivery': return <Badge className="bg-primary text-primary-foreground gap-1"><Bike className="h-3 w-3"/> Repartidor</Badge>;
-            case 'admin': return <Badge className="bg-foreground text-background">Admin</Badge>;
-            default: return <Badge variant="secondary">Cliente</Badge>;
+            case 'store': return <span className={cn(base, 'bg-info text-info-foreground')}><Store className="h-4 w-4" aria-hidden="true"/> Tienda</span>;
+            case 'delivery': return <span className={cn(base, 'bg-primary text-primary-foreground')}><Bike className="h-4 w-4" aria-hidden="true"/> Repartidor</span>;
+            case 'admin': return <span className={cn(base, 'bg-foreground text-background')}>Admin</span>;
+            default: return <span className={cn(base, 'bg-foreground/10 text-foreground')}><User className="h-4 w-4" aria-hidden="true"/> Cliente</span>;
         }
     };
 
-    if (authLoading || !userProfile) return <div className="container p-8"><Skeleton className="h-96 w-full" /></div>;
+    if (authLoading || !userProfile) return <div className="container p-8"><Skeleton className="h-96 w-full rounded-card" /></div>;
+
+    const secondTab =
+        userProfile.role === 'buyer' ? 'addresses'
+        : userProfile.role === 'store' ? 'store'
+        : userProfile.role === 'delivery' ? 'vehicle'
+        : null;
+    const sectionTitle = 'font-headline text-2xl font-bold leading-tight';
+    const tabTrigger = 'min-h-11 flex-1 rounded-xl px-4 text-base font-semibold transition-colors duration-200 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm';
+    const pillButton = 'h-12 w-full rounded-2xl text-base font-bold';
 
     return (
-        <div className="container mx-auto pb-20 max-w-5xl">
-            <PageHeader title="Mi Perfil" description={`Gestiona tu cuenta de ${
+        <div className={cn('container mx-auto max-w-5xl pb-20', largeFields)}>
+            <PageHeader title="Mi Perfil" description={`Gestioná tu cuenta de ${
                 ({ buyer: 'cliente', store: 'tienda', delivery: 'repartidor', admin: 'administrador' } as Record<string, string>)[userProfile.role] || 'usuario'
             }.`} />
 
-            <div className="grid gap-8 lg:grid-cols-12">
+            <div className="grid gap-6 lg:grid-cols-12 lg:gap-8">
                 {/* COLUMNA IZQUIERDA: FOTO Y DATOS BÁSICOS */}
-                <Card className="lg:col-span-4 h-fit shadow-md border-t-4 border-t-primary">
-                    <CardHeader className="text-center pb-2">
-                        <div className="mx-auto mb-2">
+                <Card className="relative h-fit lg:col-span-4" data-testid="profile-card">
+                    <Garland />
+                    <CardHeader className="items-center pb-2 text-center">
+                        <div className="mx-auto mb-3">
                             <ImageUpload
                                 currentImageUrl={profileImageUrl}
                                 onImageUploaded={handlePhotoUploaded}
                                 folder="profiles"
                                 ownerId={user!.uid}
                                 variant="avatar"
+                                label="foto de perfil"
                             />
                         </div>
                         {/* El badge de rol iba en absolute sobre el avatar y PISABA el botón
                             "Cambiar Foto" en celular (Fase QQ) — ahora vive junto al nombre. */}
-                        <div className="flex items-center justify-center gap-2">
-                            <CardTitle>{displayName || 'Usuario'}</CardTitle>
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                            <CardTitle className="font-headline text-2xl">{displayName || 'Usuario'}</CardTitle>
                             {getRoleBadge(userProfile.role)}
                         </div>
-                        <CardDescription>{userProfile.email}</CardDescription>
+                        <CardDescription className="break-all text-base">{userProfile.email}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4 pt-4">
                         <div className="space-y-2">
-                            <Label>Nombre Visible</Label>
+                            <Label htmlFor="profile-name">Nombre visible</Label>
                             <div className="relative">
-                                <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="pl-9" />
+                                <User className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                                <Input id="profile-name" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="!pl-12" />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label>Teléfono / WhatsApp</Label>
+                            <Label htmlFor="profile-phone">Teléfono / WhatsApp</Label>
                             <div className="relative">
-                                <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="pl-9" placeholder="+54 9..." />
+                                <Phone className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                                <Input id="profile-phone" type="tel" inputMode="tel" autoComplete="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="!pl-12" placeholder="+54 9..." />
                             </div>
                         </div>
-                        <Button onClick={handleSaveProfile} className="w-full mt-4" disabled={isSavingUser}>
-                            {isSavingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
-                            Guardar Cambios
+                        <Button onClick={handleSaveProfile} className={cn(pillButton, 'mt-2')} disabled={isSavingUser}>
+                            {isSavingUser ? <Loader2 className="h-5 w-5 animate-spin"/> : <Save className="h-5 w-5"/>}
+                            Guardar cambios
                         </Button>
                     </CardContent>
                 </Card>
 
                 {/* COLUMNA DERECHA: PESTAÑAS SEGÚN ROL */}
-                <div className="lg:col-span-8">
+                <div className="min-w-0 lg:col-span-8">
                     <Tabs defaultValue="info" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 mb-6">
-                            <TabsTrigger value="info">Información Detallada</TabsTrigger>
-                            {userProfile.role === 'buyer' && <TabsTrigger value="addresses">Mis Direcciones</TabsTrigger>}
-                            {userProfile.role === 'store' && <TabsTrigger value="store">Mi Tienda</TabsTrigger>}
-                            {userProfile.role === 'delivery' && <TabsTrigger value="vehicle">Vehículo y Licencia</TabsTrigger>}
-                        </TabsList>
+                        {secondTab && (
+                            <TabsList className="glass mb-5 flex h-auto w-full gap-1 rounded-2xl p-1">
+                                <TabsTrigger value="info" className={tabTrigger}>Mi cuenta</TabsTrigger>
+                                {userProfile.role === 'buyer' && <TabsTrigger value="addresses" className={tabTrigger}>Mis direcciones</TabsTrigger>}
+                                {userProfile.role === 'store' && <TabsTrigger value="store" className={tabTrigger}>Mi tienda</TabsTrigger>}
+                                {userProfile.role === 'delivery' && <TabsTrigger value="vehicle" className={tabTrigger}>Vehículo y documentos</TabsTrigger>}
+                            </TabsList>
+                        )}
 
-                        <TabsContent value="info">
+                        <TabsContent value="info" className="mt-0 space-y-5">
                             {/* Apariencia: tema claro (default desde el Rediseño 2) u oscuro, y
                                 el sonido de los avisos (9/11/2026). Ambos por dispositivo. */}
-                            <Card className="mb-4">
+                            <Card data-testid="profile-appearance">
                                 <CardHeader>
-                                    <CardTitle>Apariencia</CardTitle>
-                                    <CardDescription>Elegí cómo se ve la app en este dispositivo.</CardDescription>
+                                    <CardTitle className={sectionTitle}>Apariencia</CardTitle>
+                                    <CardDescription className="text-base">Elegí cómo se ve y cómo suena la app en este dispositivo.</CardDescription>
                                 </CardHeader>
-                                <CardContent>
-                                    <ThemeToggle />
-                                    <p className="mt-2 text-xs text-muted-foreground">
-                                        El modo claro puede leerse más cómodo con mucha luz o para la vista cansada.
-                                    </p>
-                                    <div className="mt-6">
-                                        <p className="text-sm font-semibold">Sonido de los avisos</p>
-                                        <p className="mb-3 text-xs text-muted-foreground">
+                                <CardContent className="space-y-6">
+                                    <div>
+                                        <p className="mb-2 text-base font-semibold">Tema</p>
+                                        <ThemeToggle />
+                                        <p className="mt-2 text-sm text-muted-foreground">
+                                            El modo claro se lee más cómodo con mucha luz o con la vista cansada.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-base font-semibold">Sonido de los avisos</p>
+                                        <p className="mb-3 text-sm text-muted-foreground">
                                             Suena con la app abierta: pedido nuevo, mensajes del chat y cambios de estado. Tocá uno para escucharlo.
                                         </p>
                                         <SoundPicker />
@@ -342,74 +362,82 @@ export default function ProfilePage() {
                             </Card>
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Detalles de la Cuenta</CardTitle>
-                                    <CardDescription>Información técnica de tu usuario.</CardDescription>
+                                    <CardTitle className={sectionTitle}>Tu cuenta</CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-4">
+                                <CardContent>
                                     {/* 🔒 El uid completo ("ID de Usuario") se ELIMINÓ de acá
                                         (auditoría de privacidad ago 2026): era ruido técnico sin
                                         uso para la persona — el soporte encuentra cuentas por
                                         email, nunca por uid. */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <Label className="text-xs text-muted-foreground">Fecha de Registro</Label>
-                                            <div className="text-sm bg-muted p-2 rounded">
-                                                {user?.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : '-'}
-                                            </div>
+                                    <dl className="grid gap-3 sm:grid-cols-2">
+                                        <div className="rounded-2xl bg-foreground/5 px-4 py-3">
+                                            <dt className="text-sm text-muted-foreground">Te registraste el</dt>
+                                            <dd className="text-base font-semibold">
+                                                {user?.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+                                            </dd>
                                         </div>
-                                    </div>
+                                        <div className="rounded-2xl bg-foreground/5 px-4 py-3">
+                                            <dt className="text-sm text-muted-foreground">Correo</dt>
+                                            <dd className="break-all text-base font-semibold">{userProfile.email}</dd>
+                                        </div>
+                                    </dl>
                                 </CardContent>
                             </Card>
                         </TabsContent>
 
                         {/* --- SOLO PARA CLIENTES --- */}
                         {userProfile.role === 'buyer' && (
-                            <TabsContent value="addresses">
+                            <TabsContent value="addresses" className="mt-0">
                                 <Card>
-                                    <CardHeader className="flex flex-row items-center justify-between">
-                                        <div>
-                                            <CardTitle>Mis Direcciones</CardTitle>
-                                            <CardDescription>Lugares frecuentes de entrega.</CardDescription>
+                                    <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                                        <div className="min-w-0">
+                                            <CardTitle className={sectionTitle}>Mis direcciones</CardTitle>
+                                            <CardDescription className="text-base">Los lugares donde recibís tus pedidos.</CardDescription>
                                         </div>
-                                        <Button size="sm" onClick={() => {
+                                        <Button className="h-11 shrink-0 rounded-2xl px-4 text-base font-semibold" onClick={() => {
                                             setNewAddress({ id: '', street: '', city: '', zipCode: '', isEditing: false });
                                             setTempCoords(undefined);
                                             setIsAddingAddress(true);
                                         }} disabled={isAddingAddress}>
-                                            <Plus className="h-4 w-4 mr-2" /> Nueva
+                                            <Plus className="h-5 w-5" /> Nueva
                                         </Button>
                                     </CardHeader>
-                                    <CardContent className="space-y-4">
+                                    <CardContent className="space-y-3">
                                         {isAddingAddress && (
-                                            <div className="bg-muted/30 p-4 rounded-lg border border-primary/20 space-y-3 animate-in fade-in zoom-in-95">
-                                                <h4 className="font-semibold text-sm">{newAddress.isEditing ? 'Editar' : 'Nueva'} Dirección</h4>
-                                                
+                                            <div className="space-y-4 rounded-2xl border border-primary/25 bg-background/50 p-4 animate-in fade-in-0 zoom-in-95 duration-300 motion-reduce:animate-none">
+                                                <h3 className="font-headline text-xl font-bold">{newAddress.isEditing ? 'Editar' : 'Nueva'} dirección</h3>
+
                                                 {/* CAMPO DE DIRECCIÓN */}
                                                 <div className="space-y-2">
-                                                    <Label>Dirección Exacta</Label>
-                                                    <Input name="street" placeholder="Ej: Calle San Martín 500 (Casa blanca)" value={newAddress.street} onChange={handleAddressChange} />
+                                                    <Label htmlFor="addr-street">Dirección exacta</Label>
+                                                    <Input id="addr-street" name="street" autoComplete="street-address" placeholder="Ej: Calle San Martín 500 (casa blanca)" value={newAddress.street} onChange={handleAddressChange} />
                                                 </div>
 
                                                 <div className="grid gap-3 sm:grid-cols-2">
-                                                    <Input name="city" placeholder="Ciudad / Barrio" value={newAddress.city} onChange={handleAddressChange} />
-                                                    <Input name="zipCode" placeholder="C.P." value={newAddress.zipCode} onChange={handleAddressChange} />
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="addr-city">Ciudad o barrio</Label>
+                                                        <Input id="addr-city" name="city" placeholder="Ej: Tinogasta" value={newAddress.city} onChange={handleAddressChange} />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="addr-zip">Código postal</Label>
+                                                        <Input id="addr-zip" name="zipCode" inputMode="numeric" autoComplete="postal-code" placeholder="Ej: 5340" value={newAddress.zipCode} onChange={handleAddressChange} />
+                                                    </div>
                                                 </div>
 
                                                 {/* BOTÓN GPS */}
-                                                <div className="flex items-center justify-between bg-muted p-2 rounded border">
-                                                    <span className="text-sm text-muted-foreground ml-2">
+                                                <div className="flex items-center justify-between gap-3 rounded-2xl bg-foreground/5 p-2 pl-4">
+                                                    <span className="text-sm text-muted-foreground">
                                                         {tempCoords ? "Ubicación marcada" : "Ubicación exacta (recomendado)"}
                                                     </span>
                                                     <Button
                                                         type="button"
                                                         variant="outline"
-                                                        size="sm"
                                                         onClick={handleGetLocation}
                                                         disabled={isLocating}
-                                                        className={tempCoords ? "text-success border-success/30 bg-success/10" : ""}
+                                                        className={cn('h-11 shrink-0 rounded-xl bg-background/70 px-4 font-semibold', tempCoords && 'border-success/40 bg-success/10 text-success hover:text-success')}
                                                     >
-                                                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin"/> :
-                                                         tempCoords ? <CheckCircle2 className="h-4 w-4"/> : <LocateFixed className="h-4 w-4"/>}
+                                                        {isLocating ? <Loader2 className="h-5 w-5 animate-spin"/> :
+                                                         tempCoords ? <CheckCircle2 className="h-5 w-5"/> : <LocateFixed className="h-5 w-5"/>}
                                                         {tempCoords ? "Actualizar" : "Detectar"}
                                                     </Button>
                                                 </div>
@@ -417,44 +445,50 @@ export default function ProfilePage() {
                                                 {/* PIN AJUSTABLE (Fase RR): el GPS crudo puede errarle por cuadras.
                                                     El mapa deja verificar/corregir el punto arrastrando el pin, o
                                                     marcarlo a mano si el GPS está apagado/denegado. */}
-                                                <LocationPicker
-                                                    value={tempCoords ?? null}
-                                                    onChange={(c) => setTempCoords(c)}
-                                                    className="h-44"
-                                                    hint={tempCoords
-                                                        ? 'Arrastrá el pin hasta la entrada exacta de tu casa.'
-                                                        : 'Tocá el mapa donde está tu casa para colocar el pin (o usá "Detectar").'}
-                                                />
+                                                <div className="overflow-hidden rounded-2xl">
+                                                    <LocationPicker
+                                                        value={tempCoords ?? null}
+                                                        onChange={(c) => setTempCoords(c)}
+                                                        className="h-48"
+                                                        hint={tempCoords
+                                                            ? 'Arrastrá el pin hasta la entrada exacta de tu casa.'
+                                                            : 'Tocá el mapa donde está tu casa para colocar el pin (o usá "Detectar").'}
+                                                    />
+                                                </div>
 
-                                                <div className="flex justify-end gap-2 pt-2">
-                                                    <Button variant="ghost" size="sm" onClick={() => setIsAddingAddress(false)}>Cancelar</Button>
-                                                    <Button size="sm" onClick={handleAddAddress}>Guardar</Button>
+                                                <div className="flex justify-end gap-2 pt-1">
+                                                    <Button variant="ghost" className="h-11 rounded-xl px-4 text-base" onClick={() => setIsAddingAddress(false)}>Cancelar</Button>
+                                                    <Button className="h-11 rounded-xl px-5 text-base font-semibold" onClick={handleAddAddress}>Guardar</Button>
                                                 </div>
                                             </div>
                                         )}
 
                                         {addresses.length === 0 && !isAddingAddress ? (
-                                            <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                                                <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                No tienes direcciones guardadas.
+                                            <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-foreground/15 px-4 py-10 text-center text-muted-foreground">
+                                                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-foreground/5">
+                                                    <MapPin className="h-7 w-7" aria-hidden="true" />
+                                                </span>
+                                                Todavía no guardaste ninguna dirección.
                                             </div>
                                         ) : (
-                                            addresses.map(addr => (
-                                                <div key={addr.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`p-2 rounded-full ${addr.coords ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'}`}>
-                                                            <MapPin className="h-4 w-4"/>
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-medium text-sm">{addr.street}</p>
-                                                            <p className="text-xs text-muted-foreground">{addr.city} {addr.coords && '• GPS Activo'}</p>
+                                            <ul className="space-y-2">
+                                            {addresses.map(addr => (
+                                                <li key={addr.id} className="flex items-center justify-between gap-3 rounded-2xl bg-background/50 p-3 transition-colors hover:bg-foreground/5">
+                                                    <div className="flex min-w-0 items-center gap-3">
+                                                        <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', addr.coords ? 'bg-success text-success-foreground' : 'bg-foreground/10 text-muted-foreground')}>
+                                                            <MapPin className="h-5 w-5" aria-hidden="true"/>
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <p className="truncate text-base font-semibold">{addr.street}</p>
+                                                            <p className="text-sm text-muted-foreground">{[addr.city, addr.coords && 'Con ubicación en el mapa'].filter(Boolean).join(' · ')}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex gap-1">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteAddress(addr)}><Trash2 className="h-4 w-4"/></Button>
-                                                    </div>
-                                                </div>
-                                            ))
+                                                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteAddress(addr)} aria-label={`Borrar la dirección ${addr.street}`}>
+                                                        <Trash2 className="h-5 w-5"/>
+                                                    </Button>
+                                                </li>
+                                            ))}
+                                            </ul>
                                         )}
                                     </CardContent>
                                 </Card>
@@ -463,22 +497,22 @@ export default function ProfilePage() {
 
                         {/* --- SOLO PARA TIENDAS --- */}
                         {userProfile.role === 'store' && (
-                            <TabsContent value="store">
+                            <TabsContent value="store" className="mt-0">
                                 <Card>
                                     <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Store className="h-5 w-5" /> Configuración de tu tienda
+                                        <CardTitle className={cn(sectionTitle, 'flex items-center gap-2')}>
+                                            <Store className="h-6 w-6 text-primary" aria-hidden="true" /> Configuración de tu tienda
                                         </CardTitle>
-                                        <CardDescription>
-                                            Horario, descripción, banner, rubro y dirección se gestionan desde el panel de tu tienda, no desde tu perfil personal.
+                                        <CardDescription className="text-base">
+                                            Horario, descripción, banner, rubro y dirección se manejan desde el panel de tu tienda, no desde tu perfil personal.
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent>
-                                        <Link href="/my-store/edit">
-                                            <Button className="w-full">
-                                                Ir a editar mi tienda <ArrowRight className="ml-2 h-4 w-4" />
-                                            </Button>
-                                        </Link>
+                                        <Button asChild className={pillButton}>
+                                            <Link href="/my-store/edit">
+                                                Ir a editar mi tienda <ArrowRight className="h-5 w-5" />
+                                            </Link>
+                                        </Button>
                                     </CardContent>
                                 </Card>
                             </TabsContent>
@@ -486,19 +520,19 @@ export default function ProfilePage() {
 
                         {/* --- SOLO PARA REPARTIDORES --- */}
                         {userProfile.role === 'delivery' && (
-                            <TabsContent value="vehicle">
+                            <TabsContent value="vehicle" className="mt-0 space-y-5">
                                 <Card>
                                     <CardHeader>
-                                        <CardTitle>Vehículo y Documentación</CardTitle>
-                                        <CardDescription>Mantén tus datos al día para poder recibir pedidos.</CardDescription>
+                                        <CardTitle className={sectionTitle}>Tu vehículo</CardTitle>
+                                        <CardDescription className="text-base">Mantené tus datos al día para poder recibir pedidos.</CardDescription>
                                     </CardHeader>
-                                    <CardContent className="space-y-6">
+                                    <CardContent>
                                         <div className="grid gap-4 md:grid-cols-2">
                                             <div className="space-y-2">
-                                                <Label>Tipo de Vehículo</Label>
+                                                <Label htmlFor="vehicle-type">Tipo de vehículo</Label>
                                                 <Select value={vehicleInfo.type} onValueChange={(val) => setVehicleInfo({...vehicleInfo, type: val})}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Selecciona" />
+                                                    <SelectTrigger id="vehicle-type">
+                                                        <SelectValue placeholder="Elegí uno" />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {VEHICLE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -507,31 +541,36 @@ export default function ProfilePage() {
                                             </div>
                                             {!isBikeType(vehicleInfo.type) && (
                                             <div className="space-y-2">
-                                                <Label>Patente / Placa</Label>
+                                                <Label htmlFor="vehicle-plate">Patente</Label>
                                                 <div className="relative">
-                                                    <Car className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                                    <Input placeholder="Ej: A123BCD" value={vehicleInfo.plate} onChange={(e) => setVehicleInfo({...vehicleInfo, plate: e.target.value})} className="pl-9 uppercase" />
+                                                    <Car className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                                                    <Input id="vehicle-plate" autoCapitalize="characters" placeholder="Ej: A123BCD" value={vehicleInfo.plate} onChange={(e) => setVehicleInfo({...vehicleInfo, plate: e.target.value})} className="!pl-12 uppercase" />
                                                 </div>
                                             </div>
                                             )}
                                             <div className="space-y-2">
-                                                <Label>Modelo</Label>
-                                                <Input placeholder="Ej: Honda Wave 110" value={vehicleInfo.model} onChange={(e) => setVehicleInfo({...vehicleInfo, model: e.target.value})} />
+                                                <Label htmlFor="vehicle-model">Modelo</Label>
+                                                <Input id="vehicle-model" placeholder="Ej: Honda Wave 110" value={vehicleInfo.model} onChange={(e) => setVehicleInfo({...vehicleInfo, model: e.target.value})} />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label>Color</Label>
-                                                <Input placeholder="Ej: Roja" value={vehicleInfo.color} onChange={(e) => setVehicleInfo({...vehicleInfo, color: e.target.value})} />
+                                                <Label htmlFor="vehicle-color">Color</Label>
+                                                <Input id="vehicle-color" placeholder="Ej: Roja" value={vehicleInfo.color} onChange={(e) => setVehicleInfo({...vehicleInfo, color: e.target.value})} />
                                             </div>
                                         </div>
+                                    </CardContent>
+                                </Card>
 
-                                        <div className="space-y-3 pt-4 border-t">
-                                            <Label className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4" /> {isBikeType(vehicleInfo.type) ? 'Verificación de identidad (DNI)' : 'Verificación de Licencia de Conducir'}
-                                            </Label>
-                                            <p className="text-xs text-muted-foreground -mt-1">
-                                                Subí las fotos de tus documentos para agilizar tu aprobación. Deben ser claras y legibles.
-                                            </p>
-                                            <div className="grid gap-3 sm:grid-cols-2">
+                                <Card data-testid="profile-docs">
+                                    <CardHeader>
+                                        <CardTitle className={cn(sectionTitle, 'flex items-center gap-2')}>
+                                            <FileText className="h-6 w-6 text-primary" aria-hidden="true" /> {isBikeType(vehicleInfo.type) ? 'Tu identidad (DNI)' : 'Licencia y papeles del vehículo'}
+                                        </CardTitle>
+                                        <CardDescription className="text-base">
+                                            Subí las fotos de tus documentos para agilizar tu aprobación. Tienen que verse claras y legibles. Solo las ve el equipo de aprobación.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                            <div className="grid gap-4 sm:grid-cols-2">
                                                 {DOC_FIELDS(isBikeType(vehicleInfo.type)).map(({ key: field, label }) => {
                                                     // Mismos documentos que pide el alta (src/lib/driver-docs.ts): bici = DNI ×3,
                                                     // moto/auto = licencia ×3 + cédula + seguro.
@@ -548,43 +587,47 @@ export default function ProfilePage() {
                                                     const isLegacyUrl = value.startsWith('http');
                                                     const displayUrl = isLegacyUrl ? value : licenseDisplayUrls[field];
                                                     return (
-                                                    <div key={label} className="space-y-1.5">
-                                                        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                                                        <div className="border-2 border-dashed rounded-lg p-3 flex flex-col items-center justify-center bg-muted/20 min-h-[140px]">
-                                                            {value ? (
-                                                                <div className="relative w-full h-32">
-                                                                    {displayUrl ? (
-                                                                        <img src={displayUrl} alt={label} className="w-full h-full object-contain rounded-md" />
-                                                                    ) : (
-                                                                        <div className="flex h-full w-full items-center justify-center text-center text-xs text-muted-foreground px-2">
-                                                                            {loadingLicenseUrls ? 'Cargando...' : 'Imagen cargada (se verá al guardar)'}
-                                                                        </div>
-                                                                    )}
-                                                                    <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => set('')}>
-                                                                        <Trash2 className="h-3 w-3" />
-                                                                    </Button>
-                                                                </div>
-                                                            ) : (
-                                                                <ImageUpload
-                                                                    onImageUploaded={set}
-                                                                    folder="licenses"
-                                                                    ownerId={user!.uid}
-                                                                    storeRawPath
-                                                                    variant="banner"
-                                                                />
-                                                            )}
-                                                        </div>
+                                                    <div key={label} className="space-y-2">
+                                                        <p className="flex items-center gap-1.5 text-[0.95rem] font-semibold">
+                                                            {value
+                                                                ? <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" />
+                                                                : <span className="h-5 w-5 rounded-full border-2 border-foreground/20" aria-hidden="true" />}
+                                                            {label}
+                                                            {value && <span className="sr-only">(cargada)</span>}
+                                                        </p>
+                                                        {value ? (
+                                                            <div className="relative h-48 overflow-hidden rounded-2xl border border-foreground/10 bg-background/50">
+                                                                {displayUrl ? (
+                                                                    <img src={displayUrl} alt={label} className="h-full w-full object-contain" />
+                                                                ) : (
+                                                                    <div className="flex h-full w-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                                                                        {loadingLicenseUrls ? 'Cargando…' : 'Imagen cargada (se verá al guardar)'}
+                                                                    </div>
+                                                                )}
+                                                                <Button variant="destructive" size="icon" className="absolute right-2 top-2 h-10 w-10 rounded-full shadow-md" onClick={() => set('')} aria-label={`Quitar ${label}`}>
+                                                                    <Trash2 className="h-5 w-5" />
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <ImageUpload
+                                                                onImageUploaded={set}
+                                                                folder="licenses"
+                                                                ownerId={user!.uid}
+                                                                storeRawPath
+                                                                variant="banner"
+                                                                label={label}
+                                                            />
+                                                        )}
                                                     </div>
                                                     );
                                                 })}
                                             </div>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="text-sm text-muted-foreground">
                                                 La selfie sirve para confirmar que el documento es tuyo. Sostenelo junto a tu cara.
                                             </p>
-                                        </div>
 
-                                        <Button className="w-full" onClick={handleSaveProfile}>
-                                            Guardar Datos del Vehículo
+                                        <Button className={pillButton} onClick={handleSaveProfile}>
+                                            Guardar datos del vehículo
                                         </Button>
                                     </CardContent>
                                 </Card>

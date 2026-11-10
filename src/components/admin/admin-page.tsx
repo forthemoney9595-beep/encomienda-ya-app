@@ -31,13 +31,14 @@ export function AdminPage({ title, subtitle, crumbs, actions, kpis, filters, liv
     <div className={cn('mx-auto w-full min-w-0 space-y-4', wide ? 'max-w-[1600px]' : 'max-w-[1400px]', className)}>
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+          <h1 className="font-headline text-[1.75rem] font-extrabold leading-tight tracking-tight sm:text-[2rem]">{title}</h1>
           {subtitle && <div className="mt-0.5 text-sm text-muted-foreground">{subtitle}</div>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </header>
       {kpis}
-      {filters && <div className="z-10 md:sticky md:top-14">{filters}</div>}
+      {/* La topbar de vidrio flota en top-2 con 3,5rem de alto: lo sticky va debajo (4,5rem). */}
+      {filters && <div className="z-10 md:sticky md:top-[4.5rem]">{filters}</div>}
       {children}
     </div>
   );

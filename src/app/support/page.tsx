@@ -1,4 +1,3 @@
-
 import PageHeader from '@/components/page-header';
 import {
   Accordion,
@@ -9,128 +8,112 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Mail, Phone, User, Store, Truck } from 'lucide-react';
 
+// Ayuda en vidrio (rediseño 9/11/2026): una tarjeta por tipo de cuenta con el ícono en un
+// cuadradito, preguntas con filas de 48 px y el texto en voseo, con los nombres de botones y
+// secciones que la app usa hoy.
 const buyerFaqs = [
   {
-    question: "¿Cómo puedo repetir un pedido?",
-    answer: "Ve a 'Mis Pedidos', selecciona un pedido que ya haya sido entregado y verás un botón de 'Volver a Pedir'. Esto añadirá todos los artículos de ese pedido a tu carrito."
+    question: "¿Cómo repito un pedido?",
+    answer: "Entrá a \"Mis Pedidos\", abrí un pedido que ya fue entregado y tocá \"Volver a pedir\". Los mismos productos se suman a tu carrito."
   },
   {
-    question: "¿Qué pasa si mi pedido es de una tienda diferente a la de mi carrito actual?",
-    answer: "Solo puedes tener artículos de una tienda a la vez en tu carrito. Si intentas añadir un artículo de otra tienda, se te preguntará si quieres vaciar tu carrito actual para añadir el nuevo artículo."
+    question: "¿Puedo pedir a dos tiendas a la vez?",
+    answer: "No: el carrito es de una tienda por vez. Si agregás algo de otra tienda, la app te pregunta si querés vaciar el carrito actual para empezar uno nuevo."
   },
   {
-    question: "¿Cómo puedo valorar un producto o una entrega?",
-    answer: "Una vez que un pedido ha sido 'Entregado', en la página de detalles del pedido verás opciones para valorar tanto los productos individuales como la experiencia con el repartidor."
+    question: "¿Cómo califico una tienda o al repartidor?",
+    answer: "Cuando el pedido figura como \"Entregado\", en el detalle del pedido vas a ver las opciones para calificar los productos, la tienda y al repartidor."
   }
 ];
 
 const storeFaqs = [
     {
-        question: "¿Cómo añado o edito mis productos?",
-        answer: "Ve a 'Mi Tienda' > 'Productos' en el menú lateral. Desde allí podrás ver tu lista de productos. Usa el botón 'Añadir Artículo' para crear uno nuevo o los botones 'Editar' y 'Eliminar' en cada producto para gestionarlos."
+        question: "¿Cómo agrego o edito mis productos?",
+        answer: "En el menú, entrá a \"Gestionar Productos\". Con \"Nuevo Producto\" cargás uno, y en cada producto tenés los botones para editarlo o borrarlo."
     },
     {
-        question: "¿Cómo gestiono las categorías de mis productos?",
-        answer: "En el menú de 'Mi Tienda', selecciona 'Categorías'. En esta página podrás añadir, editar o eliminar las categorías que se muestran en la página de tu tienda."
+        question: "¿Cómo ordeno los productos por categoría?",
+        answer: "En el menú, entrá a \"Categorías\". Ahí agregás, cambiás o borrás las secciones que se ven en el menú de tu tienda."
     },
     {
-        question: "¿Qué significan los diferentes estados de un pedido?",
-        answer: "'Pendiente de Confirmación': Un nuevo pedido que debes aceptar o rechazar. 'En preparación': Has confirmado el pedido y el cliente ha pagado; es hora de prepararlo para el repartidor. 'En reparto': Un repartidor ha recogido el pedido. 'Entregado': El pedido ha sido completado."
+        question: "¿Qué significa cada estado de un pedido?",
+        answer: "\"Pendiente de Confirmación\": un pedido nuevo que tenés que aceptar o rechazar. \"En preparación\": lo confirmaste y el cliente pagó; es momento de prepararlo. \"En reparto\": el repartidor ya lo retiró. \"Entregado\": el pedido llegó."
     }
 ];
 
 const deliveryFaqs = [
     {
-        question: "¿Cómo acepto una nueva entrega?",
-        answer: "En la sección 'Entregas', la pestaña 'Disponibles' te mostrará los pedidos que están listos para ser recogidos en las tiendas. Simplemente haz clic en 'Aceptar Pedido' para que se te asigne."
+        question: "¿Cómo tomo un pedido?",
+        answer: "En \"Panel de Entregas\", la pestaña \"Disponibles\" muestra los pedidos listos para retirar en las tiendas, con la zona, los kilómetros y los minutos de viaje. Tocá el botón para tomarlo y queda asignado a vos."
     },
     {
-        question: "¿Dónde veo mis entregas activas?",
-        answer: "En la sección 'Entregas', la pestaña 'Mis Entregas' mostrará todos los pedidos que has aceptado y que están actualmente 'En reparto'."
+        question: "¿Dónde veo los pedidos que estoy llevando?",
+        answer: "En \"Panel de Entregas\", pestaña \"En curso\": ahí están los pedidos que tomaste, con la dirección de destino y el botón para navegar."
     },
      {
-        question: "¿Cómo marco una entrega como completada?",
-        answer: "Una vez que hayas entregado el pedido al cliente, ve a 'Mis Entregas' y busca el pedido correspondiente. Haz clic en el botón 'Marcar como Entregado' para finalizar el proceso."
+        question: "¿Cómo marco que ya entregué?",
+        answer: "Cuando le das el pedido al cliente, tocá \"Ya lo entregué\" en la tarjeta del pedido y escribí el código de entrega de 4 números que te dice el cliente."
     }
 ];
 
+const SECTIONS = [
+  { id: 'buyer', title: 'Para clientes', Icon: User, faqs: buyerFaqs },
+  { id: 'store', title: 'Para tiendas', Icon: Store, faqs: storeFaqs },
+  { id: 'delivery', title: 'Para repartidores', Icon: Truck, faqs: deliveryFaqs },
+];
 
 export default function SupportPage() {
   return (
     <div className="container mx-auto">
-      <PageHeader title="Ayuda y Soporte" description="Encuentra respuestas a tus preguntas y contáctanos." />
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><User /> Para Compradores</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Accordion type="single" collapsible>
-                        {buyerFaqs.map((faq, index) => (
-                        <AccordionItem key={`buyer-${index}`} value={`buyer-item-${index}`}>
-                            <AccordionTrigger>{faq.question}</AccordionTrigger>
-                            <AccordionContent>{faq.answer}</AccordionContent>
-                        </AccordionItem>
-                        ))}
-                    </Accordion>
-                </CardContent>
-            </Card>
+      <PageHeader title="Ayuda y soporte" description="Encontrá respuestas a las preguntas más comunes o escribinos." />
 
-             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Store /> Para Tiendas</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Accordion type="single" collapsible>
-                        {storeFaqs.map((faq, index) => (
-                        <AccordionItem key={`store-${index}`} value={`store-item-${index}`}>
-                            <AccordionTrigger>{faq.question}</AccordionTrigger>
-                            <AccordionContent>{faq.answer}</AccordionContent>
-                        </AccordionItem>
-                        ))}
-                    </Accordion>
-                </CardContent>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
+        <div className="space-y-5 lg:col-span-2">
+          {SECTIONS.map(({ id, title, Icon, faqs }) => (
+            <Card key={id} data-testid={`support-${id}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-3 font-headline text-2xl">
+                  <span className="cat-tile tile-brand flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.9rem]">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  {title}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Accordion type="single" collapsible>
+                  {faqs.map((faq, index) => (
+                    <AccordionItem key={`${id}-${index}`} value={`${id}-item-${index}`} className="border-foreground/10 last:border-b-0">
+                      <AccordionTrigger className="min-h-12 gap-3 text-left text-base font-semibold hover:no-underline">{faq.question}</AccordionTrigger>
+                      <AccordionContent className="text-base leading-relaxed text-muted-foreground">{faq.answer}</AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </CardContent>
             </Card>
-
-             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Truck /> Para Repartidores</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Accordion type="single" collapsible>
-                        {deliveryFaqs.map((faq, index) => (
-                        <AccordionItem key={`delivery-${index}`} value={`delivery-item-${index}`}>
-                            <AccordionTrigger>{faq.question}</AccordionTrigger>
-                            <AccordionContent>{faq.answer}</AccordionContent>
-                        </AccordionItem>
-                        ))}
-                    </Accordion>
-                </CardContent>
-            </Card>
+          ))}
         </div>
 
         <div className="lg:col-span-1">
-            <Card>
-                <CardHeader>
-                    <CardTitle>¿Necesitas más ayuda?</CardTitle>
-                    <CardDescription>Si no encuentras la respuesta aquí, contáctanos.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex items-center gap-3">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
-                        <a href="mailto:soporte@encomiendaya.test" className="text-primary hover:underline">
-                            soporte@encomiendaya.test
-                        </a>
-                    </div>
-                     <div className="flex items-center gap-3">
-                        <Phone className="h-5 w-5 text-muted-foreground" />
-                        <span>+1 (555) 123-4567 (simulado)</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground pt-4">Próximamente: un formulario de contacto para enviar tus preguntas directamente desde aquí.</p>
-                </CardContent>
-            </Card>
+          <Card className="glass-strong lg:sticky lg:top-[5.5rem]" data-testid="support-contact">
+            <CardHeader>
+              <CardTitle className="font-headline text-2xl">¿Necesitás más ayuda?</CardTitle>
+              <CardDescription className="text-base">Si no encontrás la respuesta acá, escribinos.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <a
+                href="mailto:soporte@encomiendaya.test"
+                className="flex min-h-12 items-center gap-3 rounded-2xl bg-foreground/5 px-3 font-semibold text-primary transition-colors hover:bg-primary/10"
+              >
+                <Mail className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <span className="break-all">soporte@encomiendaya.test</span>
+              </a>
+              <div className="flex min-h-12 items-center gap-3 rounded-2xl bg-foreground/5 px-3 text-muted-foreground">
+                <Phone className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <span>+1 (555) 123-4567 (simulado)</span>
+              </div>
+              <p className="pt-2 text-sm text-muted-foreground">Próximamente: un formulario para mandarnos tu consulta desde acá.</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

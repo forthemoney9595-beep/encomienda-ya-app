@@ -136,11 +136,11 @@ export function WalletStatement(props: WalletStatementProps) {
 
   return (
     <div className="space-y-4" data-testid="wallet-statement">
-      <Card className="border-info/30 bg-info/5">
-        <CardContent className="flex gap-3 p-4">
-          <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-info" aria-hidden="true" />
+      <Card>
+        <CardContent className="flex gap-3 p-4 sm:p-5">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-info/15 text-info"><CalendarClock className="h-5 w-5" aria-hidden="true" /></span>
           <div className="space-y-1 text-sm">
-            <p className="font-semibold" data-testid="next-settlement">
+            <p className="font-headline text-xl font-extrabold leading-tight" data-testid="next-settlement">
               Próxima liquidación: {next.isToday ? 'hoy, ' : ''}{next.label}
             </p>
             <p className="text-muted-foreground">
@@ -148,8 +148,8 @@ export function WalletStatement(props: WalletStatementProps) {
               acredita cuando el administrador la aprueba y transfiere (te llega un aviso con el comprobante).
             </p>
             {hasCbu
-              ? <p className="text-xs text-success">✓ Tenés un CBU/alias cargado para recibir la liquidación.</p>
-              : <p className="text-xs text-warning" data-testid="no-cbu">Todavía no tenés CBU cargado: hacé un retiro manual una vez y queda guardado para las próximas liquidaciones.</p>}
+              ? <p className="text-sm font-semibold text-success">✓ Tenés un CBU/alias cargado para recibir la liquidación.</p>
+              : <p className="text-sm font-semibold text-warning" data-testid="no-cbu">Todavía no tenés CBU cargado: hacé un retiro manual una vez y queda guardado para las próximas liquidaciones.</p>}
           </div>
         </CardContent>
       </Card>
@@ -184,7 +184,7 @@ export function WalletStatement(props: WalletStatementProps) {
                     {weeks.map(w => <SelectItem key={w.offset} value={String(w.offset)}>{w.offset === 0 ? `Esta semana (${w.label})` : w.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button type="button" variant="outline" className="h-10 shrink-0 gap-1.5" onClick={downloadWeek} disabled={downloading || !ready} data-testid="weekly-csv">
+                <Button type="button" variant="outline" className="h-10 shrink-0 gap-1.5 rounded-full bg-transparent px-4" onClick={downloadWeek} disabled={downloading || !ready} data-testid="weekly-csv">
                   {downloading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
                   Descargar
                 </Button>
@@ -193,7 +193,7 @@ export function WalletStatement(props: WalletStatementProps) {
           </div>
         }
         footer={
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {isLoading ? 'Cargando movimientos…' : `${PERIOD_LABELS[period]} · por fecha de entrega, hora Argentina.`} El saldo disponible es el total de hoy, no solo el del período.
           </p>
         }

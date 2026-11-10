@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
@@ -358,8 +358,8 @@ export default function EditStorePage() {
       {/* SECCIÓN 1: DATOS DEL NEGOCIO */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <StoreIcon className="h-5 w-5" /> Datos del negocio
+          <CardTitle className="flex items-center gap-3 font-headline text-2xl font-extrabold">
+            <SectionIcon><StoreIcon className="h-5 w-5" aria-hidden="true" /></SectionIcon> Datos del negocio
           </CardTitle>
           <CardDescription>
             Lo que ven los clientes en la app.
@@ -436,8 +436,8 @@ export default function EditStorePage() {
       {/* SECCIÓN 2: UBICACIÓN */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" /> Ubicación
+          <CardTitle className="flex items-center gap-3 font-headline text-2xl font-extrabold">
+            <SectionIcon><MapPin className="h-5 w-5" aria-hidden="true" /></SectionIcon> Ubicación
           </CardTitle>
           <CardDescription>
             La dirección visible + el GPS que usa el mapa de seguimiento del repartidor.
@@ -501,8 +501,8 @@ export default function EditStorePage() {
       {/* SECCIÓN 3: HORARIOS */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" /> Horarios de atención
+          <CardTitle className="flex items-center gap-3 font-headline text-2xl font-extrabold">
+            <SectionIcon><Clock className="h-5 w-5" aria-hidden="true" /></SectionIcon> Horarios de atención
           </CardTitle>
           <CardDescription>
             Podés cargar más de una franja por día (ej: mañana y tarde) o marcar un día como cerrado.
@@ -512,9 +512,9 @@ export default function EditStorePage() {
           {DISPLAY_ORDER.map((dayIdx) => {
             const day = weeklySchedule[dayIdx];
             return (
-                <div key={dayIdx} className="border rounded-md p-3 bg-muted/20 space-y-2">
+                <div key={dayIdx} className="space-y-2 rounded-2xl bg-foreground/[0.04] p-3 ring-1 ring-foreground/10">
                     <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">{DAY_LABELS[dayIdx]}</span>
+                        <span className="text-base font-semibold">{DAY_LABELS[dayIdx]}</span>
                         <div className="flex items-center gap-2">
                             <span className={`text-xs ${day.closed ? 'text-muted-foreground' : 'text-success'}`}>
                                 {day.closed ? 'Cerrado' : 'Abierto'}
@@ -564,10 +564,10 @@ export default function EditStorePage() {
       </Card>
 
       {/* SECCIÓN 3 bis: HORARIO ESPECIAL POR FECHA (fiestas). Ese día pisa al semanal. */}
-      <Card id="horario-especial" className="scroll-mt-20">
+      <Card id="horario-especial" className="scroll-mt-24">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5" /> Horario especial
+          <CardTitle className="flex items-center gap-3 font-headline text-2xl font-extrabold">
+            <SectionIcon><CalendarDays className="h-5 w-5" aria-hidden="true" /></SectionIcon> Horario especial
           </CardTitle>
           <CardDescription>
             Para fechas puntuales (24/12, 31/12, feriados): ese día manda este horario en vez del semanal, y tus clientes ven hasta qué hora pueden pedir.
@@ -590,7 +590,7 @@ export default function EditStorePage() {
                   const pastOrInvalid = !!d.date && (!isValidDateKey(d.date) || d.date < todayKey);
                   const duplicated = !!d.date && specialDays.filter(x => x.date === d.date).length > 1;
                   return (
-                    <div key={d.id} data-testid="special-day" className="space-y-3 rounded-md border bg-muted/20 p-3">
+                    <div key={d.id} data-testid="special-day" className="space-y-3 rounded-2xl bg-foreground/[0.04] p-3 ring-1 ring-foreground/10">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <Label htmlFor={`sd-date-${d.id}`} className="sr-only">Fecha</Label>
@@ -714,8 +714,8 @@ export default function EditStorePage() {
       {/* SECCIÓN 4: ENTREGA */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" /> Entrega
+          <CardTitle className="flex items-center gap-3 font-headline text-2xl font-extrabold">
+            <SectionIcon><Truck className="h-5 w-5" aria-hidden="true" /></SectionIcon> Entrega
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -734,12 +734,17 @@ export default function EditStorePage() {
 
       {/* Barra de guardado fija: siempre a mano en un form largo (el rol tienda no tiene
           bottom-nav, así que no se pisa con nada). */}
-      <div className="sticky bottom-0 z-20 -mx-4 sm:mx-0 flex justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 rounded-b-lg">
-        <Button variant="ghost" onClick={() => router.push('/my-store')}>Cancelar</Button>
-        <Button onClick={handleSubmit} disabled={isSaving}>
+      <div className="glass-bar sticky bottom-3 z-20 flex justify-between gap-3 rounded-full p-2">
+        <Button variant="ghost" className="h-11 rounded-full px-5" onClick={() => router.push('/my-store')}>Cancelar</Button>
+        <Button className="h-11 rounded-full px-6 font-bold" onClick={handleSubmit} disabled={isSaving}>
           {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> Guardar Cambios</>}
         </Button>
       </div>
     </div>
   );
+}
+
+/** Ícono de sección en cuadradito de la marca (rediseño en vidrio). */
+function SectionIcon({ children }: { children: ReactNode }) {
+  return <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[0.8rem] bg-primary/10 text-primary">{children}</span>;
 }

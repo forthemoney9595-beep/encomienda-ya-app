@@ -38,7 +38,7 @@ const TONE_VALUE: Record<KpiTone, string> = {
   info: 'text-info-ink',
 };
 const TONE_BORDER: Record<KpiTone, string> = {
-  default: 'border-border',
+  default: '',
   success: 'border-success/50',
   warning: 'border-warning/60',
   destructive: 'border-destructive/50',
@@ -72,7 +72,7 @@ export function KpiCard(props: KpiCardProps) {
       data-kpi-state={error ? 'error' : loading ? 'loading' : 'ok'}
       aria-busy={loading || undefined}
       className={cn(
-        'flex h-full min-w-[168px] flex-col justify-between gap-1 rounded-lg border bg-card p-4 transition-colors',
+        'glass flex h-full min-w-[168px] flex-col justify-between gap-1 rounded-card p-4 transition-colors',
         TONE_BORDER[error ? 'destructive' : tone],
         href && 'hover:bg-admin-row-hover',
         className,

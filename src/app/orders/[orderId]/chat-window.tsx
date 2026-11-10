@@ -193,10 +193,10 @@ export function ChatWindow({ order }: ChatWindowProps) {
             <div className={cn("flex w-full", isMine ? "justify-end" : "justify-start")}>
                 <div 
                     className={cn(
-                        "max-w-[85%] p-3 rounded-xl shadow-sm border text-sm",
+                        "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[0.95rem]",
                         isMine
-                            ? "bg-primary text-primary-foreground rounded-br-none border-primary"
-                            : "bg-card text-card-foreground rounded-bl-none border-border"
+                            ? "rounded-br-md bg-primary text-primary-foreground"
+                            : "glass-strong rounded-bl-md text-card-foreground"
                     )}
                 >
                     {!isMine && (
@@ -208,7 +208,7 @@ export function ChatWindow({ order }: ChatWindowProps) {
                         </p>
                     )}
                     <p className="break-words leading-relaxed">{message.text}</p>
-                    <p className={cn("text-[9px] mt-1 opacity-70", isMine ? "text-primary-foreground/80 text-right" : "text-muted-foreground text-left")}>
+                    <p className={cn("mt-1 text-xs", isMine ? "text-primary-foreground/85 text-right" : "text-muted-foreground text-left")}>
                         {message.createdAt && typeof (message.createdAt as any).toDate === 'function' 
                             ? format((message.createdAt as any).toDate(), 'HH:mm', { locale: es })
                             : '...'}
@@ -221,18 +221,20 @@ export function ChatWindow({ order }: ChatWindowProps) {
     const currentReplies = (myRole && myRole !== 'admin') ? QUICK_REPLIES[myRole] : QUICK_REPLIES['buyer'];
 
     return (
-        <Card className="h-[500px] flex flex-col shadow-md border-t-4 border-t-primary bg-card text-card-foreground">
-            <CardHeader className="p-3 border-b bg-muted/20">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <ChatIcon className="h-5 w-5 text-primary" />
+        // Vidrio (9/11/2026): la tarjeta es de vidrio como el resto (antes bg-card macizo con
+        // una franja de color arriba); burbujas redondeadas, las ajenas en vidrio fuerte.
+        <Card className="flex h-[500px] flex-col overflow-hidden">
+            <CardHeader className="border-b border-border/60 p-4">
+                <CardTitle className="flex items-center gap-2.5 font-headline text-xl font-extrabold">
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/10"><ChatIcon className="h-5 w-5 text-primary" aria-hidden="true" /></span>
                     {chatTitle}
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-sm">
                     {chatSubtitle}
                 </CardDescription>
             </CardHeader>
 
-            <CardContent ref={messagesBoxRef} className="flex-1 overflow-y-auto p-3 space-y-3 bg-muted/30">
+            <CardContent ref={messagesBoxRef} className="flex-1 space-y-3 overflow-y-auto bg-foreground/[0.03] p-3">
                 {loadingMessages ? (
                     <div className="text-center py-10">
                         <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
@@ -244,14 +246,14 @@ export function ChatWindow({ order }: ChatWindowProps) {
                     <div className="text-center py-10 text-muted-foreground text-sm italic">
                         <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-20"/>
                         <p>Inicia la conversación</p>
-                        <p className="text-xs opacity-70">Cada mensaje le llega como aviso a la otra persona.</p>
+                        <p className="text-sm">Cada mensaje le llega como aviso a la otra persona.</p>
                     </div>
                 )}
             </CardContent>
 
             {!isAdminViewer && (
-            <CardFooter className="p-3 border-t bg-background flex-col gap-2 items-start">
-                <div className="flex flex-wrap gap-2 w-full overflow-x-auto pb-1 no-scrollbar">
+            <CardFooter className="flex-col items-start gap-2 border-t border-border/60 p-3">
+                <div className="flex w-full gap-2 overflow-x-auto pb-1 no-scrollbar">
                     {currentReplies.map((reply, index) => (
                         <Badge
                             key={index}
@@ -259,8 +261,11 @@ export function ChatWindow({ order }: ChatWindowProps) {
                             // Feedback mientras envía: sin esto, tocar una respuesta rápida
                             // no mostraba NADA y la gente la volvía a tocar (mensajes
                             // repetidos en la prueba).
-                            className={`cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors py-1 px-2 text-xs font-normal shrink-0 border-primary/20 ${isSending ? 'pointer-events-none opacity-50' : ''}`}
+                            role="button"
+                            tabIndex={0}
+                            className={`min-h-[36px] shrink-0 cursor-pointer rounded-full border-primary/25 bg-popover px-3 text-sm font-medium transition-colors hover:bg-primary hover:text-primary-foreground ${isSending ? 'pointer-events-none opacity-50' : ''}`}
                             onClick={() => handleSend(undefined, reply)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSend(undefined, reply); } }}
                         >
                             {reply}
                         </Badge>
@@ -269,14 +274,15 @@ export function ChatWindow({ order }: ChatWindowProps) {
 
                 <form onSubmit={handleSend} className="flex w-full space-x-2">
                     <Input
-                        className="flex-1 h-9 text-sm bg-background text-foreground"
+                        aria-label="Escribir un mensaje"
+                        className="h-11 flex-1 rounded-full bg-popover text-foreground"
                         type="text"
                         placeholder="Escribe aquí..."
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         disabled={isSending}
                     />
-                    <Button type="submit" size="icon" className="h-9 w-9" disabled={isSending}>
+                    <Button type="submit" size="icon" className="h-11 w-11 shrink-0 rounded-full" disabled={isSending} aria-label="Enviar mensaje">
                         {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </Button>
                 </form>

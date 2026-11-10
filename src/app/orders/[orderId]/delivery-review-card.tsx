@@ -34,24 +34,28 @@ export function DeliveryReviewCard({ order, onSubmit }: DeliveryReviewCardProps)
     return (
         <Card>
             <CardHeader>
-                <CardTitle>¿Cómo fue la entrega?</CardTitle>
+                <CardTitle className="font-headline text-2xl font-extrabold">¿Cómo fue la entrega?</CardTitle>
                 <CardDescription>
                     Valora tu experiencia con el repartidor, {order.deliveryPersonName}. Tu opinión es importante.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="flex justify-center items-center gap-2">
+                {/* Estrellas como BOTONES (antes eran íconos sueltos: sin teclado ni nombre). */}
+                <div role="radiogroup" aria-label="Calificación del repartidor" className="flex items-center justify-center gap-1">
                     {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
+                        <button
                             key={star}
-                            className={cn(
-                                'h-10 w-10 cursor-pointer transition-all',
-                                (hoverRating || rating) >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30'
-                            )}
+                            type="button"
+                            role="radio"
+                            aria-checked={rating === star}
+                            aria-label={`${star} de 5: ${['Malo', 'Regular', 'Bueno', 'Muy bueno', 'Excelente'][star - 1]}`}
+                            className="grid h-12 w-12 place-items-center rounded-full transition-transform hover:scale-110 active:scale-95 motion-reduce:transform-none"
                             onClick={() => setRating(star)}
                             onMouseEnter={() => setHoverRating(star)}
                             onMouseLeave={() => setHoverRating(0)}
-                        />
+                        >
+                            <Star aria-hidden="true" className={cn('h-9 w-9 transition-colors', (hoverRating || rating) >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30')} />
+                        </button>
                     ))}
                 </div>
                 <Textarea
@@ -63,7 +67,7 @@ export function DeliveryReviewCard({ order, onSubmit }: DeliveryReviewCardProps)
                 />
             </CardContent>
             <CardFooter>
-                <Button onClick={handleSubmit} disabled={rating === 0 || isSubmitting} className="w-full">
+                <Button onClick={handleSubmit} disabled={rating === 0 || isSubmitting} className="h-12 w-full rounded-full">
                     {isSubmitting ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (

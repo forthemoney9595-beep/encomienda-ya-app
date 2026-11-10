@@ -1,52 +1,54 @@
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { User, Store, Bike } from "lucide-react";
-import PageHeader from "@/components/page-header";
+import { AuthScreen, AuthChoice } from "@/components/auth-screen";
+
+// Elegir el tipo de cuenta (rediseño en vidrio, 9/11/2026): tres filas grandes en vez de tres
+// tarjetas que en celular quedaban apiladas con el texto chico. El cliente va primero: es el
+// 95 % de quien llega acá.
+const roles = [
+  {
+    name: "Cliente",
+    description: "Pedí a las tiendas de Tinogasta y recibí en tu puerta.",
+    icon: <User />,
+    href: "/signup/buyer",
+    testId: "signup-choice-buyer",
+  },
+  {
+    name: "Tienda",
+    description: "Vendé tus productos. Un administrador revisa y aprueba tu negocio.",
+    icon: <Store />,
+    href: "/signup/store",
+    testId: "signup-choice-store",
+  },
+  {
+    name: "Repartidor",
+    description: "Ganá plata llevando pedidos. Verificamos tus documentos antes de empezar.",
+    icon: <Bike />,
+    href: "/signup/delivery",
+    testId: "signup-choice-delivery",
+  },
+];
 
 export default function SignupPage() {
-  const roles = [
-    {
-      name: "Cliente",
-      description: "Creá tu cuenta para pedir de las tiendas de Tinogasta y recibir en tu puerta.",
-      icon: <User className="h-12 w-12" />,
-      href: "/signup/buyer"
-    },
-    {
-      name: "Tienda",
-      description: "Registra tu negocio para vender tus productos. Tu cuenta requerirá la aprobación de un administrador.",
-      icon: <Store className="h-12 w-12" />,
-      href: "/signup/store"
-    },
-    {
-      name: "Repartidor",
-      description: "Únete a nuestro equipo para ganar dinero entregando pedidos. Tu cuenta será verificada por un administrador.",
-      icon: <Bike className="h-12 w-12" />,
-      href: "/signup/delivery"
-    }
-  ]
-
   return (
-    <div className="container mx-auto">
-      <PageHeader title="Únete a EncomiendaYA" description="Elige el tipo de cuenta que quieres crear." />
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {roles.map((role) => (
-          <Link href={role.href} key={role.name}>
-            <Card className="h-full transform transition-all hover:-translate-y-2 hover:shadow-xl hover:border-primary">
-              <CardHeader className="flex flex-col items-center justify-center text-center p-8">
-                <div className="mb-4 text-primary transition-transform group-hover:scale-110">{role.icon}</div>
-                <CardTitle className="text-xl">{role.name}</CardTitle>
-                <CardDescription className="mt-2">{role.description}</CardDescription>
-              </CardHeader>
-            </Card>
+    <AuthScreen
+      testId="signup-choice"
+      title="Sumate a EncomiendaYA"
+      description="¿Qué tipo de cuenta querés crear?"
+      footer={
+        <p>
+          ¿Ya tenés una cuenta?{" "}
+          <Link href="/login" className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline">
+            Iniciá sesión
           </Link>
+        </p>
+      }
+    >
+      <div className="space-y-3">
+        {roles.map((role) => (
+          <AuthChoice key={role.name} href={role.href} icon={role.icon} title={role.name} description={role.description} testId={role.testId} />
         ))}
       </div>
-      <div className="mt-8 text-center text-sm">
-        ¿Ya tienes una cuenta?{" "}
-        <Link href="/login" className="underline hover:text-primary">
-          Iniciar Sesión
-        </Link>
-      </div>
-    </div>
+    </AuthScreen>
   );
 }

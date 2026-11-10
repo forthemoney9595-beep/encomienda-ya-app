@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
@@ -9,15 +9,18 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { driverNetForOrder } from '@/lib/money';
-import { DRIVER_ACTIVE_STATUSES } from '@/lib/order-service';
-import PageHeader from '@/components/page-header';
-import { Card, CardContent } from '@/components/ui/card';
+import { DRIVER_ACTIVE_STATUSES, MAX_ACTIVE_ORDERS } from '@/lib/order-service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
 import { SuspensionNotice } from '@/components/suspension-notice';
+import { DriverJobCard, DriverPendingNotice, type DriverPoolOrder } from '@/components/driver-job-card';
+import { useDriverTakeOrder, useDriverPoolSound } from '@/hooks/driver-take-order';
+import { cn } from '@/lib/utils';
 import {
-  Truck, Wallet, Star, BarChart3, PackageCheck, ShoppingBag, Clock, ArrowRight,
+  Truck, Wallet, Star, BarChart3, ChevronRight, PackageSearch, Bike,
 } from 'lucide-react';
+
+const fmtRating = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export default function DeliveryDashboardPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -27,12 +30,14 @@ export default function DeliveryDashboardPage() {
   // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
   const { ready } = useRequireRole('delivery');
 
-  const isApprovedDriver = (userProfile as any)?.isApproved === true;
+  const isApprovedDriver = userProfile?.isApproved === true;
   // Fase YY ter: una cuenta suspendida no está "pendiente": ve el motivo y puede apelar.
   const isSuspended = userProfile?.suspension?.active === true;
+  const isOnline = (userProfile as { isOnline?: boolean } | null)?.isOnline !== false;
 
-  // Mismas 2 queries que delivery-orders-view.tsx (panel operativo) -- ver por qué el
-  // rango de estados tiene que coincidir exacto con firestore.rules en ese archivo.
+  // Mismas queries que delivery-orders-view.tsx (panel operativo): el rango de estados del
+  // pool tiene que coincidir EXACTO con firestore.rules (si no, Firestore rechaza la consulta
+  // entera y la lista queda vacía sin ningún error visible).
   const availableQuery = useMemoFirebase(() => {
     if (!firestore || !ready) return null; // ARQ-010: ESTA era la consulta que corría para un comprador (pool → permission-denied)
     // Fase YY ter: la regla del pool exige isApprovedDriver() — un pendiente o SUSPENDIDO
@@ -44,7 +49,13 @@ export default function DeliveryDashboardPage() {
       where('status', 'in', ['En preparación', 'Listo para recoger'])
     );
   }, [firestore, ready, isApprovedDriver]);
-  const { data: availableOrders } = useCollection<any>(availableQuery);
+  const { data: allAvailable, isLoading: availableLoading } = useCollection<DriverPoolOrder>(availableQuery);
+  // Su propio pedido no aparece en su pool (decisión de producto 18/8: el repartidor puede
+  // comprar como cualquier vecino, pero no llevarse su pedido). Misma capa visual que /orders.
+  const availableOrders = useMemo(
+    () => (allAvailable || []).filter(o => o.userId !== user?.uid),
+    [allAvailable, user?.uid],
+  );
 
   // 🚨 PERF-001 (auditoría oct 2026): antes UNA query con todo el historial del
   // repartidor. Ahora dos acotadas: activos en vivo + entregados RECIENTES (creados en
@@ -81,132 +92,212 @@ export default function DeliveryDashboardPage() {
     startOfToday.setHours(0, 0, 0, 0);
     const todaySec = startOfToday.getTime() / 1000;
 
-    const active = activeOrders || [];
     const deliveredToday = (recentDelivered || []).filter(o => {
       const d = o.deliveredAt?.seconds || o.createdAt?.seconds || 0;
       return d >= todaySec;
     });
-    // Neto real (Fase PP, N3): antes era `deliveryFee` crudo y contradecía a
-    // /delivery/earnings y /delivery/analytics, que ya usan driverNetForOrder.
+    // Neto real (Fase PP, N3): mismo cálculo que /delivery/earnings y /delivery/analytics.
     const earningsToday = Math.round(deliveredToday.reduce((sum, o) => sum + driverNetForOrder(o), 0));
 
     return {
-      availableCount: availableOrders?.length || 0,
-      activeCount: active.length,
+      activeCount: (activeOrders || []).length,
       deliveredTodayCount: deliveredToday.length,
       earningsToday,
     };
-  }, [activeOrders, recentDelivered, availableOrders]);
+  }, [activeOrders, recentDelivered]);
+
+  // Tomar: la MISMA lógica que el panel de entregas (hooks/driver-take-order.ts). Al tomar,
+  // la tarjeta sale deslizándose y lleva al repartidor a "En curso".
+  const [leaving, setLeaving] = useState<DriverPoolOrder | null>(null);
+  const onTaken = useCallback((o: { id: string }) => {
+    // El listener puede haber sacado el pedido del pool antes de que vuelva la respuesta:
+    // se usa el objeto que se tocó (es el mismo DriverPoolOrder de la tarjeta).
+    setLeaving(o as DriverPoolOrder);
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    window.setTimeout(() => router.push('/orders?tab=active'), reduce ? 0 : 380);
+  }, [router]);
+  const take = useDriverTakeOrder({ activeCount: stats.activeCount, onTaken });
+
+  // Un pedido NUEVO mientras mira → suena (no en la carga inicial).
+  useDriverPoolSound(allAvailable, availableQuery, user?.uid);
+
+  // La tarjeta que se está yendo sigue en la lista hasta que termina de salir, aunque el
+  // listener ya la haya sacado del pool.
+  const shown = leaving && !availableOrders.some(o => o.id === leaving.id)
+    ? [leaving, ...availableOrders]
+    : availableOrders;
 
   if (authLoading || ordersLoading) {
     return (
-      <div className="container mx-auto space-y-4 py-6">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-28 w-full" />)}
-        </div>
+      <div className="mx-auto w-full max-w-6xl space-y-4 py-2">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-24 w-full rounded-card" />
+        <Skeleton className="h-44 w-full rounded-card" />
       </div>
     );
   }
 
-  const rating = (userProfile as any)?.rating || 0;
-  const ratingCount = (userProfile as any)?.ratingCount || 0;
+  const rating = Number((userProfile as { rating?: number } | null)?.rating) || 0;
+  const ratingCount = Number((userProfile as { ratingCount?: number } | null)?.ratingCount) || 0;
+  const rawFirst = (userProfile?.displayName || userProfile?.name || '').trim().split(/\s+/)[0] || '';
+  const firstName = rawFirst ? rawFirst.charAt(0).toLocaleUpperCase('es-AR') + rawFirst.slice(1) : '';
 
   return (
-    <div className="container mx-auto space-y-6 pb-20">
-      <PageHeader title="Mi Panel" description="Resumen de tu actividad como repartidor.">
-        <DeliveryOnlineToggle />
-      </PageHeader>
+    <div className="mx-auto w-full max-w-6xl pb-20">
+      <header className="mb-4">
+        <h1 className="font-headline text-4xl font-extrabold leading-none tracking-tight">Mi Panel</h1>
+        {firstName && <p className="mt-1 text-muted-foreground">Hola, {firstName}. Así viene tu día.</p>}
+      </header>
 
-      {isSuspended && <SuspensionNotice />}
+      {isSuspended && <SuspensionNotice className="mb-4" />}
+      {!isApprovedDriver && !isSuspended && <DriverPendingNotice className="mb-4" />}
 
-      {!isApprovedDriver && !isSuspended && (
-        <Card className="border-warning/40 bg-warning/10">
-          <CardContent className="flex items-start gap-3 py-5">
-            <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-sm text-warning">Tu cuenta está pendiente de aprobación</p>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Un administrador tiene que revisar tus datos antes de que puedas tomar pedidos.
-              </p>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start lg:gap-6">
+        {/* Columna izquierda: disponibilidad, caja de hoy y accesos */}
+        <div className="space-y-4">
+          <DeliveryOnlineToggle variant="card" />
+
+          <section className="glass rounded-card p-4 sm:p-5" aria-labelledby="caja-hoy" data-testid="driver-cash">
+            <h2 id="caja-hoy" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Caja de hoy</h2>
+            <div className="mt-2 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+              <Link href="/delivery/earnings" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="font-headline text-[3.25rem] font-extrabold leading-[0.9] tabular-nums text-success" data-testid="driver-earnings-today">
+                  {money(stats.earningsToday)}
+                </span>
+              </Link>
+              <span className="text-sm text-muted-foreground">ganaste hoy (neto)</span>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
+              <Link
+                href="/delivery/analytics"
+                className="flex min-h-[4.5rem] flex-col justify-center rounded-2xl bg-foreground/[0.05] px-3.5 py-2.5 transition-colors hover:bg-foreground/[0.09]"
+              >
+                <span className="text-sm font-semibold text-muted-foreground">Entregas</span>
+                <span className="font-headline text-3xl font-extrabold leading-tight tabular-nums">{stats.deliveredTodayCount}</span>
+              </Link>
+              <Link
+                href="/delivery/reviews"
+                className="flex min-h-[4.5rem] flex-col justify-center rounded-2xl bg-foreground/[0.05] px-3.5 py-2.5 transition-colors hover:bg-foreground/[0.09]"
+              >
+                <span className="text-sm font-semibold text-muted-foreground">Calificación</span>
+                <span className="flex items-center gap-1.5 font-headline text-3xl font-extrabold leading-tight tabular-nums">
+                  {ratingCount > 0 ? fmtRating(rating) : '—'}
+                  <Star className="h-5 w-5 fill-warning text-warning" aria-hidden="true" />
+                </span>
+              </Link>
+            </div>
+            {stats.activeCount > 0 && (
+              <Link
+                href="/orders?tab=active"
+                className="mt-2.5 flex min-h-[3rem] items-center gap-3 rounded-2xl bg-primary/10 px-3.5 py-2 font-semibold text-primary transition-colors hover:bg-primary/15"
+                data-testid="driver-active-link"
+              >
+                <Bike className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <span className="flex-1">
+                  {stats.activeCount === 1 ? 'Tenés 1 pedido en curso' : `Tenés ${stats.activeCount} pedidos en curso`}
+                  <span className="font-normal"> · {stats.activeCount}/{MAX_ACTIVE_ORDERS}</span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0" aria-hidden="true" />
+              </Link>
+            )}
+          </section>
 
-      {/* Métricas */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Disponibles ahora" value={stats.availableCount} icon={PackageCheck} tone="info" href="/orders" />
-        <StatCard label="En curso" value={stats.activeCount} icon={ShoppingBag} tone="warning" href="/orders?tab=active" />
-        {/* Tanda B: enlazaba a /orders?tab=active — no existe pestaña de entregados en el
-            panel; el historial de entregas vive en las analíticas. */}
-        <StatCard label="Entregados hoy" value={stats.deliveredTodayCount} icon={Truck} tone="muted" href="/delivery/analytics" />
-        <StatCard label="Ganancias de hoy" value={`${money(stats.earningsToday)}`} icon={Wallet} tone="success" href="/delivery/earnings" />
-      </div>
+          <nav aria-label="Accesos" className="glass hidden overflow-hidden rounded-card lg:block">
+            <QuickLinks />
+          </nav>
+        </div>
 
-      {/* Rating */}
-      <Card>
-        <CardContent className="flex items-center gap-4 py-5">
-          <div className="text-3xl font-bold text-warning">{rating.toFixed(1)}</div>
-          <div>
-            <div className="flex items-center gap-0.5">
-              {[1, 2, 3, 4, 5].map(s => (
-                <Star key={s} className={`h-4 w-4 ${Math.round(rating) >= s ? 'fill-warning text-warning' : 'text-muted-foreground/30'}`} />
+        {/* Columna derecha: pedidos para tomar */}
+        <section aria-labelledby="para-tomar" className="min-w-0">
+          <div className="mb-2.5 flex items-baseline justify-between gap-3 px-1">
+            <h2 id="para-tomar" className="font-headline text-2xl font-extrabold">Para tomar</h2>
+            {isApprovedDriver && !availableLoading && (
+              <span className="text-sm font-semibold tabular-nums text-muted-foreground" data-testid="driver-pool-count">
+                {availableOrders.length === 1 ? '1 pedido' : `${availableOrders.length} pedidos`}
+              </span>
+            )}
+          </div>
+
+          {!isApprovedDriver ? (
+            <EmptyPool text={isSuspended
+              ? 'Mientras dure la suspensión no ves pedidos para tomar.'
+              : 'Cuando te aprueben la cuenta, acá vas a ver los pedidos para tomar.'} />
+          ) : availableLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-56 w-full rounded-card" />
+            </div>
+          ) : shown.length === 0 ? (
+            <EmptyPool text={isOnline
+              ? 'No hay pedidos para tomar ahora. Te avisamos con un sonido cuando entre uno.'
+              : 'No hay pedidos para tomar. Estás como no disponible: no te avisamos de los nuevos.'} />
+          ) : (
+            <div className="space-y-3" data-testid="driver-pool">
+              {!isOnline && (
+                <p className="px-1 text-sm text-muted-foreground">
+                  Estás como no disponible: no te avisamos de pedidos nuevos, pero podés tomar los que ves acá.
+                </p>
+              )}
+              {shown.map((order, i) => (
+                <DriverJobCard
+                  key={order.id}
+                  index={i}
+                  order={order}
+                  leaving={leaving?.id === order.id}
+                  taking={take.takingId === order.id}
+                  takeLabel={leaving?.id === order.id ? 'Tomado' : take.takeLabel(order.id)}
+                  takeDisabled={take.takeDisabled || !!leaving}
+                  onTake={() => take.takeOrder(order)}
+                  onDetail={() => router.push(`/orders/${order.id}`)}
+                />
               ))}
             </div>
-            <Link href="/delivery/reviews" className="text-sm text-muted-foreground hover:underline">
-              {ratingCount} reseña{ratingCount === 1 ? '' : 's'} — ver todas
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+          )}
 
-      {/* Accesos rápidos */}
-      <div>
-        <h2 className="text-lg font-semibold mb-3">Accesos rápidos</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <QuickLink href="/orders" icon={Truck} label="Panel de Entregas" />
-          <QuickLink href="/delivery/earnings" icon={Wallet} label="Mis Ganancias" />
-          <QuickLink href="/delivery/reviews" icon={Star} label="Mis Reseñas" />
-          <QuickLink href="/delivery/analytics" icon={BarChart3} label="Analíticas" />
-        </div>
+          {/* En celular los accesos van al final, después de lo urgente. */}
+          <nav aria-label="Accesos" className="glass mt-6 overflow-hidden rounded-card lg:hidden">
+            <QuickLinks />
+          </nav>
+        </section>
       </div>
     </div>
   );
 }
 
-const TONES: Record<string, string> = {
-  info: 'text-info',
-  warning: 'text-warning',
-  success: 'text-success',
-  muted: 'text-foreground',
-};
-
-function StatCard({ label, value, icon: Icon, tone, href }: { label: string; value: string | number; icon: any; tone: string; href: string }) {
+function EmptyPool({ text }: { text: string }) {
   return (
-    <Link href={href}>
-      <Card className="hover:shadow-md transition-shadow h-full">
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <Icon className={`h-4 w-4 ${TONES[tone]}`} />
-          </div>
-          <div className={`text-2xl font-bold ${TONES[tone]}`}>{value}</div>
-        </CardContent>
-      </Card>
-    </Link>
+    <div className="glass flex items-center gap-3 rounded-card p-5" data-testid="driver-pool-empty">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-foreground/[0.06] text-muted-foreground">
+        <PackageSearch className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <p className="text-muted-foreground">{text}</p>
+    </div>
   );
 }
 
-function QuickLink({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
+const LINKS = [
+  { href: '/delivery/earnings', icon: Wallet, label: 'Ganancias', hint: 'Saldo y retiros' },
+  { href: '/delivery/analytics', icon: BarChart3, label: 'Analíticas', hint: 'Por día y horas pico' },
+  { href: '/delivery/reviews', icon: Star, label: 'Reseñas', hint: 'Lo que dicen de vos' },
+  { href: '/orders', icon: Truck, label: 'Pedidos', hint: 'Disponibles y en curso' },
+] as const;
+
+function QuickLinks() {
   return (
-    <Link href={href}>
-      <Card className="hover:shadow-md hover:border-primary/40 transition-all">
-        <CardContent className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-          <Icon className="h-6 w-6 text-primary" />
-          <span className="text-sm font-medium">{label}</span>
-        </CardContent>
-      </Card>
-    </Link>
+    <ul>
+      {LINKS.map(({ href, icon: Icon, label, hint }, i) => (
+        <li key={href} className={cn(i > 0 && 'border-t border-foreground/10')}>
+          <Link href={href} className="flex min-h-[3.75rem] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-foreground/[0.05] focus-visible:bg-foreground/[0.05] focus-visible:outline-none">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Icon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">{label}</span>
+              <span className="block text-sm text-muted-foreground">{hint}</span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }

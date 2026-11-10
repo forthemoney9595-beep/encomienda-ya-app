@@ -260,7 +260,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
   };
 
   return (
-    <div className={cn('min-w-0 overflow-hidden rounded-lg border border-border bg-card', className)}>
+    <div className={cn('min-w-0 overflow-hidden glass rounded-card', className)}>
       {toolbar}
       {body()}
       {pagination && !error && (rows.length > 0 || pagination.page > 0) && (

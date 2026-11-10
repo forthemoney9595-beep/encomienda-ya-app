@@ -129,7 +129,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       {children}
       <Dialog open={!!opts} onOpenChange={(open) => { if (!open && !busy) finish({ ok: false, values: {} }); }}>
         {opts && (
-          <DialogContent className="sm:max-w-md" data-testid="confirm-dialog">
+          <DialogContent className="sm:max-w-md" data-surface="admin" data-testid="confirm-dialog">
             <DialogHeader>
               <DialogTitle>{opts.title}</DialogTitle>
               {opts.description ? <DialogDescription asChild><div className="text-sm text-muted-foreground">{opts.description}</div></DialogDescription> : null}

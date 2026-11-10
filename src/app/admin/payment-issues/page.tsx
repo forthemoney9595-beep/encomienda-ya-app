@@ -263,7 +263,7 @@ function PaymentIssuesInner() {
     { key: 'source', header: 'Fuente', cell: r => <span className="flex flex-col"><span className={cn('inline-flex h-[22px] w-fit items-center rounded-full px-2 text-xs font-semibold', r.source === 'cron' ? 'bg-muted text-muted-foreground' : 'bg-primary/15 text-primary-ink')}>{r.source === 'cron' ? 'Automática' : 'Manual'}</span>{r.byUid && <span className="text-xs text-muted-foreground">{r.byUid.slice(0, 8)}…</span>}</span> },
     { key: 'status', header: 'Estado', cell: r => r.status === 'running' || (!r.finishedAt && r.status !== 'done')
       ? <span className="inline-flex h-[22px] items-center rounded-full bg-warning/15 px-2 text-xs font-semibold text-warning-ink">sin terminar</span>
-      : <span className="inline-flex h-[22px] items-center rounded-full bg-success/15 px-2 text-xs font-semibold text-success-ink">terminada</span> },
+      : <span className="inline-flex h-[22px] items-center rounded-full bg-success/15 px-2 text-xs font-semibold text-[hsl(142_80%_20%)] dark:text-success-ink">terminada</span> },
     { key: 'checked', header: 'Revisados', align: 'right', cell: r => <span className="tabular-nums">{(r.checkedOrders ?? 0) + (r.checkedPayments ?? 0)}{r.unverifiable ? <span className="text-xs text-muted-foreground"> · {r.unverifiable} sin ID de MP</span> : null}</span> },
     { key: 'repaired', header: 'Reparados', align: 'right', cell: r => <span className={cn('tabular-nums', (r.repaired ?? 0) > 0 && 'font-semibold text-success-ink')}>{r.repaired ?? 0}</span> },
     { key: 'flagged', header: 'Marcados', align: 'right', cell: r => <span className={cn('tabular-nums', (r.flagged ?? 0) > 0 && 'font-semibold text-destructive-ink')}>{r.flagged ?? 0}</span> },

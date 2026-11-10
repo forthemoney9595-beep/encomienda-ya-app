@@ -35,10 +35,11 @@ import { publicName } from '@/lib/public-name';
 import { describeOrderEnding } from '@/lib/confirm-timeout';
 import { useConfirmTimeoutWatcher } from '@/hooks/use-confirm-timeout';
 import { ConfirmCountdown } from '@/components/confirm-countdown';
+import { GlassBone, buyerMotion } from '@/components/buyer-motion';
 
 const OrderMap = dynamic(() => import('./order-map'), {
     ssr: false,
-    loading: () => <Skeleton className="h-full w-full bg-muted animate-pulse" />
+    loading: () => <GlassBone className="h-full w-full rounded-2xl" />
 });
 
 // Frescura de la señal del repartidor (Fase RR): driverCoords.lastUpdate se escribía
@@ -87,8 +88,10 @@ function BuyerDeliveryPin({ orderId, delivered, verified }: { orderId: string; d
     return (
         // Vidrio (9/11/2026): el código va en una tarjeta redondeada con borde de la marca (antes,
         // un ticket con muescas del Toldo). Los números grandes en letra de cartel.
-        <div className="flex w-full items-center gap-3 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3">
-            <div className="min-w-0 flex-1 text-left">
+        // Vidrio (9/11/2026): ticket de vidrio fuerte con un corte punteado y cada dígito en su
+        // casilla (se dicta de a uno en la puerta).
+        <div data-testid="delivery-pin" className="glass-strong flex w-full flex-wrap items-center gap-3 rounded-card px-4 py-3">
+            <div className="min-w-[10rem] flex-1 text-left">
                 <p className="font-headline text-xl font-extrabold leading-tight">Tu código de entrega</p>
                 {delivered ? (
                     verified
@@ -100,7 +103,12 @@ function BuyerDeliveryPin({ orderId, delivered, verified }: { orderId: string; d
                     </p>
                 )}
             </div>
-            <p className="shrink-0 border-l-2 border-dashed border-border pl-4 font-headline text-5xl font-extrabold leading-none tracking-[0.08em] tabular-nums">{data.pin}</p>
+            <p className="flex shrink-0 gap-1.5 border-l-2 border-dashed border-border pl-3">
+                <span className="sr-only">{data.pin}</span>
+                {data.pin.split('').map((d, i) => (
+                    <span key={i} aria-hidden="true" className="grid h-14 w-11 place-items-center rounded-xl bg-primary/10 font-headline text-4xl font-extrabold leading-none tabular-nums text-foreground">{d}</span>
+                ))}
+            </p>
         </div>
     );
 }
@@ -129,9 +137,9 @@ function OrderPageSkeleton() {
     return (
         <div className="container mx-auto">
             <PageHeader title={<Skeleton className="h-9 w-48" />} description={<Skeleton className="h-5 w-64" />} />
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2"><Card><CardHeader><Skeleton className="h-8 w-1/2" /></CardHeader><CardContent className="space-y-6"><Skeleton className="h-40 w-full" /></CardContent></Card></div>
-                 <div className="md:col-span-1"><Card><CardHeader><CardTitle>Mapa de Entrega</CardTitle></CardHeader><CardContent className="h-64"><Skeleton className="h-full w-full" /></CardContent></Card></div>
+             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6" aria-busy="true">
+                <div className="lg:col-span-3"><Card><CardHeader><GlassBone className="h-8 w-1/2" /></CardHeader><CardContent className="space-y-4"><GlassBone className="h-5 w-full" /><GlassBone className="h-5 w-4/5" /><GlassBone className="h-24 w-full rounded-2xl" /></CardContent></Card></div>
+                 <div className="lg:col-span-2"><Card><CardHeader><GlassBone className="h-7 w-2/3" /></CardHeader><CardContent className="h-64"><GlassBone className="h-full w-full rounded-2xl" /></CardContent></Card></div>
              </div>
         </div>
     )
@@ -167,7 +175,7 @@ function OrderProgress({ status, order, timeoutAt, showCountdown, countdownVaria
     if (status === 'Cancelado' || status === 'Rechazado') {
         // Fase YY: quién/por qué terminó ("No confirmado a tiempo", "Cancelado por el cliente"...).
         const ending = describeOrderEnding(order || { status });
-        return ( <div className="text-center" data-testid="order-ending"><Ban className="mx-auto h-12 w-12 text-destructive" /><h3 className="mt-2 text-lg font-semibold">{ending?.label || status}</h3><p className="text-sm text-muted-foreground">{ending?.detail || currentStatusInfo.description}</p></div>)
+        return ( <div className="text-center" data-testid="order-ending"><span className="mx-auto grid h-16 w-16 place-items-center rounded-card bg-destructive/10"><Ban className="h-8 w-8 text-destructive" aria-hidden="true" /></span><h3 className="mt-3 font-headline text-2xl font-extrabold">{ending?.label || status}</h3><p className="text-sm text-muted-foreground">{ending?.detail || currentStatusInfo.description}</p></div>)
     }
     const steps = DISPLAY_STEPS;
     const CurrentIcon = currentStatusInfo.icon;
@@ -177,20 +185,28 @@ function OrderProgress({ status, order, timeoutAt, showCountdown, countdownVaria
         // con porcentaje + barra + íconos, tres formas de decir lo mismo.
         <div className="space-y-6">
             <div className="flex items-center gap-3">
-                <CurrentIcon className="h-7 w-7 shrink-0 text-info" aria-hidden="true" />
+                <span className={cn('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', status === 'Entregado' ? 'bg-success/15' : 'bg-info/15')}>
+                    <CurrentIcon className={cn('h-6 w-6', status === 'Entregado' ? 'text-success' : 'text-info')} aria-hidden="true" />
+                </span>
                 <p className="font-headline text-3xl font-extrabold leading-none">{currentStatusInfo.label}</p>
             </div>
-            <ol className="grid grid-cols-5 gap-1" aria-label="Pasos del pedido">
+            {/* Vidrio (9/11/2026): tramos redondeados (antes, rayas de 5 px con borde superior).
+                Hechos en tinta suave, el actual en azul "en camino" con un brillo que avanza. */}
+            <ol className="grid grid-cols-5 gap-1.5" aria-label="Pasos del pedido">
                 {steps.map((stepInfo:any) => {
                     // Los estados intermedios ("Listo para recoger" 2.3, "En camino" 2.7) marcan
                     // como actual el último tramo alcanzado; sin el floor ninguno quedaba marcado.
                     const reached = Math.floor(currentStatusInfo.step);
                     const done = reached > stepInfo.step;
                     const now = reached === stepInfo.step;
+                    const isLastDone = now && status === 'Entregado';
                     return (
                         <li key={stepInfo.step} aria-current={now ? 'step' : undefined}
-                            className={cn('border-t-[5px] pt-1.5 text-sm font-semibold leading-tight',
-                                done ? 'border-foreground text-foreground' : now ? 'border-info text-info font-extrabold' : 'border-border text-muted-foreground')}>
+                            className={cn('text-sm font-semibold leading-tight',
+                                done ? 'text-foreground' : now ? (isLastDone ? 'text-success font-extrabold' : 'text-info font-extrabold') : 'text-muted-foreground')}>
+                            <span aria-hidden="true" className={cn('relative mb-1.5 block h-2 overflow-hidden rounded-full',
+                                done ? 'bg-foreground/70' : now ? (isLastDone ? 'bg-success' : 'bg-info') : 'bg-foreground/[0.1]',
+                                now && !isLastDone && buyerMotion.shine)} />
                             {/* En celular cinco nombres no entran en 5 columnas: la barra sola
                                 y debajo una línea con el paso actual. */}
                             <span className="sr-only sm:not-sr-only">{stepInfo.label}</span>
@@ -204,7 +220,7 @@ function OrderProgress({ status, order, timeoutAt, showCountdown, countdownVaria
                 </p>
             )}
              {showCountdown && status === 'Pendiente de Confirmación' && <ConfirmCountdown timeoutAt={timeoutAt} variant={countdownVariant} />}
-             <Alert><currentStatusInfo.icon className="h-4 w-4" /><AlertTitle>{currentStatusInfo.label}</AlertTitle><AlertDescription>{currentStatusInfo.description}{status === 'En preparación' && (<p className="mt-2 text-base font-bold text-primary">Entrega estimada: 25-40 min</p>)}</AlertDescription></Alert>
+             <Alert className="rounded-2xl border-0 bg-foreground/[0.04]"><currentStatusInfo.icon className="h-4 w-4" /><AlertTitle>{currentStatusInfo.label}</AlertTitle><AlertDescription>{currentStatusInfo.description}{status === 'En preparación' && (<p className="mt-2 text-base font-bold text-primary">Entrega estimada: 25-40 min</p>)}</AlertDescription></Alert>
         </div>
     )
 }
@@ -557,11 +573,11 @@ export default function OrderTrackingPage() {
       </AlertDialog>
 
       {paymentFailed && (
-        <Alert variant="destructive" className="mb-4">
+        <Alert variant="destructive" className="mb-4 rounded-card">
           <AlertTitle className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Pago no procesado</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 mt-2">
             <span>Tu pedido quedó pendiente de pago. Podés reintentar el pago ahora.</span>
-            <Button variant="destructive" size="sm" className="w-fit" onClick={handleRetryPayment}>
+            <Button variant="destructive" className="h-11 w-fit rounded-full" onClick={handleRetryPayment}>
               Reintentar pago
             </Button>
           </AlertDescription>
@@ -572,16 +588,16 @@ export default function OrderTrackingPage() {
         title={`Pedido #${order.id.substring(0,7)}...`}
         description={`Realizado el ${formatDate(order.createdAt)}`}
       >
-        {isBuyer && order.status === 'Entregado' && (<Button onClick={handleReorderClick}><Repeat className="mr-2 h-4 w-4" />Volver a Pedir</Button>)}
+        {isBuyer && order.status === 'Entregado' && (<Button onClick={handleReorderClick} className="h-11 rounded-full px-5"><Repeat className="mr-2 h-4 w-4" />Volver a pedir</Button>)}
       </PageHeader>
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8"> 
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6"> 
         
-        <div className={cn("space-y-8", showRightColumn ? "lg:col-span-3" : "lg:col-span-5")}>
+        <div className={cn("min-w-0 space-y-6", showRightColumn ? "lg:col-span-3" : "lg:col-span-5")}>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Store className="h-5 w-5 text-muted-foreground" />
-                        {order.storeName}
+                    <CardTitle className="flex items-center gap-3 font-headline text-3xl font-extrabold">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10"><Store className="h-5 w-5 text-primary" aria-hidden="true" /></span>
+                        <span className="min-w-0 break-words">{order.storeName}</span>
                     </CardTitle>
                     <CardDescription>
                         {isStoreOwner && order.customerName 
@@ -593,7 +609,7 @@ export default function OrderTrackingPage() {
                 <CardContent className="space-y-4">
                     {/* ACCIONES REPARTIDOR */}
                     {isAvailableToAccept && (
-                        <div className="mb-6 bg-success/10 border border-success/30 rounded-xl overflow-hidden shadow-sm animate-in fade-in zoom-in duration-300">
+                        <div className="mb-6 bg-success/10 border border-success/30 rounded-card overflow-hidden animate-in fade-in zoom-in duration-300">
                             <div className="p-4 bg-success/15 border-b border-success/30 flex justify-between items-center">
                                 <h3 className="text-lg font-bold text-success flex items-center gap-2"><Bike className="h-5 w-5" /> Solicitud de Entrega</h3>
                                 <span className="bg-success text-success-foreground px-3 py-1 rounded-full font-bold text-sm">+${Math.round(order.deliveryFee).toLocaleString('es-AR')}</span>
@@ -617,7 +633,7 @@ export default function OrderTrackingPage() {
 
                     {/* ACCIONES TIENDA */}
                     {isStoreOwner && order.status === 'En preparación' && order.deliveryPersonId && (
-                         <div className="mb-6 bg-info/10 border border-info/30 rounded-xl p-4">
+                         <div className="mb-6 rounded-card border border-info/30 bg-info/10 p-4">
                             <h3 className="text-md font-bold text-info mb-2">Coordinación de Entrega</h3>
                             <p className="text-sm text-muted-foreground mb-3">Cuando termines de preparar, avisa al repartidor con un toque.</p>
                             <Button className="w-full bg-info hover:bg-info/90 text-info-foreground" onClick={handleNotifyDriver} disabled={isUpdatingStatus || (order as any).readyForPickup}>
@@ -628,7 +644,7 @@ export default function OrderTrackingPage() {
 
                     {/* ESTADO DE ENTREGA REPARTIDOR */}
                     {isDeliveryPerson && order.status !== 'Entregado' && order.status !== 'Cancelado' && (
-                        <div className="mb-6 bg-muted/30 border border-border rounded-xl overflow-hidden shadow-sm">
+                        <div className="mb-6 bg-muted/30 border border-border rounded-card overflow-hidden">
                             <div className="p-4 bg-muted border-b border-border flex justify-between items-center">
                                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Navigation className="h-5 w-5" /> Tu Misión</h3>
                                 <div className="text-xs font-mono bg-background px-2 py-1 rounded border">
@@ -691,7 +707,7 @@ export default function OrderTrackingPage() {
                     )}
 
                     {isDeliveryPerson && order.status === 'Entregado' && (
-                         <div className="mb-6 bg-muted/30 border border-border rounded-xl p-4 flex flex-col items-center text-center">
+                         <div className="mb-6 flex flex-col items-center rounded-card bg-foreground/[0.04] p-4 text-center">
                             <div className="h-12 w-12 bg-success/15 rounded-full flex items-center justify-center mb-3"><CheckCircle className="h-6 w-6 text-success" /></div>
                             <h3 className="text-lg font-bold text-foreground">¡Entrega Completada!</h3>
                             <div className="mt-2 px-4 py-2 bg-success text-success-foreground rounded-full font-bold text-lg flex items-center gap-2 shadow-sm"><DollarSign className="h-5 w-5" />Ganaste ${Math.round(order.deliveryFee).toLocaleString('es-AR')}</div>
@@ -701,22 +717,21 @@ export default function OrderTrackingPage() {
                     {/* Fase QQ: antes renderizaba "Empanadas del VallePedido a" (texto pegado
                         y al revés) y, para la tienda, "para **nombre**" con asteriscos
                         literales de un markdown que nunca se procesó. */}
-                    <CardDescription>
+                    <CardDescription className="flex flex-wrap items-center gap-x-4 gap-y-1">
                         {isStoreOwner && order.customerName
                             ? <>Pedido de <span className="font-semibold text-foreground">{order.customerName}</span></>
-                            : <>Pedido a <span className="font-semibold text-primary">{order.storeName}</span></>}
+                            : <>Pedido a <span className="font-semibold text-foreground">{order.storeName}</span></>}
+                        <span>Estado actual: <span className="font-bold text-foreground">{order.status}</span></span>
                     </CardDescription>
-
-                    <CardDescription>Estado actual: <span className="font-bold text-primary">{order.status}</span></CardDescription>
                     <Separator/>
                     {(order.items || []).map(item => (
-                        <div key={item.id} className="flex justify-between items-center">
-                            <div>
+                        <div key={item.id} className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-start gap-3">
+                                <span className="grid h-9 min-w-[2.25rem] shrink-0 place-items-center rounded-xl bg-foreground/[0.06] px-1.5 font-headline text-lg font-extrabold tabular-nums" aria-label={`Cantidad: ${item.quantity}`}>{item.quantity}×</span>
                                 {/* ✅ FIX: Buscamos 'name' o 'title' */}
-                                <p className="font-semibold">{item.name || (item as any).title || "Producto sin nombre"}</p>
-                                <p className="text-sm text-muted-foreground">Cantidad: {item.quantity}</p>
+                                <p className="min-w-0 pt-1 font-semibold leading-snug">{item.name || (item as any).title || "Producto sin nombre"}</p>
                             </div>
-                            <div className="text-right flex items-center gap-4">
+                            <div className="flex shrink-0 items-center gap-3 text-right">
                                {isBuyer && order.status === 'Entregado' && (() => {
                                    // La calificación vive en `itemRatings` (mapa aparte); se
                                    // sigue leyendo `item.userRating` como compat con pedidos
@@ -724,7 +739,7 @@ export default function OrderTrackingPage() {
                                    const rated = order.itemRatings?.[item.id] ?? item.userRating;
                                    return rated
                                      ? (<div className="flex items-center gap-1 text-sm text-warning"><Star className="h-4 w-4 fill-current" /><span className="font-bold">{rated}</span></div>)
-                                     : (<Button variant="outline" size="sm" onClick={() => setReviewingItem(item)}><Star className="mr-2 h-4 w-4" /> Valorar</Button>);
+                                     : (<Button variant="outline" size="sm" className="h-10 rounded-full" onClick={() => setReviewingItem(item)}><Star className="mr-2 h-4 w-4" /> Valorar</Button>);
                                 })()}<p className="font-semibold tabular-nums">{money(item.price * item.quantity)}</p>
                             </div>
                         </div>
@@ -738,7 +753,7 @@ export default function OrderTrackingPage() {
                      {(order.serviceFee || 0) > 0 && (
                         <div className="flex items-baseline gap-2 text-base"><span>Tarifa de servicio</span><span aria-hidden="true" className="flex-1 -translate-y-1 border-b-2 border-dotted border-border" /><span className="tabular-nums">{money(order.serviceFee || 0)}</span></div>
                      )}
-                    <div className="flex items-baseline gap-2 border-t-2 border-foreground pt-2 font-headline text-2xl font-extrabold"><span>Total</span><span aria-hidden="true" className="flex-1" /><span className="tabular-nums">{money(displayTotal)}</span></div>
+                    <div className="flex items-baseline gap-2 rounded-2xl bg-foreground/[0.05] px-3 py-2.5 font-headline text-2xl font-extrabold"><span>Total</span><span aria-hidden="true" className="flex-1" /><span className="tabular-nums">{money(displayTotal)}</span></div>
                      <Separator/>
 
                      {/* 🔒 Auditoría de privacidad (ago 2026, estándar Rappi): el teléfono del
@@ -748,8 +763,8 @@ export default function OrderTrackingPage() {
                          el pedido decide con la distancia aproximada de la tarjeta). */}
                      {(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) && (
                      <div>
-                        <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4" /> Dirección de Envío (Referencia)</h3>
-                        <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded border mt-1">
+                        <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-info" aria-hidden="true" /> Dirección de envío (referencia)</h3>
+                        <p className="mt-1.5 rounded-2xl bg-foreground/[0.04] p-3 text-sm text-muted-foreground">
                             {order.shippingInfo?.address || order.shippingAddress?.address}
                         </p>
                      </div>
@@ -758,20 +773,20 @@ export default function OrderTrackingPage() {
                  
                  <OrderStatusUpdater order={order} />
             </Card>
-             <Card><CardHeader><CardTitle>Estado del Pedido</CardTitle></CardHeader><CardContent><OrderProgress status={order.status} order={order} timeoutAt={confirmTimes[order.id]?.timeoutAt} showCountdown={isBuyer || isStoreOwner || isAdminViewer} countdownVariant={isStoreOwner ? 'store' : 'buyer'} /></CardContent></Card>
+             <Card><CardHeader><CardTitle className="font-headline text-2xl font-extrabold">Estado del pedido</CardTitle></CardHeader><CardContent><OrderProgress status={order.status} order={order} timeoutAt={confirmTimes[order.id]?.timeoutAt} showCountdown={isBuyer || isStoreOwner || isAdminViewer} countdownVariant={isStoreOwner ? 'store' : 'buyer'} /></CardContent></Card>
         </div>
 
         {/* --- COLUMNA DERECHA --- */}
-        <div className={cn("space-y-8", showRightColumn ? "lg:col-span-2" : "hidden")}>
+        <div className={cn("min-w-0 space-y-6", showRightColumn ? "lg:col-span-2" : "hidden")}>
              <Card>
-                <CardHeader><CardTitle>Mapa de Entrega</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="font-headline text-2xl font-extrabold">Mapa de entrega</CardTitle></CardHeader>
                 {/* relative z-0 contiene los z-index internos de Leaflet (panes 400-1000):
                     sin esto el mapa flotaba POR ENCIMA del Sheet del carrito (captura real
                     de la gran prueba). Mismo fix que el wrapper del LocationPicker. */}
                 {/* El pin exacto del domicilio solo para los involucrados — el repartidor
                     del pool ve la distancia aproximada en su tarjeta, no la casa. */}
-                <CardContent className="h-96 relative z-0">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) && order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="h-full w-full bg-muted flex items-center justify-center text-muted-foreground">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) ? 'Sin datos de ubicación.' : 'El mapa se habilita al tomar el pedido.'}</div>}</CardContent>
-                <CardFooter className="flex-col items-start gap-2">
+                <CardContent className="relative z-0 h-96 pb-3"><div data-testid="order-map-box" className={cn('relative z-0 h-full overflow-hidden rounded-2xl border border-border/60', buyerMotion.mapTargets)}>{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) && order.storeCoords && order.customerCoords ? (<OrderMap order={order} />) : <div className="flex h-full w-full items-center justify-center bg-foreground/[0.04] px-4 text-center text-muted-foreground">{(isBuyer || isStoreOwner || isAdminViewer || isDeliveryPerson) ? 'Sin datos de ubicación.' : 'El mapa se habilita al tomar el pedido.'}</div>}</div></CardContent>
+                <CardFooter className="flex-col items-start gap-3">
                     {/* PIN de entrega (19/8): el comprador lo ve durante el viaje (para
                         tenerlo a mano al recibir); el ADMIN lo ve SIEMPRE que exista —
                         lo necesita para arbitrar en vivo ("el cliente no tiene el
@@ -787,8 +802,8 @@ export default function OrderTrackingPage() {
                         QUIÉN le lleva el pedido durante el viaje — antes el nombre recién
                         aparecía al calificar, con el pedido ya entregado. */}
                     {isBuyer && order.deliveryPersonName && (order.status === 'En camino' || order.status === 'En reparto') && (
-                        <p className="text-sm flex items-center gap-2">
-                            <Bike className="h-4 w-4 text-warning" />
+                        <p className="flex items-center gap-2.5 text-sm">
+                            <span className="grid h-9 w-9 place-items-center rounded-xl bg-info/10"><Bike className="h-4 w-4 text-info" aria-hidden="true" /></span>
                             Tu repartidor: <span className="font-semibold">{publicName(order.deliveryPersonName)}</span>
                         </p>
                     )}
@@ -815,7 +830,7 @@ export default function OrderTrackingPage() {
                             </Button>
                         );
                     })()}
-                    <p className="text-xs text-muted-foreground"> {order.status === 'En reparto' ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación." : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."}</p>
+                    <p className="text-sm text-muted-foreground"> {order.status === 'En reparto' ? "La línea representa la ruta de entrega directa desde la tienda hasta tu ubicación." : "Los iconos marcan la ubicación de la tienda y la dirección de entrega."}</p>
                 </CardFooter>
             </Card>
             
@@ -828,14 +843,14 @@ export default function OrderTrackingPage() {
 
             {isBuyer && order.status === 'Entregado' && (
                 <Card>
-                    <CardHeader><CardTitle>Reseña de la tienda</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="font-headline text-2xl font-extrabold">Reseña de la tienda</CardTitle></CardHeader>
                     <CardContent>
                         {order.storeReviewed ? (
                             <p className="text-sm text-muted-foreground">¡Gracias por calificar a <strong>{order.storeName}</strong>!</p>
                         ) : (
                             <div className="flex items-center justify-between gap-4">
                                 <p className="text-sm text-muted-foreground">¿Qué te pareció tu pedido en {order.storeName}?</p>
-                                <Button variant="outline" size="sm" onClick={() => setIsStoreReviewOpen(true)}>
+                                <Button variant="outline" onClick={() => setIsStoreReviewOpen(true)} className="h-11 shrink-0 rounded-full">
                                     <Star className="mr-2 h-4 w-4" /> Calificar
                                 </Button>
                             </div>
@@ -846,7 +861,7 @@ export default function OrderTrackingPage() {
 
             {isBuyer && order.status === 'Entregado' && order.deliveryPersonName && (
                 order.deliveryReviewed ? (
-                    <Card><CardHeader><CardTitle>Tu Valoración de la Entrega</CardTitle></CardHeader><CardContent className="space-y-2"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30')} />))}<span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span></div>{order.deliveryReview && (<blockquote className="border-l-2 pl-4 italic text-muted-foreground">&quot;{order.deliveryReview}&quot;</blockquote>)}<p className="text-xs text-muted-foreground pt-2">Valoración para {order.deliveryPersonName}.</p></CardContent></Card>
+                    <Card><CardHeader><CardTitle className="font-headline text-2xl font-extrabold">Tu valoración de la entrega</CardTitle></CardHeader><CardContent className="space-y-2"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={cn('h-5 w-5', order.deliveryRating && order.deliveryRating >= star ? 'text-warning fill-warning' : 'text-muted-foreground/30')} />))}<span className="ml-2 font-bold text-lg">{order.deliveryRating}/5</span></div>{order.deliveryReview && (<blockquote className="border-l-2 pl-4 italic text-muted-foreground">&quot;{order.deliveryReview}&quot;</blockquote>)}<p className="pt-2 text-sm text-muted-foreground">Valoración para {publicName(order.deliveryPersonName)}.</p></CardContent></Card>
                 ) : (
                     <DeliveryReviewCard order={order} onSubmit={handleDeliveryReviewSubmit} />
                 )

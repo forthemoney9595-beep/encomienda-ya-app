@@ -2,7 +2,13 @@ import Link from 'next/link';
 
 export default function PrivacyPage() {
   return (
-    <div className="container mx-auto max-w-3xl py-12 px-4 prose prose-slate dark:prose-invert">
+    // Texto largo en vidrio (rediseño 9/11/2026): `prose` sobre `glass-strong` (el vidrio más
+    // opaco) para que el párrafo se lea parejo sobre la veladura, con títulos en letra de cartel.
+    <div className="mx-auto max-w-3xl py-2 md:py-6">
+      <article
+        data-testid="legal-privacy"
+        className="glass-strong prose prose-slate max-w-none rounded-card p-5 dark:prose-invert sm:p-10 prose-headings:font-headline prose-headings:tracking-tight prose-h1:text-[2.1rem] prose-h1:leading-tight prose-h2:mt-10 prose-h2:text-2xl prose-a:font-semibold prose-a:text-primary prose-a:underline-offset-4 prose-li:my-1 prose-p:leading-relaxed"
+      >
       <h1>Política de Privacidad</h1>
       <p className="text-muted-foreground text-sm">Última actualización: abril de 2025</p>
 
@@ -34,8 +40,8 @@ export default function PrivacyPage() {
         Compartimos tus datos únicamente con:
       </p>
       <ul>
-        <li><strong>Tiendas:</strong> tu nombre, dirección de entrega y teléfono para procesar el pedido.</li>
-        <li><strong>Repartidores:</strong> tu nombre, dirección y teléfono para realizar la entrega.</li>
+        <li><strong>Tiendas:</strong> tu nombre y los productos de tu pedido, para prepararlo. No reciben tu teléfono: si hace falta, te escriben por el chat del pedido.</li>
+        <li><strong>Repartidores:</strong> antes de tomar el pedido, solo la zona y la distancia aproximada. Recién al tomarlo ven tu nombre y dirección de entrega, y tu teléfono mientras el pedido está en camino a tu casa.</li>
         <li><strong>MercadoPago:</strong> correo electrónico para procesar el pago.</li>
         <li><strong>Google Firebase:</strong> plataforma tecnológica donde almacenamos los datos de forma segura.</li>
       </ul>
@@ -85,6 +91,7 @@ export default function PrivacyPage() {
         Ante cualquier consulta sobre esta política, contactanos en{' '}
         <Link href="/support" className="text-primary underline">nuestra página de soporte</Link>.
       </p>
+      </article>
     </div>
   );
 }

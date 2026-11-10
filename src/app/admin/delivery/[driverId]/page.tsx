@@ -2,7 +2,6 @@
 
 import { notFound, useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +10,6 @@ import {
   Car, Mail, Phone, Star, PackageCheck, Wallet, TrendingUp, DollarSign,
   Check, XCircle, Save, Loader2, ExternalLink, AlertTriangle
 } from 'lucide-react';
-import { getPlaceholderImage } from '@/lib/placeholder-images';
 import { useState, useMemo } from 'react';
 import type { DeliveryPersonnel } from '../delivery-personnel-list';
 import { format } from 'date-fns';
@@ -34,17 +32,10 @@ import { publicName } from '@/lib/public-name';
 import { SuspendAccountDialog } from '@/components/admin/suspend-account-dialog';
 import { SuspensionPanel } from '@/components/admin/suspension-panel';
 import type { AccountSuspension } from '@/lib/suspension';
+import { PersonTile } from '@/components/admin/admin-list';
+import { resolveStatus, SOFT_BADGE } from '@/components/admin/status-badge';
+import { useAdminCrumbs } from '@/components/admin/admin-chrome';
 
-function getStatusVariant(status: string) {
-  switch (status) {
-    case 'Activo': return 'secondary';
-    case 'Pendiente': return 'default';
-    case 'Inactivo':
-    case 'Suspendido':
-    case 'Rechazado': return 'destructive';
-    default: return 'outline';
-  }
-}
 
 const formatDate = (ts: any) => {
   if (!ts) return '—';
@@ -68,6 +59,8 @@ function DriverProfilePage() {
 
   const driverRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
   const { data: driver, isLoading: driverLoading } = useDoc<DeliveryPersonnel>(driverRef);
+  // Migas de la topbar: Operación › Repartidores › {nombre} (la ficha no usa AdminPage).
+  useAdminCrumbs([{ label: 'Operación' }, { label: 'Repartidores', href: '/admin/delivery' }, { label: driver?.name || 'Repartidor' }]);
 
   if (driver && !cbuLoaded) {
     setCbuInput((driver as any).payoutCbu || '');
@@ -202,15 +195,12 @@ function DriverProfilePage() {
   return (
     <div className="container mx-auto pb-20 space-y-6">
       {/* Header */}
-      <div className="flex items-start gap-4">
-        <Avatar className="h-16 w-16 rounded-xl border-2 border-primary">
-          <AvatarImage src={getPlaceholderImage(driver.id, 128, 128)} alt={driver.name} />
-          <AvatarFallback className="text-2xl">{driver.name?.charAt(0)}</AvatarFallback>
-        </Avatar>
+      <div className="glass flex flex-wrap items-start gap-4 rounded-card p-4 sm:p-5" data-testid="driver-ficha-header">
+        <PersonTile role="delivery" photo={(driver as any).profileImageUrl} className="h-16 w-16 rounded-[1rem] [&>svg]:h-8 [&>svg]:w-8" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold">{driver.name}</h1>
-            <Badge variant={getStatusVariant(driver.status)}>{driver.status}</Badge>
+            <h1 className="font-headline text-[1.75rem] font-extrabold leading-tight tracking-tight">{driver.name}</h1>
+            <span className={cn('inline-flex h-[22px] items-center rounded-full px-2 text-xs font-semibold', SOFT_BADGE[resolveStatus('account', driver.status).tone])}>{driver.status}</span>
           </div>
           <div className="flex flex-col gap-1 mt-1 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {driver.email}</span>
@@ -218,15 +208,15 @@ function DriverProfilePage() {
             <span className="flex items-center gap-1.5 capitalize"><Car className="h-3.5 w-3.5" /> {typeof driver.vehicle === 'string' ? driver.vehicle : driver.vehicle?.type || 'N/A'}</span>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
           {driver.status !== 'Activo' && !isSuspended && (
             <Button size="sm" variant="outline" onClick={handleActivate} disabled={updatingStatus} className="gap-1.5">
-              <Check className="h-3.5 w-3.5 text-success" /> Activar
+              <Check className="h-3.5 w-3.5 text-success-ink" /> Activar
             </Button>
           )}
           {driver.status === 'Activo' && !isSuspended && (
             <Button size="sm" variant="outline" onClick={() => setSuspendOpen(true)} disabled={updatingStatus} className="gap-1.5" data-testid="open-suspend">
-              <XCircle className="h-3.5 w-3.5 text-destructive" /> Suspender
+              <XCircle className="h-3.5 w-3.5 text-destructive-ink" /> Suspender
             </Button>
           )}
         </div>
@@ -244,9 +234,9 @@ function DriverProfilePage() {
       {/* Métricas */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         {[
-          { label: 'Entregas', value: stats.totalDeliveries, icon: PackageCheck, color: 'text-info', hint: '' },
-          { label: 'Rating', value: stats.ratingCount > 0 ? `${stats.avgRating.toFixed(1)} ★` : '—', icon: Star, color: 'text-warning', hint: '' },
-          { label: 'Ganancias totales', value: `$${Math.round(stats.totalEarned).toLocaleString('es-AR')}`, icon: TrendingUp, color: 'text-success', hint: 'envíos, neto de reembolsos' },
+          { label: 'Entregas', value: stats.totalDeliveries, icon: PackageCheck, color: 'text-info-ink', hint: '' },
+          { label: 'Rating', value: stats.ratingCount > 0 ? `${stats.avgRating.toFixed(1)} ★` : '—', icon: Star, color: 'text-warning-ink', hint: '' },
+          { label: 'Ganancias totales', value: `$${Math.round(stats.totalEarned).toLocaleString('es-AR')}`, icon: TrendingUp, color: 'text-success-ink', hint: 'envíos, neto de reembolsos' },
           {
             label: 'Saldo disponible', value: `$${Math.round(stats.availableBalance).toLocaleString('es-AR')}`,
             icon: DollarSign, color: 'text-primary',
@@ -291,7 +281,7 @@ function DriverProfilePage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {!cbuSaved && (
-              <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg p-2.5">
+              <div className="flex items-center gap-2 text-xs text-warning-ink bg-warning/10 border border-warning/30 rounded-lg p-2.5">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 No recibirá liquidaciones automáticas hasta que se configure un CBU.
               </div>
@@ -311,7 +301,7 @@ function DriverProfilePage() {
         {/* Reseñas */}
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base"><Star className="h-4 w-4 text-warning" /> Reseñas de clientes</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><Star className="h-4 w-4 text-warning-ink" /> Reseñas de clientes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {(!reviews || reviews.length === 0) && <p className="text-sm text-muted-foreground text-center py-4">Sin reseñas todavía.</p>}
@@ -337,7 +327,7 @@ function DriverProfilePage() {
       <Card className="shadow-md">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <PackageCheck className="h-4 w-4 text-info" /> Entregas recientes
+            <PackageCheck className="h-4 w-4 text-info-ink" /> Entregas recientes
             <span className="text-xs font-normal text-muted-foreground">({orders?.length ?? 0} totales)</span>
           </CardTitle>
         </CardHeader>
@@ -365,7 +355,7 @@ function DriverProfilePage() {
                       <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(o.createdAt)}</td>
                       <td className="px-4 py-2.5 font-medium">{o.customerName}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">{(o as any).storeName || '—'}</td>
-                      <td className="px-4 py-2.5 text-right font-bold text-success">
+                      <td className="px-4 py-2.5 text-right font-bold text-success-ink">
                         {/* Neto (Fase PP, N5): la tarjeta de arriba ya era neta y esta
                             columna mostraba el envío crudo — misma pantalla, dos bases. */}
                         {o.status === 'Entregado' ? `$${Math.round(driverNetForOrder(o as any)).toLocaleString('es-AR')}` : '—'}

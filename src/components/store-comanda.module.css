@@ -1,0 +1,87 @@
+/* Comanda de la tienda (rediseño en vidrio, 9/11/2026): el pedido nuevo aparece como un
+   ticket de papel con dientes abajo que "sale de la impresora".
+   El papel es claro en LOS DOS temas (como un ticket de verdad), así que adentro se
+   redefinen los tokens del tema claro: Checkbox, Button, Badge y la cuenta regresiva de
+   shadcn se leen sobre el papel sin tocar esos componentes. */
+
+.paper {
+  --background: 45 60% 98%;
+  --foreground: 20 8% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 20 8% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 20 8% 10%;
+  --primary: 191 78% 26%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 40 22% 90%;
+  --secondary-foreground: 20 8% 10%;
+  --muted: 40 22% 90%;
+  --muted-foreground: 30 6% 30%;
+  --accent: 40 22% 88%;
+  --accent-foreground: 20 8% 10%;
+  --destructive: 0 73% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 143 71% 25%;
+  --success-foreground: 0 0% 100%;
+  --warning: 30 95% 30%;
+  --warning-foreground: 0 0% 100%;
+  --info: 217 74% 40%;
+  --info-foreground: 0 0% 100%;
+  --border: 36 14% 74%;
+  --input: 36 14% 62%;
+  --ring: 191 78% 26%;
+
+  position: relative;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-radius: 1rem 1rem 0 0;
+  padding: 0.85rem 1rem 1.35rem;
+  box-shadow: 0 14px 26px -18px rgb(0 0 0 / 0.45);
+  /* Dientes del corte: una tira de semicírculos calados abajo. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - 10px) no-repeat,
+    radial-gradient(circle at 8px 10px, transparent 6px, #000 6.5px) 0 100% / 16px 10px repeat-x;
+  mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - 10px) no-repeat,
+    radial-gradient(circle at 8px 10px, transparent 6px, #000 6.5px) 0 100% / 16px 10px repeat-x;
+}
+
+.dashed {
+  border-color: hsl(var(--border));
+  border-style: dashed;
+}
+
+.printing {
+  animation: comanda-print 1.15s cubic-bezier(.2, .8, .2, 1) both;
+  transform-origin: top;
+}
+.done {
+  animation: comanda-torn 0.5s cubic-bezier(.2, .8, .2, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes comanda-print {
+  0% { clip-path: inset(0 0 100% 0); transform: translateY(-6px); }
+  70% { clip-path: inset(0 0 0 0); transform: translateY(2px) rotate(-0.4deg); }
+  85% { transform: translateY(0) rotate(0.3deg); }
+  100% { clip-path: inset(0 0 0 0); transform: none; }
+}
+@keyframes comanda-torn {
+  to { transform: translateY(-14px) scale(0.96); opacity: 0; }
+}
+
+/* Ranura de la impresora arriba de la pila de tickets. */
+.slot {
+  height: 6px;
+  margin: 0 0.4rem 0.35rem;
+  border-radius: 999px;
+  background: hsl(var(--foreground) / 0.18);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .printing,
+  .done {
+    animation: none !important;
+  }
+}

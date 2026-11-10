@@ -106,7 +106,7 @@ export function MonthlyHistory({ today, todayId, fallbackRate }: { today: DailyB
   const td = 'h-11 border-b border-border px-3 align-middle tabular-nums';
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card" data-testid="monthly-history">
+    <section className="min-w-0 overflow-hidden glass rounded-card" data-testid="monthly-history">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div>
           <h2 className="flex items-center gap-2 font-semibold"><CalendarRange className="h-4 w-4 text-primary-ink" aria-hidden="true" /> Historial mensual</h2>
@@ -180,7 +180,7 @@ function MonthRowView({ r, prev, open, t, busy, onToggle, onMore, td }: {
             {!t && busy && <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" /></div>}
             {t && t.rows.length === 0 && <p className="py-3 text-center text-xs text-muted-foreground">Sin pedidos entregados este mes.</p>}
             {t && t.rows.length > 0 && (
-              <div className="divide-y divide-border/60 rounded-md border border-border bg-card">
+              <div className="divide-y divide-foreground/10 rounded-xl border border-foreground/10 bg-foreground/[0.02]">
                 {t.rows.map(x => (
                   <div key={x.id} className="flex min-h-[40px] flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 text-xs">
                     <span className="w-24 shrink-0 whitespace-nowrap text-muted-foreground">{fmtDate(x.createdAt, 'short')}</span>

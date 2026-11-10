@@ -2,7 +2,13 @@ import Link from 'next/link';
 
 export default function TermsPage() {
   return (
-    <div className="container mx-auto max-w-3xl py-12 px-4 prose prose-slate dark:prose-invert">
+    // Texto largo en vidrio (rediseño 9/11/2026): `prose` sobre `glass-strong` (el vidrio más
+    // opaco) para que el párrafo se lea parejo sobre la veladura, con títulos en letra de cartel.
+    <div className="mx-auto max-w-3xl py-2 md:py-6">
+      <article
+        data-testid="legal-terms"
+        className="glass-strong prose prose-slate max-w-none rounded-card p-5 dark:prose-invert sm:p-10 prose-headings:font-headline prose-headings:tracking-tight prose-h1:text-[2.1rem] prose-h1:leading-tight prose-h2:mt-10 prose-h2:text-2xl prose-a:font-semibold prose-a:text-primary prose-a:underline-offset-4 prose-li:my-1 prose-p:leading-relaxed"
+      >
       <h1>Términos y Condiciones de Uso</h1>
       <p className="text-muted-foreground text-sm">Última actualización: noviembre de 2026</p>
 
@@ -101,6 +107,7 @@ export default function TermsPage() {
         Para consultas sobre estos términos, contactanos a través de{' '}
         <Link href="/support" className="text-primary underline">nuestra página de soporte</Link>.
       </p>
+      </article>
     </div>
   );
 }

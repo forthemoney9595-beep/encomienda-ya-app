@@ -88,17 +88,17 @@ export function AccountStatement({
   ];
 
   return (
-    <Card className="shadow-md">
+    <Card>
       <CardHeader className="pb-3 flex flex-row items-start justify-between gap-2">
         <div>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ReceiptText className="h-4 w-4 text-primary" aria-hidden="true" /> {title}
+          <CardTitle className="flex items-center gap-2 font-headline text-2xl font-extrabold">
+            <ReceiptText className="h-5 w-5 text-primary" aria-hidden="true" /> {title}
           </CardTitle>
           <CardDescription>
             {description ?? 'Cada movimiento de plata de esta cuenta: lo ganado por pedido (neto, con la misma fórmula que aprueba los retiros), lo pagado y lo solicitado.'}
           </CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={handleCsv} disabled={sorted.length === 0} className="shrink-0 gap-1.5" aria-label="Descargar movimientos en CSV">
+        <Button variant="outline" size="sm" onClick={handleCsv} disabled={sorted.length === 0} className="h-10 shrink-0 gap-1.5 rounded-full bg-transparent px-4" aria-label="Descargar movimientos en CSV">
           <Download className="h-3.5 w-3.5" aria-hidden="true" /> CSV
         </Button>
       </CardHeader>
@@ -106,8 +106,8 @@ export function AccountStatement({
         {toolbar}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {chips.map(({ key, label, value, cls }) => (
-            <div key={label} className="rounded-lg border bg-muted/30 p-2.5">
-              <div className={cn('text-lg font-bold tabular-nums', cls)} data-testid={`statement-chip-${key}`}>
+            <div key={label} className="min-w-0 rounded-2xl bg-foreground/[0.05] p-3">
+              <div className={cn('truncate font-headline text-2xl font-extrabold leading-tight tabular-nums', cls)} data-testid={`statement-chip-${key}`}>
                 {value < 0 ? `−${money(value)}` : money(value)}
               </div>
               <div className="text-xs text-muted-foreground">{label}</div>
@@ -122,12 +122,12 @@ export function AccountStatement({
           </p>
         )}
 
-        <div className="divide-y divide-border/60 rounded-lg border">
+        <div className="divide-y divide-foreground/10 overflow-hidden rounded-2xl bg-foreground/[0.03] ring-1 ring-foreground/10">
           {sorted.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">Sin movimientos todavía.</p>
           )}
           {sorted.map(m => (
-            <div key={m.id} className="flex items-center gap-3 px-3 py-2 text-sm" data-testid="statement-row">
+            <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 text-sm" data-testid="statement-row">
               <span className="text-xs text-muted-foreground whitespace-nowrap w-24 shrink-0">
                 {format(toDate(m.date), 'd MMM yyyy', { locale: es })}
               </span>
@@ -141,11 +141,11 @@ export function AccountStatement({
                 {m.amount > 0 ? '+' : m.amount < 0 ? '−' : ''}{money(m.amount)}
               </span>
               {m.badge && (
-                <Badge variant="outline" className="text-xs text-muted-foreground shrink-0">{m.badge}</Badge>
+                <Badge variant="outline" className="shrink-0 rounded-full text-xs text-muted-foreground">{m.badge}</Badge>
               )}
               {m.href && (
                 <Link href={m.href} target="_blank" className="shrink-0">
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="Ver pedido" tabIndex={-1}><ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></Button>
+                  <Button size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0" aria-label="Ver pedido" tabIndex={-1}><ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></Button>
                 </Link>
               )}
             </div>

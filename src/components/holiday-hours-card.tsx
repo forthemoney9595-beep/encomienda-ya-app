@@ -51,15 +51,15 @@ export function HolidayHoursCard({ store, className }: { store: StoreLike; class
   };
 
   return (
-    <Card data-testid="holiday-hours-card" className={cn('border-primary/30 bg-primary/5', className)}>
-      <CardContent className="flex items-start gap-3 p-4">
-        <CalendarDays className="mt-0.5 h-6 w-6 shrink-0 text-primary" aria-hidden />
+    <Card data-testid="holiday-hours-card" className={cn('relative', className)}>
+      <CardContent className="flex items-start gap-3 p-4 sm:p-5">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><CalendarDays className="h-6 w-6" aria-hidden /></span>
         <div className="min-w-0 flex-1 space-y-2">
-          <p className="font-headline text-lg font-bold leading-tight">{question}</p>
+          <p className="font-headline text-2xl font-extrabold leading-tight">{question}</p>
           <p className="text-sm text-muted-foreground">
             Cargá un horario especial para {nights}, así tus clientes saben hasta qué hora pedir.
           </p>
-          <Button asChild size="sm">
+          <Button asChild className="h-11 rounded-full px-5">
             <Link href="/my-store/edit#horario-especial">Cargar horario de fiestas</Link>
           </Button>
         </div>

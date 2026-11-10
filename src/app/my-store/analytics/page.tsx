@@ -162,12 +162,14 @@ export default function StoreAnalyticsPage() {
         {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
             <button
                 key={p}
+                type="button"
+                aria-pressed={period === p}
                 onClick={() => setPeriod(p)}
                 className={cn(
-                    'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
+                    'min-h-11 rounded-full px-5 text-base font-semibold transition-all',
                     period === p
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                        ? 'bg-primary text-primary-foreground shadow-glow-sm'
+                        : 'glass text-muted-foreground hover:text-foreground'
                 )}
             >
                 {PERIOD_LABELS[p]}
@@ -178,21 +180,21 @@ export default function StoreAnalyticsPage() {
       {/* Tarjetas de métricas */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-        <Card className="shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Ventas Totales</CardTitle>
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Ventas Totales</CardTitle>
             <ShoppingBag className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{money(current.totalRevenue)}</div>
+            <div className="font-headline text-3xl font-extrabold leading-tight tabular-nums">{money(current.totalRevenue)}</div>
             <div className="flex items-center gap-1.5 mt-1">
-                <p className="text-xs text-muted-foreground">{PERIOD_LABELS[period]}</p>
+                <p className="text-sm text-muted-foreground">{PERIOD_LABELS[period]}</p>
                 {hasPrev && <PctBadge current={current.totalRevenue} prev={prev.totalRevenue} />}
             </div>
             {/* Es el total BRUTO que pagó el cliente: incluye el envío (va al repartidor) y
                 la tarifa de servicio + comisión (van a la plataforma). Sin esta aclaración se
                 leía como "lo que voy a cobrar" y no coincidía con la billetera. */}
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-sm text-muted-foreground">
               Bruto: incluye envío y comisiones.{' '}
               <Link href="/my-store/wallet" className="text-primary underline underline-offset-2">
                 Ver lo que cobrás
@@ -201,43 +203,43 @@ export default function StoreAnalyticsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Entregados</CardTitle>
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Entregados</CardTitle>
             <Package className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{current.completedOrders}</div>
+            <div className="font-headline text-3xl font-extrabold leading-tight tabular-nums">{current.completedOrders}</div>
             <div className="flex items-center gap-1.5 mt-1">
-                <p className="text-xs text-muted-foreground">De {current.totalOrders} totales</p>
+                <p className="text-sm text-muted-foreground">De {current.totalOrders} totales</p>
                 {hasPrev && <PctBadge current={current.completedOrders} prev={prev.completedOrders} />}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Ticket Promedio</CardTitle>
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Ticket Promedio</CardTitle>
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${Math.round(current.avgTicket).toLocaleString('es-AR')}</div>
+            <div className="font-headline text-3xl font-extrabold leading-tight tabular-nums">{money(current.avgTicket)}</div>
             <div className="flex items-center gap-1.5 mt-1">
-                <p className="text-xs text-muted-foreground">Valor medio por venta</p>
+                <p className="text-sm text-muted-foreground">Valor medio por venta</p>
                 {hasPrev && <PctBadge current={current.avgTicket} prev={prev.avgTicket} />}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados</CardTitle>
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Cancelados</CardTitle>
             <XCircle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">{current.rejectedCount}</div>
+            <div className="font-headline text-3xl font-extrabold leading-tight text-destructive tabular-nums">{current.rejectedCount}</div>
             <div className="flex items-center gap-1.5 mt-1">
-                <p className="text-xs text-muted-foreground">Pedidos no concretados</p>
+                <p className="text-sm text-muted-foreground">Pedidos no concretados</p>
                 {hasPrev && current.rejectedCount > 0 && (
                     // Para cancelados, "subir" es malo -- invertimos la lógica de color
                     <PctBadge current={prev.rejectedCount} prev={current.rejectedCount} />
@@ -250,9 +252,9 @@ export default function StoreAnalyticsPage() {
       {/* Gráfico de ventas por día. overflow-hidden (Fase QQ): los ticks de recharts
           desbordaban el Card unos px y toda la página scrolleaba horizontal en celular. */}
       {dailySalesData && dailySalesData.length > 0 && (
-        <Card className="shadow-md min-w-0 overflow-hidden">
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-success" /> Ventas por día</CardTitle>
+            <CardTitle className="flex items-center gap-2 font-headline text-2xl font-extrabold"><TrendingUp className="h-5 w-5 text-success" /> Ventas por día</CardTitle>
             <CardDescription>Ingresos de pedidos entregados — {PERIOD_LABELS[period]}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -262,7 +264,7 @@ export default function StoreAnalyticsPage() {
                 <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} className="text-muted-foreground text-xs" />
                 <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toLocaleString("es-AR", { maximumFractionDigits: 1 })}k` : `$${Math.round(v)}`)} allowDecimals={false} className="text-muted-foreground text-xs" />
                 <ChartTooltip content={<ChartTooltipContent formatter={(v: any) => `${money(Number(v))}`} />} />
-                <Bar dataKey="ventas" fill="var(--color-ventas)" radius={[4,4,0,0]} />
+                <Bar dataKey="ventas" fill="var(--color-ventas)" radius={[8,8,0,0]} />
               </BarChart>
             </ChartContainer>
           </CardContent>
@@ -273,9 +275,9 @@ export default function StoreAnalyticsPage() {
       <div className="grid gap-6 md:grid-cols-2">
 
         {/* Top 5 productos */}
-        <Card className="shadow-md">
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-warning" /> Top productos</CardTitle>
+            <CardTitle className="flex items-center gap-2 font-headline text-2xl font-extrabold"><Star className="h-5 w-5 text-warning" /> Top productos</CardTitle>
             <CardDescription>Más vendidos por ingresos — {PERIOD_LABELS[period]}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -292,7 +294,7 @@ export default function StoreAnalyticsPage() {
                         <span className="font-medium line-clamp-1">{i + 1}. {p.name}</span>
                         <span className="text-muted-foreground shrink-0 ml-2">{p.units} un. · {money(p.revenue)}</span>
                       </div>
-                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-2 overflow-hidden rounded-full bg-foreground/[0.08]">
                         <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
@@ -304,9 +306,9 @@ export default function StoreAnalyticsPage() {
         </Card>
 
         {/* Horas pico */}
-        <Card className="shadow-md min-w-0 overflow-hidden">
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-info" /> Horas pico</CardTitle>
+            <CardTitle className="flex items-center gap-2 font-headline text-2xl font-extrabold"><Clock className="h-5 w-5 text-info" /> Horas pico</CardTitle>
             <CardDescription>Cuándo llegan más pedidos — {PERIOD_LABELS[period]}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -317,7 +319,7 @@ export default function StoreAnalyticsPage() {
                   interval={3} />
                 <YAxis tickLine={false} axisLine={false} allowDecimals={false} className="text-muted-foreground text-xs" />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="pedidos" fill="var(--color-pedidos)" radius={[4,4,0,0]} />
+                <Bar dataKey="pedidos" fill="var(--color-pedidos)" radius={[8,8,0,0]} />
               </BarChart>
             </ChartContainer>
           </CardContent>
@@ -326,9 +328,9 @@ export default function StoreAnalyticsPage() {
       </div>
 
       {/* Lista de movimientos del período */}
-      <Card className="col-span-4 shadow-md">
+      <Card className="min-w-0 overflow-hidden">
         <CardHeader>
-          <CardTitle>Movimientos — {PERIOD_LABELS[period]}</CardTitle>
+          <CardTitle className="font-headline text-2xl font-extrabold">Movimientos — {PERIOD_LABELS[period]}</CardTitle>
           <CardDescription>
             {current.orders.length > 0
                 ? `${current.orders.length} pedidos en el período seleccionado.`
@@ -336,19 +338,19 @@ export default function StoreAnalyticsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="divide-y divide-foreground/10 overflow-hidden rounded-2xl bg-foreground/[0.03] ring-1 ring-foreground/10">
             {current.orders.slice(0, 10).map(order => (
-                <Link key={order.id} href={`/orders/${order.id}`} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group">
-                    <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-info/15 text-info flex items-center justify-center shrink-0 group-hover:bg-info/25 transition-colors">
+                <Link key={order.id} href={`/orders/${order.id}`} className="group flex min-h-[3.75rem] items-center justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-foreground/[0.05]">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="h-10 w-10 rounded-[0.8rem] bg-info/15 text-info flex items-center justify-center shrink-0 group-hover:bg-info/25 transition-colors">
                             <User className="h-5 w-5" />
                         </div>
-                        <div className="space-y-1">
-                            <p className="text-sm font-bold leading-none">{order.customerName}</p>
-                            <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)} • ID: {order.id.slice(0,6)}</p>
+                        <div className="min-w-0 space-y-1">
+                            <p className="truncate text-base font-bold leading-none">{order.customerName}</p>
+                            <p className="text-sm text-muted-foreground">{formatDate(order.createdAt)} • ID: {order.id.slice(0,6)}</p>
                         </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="flex shrink-0 flex-col items-end gap-1">
                         {/* Fase PP (N8): un pedido CANCELADO se mostraba como "+$X" en verde,
                             como si fuera plata que entró. Solo los entregados van en verde
                             con +; el resto en gris y sin signo. */}
@@ -356,7 +358,7 @@ export default function StoreAnalyticsPage() {
                             order.status === 'Entregado' ? 'text-success' : 'text-muted-foreground')}>
                             {order.status === 'Entregado' ? '+' : ''}{money(order.total)}
                         </div>
-                        <Badge variant="outline" className={cn('text-xs uppercase',
+                        <Badge variant="outline" className={cn('rounded-full text-xs',
                             order.status === 'Entregado' ? 'bg-success/15 text-success border-success/30' :
                             order.status === 'Rechazado' ? 'bg-destructive/15 text-destructive border-destructive/30' :
                             'bg-muted text-muted-foreground'
@@ -367,7 +369,7 @@ export default function StoreAnalyticsPage() {
                 </Link>
             ))}
             {current.orders.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                <div className="px-4 py-8 text-center text-muted-foreground">
                     <p>Acá van a aparecer tus ventas a medida que entren pedidos.</p>
                 </div>
             )}

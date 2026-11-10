@@ -7,6 +7,7 @@ import { useFirestore } from '@/lib/firebase';
 import type { Order, OrderStatus } from '@/lib/order-service';
 import { updateOrderStatus } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
+import { confirmStoreOrder } from '@/lib/store-confirm-order';
 import { CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -163,22 +164,14 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   const handleConfirmStock = async () => {
     setIsUpdating(true);
     try {
-      const cleanAdjusted = Object.fromEntries(
-        Object.entries(qtyOverrides).filter(([id]) => !uncheckedIds.has(id))
-      );
-      const res = await authedFetch('/api/orders/confirm-stock', appUser, { orderId: order.id, storeId: order.storeId, removedItemIds: Array.from(uncheckedIds), adjustedQuantities: cleanAdjusted });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'No se pudo confirmar el pedido.');
-      const changed = uncheckedIds.size > 0 || Object.keys(cleanAdjusted).length > 0;
-      toast({
-        title: changed ? 'Confirmado con cambios' : 'Stock Confirmado',
-        description: changed
-          ? [
-              uncheckedIds.size > 0 ? `${uncheckedIds.size} producto(s) sacado(s)` : '',
-              Object.keys(cleanAdjusted).length > 0 ? `${Object.keys(cleanAdjusted).length} con cantidad reducida` : '',
-            ].filter(Boolean).join(' · ') + '. El cliente ya tiene el nuevo total.'
-          : 'El cliente ha sido notificado para pagar.',
+      // Misma llamada que la comanda de /my-store y la pestaña Nuevos (lección R1).
+      const result = await confirmStoreOrder(appUser, {
+        orderId: order.id,
+        storeId: order.storeId,
+        removedItemIds: Array.from(uncheckedIds),
+        adjustedQuantities: qtyOverrides,
       });
+      toast({ title: result.title, description: result.description });
       router.refresh();
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message || 'No se pudo confirmar el pedido.' });
@@ -278,7 +271,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
       return (
         <>
           <CardFooter className="flex-col gap-4">
-              <Alert className="bg-warning/10 border-warning/30">
+              <Alert className="rounded-2xl border-warning/30 bg-warning/10">
                   <Clock className="h-4 w-4 text-warning" />
                   <AlertTitle className="text-foreground">Verificando disponibilidad</AlertTitle>
                   <AlertDescription className="text-muted-foreground">
@@ -286,10 +279,10 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
                   </AlertDescription>
               </Alert>
               <div className="flex w-full gap-3">
-                  <Button disabled variant="outline" className="flex-1 opacity-50 cursor-not-allowed">
+                  <Button disabled variant="outline" className="h-11 flex-1 cursor-not-allowed rounded-full opacity-50">
                       Esperando a la tienda...
                   </Button>
-                  <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
+                  <Button variant="outline" className="h-11 rounded-full border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
                       <Ban className="mr-2 h-4 w-4" /> Cancelar
                   </Button>
               </div>
@@ -320,19 +313,19 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
     return (
       <>
         <CardFooter className="flex-col gap-4">
-          <Alert className="bg-success/10 border-success/30">
+          <Alert className="rounded-2xl border-success/30 bg-success/10">
                <CheckCircle2 className="h-4 w-4 text-success" />
                <AlertTitle className="text-foreground">¡Stock Confirmado!</AlertTitle>
                <AlertDescription className="text-muted-foreground">
                   Tus productos están reservados. Realiza el pago para finalizar.
                </AlertDescription>
           </Alert>
-          <Button onClick={handleBuyerPayment} disabled={isUpdating} className="w-full h-12 text-lg shadow-md">
+          <Button onClick={handleBuyerPayment} disabled={isUpdating} className="h-12 w-full rounded-full text-lg shadow-md">
               {isUpdating ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
               Pagar ${(order.total || 0).toLocaleString('es-AR')} Ahora
           </Button>
-          <p className="text-xs text-muted-foreground text-center">* Procesado seguro vía MercadoPago</p>
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
+          <p className="text-center text-sm text-muted-foreground">Pago seguro con MercadoPago</p>
+          <Button variant="ghost" className="min-h-[44px] w-full rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setShowCancelDialog(true)} disabled={isUpdating}>
               <Ban className="mr-2 h-3 w-3" /> Cancelar este pedido
           </Button>
         </CardFooter>
@@ -424,7 +417,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   if (isStoreOwner && order.status === 'Pendiente de Pago') {
     return (
         <CardFooter className="flex-col items-start gap-4 pt-4 border-t">
-            <Alert className="bg-info/10 border-info/30">
+            <Alert className="rounded-2xl border-info/30 bg-info/10">
                  <CreditCard className="h-4 w-4 text-info" />
                  <AlertTitle className="text-foreground">Esperando Pago</AlertTitle>
                  <AlertDescription className="text-muted-foreground">
@@ -439,7 +432,7 @@ export function OrderStatusUpdater({ order }: OrderStatusUpdaterProps) {
   if (isStoreOwner && ['Listo para recoger', 'En camino', 'En reparto'].includes(order.status)) {
       return (
         <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-info/5">
-            <Alert className="bg-info/10 border-info/30">
+            <Alert className="rounded-2xl border-info/30 bg-info/10">
                 <Clock className="h-4 w-4 text-info" />
                 <AlertTitle className="text-foreground">
                     {order.status === 'Listo para recoger' ? 'Buscando repartidor' : order.status === 'En camino' ? 'Repartidor en camino a retirarlo' : 'En camino al cliente'}

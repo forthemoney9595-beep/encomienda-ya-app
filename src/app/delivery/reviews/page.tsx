@@ -7,7 +7,6 @@ import { useAuth } from '@/context/auth-context';
 import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, query, where, orderBy } from 'firebase/firestore';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StarRating } from '@/components/star-rating';
 import { format } from 'date-fns';
@@ -30,7 +29,7 @@ export default function DeliveryReviewsPage() {
   // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
   const { ready } = useRequireRole('delivery');
 
-  const driverRef = useMemoFirebase(() => (firestore && user && ready ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
+  const driverRef = useMemoFirebase(() => (firestore && user && ready ? doc(firestore, 'users', user.uid) : null), [firestore, user, ready]);
   const { data: driver } = useDoc<{ rating?: number; ratingCount?: number }>(driverRef);
 
   const reviewsQuery = useMemoFirebase(() => {
@@ -42,52 +41,49 @@ export default function DeliveryReviewsPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="container mx-auto space-y-4 py-6">
-        <Skeleton className="h-10 w-64" />
-        {[1, 2, 3].map(i => <Skeleton key={i} className="h-28 w-full" />)}
+      <div className="mx-auto w-full max-w-3xl space-y-4 py-2">
+        <Skeleton className="h-10 w-48" />
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full rounded-card" />)}
       </div>
     );
   }
 
+  const avg = driver?.rating || 0;
+  const count = driver?.ratingCount || 0;
+
   return (
-    <div className="container mx-auto space-y-6 pb-20">
+    <div className="mx-auto w-full max-w-3xl space-y-4 pb-20">
       <PageHeader title="Mis reseñas" description="Lo que los clientes opinan de tus entregas." />
 
-      <Card>
-        <CardContent className="flex items-center gap-4 py-5">
-          <div className="text-3xl font-bold text-warning">{(driver?.rating || 0).toFixed(1)}</div>
-          <div>
-            <StarRating rating={Math.round(driver?.rating || 0)} />
-            <p className="text-sm text-muted-foreground mt-1">{driver?.ratingCount || 0} reseña{driver?.ratingCount === 1 ? '' : 's'}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <section className="glass-strong flex items-center gap-4 rounded-card p-5" aria-label="Tu calificación" data-testid="driver-rating-summary">
+        <span className="font-headline text-[3.25rem] font-extrabold leading-none tabular-nums">
+          {count > 0 ? avg.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}
+        </span>
+        <div>
+          <StarRating rating={Math.round(avg)} />
+          <p className="mt-1 text-muted-foreground">{count} reseña{count === 1 ? '' : 's'}</p>
+        </div>
+      </section>
 
       {(!reviews || reviews.length === 0) ? (
-        <div className="text-center py-12 bg-muted/10 rounded-lg border border-dashed">
-          <p className="text-muted-foreground">Todavía no tenés reseñas. Aparecerán acá cuando un cliente califique una entrega.</p>
+        <div className="glass rounded-card px-5 py-10 text-center">
+          <p className="text-muted-foreground">Todavía no tenés reseñas. Van a aparecer acá cuando un cliente califique una entrega.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <ul className="glass divide-y divide-foreground/10 overflow-hidden rounded-card" aria-label="Reseñas">
           {reviews.map(review => (
-            <Card key={review.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{publicName(review.userName)}</CardTitle>
-                  <StarRating rating={review.rating} />
-                </div>
-                {review.createdAt?.seconds && (
-                  <p className="text-xs text-muted-foreground">{format(new Date(review.createdAt.seconds * 1000), "d MMM yyyy, HH:mm", { locale: es })}</p>
-                )}
-              </CardHeader>
-              {review.comment && (
-                <CardContent>
-                  <p className="text-sm text-foreground">{review.comment}</p>
-                </CardContent>
+            <li key={review.id} className="px-4 py-4 sm:px-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold">{publicName(review.userName)}</p>
+                <StarRating rating={review.rating} />
+              </div>
+              {review.createdAt?.seconds && (
+                <p className="text-sm text-muted-foreground">{format(new Date(review.createdAt.seconds * 1000), "d MMM yyyy, HH:mm", { locale: es })}</p>
               )}
-            </Card>
+              {review.comment && <p className="mt-2 text-foreground">{review.comment}</p>}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

@@ -217,7 +217,7 @@ export default function AdminResumenPage() {
       </KpiRow>
 
       {/* ── Pipeline en vivo ───────────────────────────────────────────────── */}
-      <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4 sm:p-5" data-testid="pipeline">
+      <section className="min-w-0 overflow-hidden glass rounded-card p-4 sm:p-5" data-testid="pipeline">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h2 className="font-semibold">Flujo del pedido <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-success-ink"><span className="h-2 w-2 rounded-full bg-success animate-pulse motion-reduce:animate-none" aria-hidden="true" />en vivo</span></h2>
@@ -231,7 +231,7 @@ export default function AdminResumenPage() {
         {inbox.errors.some(e => e.source === 'Pedidos activos') ? (
           <ErrorState compact error={inbox.errors.find(e => e.source === 'Pedidos activos')?.error} />
         ) : totalActive === 0 && !inbox.loading ? (
-          <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 p-3 text-sm">
+          <div className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm">
             <CheckCircle2 className="h-4 w-4 text-success-ink" aria-hidden="true" /> Ningún pedido en curso — todo entregado.
           </div>
         ) : (
@@ -242,7 +242,7 @@ export default function AdminResumenPage() {
                 const Icon = st.icon;
                 return (
                   <Link key={st.status} href={`/admin/orders?status=${encodeURIComponent(st.status)}`}
-                    className={cn('min-w-0 rounded-md border p-3 transition-colors hover:bg-admin-row-hover', n > 0 ? st.soft : 'border-border')}>
+                    className={cn('min-w-0 rounded-xl border p-3 transition-colors hover:bg-admin-row-hover', n > 0 ? st.soft : 'border-foreground/10')}>
                     <div className="flex items-start justify-between gap-2">
                       <div className={cn('text-[28px] font-bold leading-none tabular-nums', n > 0 ? st.ink : 'text-muted-foreground/50')}>{n}</div>
                       <Icon className={cn('h-4 w-4 shrink-0', n > 0 ? st.ink : 'text-muted-foreground/40')} aria-hidden="true" />
@@ -254,8 +254,8 @@ export default function AdminResumenPage() {
               })}
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md bg-warning/10 px-3 py-2"><span className="font-semibold text-warning-ink">{inStore} en la tienda</span> <span className="text-muted-foreground">· {inStore > inStreet ? 'cuello de botella: comercios' : 'comercios al día'}</span></div>
-              <div className="rounded-md bg-info/10 px-3 py-2"><span className="font-semibold text-info-ink">{inStreet} en la calle</span> <span className="text-muted-foreground">· {waitingDriver > 0 ? `${waitingDriver} esperando moto` : 'logística al día'}</span></div>
+              <div className="rounded-xl bg-warning/10 px-3 py-2"><span className="font-semibold text-warning-ink">{inStore} en la tienda</span> <span className="text-muted-foreground">· {inStore > inStreet ? 'cuello de botella: comercios' : 'comercios al día'}</span></div>
+              <div className="rounded-xl bg-info/10 px-3 py-2"><span className="font-semibold text-info-ink">{inStreet} en la calle</span> <span className="text-muted-foreground">· {waitingDriver > 0 ? `${waitingDriver} esperando moto` : 'logística al día'}</span></div>
             </div>
           </>
         )}
@@ -271,7 +271,7 @@ export default function AdminResumenPage() {
             const Icon = c.icon;
             const ink = c.tone === 'success' ? 'text-success-ink' : c.tone === 'warning' ? 'text-warning-ink' : c.tone === 'destructive' ? 'text-destructive-ink' : c.tone === 'info' ? 'text-info-ink' : 'text-foreground';
             return (
-              <Link key={c.label} href={c.href} className="rounded-md border border-border p-3 transition-colors hover:bg-admin-row-hover" aria-busy={c.value === null || undefined}>
+              <Link key={c.label} href={c.href} className="rounded-xl border border-foreground/10 p-3 transition-colors hover:bg-admin-row-hover" aria-busy={c.value === null || undefined}>
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn('text-2xl font-bold leading-none tabular-nums', c.value === null ? 'text-muted-foreground' : ink)}>{c.value === null ? '…' : c.value}</span>
                   <Icon className={cn('h-4 w-4 shrink-0', ink)} aria-hidden="true" />
@@ -293,7 +293,7 @@ export default function AdminResumenPage() {
           </div>
           <InboxList items={inbox.items} loading={inbox.loading} errors={inbox.errors} now={now} limit={5} moreHref="/admin/inbox" groupBy="none" />
         </div>
-        <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4 lg:col-span-2" data-testid="trend">
+        <section className="min-w-0 overflow-hidden glass rounded-card p-4 lg:col-span-2" data-testid="trend">
           <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">Últimos 7 días</h2><span className="text-xs text-muted-foreground">pedidos por día</span></div>
           {trendError ? <ErrorState compact error={trendError} onRetry={() => setTrendTick(t => t + 1)} /> : (
             <>
@@ -315,7 +315,7 @@ export default function AdminResumenPage() {
       </div>
 
       {/* ── Pedidos recientes ──────────────────────────────────────────────── */}
-      <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card" data-testid="recent-orders">
+      <section className="min-w-0 overflow-hidden glass rounded-card" data-testid="recent-orders">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="font-semibold">Pedidos recientes</h2>
           <Link href="/admin/orders" className="inline-flex min-h-[36px] items-center text-sm font-medium text-primary-ink hover:underline">Ver todos →</Link>
@@ -338,7 +338,7 @@ export default function AdminResumenPage() {
       </section>
 
       {/* ── Totales históricos (al final, desglose colapsado) ───────────────── */}
-      <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4" data-testid="historic">
+      <section className="min-w-0 overflow-hidden glass rounded-card p-4" data-testid="historic">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="font-semibold">Totales históricos</h2>
           <span className="text-xs text-muted-foreground">se refrescan al volver a la pestaña (cada 5 min)</span>

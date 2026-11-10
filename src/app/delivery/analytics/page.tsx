@@ -22,6 +22,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { type Period, PERIOD_LABELS, getPeriodBounds } from '@/lib/analytics-period';
 import { PctBadge } from '@/components/pct-badge';
+import { DriverSegmented } from '@/components/driver-tabs';
 
 const formatDate = (date: any) => {
   if (!date) return '';
@@ -82,7 +83,7 @@ export default function DeliveryAnalyticsPage() {
       );
     }
     return query(collection(firestore, 'orders'), where('deliveryPersonId', '==', user.uid), orderBy('createdAt', 'desc'));
-  }, [firestore, user, prevFrom?.toISOString()]);
+  }, [firestore, user, ready, prevFrom?.toISOString()]); // ready: sin él la consulta quedaba en null para siempre tras el guard (bug de ARQ-010)
 
   const { data: orders, isLoading: ordersLoading } = useCollection<Order>(analyticsQuery);
 
@@ -114,72 +115,64 @@ export default function DeliveryAnalyticsPage() {
 
   if (authLoading || ordersLoading) {
     return (
-      <div className="container mx-auto space-y-4 pb-20">
-        <PageHeader title="Analíticas" description="Cargando datos..." />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-32" />)}
+      <div className="mx-auto w-full max-w-5xl space-y-4 pb-20">
+        <PageHeader title="Analíticas" description="Cargando datos…" />
+        <div className="grid gap-3 md:grid-cols-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 rounded-card" />)}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto pb-20 space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-4 pb-20">
       <PageHeader title="Analíticas" description="Resumen de tu actividad como repartidor, agrupado por fecha de entrega (netos, ya con reembolsos descontados)." />
 
-      <div className="flex gap-2 flex-wrap">
-        {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            className={cn(
-              'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-              period === p ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted text-muted-foreground hover:bg-muted/70'
-            )}
-          >
-            {PERIOD_LABELS[p]}
-          </button>
-        ))}
-      </div>
+      <DriverSegmented
+        label="Período"
+        value={period}
+        onChange={(v) => setPeriod(v as Period)}
+        items={(Object.keys(PERIOD_LABELS) as Period[]).map(p => ({ value: p, label: PERIOD_LABELS[p], testId: `period-${p}` }))}
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="shadow-sm">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Ganancias Totales</CardTitle>
             <Wallet className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{money(current.totalEarned)}</div>
+            <div className="font-headline text-3xl font-extrabold tabular-nums text-success">{money(current.totalEarned)}</div>
             <div className="flex items-center gap-1.5 mt-1">
-              <p className="text-xs text-muted-foreground">{PERIOD_LABELS[period]}</p>
+              <p className="text-sm text-muted-foreground">{PERIOD_LABELS[period]}</p>
               {hasPrev && <PctBadge current={current.totalEarned} prev={prev.totalEarned} />}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Entregas Completadas</CardTitle>
             <Truck className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{current.completedCount}</div>
+            <div className="font-headline text-3xl font-extrabold tabular-nums" data-testid="analytics-completed">{current.completedCount}</div>
             <div className="flex items-center gap-1.5 mt-1">
-              <p className="text-xs text-muted-foreground">{PERIOD_LABELS[period]}</p>
+              <p className="text-sm text-muted-foreground">{PERIOD_LABELS[period]}</p>
               {hasPrev && <PctBadge current={current.completedCount} prev={prev.completedCount} />}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Ganancia Promedio</CardTitle>
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{money(current.avgEarning)}</div>
+            <div className="font-headline text-3xl font-extrabold tabular-nums">{money(current.avgEarning)}</div>
             <div className="flex items-center gap-1.5 mt-1">
-              <p className="text-xs text-muted-foreground">Por entrega</p>
+              <p className="text-sm text-muted-foreground">Por entrega</p>
               {hasPrev && <PctBadge current={current.avgEarning} prev={prev.avgEarning} />}
             </div>
           </CardContent>
@@ -187,9 +180,9 @@ export default function DeliveryAnalyticsPage() {
       </div>
 
       {dailyEarningsData && dailyEarningsData.length > 0 && (
-        <Card className="shadow-md min-w-0 overflow-hidden">
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-success" /> Ganancias por día</CardTitle>
+            <CardTitle className="flex items-center gap-2 font-headline text-2xl font-extrabold"><TrendingUp className="h-5 w-5 text-success" /> Ganancias por día</CardTitle>
             <CardDescription>{PERIOD_LABELS[period]}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -206,9 +199,9 @@ export default function DeliveryAnalyticsPage() {
         </Card>
       )}
 
-      <Card className="shadow-md">
+      <Card className="min-w-0 overflow-hidden">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-info" /> Horas pico</CardTitle>
+          <CardTitle className="flex items-center gap-2 font-headline text-2xl font-extrabold"><Clock className="h-5 w-5 text-info" /> Horas pico</CardTitle>
           <CardDescription>Cuándo hacés más entregas — {PERIOD_LABELS[period]}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -224,28 +217,32 @@ export default function DeliveryAnalyticsPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-md">
+      <Card className="min-w-0 overflow-hidden">
         <CardHeader>
-          <CardTitle>Movimientos — {PERIOD_LABELS[period]}</CardTitle>
+          <CardTitle className="font-headline text-2xl font-extrabold">Movimientos — {PERIOD_LABELS[period]}</CardTitle>
           <CardDescription>
             {current.orders.length > 0 ? `${current.orders.length} pedidos en el período seleccionado.` : 'No hay pedidos en este período.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="-mx-2 divide-y divide-foreground/10 sm:-mx-3">
             {current.orders.slice(0, 10).map(order => (
-              <Link key={order.id} href={`/orders/${order.id}`} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-info/15 text-info flex items-center justify-center shrink-0 group-hover:bg-info/25 transition-colors">
-                    <StoreIcon className="h-5 w-5" />
+              <Link key={order.id} href={`/orders/${order.id}`} className="group flex min-h-[3.75rem] items-center justify-between gap-3 rounded-2xl px-2 py-2.5 transition-colors hover:bg-foreground/[0.05] sm:px-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <StoreIcon className="h-5 w-5" aria-hidden="true" />
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold leading-none">{order.storeName}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(orderDate(order))} • ID: {order.id.slice(0, 6)}</p>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="truncate font-semibold leading-tight">{order.storeName}</p>
+                    <p className="text-sm text-muted-foreground">{formatDate(orderDate(order))} · #{order.id.slice(0, 6)}</p>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className="font-bold text-success">+${Math.round(driverNetForOrder(order as any)).toLocaleString('es-AR')}</div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {/* Solo los entregados suman (misma regla que las analíticas de la tienda, Fase PP N8):
+                      un cancelado no se pinta como "+$X" en verde. */}
+                  {order.status === 'Entregado'
+                    ? <div className="font-headline text-lg font-extrabold tabular-nums text-success">+{money(driverNetForOrder(order as any))}</div>
+                    : <div className="text-sm text-muted-foreground">Sin cobro</div>}
                   <Badge variant="outline" className={cn('text-xs uppercase',
                     order.status === 'Entregado' ? 'bg-success/15 text-success border-success/30' :
                     order.status === 'Cancelado' ? 'bg-destructive/15 text-destructive border-destructive/30' :
@@ -257,7 +254,7 @@ export default function DeliveryAnalyticsPage() {
               </Link>
             ))}
             {current.orders.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+              <div className="rounded-2xl bg-foreground/[0.04] py-8 text-center text-muted-foreground">
                 <p>Acá van a aparecer tus entregas a medida que las completes.</p>
               </div>
             )}

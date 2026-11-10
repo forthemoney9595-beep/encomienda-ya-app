@@ -39,6 +39,7 @@ import {
 import { ImageUpload } from '@/components/image-upload';
 import { AlertTriangle, CheckCircle2, Clock3, Loader2, MessageSquareWarning, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DIALOG_CLOSE_BIG, DIALOG_SHELL } from '@/components/buyer-motion';
 
 
 export function ClaimSection({ order }: { order: Order }) {
@@ -153,14 +154,20 @@ export function ClaimSection({ order }: { order: Order }) {
 
       {/* Estado del reclamo existente */}
       {order.claimId && claim && (
-        <Card className={cn('border-l-4',
-          claim.resolved
-            ? (claim.resolution === 'rejected' ? 'border-l-muted-foreground' : 'border-l-success')
-            : 'border-l-warning')}>
+        <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <MessageSquareWarning className="h-4 w-4" /> Tu reclamo
-              <Badge variant="outline" className="ml-auto text-xs">
+            <CardTitle className="flex items-center gap-2.5 font-headline text-xl font-extrabold">
+              {/* Vidrio (9/11/2026): el estado va en el cuadradito del ícono (antes, un borde
+                  izquierdo de color que en la tarjeta redondeada se veía cortado). */}
+              <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-xl',
+                claim.resolved
+                  ? (claim.resolution === 'rejected' ? 'bg-foreground/[0.07]' : 'bg-success/15')
+                  : 'bg-warning/15')}>
+                <MessageSquareWarning className={cn('h-4 w-4',
+                  claim.resolved ? (claim.resolution === 'rejected' ? 'text-muted-foreground' : 'text-success') : 'text-warning')} aria-hidden="true" />
+              </span>
+              Tu reclamo
+              <Badge variant="outline" className="ml-auto rounded-full text-xs">
                 {CLAIM_TYPES[claim.type]?.label || claim.type}
               </Badge>
             </CardTitle>
@@ -181,13 +188,13 @@ export function ClaimSection({ order }: { order: Order }) {
             {claim.resolved && claim.resolution === 'rejected' && (
               <div className="text-muted-foreground">
                 <p>Revisamos tu reclamo y esta vez no pudimos aprobarlo.</p>
-                {claim.resolutionNote && <blockquote className="border-l-2 pl-3 mt-1 italic">{claim.resolutionNote}</blockquote>}
+                {claim.resolutionNote && <blockquote className="mt-1.5 rounded-xl bg-foreground/[0.04] p-3 italic">{claim.resolutionNote}</blockquote>}
               </div>
             )}
             {claim.resolved && claim.resolution === 'other' && (
               <div className="text-muted-foreground">
                 <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" /> Resuelto.</p>
-                {claim.resolutionNote && <blockquote className="border-l-2 pl-3 mt-1 italic">{claim.resolutionNote}</blockquote>}
+                {claim.resolutionNote && <blockquote className="mt-1.5 rounded-xl bg-foreground/[0.04] p-3 italic">{claim.resolutionNote}</blockquote>}
               </div>
             )}
           </CardContent>
@@ -197,25 +204,25 @@ export function ClaimSection({ order }: { order: Order }) {
       {/* Botón de reclamo (solo si no hay uno ya) */}
       {!order.claimId && isDelivered && withinWindow && (
         <Card>
-          <CardContent className="p-4 flex items-center justify-between gap-4">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <p className="text-sm text-muted-foreground">¿Algo salió mal con tu pedido?</p>
-            <Button variant="outline" size="sm" onClick={openDialog}>
+            <Button variant="outline" onClick={openDialog} className="h-11 rounded-full">
               <AlertTriangle className="mr-2 h-4 w-4" /> Reportar un problema
             </Button>
           </CardContent>
         </Card>
       )}
       {!order.claimId && isDelivered && !withinWindow && (
-        <p className="text-xs text-muted-foreground text-center">
+        <p className="text-center text-sm text-muted-foreground">
           El plazo para reclamar por este pedido venció ({windowHours}h desde la entrega).
           Si necesitás ayuda, escribinos por el chat del pedido.
         </p>
       )}
       {!order.claimId && !isDelivered && isStuck && (
         <Card className="border-warning/30 bg-warning/10">
-          <CardContent className="p-4 flex items-center justify-between gap-4">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <p className="text-sm">Tu pedido lleva un buen rato sin avances.</p>
-            <Button variant="outline" size="sm" onClick={openDialog}>
+            <Button variant="outline" onClick={openDialog} className="h-11 rounded-full bg-popover">
               <AlertTriangle className="mr-2 h-4 w-4" /> ¿Problemas con tu pedido?
             </Button>
           </CardContent>
@@ -223,9 +230,9 @@ export function ClaimSection({ order }: { order: Order }) {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Reportar un problema</DialogTitle>
+        <DialogContent className={cn('max-w-md max-h-[90vh] overflow-y-auto', DIALOG_SHELL, DIALOG_CLOSE_BIG)}>
+          <DialogHeader className="pr-10 text-left">
+            <DialogTitle className="font-headline text-3xl font-extrabold">Reportar un problema</DialogTitle>
             <DialogDescription>
               {isDelivered
                 ? 'Contanos qué pasó con tu pedido. Lo revisamos y te respondemos.'
@@ -244,12 +251,12 @@ export function ClaimSection({ order }: { order: Order }) {
                       type="button"
                       onClick={() => setType(key)}
                       className={cn(
-                        'text-left rounded-lg border p-3 transition-colors',
-                        type === key ? 'border-primary bg-primary/10' : 'hover:bg-muted/50',
+                        'min-h-[44px] rounded-2xl border p-3 text-left transition-colors',
+                        type === key ? 'border-primary bg-primary/10' : 'border-border hover:bg-foreground/[0.04]',
                       )}
                     >
                       <p className="text-sm font-medium">{m.label}</p>
-                      <p className="text-xs text-muted-foreground">{m.description}</p>
+                      <p className="text-sm text-muted-foreground">{m.description}</p>
                     </button>
                   ))}
                 </div>
@@ -259,9 +266,9 @@ export function ClaimSection({ order }: { order: Order }) {
             {meta?.itemBased && (
               <div className="space-y-2">
                 <Label>¿Qué productos?</Label>
-                <div className="space-y-1.5 rounded-lg border p-3">
+                <div className="space-y-1 rounded-2xl border p-2">
                   {order.items.map(it => (
-                    <label key={it.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <label key={it.id} className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/[0.04]">
                       <Checkbox
                         checked={!!selectedItems[String(it.id)]}
                         onCheckedChange={(c) =>
@@ -318,8 +325,8 @@ export function ClaimSection({ order }: { order: Order }) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={submitting}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={!canSubmit || submitting}>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={submitting} className="h-11 rounded-full">Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={!canSubmit || submitting} className="h-11 rounded-full">
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Enviar reclamo
             </Button>

@@ -9,7 +9,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Bell, CheckCircle2, AlertCircle, Package, Info, Truck, Trash2, BellRing, DollarSign, Wallet } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -221,43 +220,48 @@ export function Notifications() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label={unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : "Notificaciones"}>
+        <Button variant="ghost" size="icon" className="relative h-11 w-11 rounded-[0.875rem]" aria-label={unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : "Notificaciones"}>
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-destructive text-xs text-white font-bold animate-pulse">
-                {unreadCount}
+            <span className="absolute right-0.5 top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-xs font-bold text-destructive-foreground ring-2 ring-background motion-safe:animate-pulse" aria-hidden="true">
+                {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
-        <div className="p-4 border-b bg-muted/20">
-            <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold">Notificaciones</span>
-                <div className="flex items-center gap-2">
-                    {unreadCount > 0 && <Badge variant="secondary" className="text-xs h-5">{unreadCount} nuevas</Badge>}
+      {/* Panel de vidrio (rediseño 9/11/2026). El PopoverContent queda transparente y el vidrio
+          va adentro: `glass-strong` vive en @layer components y el bg-popover del Popover lo pisaría. */}
+      <PopoverContent align="end" sideOffset={10} className="w-[min(24rem,calc(100vw-1.5rem))] rounded-card border-0 bg-transparent p-0 shadow-none">
+        <div data-testid="notif-panel" className="glass-strong overflow-hidden rounded-card">
+        <div className="border-b border-foreground/10 p-4">
+            <div className="flex items-center justify-between gap-2">
+                <h2 className="font-headline text-xl font-bold leading-none">Notificaciones</h2>
+                <div className="flex items-center gap-1.5">
+                    {unreadCount > 0 && (
+                        <span className="inline-flex h-7 items-center rounded-full bg-info/15 px-2.5 text-sm font-semibold text-info">{unreadCount} nuevas</span>
+                    )}
                     {localNotifications.length > 0 && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={handleClearAll} title="Borrar todas">
-                            <Trash2 className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={handleClearAll} aria-label="Borrar todas las notificaciones" title="Borrar todas">
+                            <Trash2 className="h-5 w-5" />
                         </Button>
                     )}
                 </div>
             </div>
 
             {permissionStatus === 'default' && (
-                // OJO: nada de bg-info/10/text-info — son colores de tema claro y en el
-                // tema oscuro el botón se veía gris lavado, como deshabilitado (captura de
-                // la prueba del APK, 15/8). Tokens semánticos del tema, como el resto.
+                // OJO: nada de bg-blue-50 — en el tema oscuro el botón se veía gris lavado,
+                // como deshabilitado (captura de la prueba del APK, 15/8). Tokens del tema.
                 <Button
-                    variant="outline" size="sm"
-                    className="w-full mt-2 h-8 text-xs border-info/40 bg-info/10 text-info hover:bg-info/20 hover:text-info"
+                    variant="outline"
+                    data-testid="notif-enable"
+                    className="mt-3 h-11 w-full rounded-2xl border-info/40 bg-info/10 text-sm font-semibold text-info hover:bg-info/20 hover:text-info"
                     onClick={handleEnableNotifications}
                 >
-                    <BellRing className="mr-2 h-3 w-3" /> Activar Avisos Push
+                    <BellRing className="h-5 w-5" /> Activar avisos en este dispositivo
                 </Button>
             )}
             {permissionStatus === 'granted' && registrationError && (
-                <div className="w-full mt-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-xs leading-snug text-warning">
+                <div data-testid="notif-register-error" role="status" className="mt-3 w-full rounded-2xl border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm leading-snug text-warning">
                     Permiso OK, pero el registro del dispositivo falla: {registrationError}
                 </div>
             )}
@@ -266,51 +270,61 @@ export function Notifications() {
                 // APK, 15/8): con el permiso denegado no se mostraba nada. Ahora se ve y
                 // explica cómo destrabarlo (el permiso del SITIO se maneja en Chrome).
                 <button
+                    type="button"
+                    data-testid="notif-blocked"
                     onClick={() => toast({
                         title: "Cómo desbloquear los avisos",
                         description: "En el celular: abrí Chrome → entrá a encomienda-ya-app.vercel.app → tocá el candado junto a la dirección → Permisos → Notificaciones → Permitir. Después cerrá y reabrí la app. En PC: mismo candado junto a la dirección.",
                         duration: 15000,
                     })}
-                    className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-xs text-warning hover:bg-warning/20 transition-colors"
+                    className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-warning/40 bg-warning/10 px-3 py-2 text-left text-sm font-medium leading-snug text-warning transition-colors hover:bg-warning/20"
                 >
+                    <AlertCircle className="h-5 w-5 shrink-0" aria-hidden="true" />
                     Avisos bloqueados en este dispositivo — tocá para ver cómo activarlos
                 </button>
             )}
         </div>
 
-        <ScrollArea className="h-[300px]">
           {!localNotifications || localNotifications.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              No tienes notificaciones.
+            <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-foreground/5 text-muted-foreground">
+                <Bell className="h-7 w-7" aria-hidden="true" />
+              </span>
+              <p className="text-base text-muted-foreground">Todavía no tenés notificaciones.</p>
             </div>
           ) : (
-            <div className="flex flex-col">
+          <ScrollArea className="h-[min(26rem,58vh)]">
+            <ul className="flex flex-col gap-1 p-2">
               {localNotifications.map((notif: any) => (
+                <li key={notif.id}>
                 <button
-                  key={notif.id}
-                  className={`flex items-start gap-3 p-4 text-left hover:bg-muted/50 transition-colors border-b last:border-0 ${!notif.read ? 'bg-info/10' : ''}`}
+                  type="button"
+                  className={`flex w-full items-start gap-3 rounded-2xl p-3 text-left transition-colors duration-200 hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${!notif.read ? 'bg-info/10' : ''}`}
                   onClick={() => handleNotificationClick(notif)}
                 >
-                  <div className="mt-1 bg-card p-2 rounded-full border shadow-sm shrink-0">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background/80 shadow-sm [&_svg]:h-5 [&_svg]:w-5">
                     {getIcon(notif.type)}
-                  </div>
-                  <div className="space-y-1 w-full">
-                    <p className={`text-sm ${!notif.read ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                  </span>
+                  <span className="min-w-0 flex-1 space-y-0.5">
+                    <span className={`block text-base leading-snug ${!notif.read ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
                       {notif.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">
+                    </span>
+                    <span className="block text-sm leading-snug text-muted-foreground line-clamp-2">
                       {notif.body || notif.message}
-                    </p>
-                    <p className="text-xs text-muted-foreground/60 mt-1 first-letter:uppercase">
+                    </span>
+                    <span className="block pt-0.5 text-xs text-muted-foreground first-letter:uppercase">
                       {getTimeAgo(notif.createdAt)}
-                    </p>
-                  </div>
-                  {!notif.read && <div className="h-2 w-2 rounded-full bg-info mt-2 shrink-0" />}
+                    </span>
+                  </span>
+                  {!notif.read && <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-info" aria-hidden="true" />}
+                  {!notif.read && <span className="sr-only">(sin leer)</span>}
                 </button>
+                </li>
               ))}
-            </div>
+            </ul>
+          </ScrollArea>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );

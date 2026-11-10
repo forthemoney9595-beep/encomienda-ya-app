@@ -17,6 +17,7 @@ import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { GeoCoords } from '@/lib/geo';
 import { cn } from '@/lib/utils';
+import { buyerMotion } from '@/components/buyer-motion';
 
 const LocationPickerMap = dynamic(() => import('./location-picker-map'), {
   ssr: false,
@@ -39,12 +40,12 @@ export function LocationPicker({
 }: LocationPickerProps) {
   return (
     <div className="space-y-1.5">
-      <div className={cn('relative z-0 h-48 w-full overflow-hidden rounded-lg border', className)}>
+      <div className={cn('relative z-0 h-48 w-full overflow-hidden rounded-2xl border border-border/70', buyerMotion.mapTargets, className)}>
         <LocationPickerMap value={value} onChange={onChange} />
       </div>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
       {value && typeof value.accuracy === 'number' && value.accuracy > 25 && (
-        <p className="text-xs text-warning">
+        <p className="text-sm text-warning">
           El GPS reportó ±{Math.round(value.accuracy)} m de precisión — verificá el pin y ajustalo si hace falta.
         </p>
       )}

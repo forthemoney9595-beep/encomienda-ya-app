@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import AdminAuthGuard from '../admin-auth-guard';
-import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AdminPage } from '@/components/admin/admin-page';
+import { useConfirm } from '@/components/admin/confirm-dialog';
+import { money } from '@/lib/format-money';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +16,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
-import { Settings, AlertTriangle, Save, Loader2 } from 'lucide-react';
+import { AlertTriangle, Save, Loader2, Wallet, Route, Timer, Sparkles } from 'lucide-react';
 import { CONFIRM_DEFAULTS, CONFIRM_RANGES, confirmConfigError } from '@/lib/confirm-timeout';
 import { CHRISTMAS_MODES, normalizeChristmasMode, type ChristmasMode } from '@/lib/seasonal';
 
@@ -39,6 +42,7 @@ function AdminSettingsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const { user: adminUser } = useAuth();
+  const confirmDialog = useConfirm();
 
   const configRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
   const { data: configData, isLoading: configLoading } = useDoc<PlatformConfig>(configRef);
@@ -71,7 +75,12 @@ function AdminSettingsPage() {
     // El modo mantenimiento corta los pedidos en TODA la plataforma -- pedía menos
     // confirmación que cancelar un solo pedido. Solo se pregunta al ACTIVARLO.
     const turningOnMaintenance = localConfig.maintenanceMode && !configData?.maintenanceMode;
-    if (turningOnMaintenance && !confirm('⚠️ Vas a activar el MODO MANTENIMIENTO: ningún cliente va a poder hacer pedidos en toda la plataforma hasta que lo desactives. ¿Confirmás?')) {
+    if (turningOnMaintenance && !(await confirmDialog({
+      title: '¿Activar el modo mantenimiento?',
+      description: 'Ningún cliente va a poder hacer pedidos en toda la plataforma hasta que lo desactives.',
+      tone: 'destructive',
+      confirmLabel: 'Activar mantenimiento',
+    })).ok) {
       return;
     }
 
@@ -109,31 +118,33 @@ function AdminSettingsPage() {
   // Ver comentario de configReady: nunca mostrar el form con defaults inventados.
   if (!configReady) {
     return (
-      <div className="container mx-auto pb-20 space-y-6 max-w-2xl">
-        <PageHeader title="Configuración" description="Parámetros globales de la plataforma." />
-        <div className="h-96 w-full rounded-xl bg-muted/40 animate-pulse" />
-      </div>
+      <AdminPage title="Configuración" subtitle="Parámetros globales de la plataforma.">
+        <div className="glass h-96 w-full animate-pulse rounded-card" aria-busy="true" aria-label="Cargando la configuración" />
+      </AdminPage>
     );
   }
 
+  const inputCls = 'min-h-[44px]';
   return (
-    <div className="container mx-auto pb-20 space-y-6 max-w-2xl">
-      <PageHeader title="Configuración" description="Parámetros globales de la plataforma." />
-
-      <Card className="border-primary/30 bg-primary/5 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-            <Settings className="h-5 w-5" /> Configuración de Plataforma
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <AdminPage
+      title="Configuración"
+      subtitle="Parámetros globales de la plataforma. Cada cambio queda en la auditoría."
+      actions={
+        <Button className="min-h-[44px]" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="mr-2 h-4 w-4" aria-hidden="true" />}
+          {isSaving ? 'Guardando...' : 'Guardar Configuración'}
+        </Button>
+      }
+    >
+      <div className="grid min-w-0 gap-4 xl:grid-cols-2 xl:items-start">
+        <SettingsSection icon={Wallet} title="Plata" hint="Lo que paga el cliente y lo que se queda la plataforma de cada venta.">
           <div className="space-y-2">
             <Label htmlFor="fee" className="text-sm font-semibold">Tarifa de Servicio al Cliente (%)</Label>
             <div className="relative">
               <Input id="fee" type="number" min={CONFIG_RANGES.serviceFee.min} max={CONFIG_RANGES.serviceFee.max} value={shown(localConfig.serviceFee, 5)}
                 onChange={(e) => setLocalConfig({ ...localConfig, serviceFee: numOrNaN(e) })}
-                className="pl-8 border-primary/30" />
-              <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
+                className={cn(inputCls, 'pl-8')} />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground" aria-hidden="true">%</span>
             </div>
           </div>
 
@@ -142,26 +153,54 @@ function AdminSettingsPage() {
             <div className="relative">
               <Input id="deliveryFee" type="number" min={CONFIG_RANGES.deliveryFee.min} max={CONFIG_RANGES.deliveryFee.max} value={shown(localConfig.deliveryFee, 2000)}
                 onChange={(e) => setLocalConfig({ ...localConfig, deliveryFee: numOrNaN(e) })}
-                className="pl-8 border-primary/30" />
-              <span className="absolute left-3 top-2.5 text-muted-foreground font-bold text-xs">$</span>
+                className={cn(inputCls, 'pl-8')} />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground" aria-hidden="true">$</span>
             </div>
-            <p className="text-xs text-muted-foreground">Costo de envío que se suma a cada pedido. Default: $2000.</p>
+            <p className="text-xs text-muted-foreground">Costo de envío que se suma a cada pedido. Default: {money(2000)}.</p>
           </div>
 
-          {/* Envío según distancia (Fase RR ter) — con $/km en 0 el envío es fijo como siempre */}
+          <div className="space-y-2">
+            <Label htmlFor="commission" className="text-sm font-semibold">Comisión por defecto a tiendas (%)</Label>
+            <div className="relative">
+              <Input id="commission" type="number" min={CONFIG_RANGES.defaultCommissionRate.min} max={CONFIG_RANGES.defaultCommissionRate.max} value={shown(localConfig.defaultCommissionRate, 10)}
+                onChange={(e) => setLocalConfig({ ...localConfig, defaultCommissionRate: numOrNaN(e) })}
+                className={cn(inputCls, 'pl-8')} />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground" aria-hidden="true">%</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Se aplica a las tiendas que no tengan una comisión propia cargada. Antes esas
+              tiendas quedaban en 0% sin que nadie lo notara — o sea, operaban gratis.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="settlementDay" className="text-sm font-semibold">Día de liquidación automática</Label>
+            <select id="settlementDay" value={localConfig.settlementDayOfWeek ?? 5}
+              onChange={(e) => setLocalConfig({ ...localConfig, settlementDayOfWeek: Number(e.target.value) })}
+              className="min-h-[44px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground">
+              {['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((d, i) => (
+                <option key={i} value={i}>{d}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">El cron genera automáticamente los retiros pendientes ese día.</p>
+          </div>
+        </SettingsSection>
+
+        {/* Envío según distancia (Fase RR ter) — con $/km en 0 el envío es fijo como siempre */}
+        <SettingsSection icon={Route} title="Envío por distancia" hint="Con el adicional en 0 el envío es fijo, como siempre.">
           <div className="space-y-2">
             <Label htmlFor="feePerKm" className="text-sm font-semibold">Adicional por distancia ($ por km extra)</Label>
             <div className="relative">
               <Input id="feePerKm" type="number" min={CONFIG_RANGES.deliveryFeePerKm.min} max={CONFIG_RANGES.deliveryFeePerKm.max} value={shown(localConfig.deliveryFeePerKm, 0)}
                 onChange={(e) => setLocalConfig({ ...localConfig, deliveryFeePerKm: numOrNaN(e) })}
-                className="pl-8 border-primary/30" />
-              <span className="absolute left-3 top-2.5 text-muted-foreground font-bold text-xs">$</span>
+                className={cn(inputCls, 'pl-8')} />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground" aria-hidden="true">$</span>
             </div>
             <p className="text-xs text-muted-foreground">
               En 0 (default) el envío es fijo. Si lo activás, cada km EMPEZADO más allá de los
-              km incluidos suma este monto (distancia tienda→cliente en línea recta — el camino
-              real por calle es algo más largo, calibrar sabiendo eso). Ej: base $2.000 + $500/km
-              con 5 km incluidos → Santa Rosa (~10 km) paga $2.000 + 5×$500 = $4.500.
+              km incluidos suma este monto (distancia tienda→cliente por ruta; si Google no
+              responde, en línea recta). Ej: base {money(2000)} + {money(500)}/km con 5 km incluidos →
+              Santa Rosa (~10 km) paga {money(2000)} + 5×{money(500)} = {money(4500)}.
             </p>
           </div>
 
@@ -169,7 +208,7 @@ function AdminSettingsPage() {
             <Label htmlFor="includedKm" className="text-sm font-semibold">Km incluidos en el envío base</Label>
             <Input id="includedKm" type="number" min={CONFIG_RANGES.deliveryIncludedKm.min} max={CONFIG_RANGES.deliveryIncludedKm.max} value={shown(localConfig.deliveryIncludedKm, 5)}
               onChange={(e) => setLocalConfig({ ...localConfig, deliveryIncludedKm: numOrNaN(e) })}
-              className="border-primary/30" />
+              className={inputCls} />
             <p className="text-xs text-muted-foreground">
               Hasta esta distancia se cobra solo la base (default: 5 km — cubre todo el casco
               urbano de Tinogasta). Solo aplica si el adicional por km está activo.
@@ -180,7 +219,7 @@ function AdminSettingsPage() {
             <Label htmlFor="maxKm" className="text-sm font-semibold">Distancia máxima de entrega (km)</Label>
             <Input id="maxKm" type="number" min={CONFIG_RANGES.maxDeliveryDistanceKm.min} max={CONFIG_RANGES.maxDeliveryDistanceKm.max} value={shown(localConfig.maxDeliveryDistanceKm, 35)}
               onChange={(e) => setLocalConfig({ ...localConfig, maxDeliveryDistanceKm: numOrNaN(e) })}
-              className="border-primary/30" />
+              className={inputCls} />
             <p className="text-xs text-muted-foreground">
               Medida POR RUTA (en moto) desde la tienda. Si el cliente queda más lejos, el pedido se
               rechaza con un aviso para revisar el mapa. Con 35 km (default) entran todos los parajes
@@ -189,39 +228,15 @@ function AdminSettingsPage() {
               mide en línea recta.
             </p>
           </div>
+        </SettingsSection>
 
-          <div className="space-y-2">
-            <Label htmlFor="commission" className="text-sm font-semibold">Comisión por defecto a tiendas (%)</Label>
-            <div className="relative">
-              <Input id="commission" type="number" min={CONFIG_RANGES.defaultCommissionRate.min} max={CONFIG_RANGES.defaultCommissionRate.max} value={shown(localConfig.defaultCommissionRate, 10)}
-                onChange={(e) => setLocalConfig({ ...localConfig, defaultCommissionRate: numOrNaN(e) })}
-                className="pl-8 border-primary/30" />
-              <span className="absolute left-3 top-2.5 text-muted-foreground font-bold">%</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Se aplica a las tiendas que no tengan una comisión propia cargada. Antes esas
-              tiendas quedaban en 0% sin que nadie lo notara — o sea, operaban gratis.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="claimWindow" className="text-sm font-semibold">Ventana de reclamo del comprador (horas)</Label>
-            <Input id="claimWindow" type="number" min={CONFIG_RANGES.claimWindowHours.min} max={CONFIG_RANGES.claimWindowHours.max} value={shown(localConfig.claimWindowHours, 24)}
-              onChange={(e) => setLocalConfig({ ...localConfig, claimWindowHours: numOrNaN(e) })}
-              className="border-primary/30" />
-            <p className="text-xs text-muted-foreground">
-              Cuántas horas después de la entrega el cliente puede reportar un problema con su
-              pedido. Default: 24h. Si algún rubro (ej. supermercados) necesita más margen, se
-              sube acá sin tocar código.
-            </p>
-          </div>
-
-          {/* Fase YY (punto 5): pedidos que la tienda no confirma. Antes esperaban para siempre. */}
+        {/* Fase YY (punto 5): pedidos que la tienda no confirma. Antes esperaban para siempre. */}
+        <SettingsSection icon={Timer} title="Pedidos y reclamos" hint="Plazos que corren solos: recordatorio, cancelación y ventana de reclamo.">
           <div className="space-y-2">
             <Label htmlFor="confirmReminder" className="text-sm font-semibold">Recordatorio a la tienda si no confirma (minutos)</Label>
             <Input id="confirmReminder" type="number" min={CONFIG_RANGES.confirmReminderMinutes.min} max={CONFIG_RANGES.confirmReminderMinutes.max} value={shown(localConfig.confirmReminderMinutes, CONFIRM_DEFAULTS.reminderMinutes)}
               onChange={(e) => setLocalConfig({ ...localConfig, confirmReminderMinutes: numOrNaN(e) })}
-              className="border-primary/30" />
+              className={inputCls} />
             <p className="text-xs text-muted-foreground">
               A los N minutos de entrar un pedido sin confirmar, la tienda recibe un aviso (campanita +
               push). Entre {CONFIG_RANGES.confirmReminderMinutes.min} y {CONFIG_RANGES.confirmReminderMinutes.max}. Default: {CONFIRM_DEFAULTS.reminderMinutes}.
@@ -232,7 +247,7 @@ function AdminSettingsPage() {
             <Label htmlFor="confirmTimeout" className="text-sm font-semibold">Cancelación automática si no confirma (minutos)</Label>
             <Input id="confirmTimeout" type="number" min={CONFIG_RANGES.confirmTimeoutMinutes.min} max={CONFIG_RANGES.confirmTimeoutMinutes.max} value={shown(localConfig.confirmTimeoutMinutes, CONFIRM_DEFAULTS.timeoutMinutes)}
               onChange={(e) => setLocalConfig({ ...localConfig, confirmTimeoutMinutes: numOrNaN(e) })}
-              className="border-primary/30" />
+              className={inputCls} />
             <p className="text-xs text-muted-foreground">
               Pasado este plazo el pedido se cancela solo, vuelve el stock y se le avisa al cliente que
               no se le cobró nada (todavía no pagó: se paga después de que la tienda confirma). Tiene
@@ -241,54 +256,78 @@ function AdminSettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Día de liquidación automática</Label>
-            <select value={localConfig.settlementDayOfWeek ?? 5}
-              onChange={(e) => setLocalConfig({ ...localConfig, settlementDayOfWeek: Number(e.target.value) })}
-              className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background text-foreground">
-              {['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((d, i) => (
-                <option key={i} value={i}>{d}</option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">El cron genera automáticamente los retiros pendientes ese día.</p>
-          </div>
-
-          {/* Navidad (rediseño en vidrio, 9/11/2026): guirnalda de lucecitas y estrellita en el
-              encabezado. Solo decoración: no cambia ningún dato ni ningún horario. */}
-          <div className="space-y-2">
-            <Label htmlFor="christmasMode" className="text-sm font-semibold">Decoración de Navidad</Label>
-            <select id="christmasMode" value={normalizeChristmasMode(localConfig.christmasMode)}
-              onChange={(e) => setLocalConfig({ ...localConfig, christmasMode: normalizeChristmasMode(e.target.value) })}
-              className="min-h-[44px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
-              {CHRISTMAS_MODES.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
+            <Label htmlFor="claimWindow" className="text-sm font-semibold">Ventana de reclamo del comprador (horas)</Label>
+            <Input id="claimWindow" type="number" min={CONFIG_RANGES.claimWindowHours.min} max={CONFIG_RANGES.claimWindowHours.max} value={shown(localConfig.claimWindowHours, 24)}
+              onChange={(e) => setLocalConfig({ ...localConfig, claimWindowHours: numOrNaN(e) })}
+              className={inputCls} />
             <p className="text-xs text-muted-foreground">
-              Lucecitas en las tarjetas principales y una estrellita junto al nombre de la app. En
-              Automática se prende sola del 8 de diciembre al 6 de enero (hora de Argentina).
+              Cuántas horas después de la entrega el cliente puede reportar un problema con su
+              pedido. Default: 24h. Si algún rubro (ej. supermercados) necesita más margen, se
+              sube acá sin tocar código.
             </p>
           </div>
+        </SettingsSection>
 
-          <div className="flex items-center justify-between border border-border p-3 rounded-lg bg-muted/30 backdrop-blur-sm">
-            <div className="space-y-0.5">
-              <Label className="text-base font-bold text-destructive flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" /> Modo Mantenimiento
-              </Label>
-              <p className="text-xs text-muted-foreground">Impide crear nuevos pedidos.</p>
+        <div className="min-w-0 space-y-4">
+          {/* Navidad (rediseño en vidrio, 9/11/2026): guirnalda de lucecitas y estrellita en el
+              encabezado. Solo decoración: no cambia ningún dato ni ningún horario. */}
+          <SettingsSection icon={Sparkles} title="Decoración">
+            <div className="space-y-2">
+              <Label htmlFor="christmasMode" className="text-sm font-semibold">Decoración de Navidad</Label>
+              <select id="christmasMode" value={normalizeChristmasMode(localConfig.christmasMode)}
+                onChange={(e) => setLocalConfig({ ...localConfig, christmasMode: normalizeChristmasMode(e.target.value) })}
+                className="min-h-[44px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground">
+                {CHRISTMAS_MODES.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Lucecitas en las tarjetas principales y una estrellita junto al nombre de la app. En
+                Automática se prende sola del 8 de diciembre al 6 de enero (hora de Argentina).
+              </p>
             </div>
-            <Switch aria-label="Modo mantenimiento" checked={localConfig.maintenanceMode}
-              onCheckedChange={(checked) => setLocalConfig({ ...localConfig, maintenanceMode: checked })}
-              className="data-[state=checked]:bg-destructive" />
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button className="w-full" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {isSaving ? 'Guardando...' : 'Guardar Configuración'}
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
+          </SettingsSection>
+
+          <Card className={cn('min-w-0', localConfig.maintenanceMode && 'border-destructive/50 bg-destructive/[0.06]')}>
+            <CardContent className="flex items-center justify-between gap-4 p-5">
+              <div className="space-y-0.5">
+                <Label htmlFor="maintenance" className="flex items-center gap-2 text-base font-bold text-destructive-ink">
+                  <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Modo Mantenimiento
+                </Label>
+                <p className="text-sm text-muted-foreground">Impide crear nuevos pedidos en toda la plataforma.</p>
+              </div>
+              <Switch id="maintenance" aria-label="Modo mantenimiento" checked={localConfig.maintenanceMode}
+                onCheckedChange={(checked) => setLocalConfig({ ...localConfig, maintenanceMode: checked })}
+                className="data-[state=checked]:bg-destructive" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Guardar también al pie (en celular el botón de arriba queda lejos después de bajar). */}
+      <div className="glass-bar sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-10 flex items-center justify-between gap-3 rounded-card p-3 lg:bottom-3">
+        <p className="hidden text-sm text-muted-foreground sm:block">Los cambios se aplican a toda la plataforma al guardar.</p>
+        <Button className="min-h-[44px] w-full sm:w-auto" onClick={handleSave} disabled={isSaving} data-testid="settings-save-bottom">
+          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="mr-2 h-4 w-4" aria-hidden="true" />}
+          {isSaving ? 'Guardando...' : 'Guardar cambios'}
+        </Button>
+      </div>
+    </AdminPage>
+  );
+}
+
+function SettingsSection({ icon: Icon, title, hint, children, className }: { icon: React.ComponentType<{ className?: string }>; title: string; hint?: string; children: React.ReactNode; className?: string }) {
+  return (
+    <Card className={cn('min-w-0', className)}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[0.75rem] bg-primary/10 text-primary-ink" aria-hidden="true"><Icon className="h-[18px] w-[18px]" /></span>
+          {title}
+        </CardTitle>
+        {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
+      </CardHeader>
+      <CardContent className="space-y-5">{children}</CardContent>
+    </Card>
   );
 }
 

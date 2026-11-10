@@ -92,7 +92,7 @@ export function ManageDriverDialog({ isOpen, setIsOpen, onSave, driver }: Manage
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent>
+      <DialogContent data-surface="admin">
         <DialogHeader>
           <DialogTitle>Editar Repartidor</DialogTitle>
           <DialogDescription>Datos de contacto y vehículo. El estado se cambia con Aprobar/Rechazar.</DialogDescription>

@@ -5,7 +5,6 @@ import { useRequireRole } from '@/hooks/use-require-role';
 import { money } from '@/lib/format-money';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +29,9 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { DriverTabsList } from '@/components/driver-tabs';
+import { cn } from '@/lib/utils';
 import { WalletStatement } from '@/components/wallet-statement';
 import { FALLBACK_COMMISSION } from '@/lib/money';
 
@@ -63,6 +64,7 @@ export default function DeliveryEarningsPage() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [cbu, setCbu] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [historyTab, setHistoryTab] = useState('withdrawals');
 
   // 1. Seguridad: Redirigir si no es repartidor
   // ARQ-010: guard único + `ready` para no armar consultas antes de confirmar el rol.
@@ -172,112 +174,109 @@ export default function DeliveryEarningsPage() {
 
   if (authLoading || ordersLoading || withdrawalsLoading) {
     return (
-        <div className="container mx-auto space-y-4 pb-20">
-            <PageHeader title="Mis Finanzas" description="Calculando balance..." />
-            <div className="grid gap-4 md:grid-cols-2">
-                <Skeleton className="h-32" />
-                <Skeleton className="h-32" />
+        <div className="mx-auto w-full max-w-3xl space-y-4 pb-20">
+            <PageHeader title="Mis ganancias" description="Calculando tu saldo…" />
+            <Skeleton className="h-44 w-full rounded-card" />
+            <div className="grid gap-3 sm:grid-cols-2">
+                <Skeleton className="h-24 rounded-card" />
+                <Skeleton className="h-24 rounded-card" />
             </div>
         </div>
     );
   }
 
+  const canWithdraw = financialSummary.availableBalance >= 1;
+
   return (
-    <div className="container mx-auto pb-20 space-y-6">
-      <PageHeader 
-        title="Billetera Digital" 
-        description={`Gestión financiera para ${userProfile?.displayName || 'Repartidor'}.`} 
+    <div className="mx-auto w-full max-w-3xl space-y-4 pb-20">
+      <PageHeader
+        title="Mis ganancias"
+        description={`Saldo, retiros y entregas de ${userProfile?.displayName || 'tu cuenta'}.`}
       />
 
-      {/* TARJETA PRINCIPAL: BALANCE DISPONIBLE */}
-      <Card className="bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30 shadow-md">
-          <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium text-foreground flex items-center gap-2">
-                  <Wallet className="h-5 w-5 text-primary" /> Saldo Disponible
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">Dinero listo para retirar</CardDescription>
-          </CardHeader>
-          <CardContent>
-              <div className="text-4xl font-bold text-foreground mb-4">
-                  {money(financialSummary.availableBalance)}
+      {/* SALDO DISPONIBLE: lo más importante de la pantalla, en verde de plata */}
+      <section className="glass-strong rounded-card p-5" aria-labelledby="saldo-titulo" data-testid="driver-balance">
+          <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-success/15 text-success">
+                  <Wallet className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div>
+                  <h2 id="saldo-titulo" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Saldo disponible</h2>
+                  <p className="text-sm text-muted-foreground">Plata lista para retirar</p>
               </div>
+          </div>
+          <p className="mt-3 font-headline text-[3.25rem] font-extrabold leading-[0.9] tabular-nums text-success">
+              {money(financialSummary.availableBalance)}
+          </p>
 
-              <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
-                  <DialogTrigger asChild>
-                      <Button disabled={financialSummary.availableBalance < 1} className="w-full sm:w-auto font-bold shadow-sm">
-                          Solicitar Retiro
-                      </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                      <DialogHeader>
-                          <DialogTitle>Solicitar Transferencia</DialogTitle>
-                          <DialogDescription>
-                              El dinero será enviado a tu cuenta bancaria o MercadoPago.
-                          </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-2">
-                          <div className="space-y-2">
-                              <Label htmlFor="withdraw-amount">Monto a retirar</Label>
-                              <div className="relative">
-                                  <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                                  <Input 
-                                      id="withdraw-amount"
-                                      type="number" 
-                                      inputMode="numeric"
-                                      min={1}
-                                      max={Math.floor(financialSummary.availableBalance)}
-                                      required
-                                      placeholder="0" 
-                                      className="pl-7 font-bold text-lg"
-                                      value={withdrawAmount}
-                                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                                  />
-                              </div>
-                              <p className="text-xs text-muted-foreground">Máximo disponible: {money(financialSummary.availableBalance)}</p>
-                          </div>
-                          <div className="space-y-2">
-                              <Label htmlFor="withdraw-cbu">CBU, CVU o Alias</Label>
-                              <Input 
-                                  id="withdraw-cbu"
-                                  placeholder="Ej: mi.alias.mp" 
-                                  value={cbu}
-                                  onChange={(e) => setCbu(e.target.value)}
+          <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
+              <DialogTrigger asChild>
+                  <Button disabled={!canWithdraw} className="mt-4 h-12 w-full rounded-2xl text-base font-bold sm:w-auto sm:px-8">
+                      Solicitar retiro
+                  </Button>
+              </DialogTrigger>
+              <DialogContent className="w-[calc(100%-1.5rem)] rounded-card sm:rounded-card">
+                  <DialogHeader>
+                      <DialogTitle className="font-headline text-2xl font-extrabold">Solicitar transferencia</DialogTitle>
+                      <DialogDescription className="text-base">
+                          Te la mandamos a tu cuenta bancaria o de MercadoPago cuando la apruebe la administración.
+                      </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                      <div className="space-y-2">
+                          <Label htmlFor="withdraw-amount">Monto a retirar</Label>
+                          <div className="relative">
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                              <Input
+                                  id="withdraw-amount"
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={1}
+                                  max={Math.floor(financialSummary.availableBalance)}
+                                  required
+                                  placeholder="0"
+                                  className="h-12 rounded-2xl pl-8 text-lg font-bold"
+                                  value={withdrawAmount}
+                                  onChange={(e) => setWithdrawAmount(e.target.value)}
                               />
                           </div>
+                          <p className="text-sm text-muted-foreground">Máximo disponible: {money(financialSummary.availableBalance)}</p>
                       </div>
-                      <DialogFooter>
-                          <Button variant="outline" onClick={() => setIsWithdrawOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                          <Button onClick={handleRequestWithdrawal} disabled={isSubmitting || !(Number(withdrawAmount) > 0) || Number(withdrawAmount) > financialSummary.availableBalance || cbu.trim().length < 5}>
-                              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirmar
-                          </Button>
-                      </DialogFooter>
-                  </DialogContent>
-              </Dialog>
-          </CardContent>
-      </Card>
+                      <div className="space-y-2">
+                          <Label htmlFor="withdraw-cbu">CBU, CVU o alias</Label>
+                          <Input
+                              id="withdraw-cbu"
+                              placeholder="Ej: mi.alias.mp"
+                              className="h-12 rounded-2xl"
+                              value={cbu}
+                              onChange={(e) => setCbu(e.target.value)}
+                          />
+                      </div>
+                  </div>
+                  <DialogFooter className="gap-2">
+                      <Button variant="outline" className="h-12 rounded-2xl" onClick={() => setIsWithdrawOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+                      <Button className="h-12 rounded-2xl" onClick={handleRequestWithdrawal} disabled={isSubmitting || !(Number(withdrawAmount) > 0) || Number(withdrawAmount) > financialSummary.availableBalance || cbu.trim().length < 5}>
+                          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirmar
+                      </Button>
+                  </DialogFooter>
+              </DialogContent>
+          </Dialog>
+      </section>
 
       {/* METRICAS SECUNDARIAS */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-            <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" /> Ganancias Históricas
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{money(financialSummary.totalEarned)}</div>
-            </CardContent>
-        </Card>
-        <Card>
-            <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <History className="h-4 w-4" /> Total Retirado
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold text-muted-foreground">{money(financialSummary.totalWithdrawn)}</div>
-            </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="glass rounded-card p-4">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                <TrendingUp className="h-4 w-4" aria-hidden="true" /> Ganado en total
+            </p>
+            <p className="mt-1 font-headline text-3xl font-extrabold tabular-nums">{money(financialSummary.totalEarned)}</p>
+        </div>
+        <div className="glass rounded-card p-4">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                <History className="h-4 w-4" aria-hidden="true" /> Retirado
+            </p>
+            <p className="mt-1 font-headline text-3xl font-extrabold tabular-nums text-muted-foreground">{money(financialSummary.totalWithdrawn)}</p>
+        </div>
       </div>
 
       {/* Estado de cuenta + día de cobro (Fase YY bis): mismas fórmulas que la ficha del admin. */}
@@ -294,102 +293,93 @@ export default function DeliveryEarningsPage() {
       />
 
       {/* PESTAÑAS DE HISTORIAL */}
-      <Tabs defaultValue="withdrawals" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="withdrawals">Retiros</TabsTrigger>
-              <TabsTrigger value="earnings">Ingresos (Entregas)</TabsTrigger>
-          </TabsList>
+      <Tabs value={historyTab} onValueChange={setHistoryTab} className="w-full">
+          <DriverTabsList
+              value={historyTab}
+              className="mb-3"
+              items={[
+                  { value: 'withdrawals', label: 'Retiros' },
+                  { value: 'earnings', label: 'Entregas' },
+              ]}
+          />
 
-          {/* TABLA DE RETIROS */}
-          <TabsContent value="withdrawals">
-              <Card>
-                  <CardHeader>
-                      <CardTitle className="text-base">Historial de Solicitudes</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                      {(!withdrawals || withdrawals.length === 0) ? (
-                          <div className="text-center py-8 text-muted-foreground text-sm border-dashed border-2 rounded">
-                              No has realizado retiros aún.
-                          </div>
-                      ) : (
-                          withdrawals.map((w: any) => (
-                              <div key={w.id} className="p-3 border rounded-lg bg-card text-sm space-y-1.5">
-                                  <div className="flex items-center justify-between gap-2">
-                                      <div>
-                                          <div className="flex items-center gap-2">
-                                              <p className="font-bold">{money(w.amount || 0)}</p>
-                                              {w.source === 'auto' && <Badge variant="outline" className="text-xs border-primary/40 text-primary">Automático</Badge>}
-                                          </div>
-                                          <p className="text-xs text-muted-foreground">{formatDate(w.createdAt)}</p>
+          {/* RETIROS */}
+          <TabsContent value="withdrawals" className="mt-0">
+              {(!withdrawals || withdrawals.length === 0) ? (
+                  <div className="glass rounded-card px-5 py-8 text-center text-muted-foreground">
+                      Todavía no pediste ningún retiro.
+                  </div>
+              ) : (
+                  <ul className="glass divide-y divide-foreground/10 overflow-hidden rounded-card" aria-label="Historial de retiros">
+                      {withdrawals.map((w: any) => (
+                          <li key={w.id} className="space-y-1.5 px-4 py-3.5">
+                              <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                          <p className="font-headline text-xl font-extrabold tabular-nums">{money(w.amount || 0)}</p>
+                                          {w.source === 'auto' && <Badge variant="outline" className="border-primary/40 text-xs text-primary">Automático</Badge>}
                                       </div>
-                                      <Badge variant={
-                                          w.status === 'approved' ? 'default' :
-                                          w.status === 'rejected' ? 'destructive' : 'secondary'
-                                      } className={w.status === 'approved' ? 'bg-success text-success-foreground hover:bg-success/90' : w.status === 'pending' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : ''}>
-                                          {w.status === 'approved' ? 'Pagado' :
-                                           w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
-                                      </Badge>
+                                      <p className="text-sm text-muted-foreground">{formatDate(w.createdAt)}</p>
                                   </div>
-                                  {/* El motivo del rechazo se guardaba pero no se mostraba: el
-                                      repartidor veía "Rechazado" sin saber qué corregir. */}
-                                  {w.status === 'rejected' && w.rejectionReason && (
-                                      <p className="rounded border-l-2 border-destructive/40 bg-destructive/5 px-2 py-1 text-xs text-muted-foreground">
-                                          {w.rejectionReason}
-                                      </p>
-                                  )}
-                                  {/* Comprobante de la transferencia real, para poder rastrearla. */}
-                                  {w.status === 'approved' && w.operationRef && (
-                                      <p className="text-xs text-muted-foreground">
-                                          Comprobante: <span className="font-mono">{w.operationRef}</span>
-                                          {w.processedAt && ` · ${formatDate(w.processedAt)}`}
-                                      </p>
-                                  )}
+                                  <Badge variant={
+                                      w.status === 'approved' ? 'default' :
+                                      w.status === 'rejected' ? 'destructive' : 'secondary'
+                                  } className={cn('shrink-0', w.status === 'approved' ? 'bg-success text-success-foreground hover:bg-success/90' : w.status === 'pending' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : '')}>
+                                      {w.status === 'approved' ? 'Pagado' :
+                                       w.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                                  </Badge>
                               </div>
-                          ))
-                      )}
-                  </CardContent>
-              </Card>
+                              {/* El motivo del rechazo se guardaba pero no se mostraba: el
+                                  repartidor veía "Rechazado" sin saber qué corregir. */}
+                              {w.status === 'rejected' && w.rejectionReason && (
+                                  <p className="rounded-xl bg-destructive/10 px-3 py-1.5 text-sm text-muted-foreground">
+                                      {w.rejectionReason}
+                                  </p>
+                              )}
+                              {/* Comprobante de la transferencia real, para poder rastrearla. */}
+                              {w.status === 'approved' && w.operationRef && (
+                                  <p className="text-sm text-muted-foreground">
+                                      Comprobante: <span className="font-mono">{w.operationRef}</span>
+                                      {w.processedAt && ` · ${formatDate(w.processedAt)}`}
+                                  </p>
+                              )}
+                          </li>
+                      ))}
+                  </ul>
+              )}
           </TabsContent>
 
-          {/* TABLA DE INGRESOS (Orders) */}
-          <TabsContent value="earnings">
-              <Card>
-                  <CardHeader>
-                      <CardTitle className="text-base">Historial de Entregas</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {financialSummary.deliveredOrders.length === 0 ? (
-                        <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
-                            <Truck className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                            <p>Aún no has completado ninguna entrega.</p>
-                        </div>
-                    ) : (
-                        financialSummary.deliveredOrders.map((order) => (
-                            <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-bold text-sm">{order.storeName}</span>
-                                        <span className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <CreditCard className="h-3 w-3" /> Pago Digital
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    {/* Neto (Fase PP, N4): antes mostraba deliveryFee crudo y las
-                                        filas no sumaban el titular de la misma pantalla. */}
-                                    <span className="block font-bold text-success">
-                                        +{money(driverNetForOrder(order as any))}
-                                    </span>
-                                    {(order as any).refunded && (
-                                        <span className="block text-xs text-info">reembolso aplicado</span>
-                                    )}
-                                </div>
+          {/* ENTREGAS (ingresos) */}
+          <TabsContent value="earnings" className="mt-0">
+            {financialSummary.deliveredOrders.length === 0 ? (
+                <div className="glass rounded-card px-5 py-10 text-center text-muted-foreground">
+                    <Truck className="mx-auto mb-2 h-8 w-8 opacity-60" aria-hidden="true" />
+                    <p>Todavía no completaste ninguna entrega.</p>
+                </div>
+            ) : (
+                <ul className="glass divide-y divide-foreground/10 overflow-hidden rounded-card" aria-label="Historial de entregas">
+                    {financialSummary.deliveredOrders.map((order) => (
+                        <li key={order.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
+                            <div className="min-w-0">
+                                <p className="truncate font-semibold">{order.storeName}</p>
+                                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                    <CreditCard className="h-4 w-4 shrink-0" aria-hidden="true" /> Pago digital · {formatDate(order.createdAt)}
+                                </p>
                             </div>
-                        ))
-                    )}
-                  </CardContent>
-              </Card>
+                            <div className="shrink-0 text-right">
+                                {/* Neto (Fase PP, N4): antes mostraba deliveryFee crudo y las
+                                    filas no sumaban el titular de la misma pantalla. */}
+                                <span className="block font-headline text-xl font-extrabold tabular-nums text-success">
+                                    +{money(driverNetForOrder(order as any))}
+                                </span>
+                                {(order as any).refunded && (
+                                    <span className="block text-sm text-info">reembolso aplicado</span>
+                                )}
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
           </TabsContent>
       </Tabs>
     </div>

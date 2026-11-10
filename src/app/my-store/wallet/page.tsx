@@ -31,7 +31,8 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { StoreTabsList, StoreTabsTrigger } from '@/components/store-tabs';
 import { WalletStatement } from '@/components/wallet-statement';
 
 const formatDate = (date: any) => {
@@ -191,26 +192,27 @@ export default function StoreWalletPage() {
     <div className="container mx-auto pb-20 space-y-6">
       <PageHeader title="Billetera de Tienda" description={`Gestión financiera de ${myStore?.name || 'mi tienda'}.`} />
 
-      <Card className="bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30 shadow-md">
+      <Card className="glass-strong">
           <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-medium text-foreground flex items-center gap-2">
-                  <Wallet className="h-5 w-5 text-primary" /> Saldo Disponible
+              <CardTitle className="flex items-center gap-3 text-lg font-semibold text-foreground">
+                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-success/15 text-success"><Wallet className="h-5 w-5" aria-hidden="true" /></span>
+                  Saldo disponible
               </CardTitle>
               <CardDescription className="text-muted-foreground">
-                  Neto (Comisión actual: {financialSummary.commissionRate}%)
+                  Neto (comisión actual: {financialSummary.commissionRate}%)
               </CardDescription>
           </CardHeader>
           <CardContent>
-              <div className="text-4xl font-bold text-foreground mb-4">
+              <div className="mb-4 font-headline text-5xl font-extrabold leading-none text-success tabular-nums">
                   {money(financialSummary.availableBalance)}
               </div>
               <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
                   <DialogTrigger asChild>
-                      <Button className="shadow-sm" disabled={financialSummary.availableBalance < 1} title={financialSummary.availableBalance < 1 ? "Todavía no tenés saldo para retirar" : undefined}>Solicitar Retiro</Button>
+                      <Button className="h-12 rounded-full px-6 text-base font-bold" disabled={financialSummary.availableBalance < 1} title={financialSummary.availableBalance < 1 ? "Todavía no tenés saldo para retirar" : undefined}>Solicitar retiro</Button>
                   </DialogTrigger>
                   <DialogContent>
                       <DialogHeader>
-                          <DialogTitle>Retirar Fondos</DialogTitle>
+                          <DialogTitle>Retirar fondos</DialogTitle>
                           <DialogDescription>Transferencia a cuenta bancaria.</DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-2">
@@ -234,12 +236,12 @@ export default function StoreWalletPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ventas Totales</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold text-success">+{money(financialSummary.totalSalesRevenue)}</div></CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-muted-foreground">Ventas totales</CardTitle></CardHeader>
+            <CardContent><div className="font-headline text-3xl font-extrabold text-success tabular-nums">+{money(financialSummary.totalSalesRevenue)}</div></CardContent>
         </Card>
         <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Retirado</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold text-muted-foreground">-{money(financialSummary.totalWithdrawn)}</div></CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-muted-foreground">Total retirado</CardTitle></CardHeader>
+            <CardContent><div className="font-headline text-3xl font-extrabold text-muted-foreground tabular-nums">-{money(financialSummary.totalWithdrawn)}</div></CardContent>
         </Card>
       </div>
 
@@ -257,16 +259,16 @@ export default function StoreWalletPage() {
       />
 
       <Tabs defaultValue="history" className="w-full">
-          <TabsList className="w-full grid grid-cols-2">
-              <TabsTrigger value="history">Retiros</TabsTrigger>
-              <TabsTrigger value="sales">Ventas</TabsTrigger>
-          </TabsList>
+          <StoreTabsList className="mb-3">
+              <StoreTabsTrigger value="history">Retiros</StoreTabsTrigger>
+              <StoreTabsTrigger value="sales">Ventas</StoreTabsTrigger>
+          </StoreTabsList>
           <TabsContent value="history">
               <Card>
-                  <CardHeader><CardTitle>Historial de Retiros</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="font-headline text-2xl font-extrabold">Historial de retiros</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                       {withdrawals?.map((w: any) => (
-                          <div key={w.id} className="p-3 border rounded text-sm space-y-1.5">
+                          <div key={w.id} className="space-y-1.5 rounded-2xl bg-foreground/[0.04] p-3 text-sm ring-1 ring-foreground/10">
                               <div className="flex justify-between items-center gap-2">
                                   <span className="flex items-center gap-2">
                                       {money(w.amount || 0)} - {formatDate(w.createdAt)}
@@ -279,7 +281,7 @@ export default function StoreWalletPage() {
                               {/* El motivo del rechazo se guardaba pero no se mostraba en ningún
                                   lado: la tienda veía "Rechazado" y no sabía qué corregir. */}
                               {w.status === 'rejected' && w.rejectionReason && (
-                                  <p className="rounded border-l-2 border-destructive/40 bg-destructive/5 px-2 py-1 text-xs text-muted-foreground">
+                                  <p className="rounded-xl bg-destructive/10 px-2.5 py-1.5 text-sm text-muted-foreground">
                                       {w.rejectionReason}
                                   </p>
                               )}
@@ -299,7 +301,7 @@ export default function StoreWalletPage() {
           </TabsContent>
           <TabsContent value="sales">
               <Card>
-                  <CardHeader><CardTitle>Últimas Ventas</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="font-headline text-2xl font-extrabold">Últimas ventas</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                       {/* El monto por venta usa la MISMA función que el titular de arriba.
                           Antes calculaba aparte (sin descontar reembolsos ni excluir
@@ -308,12 +310,12 @@ export default function StoreWalletPage() {
                       {orders?.map((o) => {
                           const neto = storeNetForOrder(o, financialSummary.commissionRate);
                           return (
-                              <div key={o.id} className="flex justify-between items-center p-3 border rounded text-sm">
+                              <div key={o.id} className="flex items-center justify-between rounded-2xl bg-foreground/[0.04] p-3 text-sm ring-1 ring-foreground/10">
                                   <span>
                                       Orden #{o.id.slice(0,6)}
                                       {o.refunded && <span className="ml-2 text-xs text-destructive">reembolsada</span>}
                                   </span>
-                                  <span className={cn('font-bold', neto > 0 ? 'text-success' : 'text-muted-foreground')}>
+                                  <span className={cn('font-headline text-lg font-extrabold tabular-nums', neto > 0 ? 'text-success' : 'text-muted-foreground')}>
                                       +{money(neto)}
                                   </span>
                               </div>

@@ -21,8 +21,11 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-[60dvh] items-center justify-center" role="status">
+        <span className="glass flex h-16 w-16 items-center justify-center rounded-card">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+        </span>
+        <span className="sr-only">Cargando tus pedidos…</span>
       </div>
     );
   }

@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthScreen, AuthGroupTitle, authButton } from '@/components/auth-screen';
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,7 +25,7 @@ import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   storeName: z.string().min(3, "El nombre de la tienda debe tener al menos 3 caracteres."),
-  category: z.string({ required_error: "Por favor selecciona una categoría." }),
+  category: z.string({ required_error: "Elegí el rubro de tu negocio." }),
   address: z.string().min(5, "La dirección debe tener al menos 5 caracteres."),
   ownerName: z.string().min(5, "Ingresá tu nombre y apellido completos."),
   phoneNumber: z.string().min(8, "Ingresá un teléfono válido (con código de área).").regex(/^[0-9+\s-]+$/, "Solo números, espacios, + y -."),
@@ -33,7 +33,7 @@ const formSchema = z.object({
   dni: z.string().regex(/^\d{7,8}$/, "El DNI debe tener 7 u 8 números, sin puntos."),
   // CUIT: 11 dígitos, con o sin guiones (XX-XXXXXXXX-X) -- se guarda solo el número.
   cuit: z.string().regex(/^\d{2}-?\d{8}-?\d{1}$/, "Formato de CUIT inválido (ej: 20-12345678-9)."),
-  email: z.string().email("Por favor ingresa un correo electrónico válido."),
+  email: z.string().email("Ingresá un correo electrónico válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
 });
 
@@ -169,23 +169,34 @@ export default function SignupStorePage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center py-10">
-      <Card className="w-full max-w-md">
+    <AuthScreen
+      testId="signup-store-card"
+      title="Registrá tu tienda"
+      description="Completá los datos de tu negocio. Un administrador lo revisa y te avisamos cuando quede aprobado."
+      footer={
+        <>
+          <p>
+            ¿Ya tenés una cuenta?{" "}
+            <Link href="/login" className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline">Iniciá sesión</Link>
+          </p>
+          {/* Tanda B: solo el alta de comprador mostraba el consentimiento legal. */}
+          <p className="text-sm">
+            Al registrarte aceptás nuestros{' '}
+            <Link href="/terms" className="font-semibold underline underline-offset-4">Términos</Link> y la{' '}
+            <Link href="/privacy" className="font-semibold underline underline-offset-4">Política de Privacidad</Link>.
+          </p>
+        </>
+      }
+    >
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} method="post" action="#">
-            <CardHeader>
-              <CardTitle className="text-2xl">Registrar tu Tienda</CardTitle>
-              <CardDescription>
-                Rellena los datos para registrar tu negocio en la plataforma. Tu tienda necesitará ser aprobada.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} method="post" action="#" className="grid gap-4">
+              <AuthGroupTitle>Tu negocio</AuthGroupTitle>
               <FormField
                 control={form.control}
                 name="storeName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre de la Tienda</FormLabel>
+                    <FormLabel>Nombre de la tienda</FormLabel>
                     <FormControl>
                       <Input placeholder="Ej. Paraíso de la Pizza" {...field} />
                     </FormControl>
@@ -198,11 +209,11 @@ export default function SignupStorePage() {
                 name="category"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Categoría</FormLabel>
+                    <FormLabel>Rubro</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una categoría" />
+                          <SelectValue placeholder="Elegí el rubro" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -241,7 +252,7 @@ export default function SignupStorePage() {
                   </FormItem>
                 )}
               />
-              <hr className="my-2" />
+              <div className="mt-2 border-t border-foreground/10 pt-4"><AuthGroupTitle>Tus datos</AuthGroupTitle></div>
               <FormField
                 control={form.control}
                 name="ownerName"
@@ -262,7 +273,7 @@ export default function SignupStorePage() {
                   <FormItem>
                     <FormLabel>Tu DNI</FormLabel>
                     <FormControl>
-                      <Input placeholder="Sin puntos" {...field} />
+                      <Input inputMode="numeric" placeholder="Sin puntos" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -273,9 +284,9 @@ export default function SignupStorePage() {
                 name="phoneNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tu Teléfono / WhatsApp</FormLabel>
+                    <FormLabel>Tu teléfono / WhatsApp</FormLabel>
                     <FormControl>
-                      <Input type="tel" placeholder="Ej. 3834123456" {...field} />
+                      <Input type="tel" autoComplete="tel" inputMode="tel" placeholder="Ej. 3834123456" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -286,9 +297,9 @@ export default function SignupStorePage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Correo Electrónico de la Cuenta</FormLabel>
+                    <FormLabel>Correo electrónico de la cuenta</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="nombre@ejemplo.com" {...field} />
+                      <Input type="email" autoComplete="email" inputMode="email" placeholder="nombre@ejemplo.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -301,33 +312,17 @@ export default function SignupStorePage() {
                   <FormItem>
                     <FormLabel>Contraseña</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input type="password" autoComplete="new-password" placeholder="Al menos 6 caracteres" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </CardContent>
-            <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={!hydrated || isSubmitting}>
-                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Registrando tienda...</> : "Registrar Tienda"}
+              <Button type="submit" className={authButton + ' mt-1'} disabled={!hydrated || isSubmitting}>
+                {isSubmitting ? <><Loader2 className="h-5 w-5 animate-spin" />Registrando tienda...</> : "Registrar mi tienda"}
               </Button>
-              <div className="mt-4 text-center text-sm">
-                ¿Ya tienes una cuenta?{" "}
-                <Link href="/login" className="underline">
-                  Iniciar Sesión
-                </Link>
-              </div>
-              {/* Tanda B: solo el alta de comprador mostraba el consentimiento legal. */}
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Al registrarte aceptás nuestros{' '}
-                <Link href="/terms" className="underline">Términos</Link> y{' '}
-                <Link href="/privacy" className="underline">Política de Privacidad</Link>.
-              </p>
-            </CardFooter>
           </form>
         </Form>
-      </Card>
-    </div>
+    </AuthScreen>
   );
 }

@@ -108,7 +108,7 @@ export default function StoreCategoriesPage() {
   }
 
   return (
-    <div className="container mx-auto">
+    <div className="container mx-auto pb-20">
       <ManageCategoryDialog
         isOpen={isManageDialogOpen}
         setIsOpen={setManageDialogOpen}
@@ -117,34 +117,34 @@ export default function StoreCategoriesPage() {
         existingCategories={categories}
       />
       <PageHeader title="Gestionar Categorías" description="Organiza los productos de tu tienda.">
-        <Button onClick={openDialogForCreate}>
+        <Button onClick={openDialogForCreate} className="h-11 rounded-full px-5">
           <PlusCircle className="mr-2 h-4 w-4" />
           Añadir Categoría
         </Button>
       </PageHeader>
       <Card>
         <CardHeader>
-          <CardTitle>Tus Categorías</CardTitle>
+          <CardTitle className="font-headline text-2xl font-extrabold">Tus categorías</CardTitle>
           <CardDescription>
             Estas son las categorías que los clientes verán en la página de tu tienda.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="divide-y divide-foreground/10 overflow-hidden rounded-2xl bg-foreground/[0.03] ring-1 ring-foreground/10">
             {categories.length > 0 ? (
               categories.map(category => (
-                <div key={category} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Tag className="h-5 w-5 text-muted-foreground" />
-                    <span className="font-medium">{category}</span>
+                <div key={category} className="flex min-h-[3.75rem] items-center justify-between gap-2 px-3 py-2 transition-colors hover:bg-foreground/[0.04]">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[0.8rem] bg-primary/10 text-primary"><Tag className="h-5 w-5" aria-hidden="true" /></span>
+                    <span className="min-w-0 break-words font-semibold">{category}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" aria-label={`Editar categoría ${category}`} onClick={() => openDialogForEdit(category)}>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="ghost" size="icon" className="rounded-full" aria-label={`Editar categoría ${category}`} onClick={() => openDialogForEdit(category)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label={`Eliminar categoría ${category}`} className="text-destructive hover:text-destructive">
+                        <Button variant="ghost" size="icon" aria-label={`Eliminar categoría ${category}`} className="rounded-full text-destructive hover:text-destructive">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
@@ -165,7 +165,7 @@ export default function StoreCategoriesPage() {
                 </div>
               ))
             ) : (
-              <div className="text-center text-muted-foreground py-10">
+              <div className="px-4 py-10 text-center text-muted-foreground">
                 <p>No tienes categorías definidas.</p>
                 <p className="text-sm">Haz clic en &quot;Añadir Categoría&quot; para crear la primera.</p>
               </div>

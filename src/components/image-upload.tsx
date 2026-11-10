@@ -22,6 +22,8 @@ interface ImageUploadProps {
   // tiene que pedir una URL firmada de corta duración vía /api/licenses/signed-url -- así
   // el archivo no queda accesible para siempre a cualquiera que consiga el link.
   storeRawPath?: boolean;
+  // Qué se sube ("Licencia — frente"): solo para el texto que anuncia el botón.
+  label?: string;
 }
 
 // Comprime/achica la imagen EN EL NAVEGADOR antes de subir (Fase RR sexies). Antes había
@@ -61,6 +63,7 @@ export function ImageUpload({
   ownerId,
   variant = 'avatar',
   storeRawPath = false,
+  label,
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(currentImageUrl);
@@ -155,62 +158,83 @@ export function ImageUpload({
 
   if (variant === 'avatar') {
     return (
-      <div className="flex flex-col items-center gap-4">
-        <div className="relative group cursor-pointer" onClick={handleFileClick}>
-          <Avatar className="h-24 w-24 border-2 border-muted transition-opacity group-hover:opacity-80">
+      <div className="flex flex-col items-center gap-3">
+        <button
+          type="button"
+          onClick={handleFileClick}
+          disabled={isUploading}
+          aria-label={label ? `Cambiar ${label}` : 'Cambiar foto de perfil'}
+          className="group relative rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Avatar className="h-24 w-24 ring-4 ring-background/70 shadow-[var(--glass-shadow)] transition-transform duration-200 group-hover:scale-[1.03] motion-reduce:transition-none">
             <AvatarImage src={previewUrl} className="object-cover" />
             <AvatarFallback className="bg-muted">
                 {isUploading ? <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /> : <UserIconPlaceholder />}
             </AvatarFallback>
           </Avatar>
-          
           {/* Overlay de edición */}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-            <Camera className="h-6 w-6 text-white" />
-          </div>
-        </div>
-        
-        <Button variant="outline" size="sm" onClick={handleFileClick} disabled={isUploading}>
-          {isUploading ? "Subiendo..." : "Cambiar Foto"}
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <Camera className="h-6 w-6 text-white" aria-hidden="true" />
+          </span>
+          <span className="absolute -bottom-0.5 -right-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md ring-2 ring-background" aria-hidden="true">
+            <Camera className="h-4 w-4" />
+          </span>
+        </button>
+
+        <Button variant="outline" onClick={handleFileClick} disabled={isUploading} className="h-11 rounded-2xl bg-background/60 px-5">
+          {isUploading ? "Subiendo..." : "Cambiar foto"}
         </Button>
-        <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept="image/*" 
+        <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/*"
             onChange={handleFileChange}
         />
       </div>
     );
   }
 
-  // Variante Banner/Producto
+  // Variante Banner/Producto/Documento: un botón real (antes un div con onClick, que no se
+  // podía usar con teclado ni lo anunciaba un lector de pantalla).
   return (
     <div className="w-full">
-        <div 
+        <button
+            type="button"
             onClick={handleFileClick}
-            className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50 transition-colors h-48 relative overflow-hidden"
+            disabled={isUploading}
+            aria-label={previewUrl ? `Cambiar ${label || 'imagen'}` : `Subir ${label || 'imagen'}`}
+            className="group relative flex h-48 w-full flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-foreground/20 bg-background/40 p-6 text-center outline-none ring-offset-background transition-colors duration-200 hover:border-primary/50 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait"
         >
             {previewUrl ? (
-                <img src={previewUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                <>
+                    <img src={previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    <span className="glass-strong absolute bottom-2 right-2 inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-foreground">
+                        <Camera className="h-4 w-4" aria-hidden="true" /> Cambiar
+                    </span>
+                </>
             ) : (
                 <>
-                    <UploadCloud className="h-10 w-10 text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground">Click para subir imagen</p>
+                    <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-200 group-hover:-translate-y-0.5 motion-reduce:transition-none">
+                        <UploadCloud className="h-7 w-7" aria-hidden="true" />
+                    </span>
+                    <span className="text-base font-semibold text-foreground">Tocá para subir una foto</span>
+                    <span className="mt-0.5 text-sm text-muted-foreground">Desde la cámara o la galería</span>
                 </>
             )}
-            
+
             {isUploading && (
-                <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/80 text-sm font-semibold text-foreground" role="status">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+                    Subiendo…
+                </span>
             )}
-        </div>
-        <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept="image/*" 
+        </button>
+        <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/*"
             onChange={handleFileChange}
         />
     </div>
@@ -224,6 +248,7 @@ function UserIconPlaceholder() {
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            aria-hidden="true"
         >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>

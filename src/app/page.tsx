@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/page-header';
@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { CategoryTile } from '@/components/category-tile';
 import { Pill } from '@/components/price-pill';
+import { SlidingPill, useScrollActiveIntoRow } from '@/components/buyer-motion';
 
 // --- TIPOS ---
 interface Store {
@@ -66,18 +67,37 @@ const cleanAddress = (rawAddress: string | undefined) => {
 // --- COMPONENTES DE LA APP (MODO USUARIO) ---
 
 // Fila horizontal desplazable para las secciones destacadas del inicio.
+// Título de sección en vidrio (9/11/2026): reemplaza la "línea de tinta" del Toldo
+// (border-b-2 border-foreground). Ícono en un cuadradito suave del color de la sección y,
+// si hay, el contador en una pastilla de vidrio a la derecha.
+const SECTION_TONES = {
+  offer: 'bg-offer/15 text-offer',
+  brand: 'bg-primary/10 text-primary',
+} as const;
+const SectionTitle = ({
+  title, icon: Icon, tone = 'brand', meta,
+}: { title: string; icon: LucideIcon; tone?: keyof typeof SECTION_TONES; meta?: string }) => (
+  <div className="mb-3 flex items-center gap-3">
+    <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-2xl', SECTION_TONES[tone])}>
+      <Icon className="h-5 w-5" aria-hidden="true" />
+    </span>
+    <h2 className="font-headline text-2xl font-extrabold leading-none">{title}</h2>
+    {meta && (
+      <span className="glass ml-auto shrink-0 rounded-full px-3 py-1 text-sm text-muted-foreground">{meta}</span>
+    )}
+  </div>
+);
+
 const StoreRow = ({
-  title, icon: Icon, accent, children,
-}: { title: string; icon: LucideIcon; accent: string; children: React.ReactNode }) => (
+  title, icon, tone, children,
+}: { title: string; icon: LucideIcon; tone?: keyof typeof SECTION_TONES; children: React.ReactNode }) => (
   <section className="mb-8">
-    <h2 className="font-headline text-2xl font-extrabold mb-3 flex items-center gap-2 border-b-2 border-foreground pb-1">
-      <Icon className={cn('h-5 w-5', accent)} aria-hidden="true" />
-      {title}
-    </h2>
+    <SectionTitle title={title} icon={icon} tone={tone} />
     {/* min-w-0 obligatorio: sin esto el contenido ancho de la fila estira toda la página
-        (es el bug de overflow horizontal ya documentado en CLAUDE.md). */}
+        (es el bug de overflow horizontal ya documentado en CLAUDE.md). El padding vertical
+        deja respirar la sombra del vidrio (overflow-x recorta también en vertical). */}
     <div className="min-w-0">
-      <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">{children}</div>
+      <div className="-mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-4 pt-1 no-scrollbar [&>a]:snap-start">{children}</div>
     </div>
   </section>
 );
@@ -89,21 +109,28 @@ interface CategoryChipsProps {
   counts: Record<string, number>;
 }
 
-const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, counts }: CategoryChipsProps) => (
-  <div role="group" aria-label="Filtrar por rubro" className="flex gap-3 overflow-x-auto pb-2 mb-6 no-scrollbar">
+function CategoryChips({ categories, selectedCategory, setSelectedCategory, counts }: CategoryChipsProps) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  useScrollActiveIntoRow(rowRef, '[aria-pressed="true"]', selectedCategory);
+  return (
+  <div ref={rowRef} role="group" aria-label="Filtrar por rubro" className="relative -mx-1 mb-6 flex gap-3 overflow-x-auto px-1 pb-3 pt-1 no-scrollbar">
+    {/* Anillo de la marca que se DESLIZA hasta el rubro elegido (antes saltaba de golpe). */}
+    <SlidingPill
+      containerRef={rowRef}
+      activeSelector='[aria-pressed="true"]'
+      activeKey={selectedCategory + categories.length}
+      className="z-[2] rounded-card bg-primary/10 ring-2 ring-primary"
+    />
     {categories.map((cat) => {
       const isActive = selectedCategory === cat;
       return (
         // Vidrio (9/11/2026): cada rubro es una baldosa de vidrio con el cuadradito de su color
-        // (antes, el toldo a rayas). La activa lleva el borde de la marca.
+        // (antes, el toldo a rayas). La activa la marca el anillo que se desliza.
         <button
           key={cat}
           onClick={() => setSelectedCategory(cat)}
           aria-pressed={isActive}
-          className={cn(
-            'glass w-[5.5rem] shrink-0 rounded-card px-1 pb-2 pt-3 text-center transition-colors',
-            isActive && 'border-primary bg-primary/10 ring-2 ring-primary',
-          )}
+          className="glass relative w-[5.5rem] shrink-0 rounded-card px-1 pb-2 pt-3 text-center transition-transform active:scale-95 motion-reduce:active:scale-100"
         >
           <CategoryTile category={cat === 'Todas' ? 'todas' : cat} size="sm" className="mx-auto" />
           <span className="mt-1.5 block px-1 font-headline text-base font-bold leading-tight">
@@ -116,7 +143,8 @@ const CategoryChips = ({ categories, selectedCategory, setSelectedCategory, coun
       );
     })}
   </div>
-);
+  );
+}
 
 interface FilterBarProps {
   searchTerm: string;
@@ -129,17 +157,21 @@ interface FilterBarProps {
 // encabezado no se muestra, para no tener dos buscadores apilados.
 const FilterBar = ({ searchTerm, setSearchTerm }: FilterBarProps) => (
   <div className="relative mb-6">
-    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+    <Search className="absolute left-4 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
     <Input
       type="search"
       aria-label="Buscar una tienda"
       placeholder="Buscar una tienda..."
       value={searchTerm}
       onChange={(e) => setSearchTerm(e.target.value)}
-      className="pl-10 w-full h-12 rounded-xl bg-card"
+      className="h-12 w-full rounded-full border-[color:var(--glass-line)] bg-[color:var(--glass-strong)] pl-11 shadow-[var(--glass-shadow)] [backdrop-filter:blur(var(--glass-blur))_saturate(1.5)]"
     />
   </div>
 );
+
+// "Los de la cuadra": en celular las tiendas son filas dentro de UNA tarjeta de vidrio (lista
+// agrupada, como el prototipo); desde sm, cada tienda es su propia tarjeta de vidrio.
+const STORE_GRID = 'glass grid gap-0 rounded-card px-3 sm:gap-5 sm:grid-cols-2 sm:border-0 sm:bg-transparent sm:px-0 sm:shadow-none sm:backdrop-blur-none lg:grid-cols-3 xl:grid-cols-4 [&>a:last-child>div]:border-b-0';
 
 // Primer nombre con mayúscula inicial: el perfil a veces guarda "david" y el saludo decía
 // "Hola, david".
@@ -210,18 +242,26 @@ function PromoSlider({ offers }: { offers: { id: string; name: string; maxDiscou
           ))}
         </CarouselContent>
       </Carousel>
-      <div className="mt-2 flex justify-center gap-1.5">
+      {/* Puntitos con área tocable de 36 px (antes 6 px: imposibles con el pulgar). El
+          punto visible sigue chico; el botón que lo envuelve es el que mide 36. */}
+      <div className="mt-1 flex justify-center">
         {offers.map((o, i) => (
           <button
             key={o.id}
             type="button"
             onClick={() => api?.scrollTo(i)}
             aria-label={`Ver oferta ${i + 1} de ${offers.length}`}
-            className={cn(
-              'h-1.5 rounded-full transition-all duration-300',
-              i === index ? 'w-5 bg-offer' : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60',
-            )}
-          />
+            aria-current={i === index ? 'true' : undefined}
+            className="group grid h-9 min-w-[36px] place-items-center px-1"
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                'block h-2 rounded-full transition-all duration-300 motion-reduce:transition-none',
+                i === index ? 'w-6 bg-offer' : 'w-2 bg-muted-foreground/35 group-hover:bg-muted-foreground/60',
+              )}
+            />
+          </button>
         ))}
       </div>
     </div>
@@ -404,7 +444,7 @@ function HomeContent() {
     if (storesLoading) {
       return (
         <div className="container mx-auto space-y-6 py-6">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
             {[1, 2, 3, 4].map(i => <StoreCardSkeleton key={i} />)}
           </div>
         </div>
@@ -422,11 +462,11 @@ function HomeContent() {
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href="/signup/buyer">
-              <Button size="sm" className="rounded-full h-9 px-5 shadow-md">
+              <Button size="sm" className="h-11 rounded-full px-5 shadow-md">
                 Crear cuenta <ArrowRight className="ml-1.5 h-4 w-4" />
               </Button>
             </Link>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            <Link href="/login" className="inline-flex min-h-[44px] items-center text-sm font-medium text-muted-foreground hover:text-foreground">
               Ya tengo cuenta →
             </Link>
             <span className="ml-auto text-xs text-muted-foreground hidden sm:flex items-center gap-1">
@@ -451,17 +491,17 @@ function HomeContent() {
 
         {/* "Con descuento" sí (es vidriera pura, cero datos personales); "Tus favoritas" no. */}
         {!hasFilters && discountedStores.length > 0 && (
-          <StoreRow title="Con descuento" icon={Zap} accent="text-offer">
+          <StoreRow title="Con descuento" icon={Zap} tone="offer">
             {discountedStores.map((d, i) => renderCard(d, i, 'carousel'))}
           </StoreRow>
         )}
 
-        <h2 className="font-headline text-2xl font-extrabold mb-1 flex items-baseline gap-2 border-b-2 border-foreground pb-1">
-          <ShoppingBag className="h-5 w-5 self-center text-primary" aria-hidden="true" />
-          {hasFilters ? 'Resultados' : 'Los de la cuadra'}
-          <span className="ml-auto font-body text-sm font-normal text-muted-foreground">{filteredStores.length} {filteredStores.length === 1 ? 'tienda' : 'tiendas'}</span>
-        </h2>
-        <div className="grid gap-0 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <SectionTitle
+          title={hasFilters ? 'Resultados' : 'Los de la cuadra'}
+          icon={ShoppingBag}
+          meta={`${filteredStores.length} ${filteredStores.length === 1 ? 'tienda' : 'tiendas'}`}
+        />
+        <div className={STORE_GRID}>
           {filteredStores.length === 0 ? (
             <div className="col-span-full text-center py-12 opacity-70">
               <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
@@ -498,7 +538,7 @@ function HomeContent() {
     return (
       <div className="container mx-auto space-y-6 py-6">
         <PageHeader title="Cargando..." description="" />
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
           {[1, 2, 3, 4].map(i => <StoreCardSkeleton key={i} />)}
         </div>
       </div>
@@ -548,23 +588,23 @@ function HomeContent() {
       {/* Secciones destacadas — solo en modo "explorar" (sin filtros activos). Con filtros
           se muestra una única grilla de resultados, si no la página confunde. */}
       {!hasFilters && discountedStores.length > 0 && (
-        <StoreRow title="Con descuento" icon={Zap} accent="text-offer">
+        <StoreRow title="Con descuento" icon={Zap} tone="offer">
           {discountedStores.map((d, i) => renderCard(d, i, 'carousel'))}
         </StoreRow>
       )}
       {!hasFilters && favoriteStores.length > 0 && (
-        <StoreRow title="Tus favoritas" icon={Heart} accent="text-primary">
+        <StoreRow title="Tus favoritas" icon={Heart} tone="brand">
           {favoriteStores.map((d, i) => renderCard(d, i, 'carousel'))}
         </StoreRow>
       )}
 
-      <h2 className="font-headline text-2xl font-extrabold mb-1 flex items-baseline gap-2 border-b-2 border-foreground pb-1">
-        <ShoppingBag className="h-5 w-5 self-center text-primary" aria-hidden="true" />
-        {hasFilters ? 'Resultados' : 'Los de la cuadra'}
-        <span className="ml-auto font-body text-sm font-normal text-muted-foreground">{filteredStores.length} {filteredStores.length === 1 ? 'tienda' : 'tiendas'}</span>
-      </h2>
+      <SectionTitle
+          title={hasFilters ? 'Resultados' : 'Los de la cuadra'}
+          icon={ShoppingBag}
+          meta={`${filteredStores.length} ${filteredStores.length === 1 ? 'tienda' : 'tiendas'}`}
+        />
 
-      <div className="grid gap-0 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className={STORE_GRID}>
         {filteredStores.length === 0 ? (
              <div className="col-span-full text-center py-12 opacity-70">
                 <Search className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />

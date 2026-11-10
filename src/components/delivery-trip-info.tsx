@@ -16,21 +16,29 @@ export interface DeliveryTripInfoProps {
   durationS?: number | null;
   source?: 'route' | 'line' | null;
   className?: string;
+  /** 'lg' (rediseño en vidrio): la zona en letra de cartel grande, para la tarjeta del pool. */
+  size?: 'md' | 'lg';
 }
 
-export function DeliveryTripInfo({ zone, distanceM, durationS, source, className }: DeliveryTripInfoProps) {
+export function DeliveryTripInfo({ zone, distanceM, durationS, source, className, size = 'md' }: DeliveryTripInfoProps) {
   const hasDistance = typeof distanceM === 'number' && Number.isFinite(distanceM);
   if (!zone && !hasDistance) return null;
   const byRoute = source === 'route';
+  const lg = size === 'lg';
 
   return (
     <div className={cn('flex items-start gap-3', className)}>
-      <MapPinned className="mt-0.5 h-5 w-5 shrink-0 text-info" aria-hidden />
+      <MapPinned className={cn('mt-0.5 h-5 w-5 shrink-0', lg ? 'text-primary' : 'text-info')} aria-hidden />
       <div className="min-w-0">
-        <p className="text-xs font-bold uppercase text-muted-foreground">Entregar en</p>
-        <p className="font-semibold leading-tight">{zone || 'Zona sin identificar'}</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Entregar en</p>
+        <p
+          className={lg ? 'mt-0.5 break-words font-headline text-[1.75rem] font-extrabold leading-none' : 'font-semibold leading-tight'}
+          data-testid="trip-zone"
+        >
+          {zone || 'Zona sin identificar'}
+        </p>
         {hasDistance && (
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+          <p className={cn('flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground', lg ? 'mt-1.5' : 'mt-0.5')}>
             <Bike className="h-4 w-4" aria-hidden />
             {byRoute
               ? <>{formatDistance(distanceM!)} por ruta{typeof durationS === 'number' && <> · ~{formatTravelMinutes(durationS)} en moto</>}</>

@@ -10,7 +10,7 @@ type Tone = OrderStatusKind; // success | info | warning | destructive | neutral
 
 /** Badge SUAVE: relleno al 15 % + texto de TINTA (AA en los dos temas, ver globals.css). */
 export const SOFT_BADGE: Record<Tone, string> = {
-  success: 'bg-success/15 text-success-ink',
+  success: 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink',
   info: 'bg-info/15 text-info-ink',
   warning: 'bg-warning/15 text-warning-ink',
   destructive: 'bg-destructive/15 text-destructive-ink',

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { StoreImage } from '@/components/store-image';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { Pill } from '@/components/price-pill';
+import { money } from '@/lib/format-money';
 
 export interface StoreCardStore {
   id: string;
@@ -51,16 +52,18 @@ export function StoreCard({
   return (
     <Link
       href={`/stores/${store.id}`}
-      className={cn('group block stagger-in', isCarousel && 'w-[260px] shrink-0')}
+      className={cn('group block stagger-in rounded-card outline-none transition-transform duration-150 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-ring motion-reduce:active:scale-100', isCarousel && 'w-[260px] shrink-0')}
       style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
     >
       <Card
         className={cn(
-          'relative flex h-full flex-col overflow-hidden transition-colors',
+          'relative flex h-full flex-col overflow-hidden transition-[background-color,box-shadow] duration-200',
           // Celular: fila de lista ("Los de la cuadra"), sin caja; desde sm, tarjeta.
           // Vidrio (9/11/2026): la tarjeta es la <Card> de vidrio; en celular la fila no lleva caja.
-          isCarousel ? '' : 'rounded-none border-0 border-b border-border/70 bg-transparent shadow-none backdrop-blur-none sm:rounded-card sm:border sm:border-[color:var(--glass-line)] sm:bg-[color:var(--glass)] sm:shadow-[var(--glass-shadow)]',
-          'hover:bg-foreground/[0.04]',
+          isCarousel ? '' : 'rounded-none border-0 border-b border-border/70 bg-transparent shadow-none backdrop-blur-none sm:rounded-card sm:border sm:border-[color:var(--glass-line)] sm:bg-[color:var(--glass)] sm:shadow-[var(--glass-shadow)] sm:[backdrop-filter:blur(var(--glass-blur))_saturate(1.5)]',
+          // Hover: solo la fila del celular se tiñe; la tarjeta de vidrio NO cambia de fondo
+          // (un bg-* de utilidad le sacaba el vidrio y quedaba transparente al pasar el mouse).
+          !isCarousel && 'max-sm:hover:bg-foreground/[0.04]',
         )}
       >
         {/* Badge de descuento junto al nombre, rubro en el color de su FAMILIA + "Llega
@@ -91,7 +94,7 @@ export function StoreCard({
           </div>
 
           {/* --- Contenido --- */}
-          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-3 pl-3 pr-10 sm:p-4 sm:pb-3">
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-3 pl-3 pr-11 sm:p-4 sm:pb-3">
             <div className="flex items-center gap-2">
               <h3 className="line-clamp-1 font-headline text-xl font-extrabold leading-tight">{store.name}</h3>
               {(store.maxDiscountPercent || 0) > 0 && (
@@ -114,7 +117,7 @@ export function StoreCard({
               )}
               {deliveryFee !== undefined && (
                 <span className="text-muted-foreground">
-                  Envío {deliveryFeeFrom ? 'desde ' : ''}${deliveryFee.toLocaleString('es-AR')}
+                  Envío {deliveryFeeFrom ? 'desde ' : ''}{money(deliveryFee)}
                 </span>
               )}
               <span className={cn('font-bold', isOpen ? 'text-success' : 'text-muted-foreground')}>
@@ -130,9 +133,14 @@ export function StoreCard({
           type="button"
           onClick={(e) => onToggleFavorite(e, store)}
           aria-label={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-          className="absolute right-1 top-1 z-10 grid h-10 w-10 place-items-center rounded-full bg-background/80 transition-colors hover:bg-background"
+          className={cn(
+            'absolute z-10 grid h-11 w-11 place-items-center rounded-full transition-transform active:scale-90 motion-reduce:active:scale-100',
+            // Sobre la foto (tarjeta): círculo de vidrio. En la fila del celular, sin círculo
+            // (tapaba la etiqueta de descuento), arriba a la derecha.
+            isCarousel ? 'glass-strong right-2 top-2' : 'right-0 top-1 sm:glass-strong sm:right-2 sm:top-2',
+          )}
         >
-          <Heart className={cn('h-4 w-4 transition-colors', isFavorite ? 'fill-primary text-primary' : 'text-muted-foreground')} />
+          <Heart className={cn('h-[18px] w-[18px] transition-colors', isFavorite ? 'fill-primary text-primary' : 'text-foreground/70')} aria-hidden="true" />
         </button>
         )}
       </Card>

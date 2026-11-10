@@ -11,11 +11,11 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import { money } from '@/lib/format-money';
 import Link from 'next/link';
 import AdminAuthGuard from '../admin-auth-guard';
-import PageHeader from '@/components/page-header';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AdminPage } from '@/components/admin/admin-page';
+import { SlidingChips } from '@/components/admin/admin-list';
+import { EmptyState } from '@/components/admin/empty-state';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -189,55 +189,57 @@ function AdminClaimsPage() {
   };
 
   return (
-    <div className="container mx-auto pb-20 space-y-6">
-      <PageHeader
-        title="Reclamos de Compradores"
-        description="Problemas reportados por los clientes sobre sus pedidos. Cada reclamo se resuelve con reembolso, rechazo con motivo, u otra vía."
-      />
-
-      <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as 'pending' | 'resolved')}>
-        <TabsList>
-          <TabsTrigger value="pending">Pendientes ({rows.filter(r => r.resolved !== true).length})</TabsTrigger>
-          <TabsTrigger value="resolved">Resueltos ({rows.filter(r => r.resolved === true).length})</TabsTrigger>
-        </TabsList>
-      </Tabs>
+    <AdminPage
+      title="Reclamos"
+      subtitle="Problemas que reportan los clientes sobre sus pedidos. Cada uno se resuelve con reembolso, rechazo con motivo u otra vía."
+    >
+      <div className="space-y-1">
+        <SlidingChips
+          chips={[
+            { value: 'pending' as const, label: 'Pendientes', count: isLoading ? null : rows.filter(r => r.resolved !== true).length },
+            { value: 'resolved' as const, label: 'Resueltos', count: isLoading ? null : rows.filter(r => r.resolved === true).length },
+          ]}
+          value={statusTab}
+          onChange={setStatusTab}
+          label="Estado de los reclamos"
+          testId="claims-tabs"
+        />
+        <p className="text-xs text-muted-foreground">Los conteos son de los reclamos ya cargados.</p>
+      </div>
 
       {isLoading && (
-        <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Cargando reclamos" /></div>
       )}
 
       {!isLoading && displayed.length === 0 && (
         <Card>
-          <CardContent className="text-center py-12 text-muted-foreground space-y-2">
-            <CheckCircle2 className="h-8 w-8 mx-auto opacity-30 text-success" />
-            <p>{statusTab === 'pending' ? 'Sin reclamos pendientes.' : 'Todavía no hay reclamos resueltos.'}</p>
-          </CardContent>
+          <EmptyState icon={CheckCircle2} title={statusTab === 'pending' ? 'Sin reclamos pendientes' : 'Todavía no hay reclamos resueltos'} />
         </Card>
       )}
 
       {!isLoading && displayed.length > 0 && (
         <div className="space-y-3">
-          {displayed.map((claim) => {
+          {displayed.map((claim, idx) => {
             const meta = CLAIM_TYPES[claim.type as ClaimType];
             return (
-              <Card key={claim.id} data-testid="claim-card" className={cn('border-l-4',
+              <Card key={claim.id} style={{ animationDelay: `${Math.min(idx, 10) * 35}ms` }} data-testid="claim-card" className={cn('stagger-in border-l-4',
                 claim.resolved
                   ? (claim.resolution === 'rejected' ? 'border-l-muted-foreground' : 'border-l-success')
                   : (claim.type === 'not_received' || claim.type === 'stuck_order' ? 'border-l-destructive' : 'border-l-warning'))}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="text-xs gap-1 border-warning/40 text-warning">
-                      <AlertTriangle className="h-3 w-3" /> {meta?.label || claim.type}
-                    </Badge>
+                    <span className="inline-flex h-[22px] items-center gap-1 rounded-full bg-warning/15 px-2 text-xs font-semibold text-warning-ink">
+                      <AlertTriangle className="h-3 w-3" aria-hidden="true" /> {meta?.label || claim.type}
+                    </span>
                     {claim.resolved && (
-                      <Badge variant="outline" className={cn('text-xs',
-                        claim.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success')}>
+                      <span className={cn('inline-flex h-[22px] items-center rounded-full px-2 text-xs font-semibold',
+                        claim.resolution === 'rejected' ? 'bg-muted text-muted-foreground' : 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink')}>
                         {RESOLUTION_LABELS[claim.resolution || ''] || 'Resuelto'}
-                      </Badge>
+                      </span>
                     )}
                     <span className="text-xs text-muted-foreground">{formatDate(claim.createdAt)}</span>
                     {typeof claim.suggestedAmount === 'number' && claim.suggestedAmount > 0 && (
-                      <span className="ml-auto text-sm font-bold">{money(claim.suggestedAmount)}</span>
+                      <span className="ml-auto text-base font-bold tabular-nums" title="Monto sugerido">{money(claim.suggestedAmount)}</span>
                     )}
                   </div>
 
@@ -248,8 +250,8 @@ function AdminClaimsPage() {
                     </p>
                     {/* Antifraude: historial del comprador a la vista, sin bloqueo automático */}
                     <p className={cn('text-xs flex items-center gap-1',
-                      (claim.previousClaims || 0) >= 2 ? 'text-warning' : 'text-muted-foreground')}>
-                      <UserRound className="h-3 w-3" />
+                      (claim.previousClaims || 0) >= 2 ? 'font-medium text-warning-ink' : 'text-muted-foreground')}>
+                      <UserRound className="h-3 w-3" aria-hidden="true" />
                       {claim.previousClaims
                         ? `Reclamo n.º ${claim.previousClaims + 1} de este comprador · ${claim.previousRefunded || 0} terminaron en reembolso`
                         : 'Primer reclamo de este comprador'}
@@ -259,7 +261,7 @@ function AdminClaimsPage() {
                         {risks[claim.id].map(sig => (
                           <span key={sig.code} title={sig.detail}
                             className={cn('inline-flex min-h-[24px] items-center gap-1 rounded-full px-2 text-xs font-semibold',
-                              sig.code === 'pin_verified_not_received' ? 'bg-destructive/15 text-destructive' : 'bg-warning/15 text-warning')}>
+                              sig.code === 'pin_verified_not_received' ? 'bg-destructive/15 text-destructive-ink' : 'bg-warning/15 text-warning-ink')}>
                             <ShieldAlert className="h-3 w-3" aria-hidden="true" /> {sig.label}
                           </span>
                         ))}
@@ -270,20 +272,20 @@ function AdminClaimsPage() {
                         Productos: {claim.items.map(it => `${it.name} ×${it.quantity}`).join(', ')}
                       </p>
                     )}
-                    <blockquote className="border-l-2 pl-3 text-muted-foreground italic">{claim.description}</blockquote>
+                    <blockquote className="border-l-2 border-foreground/20 pl-3 text-foreground/80 italic">{claim.description}</blockquote>
                     {claim.resolved && claim.resolutionNote && (
                       <p className="text-xs text-muted-foreground">Resolución: {claim.resolutionNote}</p>
                     )}
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/orders/${claim.orderId}`} target="_blank">
-                        <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Ver pedido
+                    <Button variant="outline" size="sm" className="min-h-[40px]" asChild>
+                      <Link href={`/admin/orders/${claim.orderId}`}>
+                        <ExternalLink className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> Ver pedido
                       </Link>
                     </Button>
                     {claim.photoPath && (
-                      <Button variant="outline" size="sm" onClick={() => viewPhoto(claim)} disabled={loadingPhoto === claim.id}>
+                      <Button variant="outline" size="sm" className="min-h-[40px]" onClick={() => viewPhoto(claim)} disabled={loadingPhoto === claim.id}>
                         {loadingPhoto === claim.id
                           ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           : <><ImageIcon className="h-3.5 w-3.5 mr-1.5" /> Ver foto</>}
@@ -292,14 +294,14 @@ function AdminClaimsPage() {
                     {claim.resolved !== true && (
                       <div className="flex items-center gap-2 ml-auto">
                         {!isSupport && (
-                          <Button size="sm" onClick={() => setRefundClaim(claim)}>
+                          <Button size="sm" className="min-h-[40px]" onClick={() => setRefundClaim(claim)}>
                             <Wallet className="h-3.5 w-3.5 mr-1.5" /> Reembolsar
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" onClick={() => openDialog({ kind: 'other', claim })}>
+                        <Button variant="outline" size="sm" className="min-h-[40px]" onClick={() => openDialog({ kind: 'other', claim })}>
                           <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Otra vía
                         </Button>
-                        <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                        <Button variant="outline" size="sm" className="min-h-[40px] text-destructive-ink border-destructive/40 hover:bg-destructive/10"
                           onClick={() => openDialog({ kind: 'reject', claim })}>
                           <XCircle className="h-3.5 w-3.5 mr-1.5" /> Rechazar
                         </Button>
@@ -315,7 +317,7 @@ function AdminClaimsPage() {
 
       {hasMore && !isLoading && (
         <div className="flex justify-center pt-2">
-          <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+          <Button variant="outline" className="min-h-[44px]" onClick={loadMore} disabled={loadingMore}>
             {loadingMore && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Cargar más
           </Button>
@@ -323,7 +325,7 @@ function AdminClaimsPage() {
       )}
 
       <Dialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" data-surface="admin">
           {(dialog?.kind === 'reject' || dialog?.kind === 'other') && (
             <>
               <DialogHeader>
@@ -360,7 +362,7 @@ function AdminClaimsPage() {
           setRefundClaim(null);
         }}
       />
-    </div>
+    </AdminPage>
   );
 }
 

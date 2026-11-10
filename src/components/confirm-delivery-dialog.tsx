@@ -5,9 +5,10 @@ import type { User } from 'firebase/auth';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, KeyRound } from 'lucide-react';
+import { Loader2, KeyRound, PackageCheck } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 import { useToast } from '@/hooks/use-toast';
+import { money } from '@/lib/format-money';
 
 /**
  * Diálogo ÚNICO de "Confirmar Entrega" con PIN (19/8) — lo usan los 3 botones de
@@ -49,7 +50,7 @@ export function ConfirmDeliveryDialog({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast({ title: '¡Entrega Completada!', description: 'Ganancia registrada en tu Billetera.' });
+        toast({ title: 'Entrega completada', description: 'La ganancia ya está en tu billetera.' });
         reset();
         onOpenChange(false);
         onDelivered?.();
@@ -70,40 +71,43 @@ export function ConfirmDeliveryDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100%-1.5rem)] rounded-card sm:max-w-md sm:rounded-card" data-testid="confirm-delivery-dialog">
         {step === 'confirm' ? (
           <>
             <DialogHeader>
-              <DialogTitle>Confirmar Entrega</DialogTitle>
-              <DialogDescription>
+              <span className="mb-1 grid h-12 w-12 place-items-center rounded-2xl bg-success/15 text-success sm:mx-0 mx-auto">
+                <PackageCheck className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <DialogTitle className="font-headline text-2xl font-extrabold">Confirmar entrega</DialogTitle>
+              <DialogDescription className="text-base">
                 ¿Entregaste el pedido{customerName ? ` a ${customerName}` : ''}?
               </DialogDescription>
             </DialogHeader>
 
             {(cashTotal || 0) > 0 && (
-              <div className="bg-warning/15 p-4 rounded-lg border border-warning text-center my-2">
-                <p className="font-bold text-warning uppercase">¡COBRAR AL CLIENTE!</p>
-                <h3 className="font-black text-2xl text-foreground">${cashTotal}</h3>
+              <div className="my-1 rounded-2xl border-2 border-warning bg-warning/10 p-4 text-center">
+                <p className="text-sm font-bold uppercase tracking-wide">Cobrale al cliente</p>
+                <p className="font-headline text-4xl font-extrabold tabular-nums">{money(cashTotal || 0)}</p>
               </div>
             )}
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
-              <Button className="bg-success hover:bg-success/90 text-success-foreground" onClick={() => submit(false)} disabled={loading}>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" className="h-12 rounded-2xl" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
+              <Button className="h-12 rounded-2xl bg-success text-base font-bold text-success-foreground hover:bg-success/90" onClick={() => submit(false)} disabled={loading}>
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Sí, Entregado
+                Sí, lo entregué
               </Button>
             </DialogFooter>
           </>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <KeyRound className="h-5 w-5 text-primary" /> Código de entrega
+              <DialogTitle className="flex items-center gap-2 font-headline text-2xl font-extrabold">
+                <KeyRound className="h-6 w-6 text-primary" aria-hidden="true" /> Código de entrega
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-base">
                 Pedile al cliente el <strong>código de 4 dígitos</strong> — lo tiene en su
                 pantalla del pedido. Es la prueba de que el pedido llegó a sus manos.
               </DialogDescription>
@@ -115,22 +119,24 @@ export function ConfirmDeliveryDialog({
               inputMode="numeric"
               autoComplete="one-time-code"
               placeholder="• • • •"
-              className="h-14 text-center text-3xl font-bold tracking-[0.5em]"
+              className="h-16 rounded-2xl text-center font-headline text-4xl font-extrabold tracking-[0.5em] tabular-nums"
+              aria-label="Código de entrega de 4 números"
+              data-testid="delivery-pin-input"
               autoFocus
             />
 
-            {error && <p className="text-sm text-destructive text-center">{error}</p>}
+            {error && <p className="text-center text-sm text-destructive" role="alert">{error}</p>}
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               ¿El cliente no está o no encuentra el código? Cerrá esto y usá
-              «Reportar problema» — lo resuelve la administración.
+              «Reportar problema»: lo resuelve la administración.
             </p>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
-              <Button className="bg-success hover:bg-success/90 text-success-foreground" onClick={() => submit(true)} disabled={loading || pin.length !== 4}>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" className="h-12 rounded-2xl" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
+              <Button className="h-12 rounded-2xl bg-success text-base font-bold text-success-foreground hover:bg-success/90" onClick={() => submit(true)} disabled={loading || pin.length !== 4} data-testid="delivery-pin-submit">
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Confirmar Entrega
+                Confirmar entrega
               </Button>
             </DialogFooter>
           </>

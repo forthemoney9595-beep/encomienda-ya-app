@@ -405,21 +405,21 @@ export default function ProductManagementPage() {
 
   return (
     <div className="container mx-auto pb-20">
-      <PageHeader 
-        title="Gestión de Productos" 
-        description="Añade, edita o elimina los productos que ofreces en tu tienda."
+      <PageHeader
+        title="Productos"
+        description="Agregá, editá o sacá los productos que ofrecés en tu tienda."
       />
-       <div className="flex gap-2 mb-6">
-            <Link href={`/stores/${userProfile?.storeId}`} target="_blank">
-                <Button variant="outline">
-                    <ExternalLink className="mr-2 h-4 w-4" /> Ver mi Tienda
-                </Button>
-            </Link>
-            <Button onClick={() => openDialog()}>
-                <Plus className="mr-2 h-4 w-4" /> Nuevo Producto
+       <div className="mb-5 flex flex-wrap gap-2">
+            <Button asChild variant="outline" className="h-11 rounded-full bg-transparent px-5">
+                <Link href={`/stores/${userProfile?.storeId}`} target="_blank">
+                    <ExternalLink className="mr-2 h-4 w-4" /> Ver mi tienda
+                </Link>
+            </Button>
+            <Button className="h-11 rounded-full px-5 font-bold" onClick={() => openDialog()}>
+                <Plus className="mr-2 h-4 w-4" /> Nuevo producto
             </Button>
             {/* Botón discreto para activar modo limpieza si se necesita en el futuro */}
-            <Button variant="ghost" size="icon" onClick={() => setShowDebug(!showDebug)} title="Modo Limpieza">
+            <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full" onClick={() => setShowDebug(!showDebug)} title="Modo Limpieza" aria-label="Modo limpieza">
                 <Bug className="h-4 w-4 text-muted-foreground/50" />
             </Button>
         </div>
@@ -470,18 +470,19 @@ export default function ProductManagementPage() {
            </Card>
        )}
 
-      <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+      <div className="glass mb-4 flex flex-col gap-2 rounded-card p-2 sm:flex-row sm:items-center">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
-            placeholder="Buscar producto..."
-            className="pl-9"
+            placeholder="Buscar producto…"
+            aria-label="Buscar producto"
+            className="h-11 rounded-full border-transparent bg-foreground/[0.05] pl-10 text-base"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as any)}>
-          <SelectTrigger className="w-full sm:w-52">
+          <SelectTrigger className="h-11 w-full rounded-full border-transparent bg-foreground/[0.05] sm:w-56" aria-label="Filtrar productos">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -495,25 +496,25 @@ export default function ProductManagementPage() {
 
       {/* Barra de acciones masivas */}
       {filteredProducts.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox aria-label="Seleccionar todos los productos visibles" checked={allVisibleSelected} onCheckedChange={toggleSelectAllVisible} />
+        <div className="glass mb-4 flex flex-wrap items-center gap-3 rounded-card px-3 py-2" data-testid="bulk-bar">
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-base font-semibold">
+            <Checkbox aria-label="Seleccionar todos los productos visibles" checked={allVisibleSelected} onCheckedChange={toggleSelectAllVisible} className="h-6 w-6 rounded-md" />
             Seleccionar todos
           </label>
           {selectedIds.size > 0 ? (
             <>
               <span className="text-sm text-muted-foreground">{selectedIds.size} seleccionado(s)</span>
               <div className="flex flex-wrap gap-2 ml-auto">
-                <Button size="sm" variant="outline" disabled={isBulkWorking} onClick={() => bulkSetAvailability(true)}>
+                <Button variant="outline" className="h-11 rounded-full px-4 bg-transparent" disabled={isBulkWorking} onClick={() => bulkSetAvailability(true)}>
                   <Eye className="mr-2 h-4 w-4" /> Disponible
                 </Button>
-                <Button size="sm" variant="outline" disabled={isBulkWorking} onClick={() => bulkSetAvailability(false)}>
+                <Button variant="outline" className="h-11 rounded-full px-4 bg-transparent" disabled={isBulkWorking} onClick={() => bulkSetAvailability(false)}>
                   <EyeOff className="mr-2 h-4 w-4" /> Agotado
                 </Button>
-                <Button size="sm" variant="destructive" disabled={isBulkWorking} onClick={bulkDelete}>
+                <Button variant="destructive" className="h-11 rounded-full px-4" disabled={isBulkWorking} onClick={bulkDelete}>
                   <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                 </Button>
-                <Button size="sm" variant="ghost" disabled={isBulkWorking} onClick={clearSelection}>
+                <Button variant="ghost" className="h-11 rounded-full px-4" disabled={isBulkWorking} onClick={clearSelection}>
                   <X className="mr-2 h-4 w-4" /> Limpiar
                 </Button>
               </div>
@@ -525,24 +526,24 @@ export default function ProductManagementPage() {
       )}
 
       {(!filteredProducts || filteredProducts.length === 0) ? (
-        <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed">
+        <div className="glass rounded-card px-4 py-12 text-center">
           <Package className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
           <h3 className="text-lg font-medium">
             {searchTerm ? 'No se encontraron productos' : 'Tu inventario está vacío'}
           </h3>
-          {!searchTerm && <Button onClick={() => openDialog()} className="mt-4">Crear Primer Producto</Button>}
+          {!searchTerm && <Button onClick={() => openDialog()} className="mt-4 h-11 rounded-full px-6">Crear el primer producto</Button>}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredProducts.map((product) => (
-            <Card key={product.id} className={`flex flex-col overflow-hidden group hover:shadow-lg transition-shadow ${!product.available ? 'opacity-75 border-dashed' : ''} ${selectedIds.has(product.id) ? 'ring-2 ring-primary' : product.isFeatured ? 'ring-2 ring-warning' : ''}`}>
-              <div className="relative h-48 w-full bg-muted flex items-center justify-center overflow-hidden">
+            <Card key={product.id} data-testid="store-product-card" className={`group flex flex-col overflow-hidden transition-transform duration-200 ease-spring hover:-translate-y-0.5 ${selectedIds.has(product.id) ? 'ring-2 ring-primary' : product.isFeatured ? 'ring-2 ring-warning' : ''}`}>
+              <div className="relative m-2 mb-0 flex h-48 items-center justify-center overflow-hidden rounded-[1rem] bg-foreground/[0.06]">
                 <div className="absolute top-2 left-2 z-10">
                   <Checkbox
                     aria-label={`Seleccionar ${product.name}`}
                     checked={selectedIds.has(product.id)}
                     onCheckedChange={() => toggleSelect(product.id)}
-                    className="bg-background/80 border-2 shadow-sm"
+                    className="h-6 w-6 rounded-md border-2 bg-background/90 shadow-sm"
                   />
                 </div>
                 {product.imageUrl ? (
@@ -559,19 +560,19 @@ export default function ProductManagementPage() {
                 )}
                 
                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                    <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">{product.category || 'Sin cat.'}</span>
+                    <span className="rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white">{product.category || 'Sin cat.'}</span>
                     {product.isFeatured && (
-                        <span className="bg-warning text-warning-foreground text-xs px-2 py-1 rounded-md font-bold flex items-center gap-1">
+                        <span className="flex items-center gap-1 rounded-full bg-warning px-2.5 py-1 text-xs font-bold text-warning-foreground">
                             <Star className="h-3 w-3 fill-current" /> TOP
                         </span>
                     )}
                     {product.stock != null && (
-                        <span className={`text-xs px-2 py-1 rounded-md font-medium ${product.stock <= 3 ? 'bg-destructive text-destructive-foreground' : 'bg-black/70 text-white'}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${product.stock <= 3 ? 'bg-destructive text-destructive-foreground' : 'bg-black/70 text-white'}`}>
                             Quedan {product.stock}
                         </span>
                     )}
                     {!!product.discountPercent && (
-                        <span className="bg-success text-success-foreground text-xs px-2 py-1 rounded-md font-bold">
+                        <span className="rounded-full bg-offer px-2.5 py-1 text-xs font-bold text-offer-foreground">
                             -{product.discountPercent}%
                         </span>
                     )}
@@ -579,21 +580,21 @@ export default function ProductManagementPage() {
 
                 {!product.available && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
-                    <Badge variant="destructive" className="text-sm px-3 py-1 uppercase border-2"> Agotado </Badge>
+                    <Badge variant="destructive" className="rounded-full px-3 py-1 text-sm"> Agotado </Badge>
                   </div>
                 )}
               </div>
               
               <CardHeader className="p-4 pb-2">
                 <div className="flex justify-between items-start">
-                  <CardTitle className={`text-lg line-clamp-1 ${!product.name ? 'text-destructive italic' : ''}`} title={product.name}>
+                  <CardTitle className={`font-headline text-xl font-extrabold line-clamp-1 ${!product.name ? 'text-destructive italic' : ''}`} title={product.name}>
                       {product.name || 'Sin nombre'}
                   </CardTitle>
                   <span className="flex flex-col items-end">
                     {!!product.discountPercent && (
                         <span className="text-xs text-muted-foreground line-through">{money((product.price || 0))}</span>
                     )}
-                    <span className="font-bold text-foreground">
+                    <span className="font-headline text-lg font-extrabold text-foreground tabular-nums">
                         {money((product.discountPercent ? (product.price || 0) * (1 - product.discountPercent / 100) : (product.price || 0)))}
                     </span>
                   </span>
@@ -606,12 +607,13 @@ export default function ProductManagementPage() {
                 </p>
               </CardContent>
 
-              <CardFooter className="p-4 bg-muted/30 flex gap-1 border-t justify-between">
+              <CardFooter className="flex justify-between gap-1 border-t border-foreground/10 p-3">
                 <div className="flex gap-1">
                     <Button 
                     variant="ghost" 
                     size="icon" 
-                    className={`h-8 w-8 ${product.available ? 'text-success' : 'text-muted-foreground'}`}
+                    className={`h-10 w-10 rounded-full ${product.available ? 'text-success' : 'text-muted-foreground'}`}
+                    aria-label={product.available ? `Marcar ${product.name || 'producto'} como agotado` : `Marcar ${product.name || 'producto'} como disponible`}
                     onClick={() => toggleAvailability(product)}
                     title={product.available ? "Marcar como Agotado" : "Marcar como Disponible"}
                     >
@@ -621,7 +623,8 @@ export default function ProductManagementPage() {
                     <Button 
                     variant="ghost" 
                     size="icon" 
-                    className={`h-8 w-8 ${product.isFeatured ? 'text-warning' : 'text-muted-foreground'}`}
+                    className={`h-10 w-10 rounded-full ${product.isFeatured ? 'text-warning' : 'text-muted-foreground'}`}
+                    aria-label={product.isFeatured ? `Quitar ${product.name || 'producto'} de destacados` : `Destacar ${product.name || 'producto'}`}
                     onClick={() => toggleFeatured(product)}
                     >
                     <Star className={`h-4 w-4 ${product.isFeatured ? 'fill-current' : ''}`} />
@@ -629,10 +632,10 @@ export default function ProductManagementPage() {
                 </div>
 
                 <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openDialog(product)}>
+                    <Button variant="outline" className="h-10 rounded-full bg-transparent px-4" onClick={() => openDialog(product)}>
                     <Pencil className="mr-2 h-3 w-3" /> Editar
                     </Button>
-                    <Button variant="destructive" size="icon" className="h-9 w-9" aria-label={`Eliminar ${product.name}`} onClick={() => handleDelete(product)}>
+                    <Button variant="destructive" size="icon" className="h-10 w-10 rounded-full" aria-label={`Eliminar ${product.name}`} onClick={() => handleDelete(product)}>
                     <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>
@@ -654,7 +657,7 @@ export default function ProductManagementPage() {
           <form onSubmit={handleSave} className="space-y-4 py-2">
 
             {!editingProduct && (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+              <div className="rounded-2xl bg-primary/[0.07] p-3 text-sm text-muted-foreground ring-1 ring-primary/20">
                 <strong className="text-foreground">¿Querés armar un combo?</strong> Creá un producto
                 con el precio total del combo (ej: <em>&ldquo;Combo Pizza + Gaseosa&rdquo;</em>) y elegí la categoría
                 <strong> &ldquo;Combos&rdquo;</strong>. Aparece con su propia sección en tu tienda.
@@ -714,7 +717,7 @@ export default function ProductManagementPage() {
                   </SelectContent>
                 </Select>
                 {storeCategories.length === 0 && (
-                  <p className="text-[0.7rem] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Definí tus propias categorías en <Link href="/my-store/categories" className="underline">Categorías</Link>.
                   </p>
                 )}
@@ -760,7 +763,7 @@ export default function ProductManagementPage() {
               />
             </div>
 
-            <div className="flex items-center space-x-2 border p-3 rounded-md bg-muted/20">
+            <div className="flex items-center space-x-3 rounded-2xl bg-foreground/[0.04] p-3 ring-1 ring-foreground/10">
                 <Switch 
                     id="featured" 
                     checked={formData.isFeatured}

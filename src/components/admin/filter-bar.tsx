@@ -58,7 +58,7 @@ function Chip({ active, label, count, onClick }: { active: boolean; label: strin
       aria-pressed={active}
       className={cn(
         'inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[13px] transition-colors',
-        active ? 'border-transparent bg-primary text-primary-foreground' : 'border-border bg-card text-foreground hover:bg-admin-row-hover',
+        active ? 'border-transparent bg-primary text-primary-foreground' : 'border-foreground/10 bg-foreground/[0.03] text-foreground hover:bg-admin-row-hover',
       )}
     >
       {label}
@@ -121,7 +121,7 @@ export function FilterBar(props: FilterBarProps) {
   );
 
   return (
-    <div className={cn('min-w-0 space-y-2 overflow-hidden rounded-lg border border-border bg-card p-3', className)} data-testid="filter-bar">
+    <div className={cn('min-w-0 space-y-2 overflow-hidden glass rounded-card p-3', className)} data-testid="filter-bar">
       {chips && chips.length > 0 && (
         <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 no-scrollbar" role="group" aria-label="Filtros rápidos">
           {chips.map(c => (
@@ -143,7 +143,7 @@ export function FilterBar(props: FilterBarProps) {
                 <SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> Filtros{activeCount > 0 ? ` (${activeCount})` : ''}
               </Button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+            <SheetContent side="bottom" data-surface="admin" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
               <SheetHeader><SheetTitle>Filtros</SheetTitle></SheetHeader>
               <div className="space-y-4 py-4">{selectControls(true)}</div>
               <div className="flex gap-2">

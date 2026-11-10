@@ -97,11 +97,15 @@ export function SuspensionNotice({ className }: { className?: string }) {
   };
 
   return (
-    <div className={cn('rounded-xl border border-destructive/40 bg-destructive/10 p-4', className)} role="alert" data-testid="suspension-notice">
+    // Rediseño en vidrio (9/11/2026): vidrio opaco con borde rojo y el ícono en un cuadradito
+    // rojo suave. Mismas props, mismo texto y mismos data-testid (los usa _pw-tanda-c.js).
+    <div className={cn('glass-strong rounded-card border-destructive/45 p-4 sm:p-5', className)} role="alert" data-testid="suspension-notice">
       <div className="flex items-start gap-3">
-        <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-destructive/15 text-destructive">
+          <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+        </span>
         <div className="min-w-0 flex-1 space-y-1.5">
-          <p className="font-semibold text-sm text-destructive">
+          <p className="font-headline text-xl font-extrabold leading-tight text-destructive">
             {isStore ? 'Tu tienda está suspendida' : 'Tu cuenta está suspendida'}
           </p>
           <p className="text-sm"><span className="font-medium">Motivo:</span> {reasonLabelOf(s.reason)}</p>
@@ -109,7 +113,7 @@ export function SuspensionNotice({ className }: { className?: string }) {
           <p className="text-sm">
             {expired ? 'El plazo terminó: estamos reactivando tu cuenta…' : `${isStore ? 'No recibís pedidos nuevos' : 'No podés tomar pedidos nuevos'} ${describeSuspensionEnd(s.until ?? null)}.`}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {isStore
               ? 'Los pedidos que ya estaban en curso siguen su camino. Lo que ganaste se te sigue debiendo: podés pedir el retiro desde tu billetera.'
               : 'Los pedidos que ya llevás los podés terminar. Lo que ganaste se te sigue debiendo: podés pedir el retiro desde tus ganancias.'}
@@ -122,14 +126,14 @@ export function SuspensionNotice({ className }: { className?: string }) {
             </p>
           )}
           {(appeal?.status === 'maintained' || s.appealStatus === 'maintained') && (
-            <div className="rounded-md border bg-background/60 p-2 text-sm" data-testid="appeal-status">
+            <div className="rounded-2xl bg-foreground/[0.05] p-3 text-sm" data-testid="appeal-status">
               <p className="font-medium">Revisamos tu apelación: la suspensión se mantiene.</p>
               {appeal?.response && <p className="text-muted-foreground">Respuesta: {appeal.response}</p>}
             </div>
           )}
 
           {allowedToAppeal && (
-            <Button type="button" size="sm" variant="outline" className="mt-1 h-9 gap-1.5" onClick={() => { setError(null); setOpen(true); }} data-testid="appeal-open">
+            <Button type="button" variant="outline" className="mt-2 h-11 gap-1.5 rounded-2xl bg-transparent px-5 text-base" onClick={() => { setError(null); setOpen(true); }} data-testid="appeal-open">
               <Gavel className="h-4 w-4" aria-hidden="true" /> Apelar
             </Button>
           )}
@@ -137,9 +141,9 @@ export function SuspensionNotice({ className }: { className?: string }) {
       </div>
 
       <Dialog open={open} onOpenChange={(o) => { if (!sending) setOpen(o); }}>
-        <DialogContent className="sm:max-w-md" data-testid="appeal-dialog">
+        <DialogContent className="w-[calc(100%-1.5rem)] rounded-card sm:max-w-md sm:rounded-card" data-testid="appeal-dialog">
           <DialogHeader>
-            <DialogTitle>Apelar la suspensión</DialogTitle>
+            <DialogTitle className="font-headline text-2xl font-extrabold">Apelar la suspensión</DialogTitle>
             <DialogDescription>
               Contanos tu versión de lo que pasó. Podés apelar una sola vez por esta suspensión; la administración la revisa
               y te responde por escrito.
@@ -147,7 +151,7 @@ export function SuspensionNotice({ className }: { className?: string }) {
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="appeal-text">Tu apelación</Label>
-            <Textarea id="appeal-text" data-testid="appeal-text" rows={5} maxLength={APPEAL_TEXT_MAX} value={text}
+            <Textarea id="appeal-text" data-testid="appeal-text" rows={5} className="rounded-2xl text-base" maxLength={APPEAL_TEXT_MAX} value={text}
               onChange={(e) => setText(e.target.value)} aria-invalid={len > 0 && len < APPEAL_TEXT_MIN}
               placeholder="Ej: ese día el cliente no estaba en la dirección y lo esperé 20 minutos; tengo capturas del chat." />
             <p className={cn('text-xs', len > 0 && len < APPEAL_TEXT_MIN ? 'text-destructive' : 'text-muted-foreground')}>
@@ -156,8 +160,8 @@ export function SuspensionNotice({ className }: { className?: string }) {
             {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
           </div>
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={sending}>Cancelar</Button>
-            <Button type="button" onClick={send} disabled={!!validateAppealText(text) || sending} data-testid="appeal-send">
+            <Button type="button" variant="outline" className="h-12 rounded-2xl" onClick={() => setOpen(false)} disabled={sending}>Cancelar</Button>
+            <Button type="button" className="h-12 rounded-2xl" onClick={send} disabled={!!validateAppealText(text) || sending} data-testid="appeal-send">
               {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Enviar apelación
             </Button>
           </DialogFooter>

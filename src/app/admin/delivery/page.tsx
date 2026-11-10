@@ -1,10 +1,6 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import PageHeader from '@/components/page-header';
-import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
-import { cn } from '@/lib/utils';
 // ✅ Importamos la interfaz desde el archivo vecino que acabamos de arreglar
 import { DeliveryPersonnelList, type DeliveryPersonnel } from './delivery-personnel-list';
 // ✅ Import correcto del contexto de Auth
@@ -19,6 +15,9 @@ import { logAdminAction } from '@/lib/admin-audit';
 import { setAccountApproval } from '@/lib/approval-service';
 import { authedFetch } from '@/lib/authed-fetch';
 import { SuspendAccountDialog, type SuspendTarget } from '@/components/admin/suspend-account-dialog';
+import { AdminPage } from '@/components/admin/admin-page';
+import { GlassSearch, ListCard, SlidingChips } from '@/components/admin/admin-list';
+import { useConfirm } from '@/components/admin/confirm-dialog';
 
 type DriverFilter = 'all' | 'pending' | 'active' | 'suspended' | 'rejected';
 
@@ -26,7 +25,8 @@ function AdminDeliveryPage() {
   const { user, isFullAdmin, loading: authLoading } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
-  
+  const confirmDialog = useConfirm();
+
   const [isManageDialogOpen, setManageDialogOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<DeliveryPersonnel | null>(null);
   const [search, setSearch] = useState('');
@@ -159,9 +159,13 @@ function AdminDeliveryPage() {
       // 409 = tiene plata sin cobrar. Borrarlo haría desaparecer una deuda real, asi que la
       // API lo frena y hay que confirmarlo a mano.
       if (res.status === 409 && data.needsForce) {
-        if (!confirm(`${data.error}
-
-¿Borrar igual? La deuda se pierde y queda registrada en el log.`)) return;
+        const { ok } = await confirmDialog({
+          title: '¿Borrar igual?',
+          description: `${data.error} La deuda se pierde y queda registrada en el log.`,
+          tone: 'destructive',
+          confirmLabel: 'Borrar igual',
+        });
+        if (!ok) return;
         res = await authedFetch('/api/admin/delete-user', user, { userId: driverId, force: true });
         data = await res.json();
       }
@@ -179,55 +183,59 @@ function AdminDeliveryPage() {
     setManageDialogOpen(true);
   };
 
+  const loadingAll = authLoading || personnelLoading;
   return (
-    <div className="container mx-auto space-y-6">
+    <AdminPage
+      title="Repartidores"
+      subtitle={loadingAll ? 'Cargando…' : (
+        <span data-testid="drivers-kline">
+          <b className="tabular-nums text-foreground">{counts.all}</b> en la flota · <b className="tabular-nums text-foreground">{counts.active}</b> activos
+          {counts.pending > 0 && <> · <b className="tabular-nums text-warning-ink">{counts.pending}</b> esperando aprobación</>}
+        </span>
+      )}
+    >
       <ManageDriverDialog
         isOpen={isManageDialogOpen}
         setIsOpen={setManageDialogOpen}
         onSave={handleSaveDriver}
         driver={editingDriver}
       />
-      
-      <PageHeader title="Gestión de Repartidores" description="Administra las cuentas y aprobaciones de tu flota." />
 
-      {/* Búsqueda + filtro por estado: antes esta página no tenía NINGUNO de los dos, había
-          que revisar la lista completa a ojo para encontrar un repartidor o ver quién estaba
-          pendiente de aprobación. Filtrado en memoria: `users where role==delivery` es un
+      {/* Búsqueda + filtro por estado. Filtrado en memoria: `users where role==delivery` es un
           subconjunto acotado (la flota de un pueblo), no una colección sin techo. */}
-      <div className="flex flex-col gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nombre, email, patente, teléfono o DNI..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {([
-            { k: 'all', label: 'Todos' },
-            { k: 'pending', label: 'Pendientes' },
-            { k: 'active', label: 'Activos' },
-            { k: 'suspended', label: 'Suspendidos' },
-            { k: 'rejected', label: 'Rechazados' },
-          ] as { k: DriverFilter; label: string }[]).map(({ k, label }) => (
-            <button key={k} onClick={() => setStatusFilter(k)}
-              className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-                statusFilter === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70')}>
-              {label} ({counts[k]})
-            </button>
-          ))}
-        </div>
+      <div className="space-y-3">
+        <GlassSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre, email, patente, teléfono o DNI"
+          label="Buscar repartidores"
+          testId="drivers-search"
+          hint="Busca en toda la flota (teléfono, DNI o CUIL: desde 3 dígitos)."
+        />
+        <SlidingChips
+          chips={([
+            { value: 'all', label: 'Todos' },
+            { value: 'active', label: 'Activos' },
+            { value: 'pending', label: 'Pendientes' },
+            { value: 'suspended', label: 'Suspendidos' },
+            { value: 'rejected', label: 'Rechazados' },
+          ] as { value: DriverFilter; label: string }[]).map(c => ({ ...c, count: loadingAll ? null : counts[c.value] }))}
+          value={statusFilter}
+          onChange={setStatusFilter}
+          label="Filtrar repartidores por estado"
+          testId="drivers-chips"
+        />
       </div>
 
-      {authLoading || personnelLoading ? (
-         <div className="border rounded-lg p-4 space-y-4">
-            <div className="flex justify-between">
-                <Skeleton className="h-8 w-1/4" />
-                <Skeleton className="h-8 w-24" />
+      {loadingAll ? (
+        <ListCard>
+          {[0, 1, 2].map(i => (
+            <div key={i} className="flex items-center gap-3 px-3.5 py-3">
+              <Skeleton className="h-9 w-9 rounded-[0.75rem]" />
+              <div className="flex-1 space-y-1.5"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-3 w-1/4" /></div>
             </div>
-            <div className="space-y-2">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-            </div>
-        </div>
+          ))}
+        </ListCard>
       ) : (
         <DeliveryPersonnelList
           personnel={filteredPersonnel}
@@ -243,7 +251,7 @@ function AdminDeliveryPage() {
         onOpenChange={(o) => { if (!o) setSuspendTarget(null); }}
         target={suspendTarget}
       />
-    </div>
+    </AdminPage>
   );
 }
 

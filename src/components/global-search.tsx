@@ -19,6 +19,7 @@ import { UserDetailDialog } from '@/app/admin/users/user-detail-dialog';
 import { getCategoryStyle, formatCategoryLabel } from '@/lib/category-style';
 import { fetchUsersForSearch, userMatchesSearch } from '@/lib/admin-user-search';
 import { cn } from '@/lib/utils';
+import { CategoryTile } from '@/components/category-tile';
 
 interface StoreLite {
   id: string;
@@ -108,19 +109,18 @@ function BuyerSearch({ open, onOpenChange }: GlobalSearchProps) {
         {(stores || []).length > 0 && (
           <CommandGroup heading="Tiendas">
             {(stores || []).map(s => {
-              const style = getCategoryStyle(s.category || '');
-              const Icon = style.icon;
+              // Vidrio (9/11/2026): el rubro con su cuadradito de color (CategoryTile), igual
+              // que en el inicio, y el nombre del rubro legible ("Comida Rápida", no el slug).
               return (
                 <CommandItem
                   key={s.id}
                   value={`${s.name} ${s.category || ''}`}
                   onSelect={() => go(() => router.push(`/stores/${s.id}`))}
+                  className="gap-3 rounded-xl"
                 >
-                  <span className={cn('mr-2 flex h-7 w-7 items-center justify-center rounded-lg', style.bg)}>
-                    <Icon className={cn('h-4 w-4', style.text)} />
-                  </span>
-                  <span className="flex-1 truncate">{s.name}</span>
-                  {s.category && <span className="ml-2 text-xs text-muted-foreground">{s.category}</span>}
+                  <CategoryTile category={s.category} size="sm" />
+                  <span className="flex-1 truncate font-semibold">{s.name}</span>
+                  {s.category && <span className="ml-2 text-sm text-muted-foreground">{formatCategoryLabel(s.category)}</span>}
                 </CommandItem>
               );
             })}

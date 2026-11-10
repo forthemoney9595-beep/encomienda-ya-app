@@ -1,0 +1,85 @@
+/* Animaciones cortas de la tanda COMPRADOR del rediseño en vidrio (9/11/2026).
+   CSS Module propio (no toca globals.css, que es de la tanda base). Todas se apagan con
+   prefers-reduced-motion. Duraciones cortas a propósito: Android de gama baja. */
+
+/* El carrito "rebota" cuando se agrega algo: crece un poco y vuelve. Sin pasarse de largo
+   hacia abajo (la regla del Rediseño 2 es "sin rebotes de resorte"): un solo latido. */
+.bump {
+  animation: buyer-bump 0.42s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes buyer-bump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.16); }
+  100% { transform: scale(1); }
+}
+
+/* El número de una cantidad que cambia: entra desde abajo. */
+.tick {
+  display: inline-block;
+  animation: buyer-tick 0.24s ease-out;
+}
+@keyframes buyer-tick {
+  from { transform: translateY(35%); opacity: 0.2; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Píldora que se desliza en solapas y chips. Solo anima transform/width/height (baratos). */
+.pill {
+  transition: transform 0.32s cubic-bezier(.2, .8, .2, 1), width 0.32s cubic-bezier(.2, .8, .2, 1), height 0.32s cubic-bezier(.2, .8, .2, 1), opacity 0.2s ease-out;
+  will-change: transform;
+}
+
+/* Barra flotante que aparece desde abajo. */
+.rise {
+  animation: buyer-rise 0.32s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+@keyframes buyer-rise {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Skeleton de vidrio: brillo suave que recorre la tarjeta. */
+.shine {
+  position: relative;
+  overflow: hidden;
+}
+.shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.28), transparent);
+  animation: buyer-shine 1.6s ease-in-out infinite;
+}
+:global(.dark) .shine::after {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.07), transparent);
+}
+@keyframes buyer-shine {
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bump,
+  .tick,
+  .rise,
+  .shine::after {
+    animation: none !important;
+  }
+  .pill {
+    transition: none !important;
+  }
+}
+
+/* Mapas Leaflet de la tanda comprador: los botones + / − de zoom miden 30 px por defecto;
+   se llevan a 40 px para el pulgar. Va en el contenedor del mapa (que ya es relative z-0). */
+.mapTargets :global(.leaflet-bar a),
+.mapTargets :global(.leaflet-bar a:hover) {
+  width: 40px;
+  height: 40px;
+  line-height: 40px;
+  font-size: 20px;
+}
+.mapTargets :global(.leaflet-bar) {
+  border-radius: 12px;
+  overflow: hidden;
+}

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Star, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DIALOG_CLOSE_BIG, DIALOG_SHELL } from '@/components/buyer-motion';
 
 interface ReviewDialogProps {
   isOpen: boolean;
@@ -39,9 +40,9 @@ export function ReviewDialog({ isOpen, setIsOpen, productName, title = 'Califica
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className={cn("sm:max-w-[425px]", DIALOG_SHELL, DIALOG_CLOSE_BIG)}>
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="font-headline text-3xl font-extrabold">{title}</DialogTitle>
           <DialogDescription>
             ¿Qué te pareció <strong>{productName}</strong>? Tu opinión ayuda a otros usuarios.
           </DialogDescription>
@@ -49,19 +50,22 @@ export function ReviewDialog({ isOpen, setIsOpen, productName, title = 'Califica
         
         <div className="flex flex-col items-center gap-4 py-4">
           {/* Estrellas Interactivas */}
-          <div className="flex gap-1">
+          <div role="radiogroup" aria-label="Calificación" className="flex gap-1">
             {[1, 2, 3, 4, 5].map((star) => (
               <button
                 key={star}
                 type="button"
-                className="transition-transform hover:scale-110 focus:outline-none p-1"
+                role="radio"
+                aria-checked={rating === star}
+                aria-label={`${star} de 5`}
+                className="grid h-12 w-12 place-items-center rounded-full transition-transform hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none"
                 onMouseEnter={() => setHoverRating(star)}
                 onMouseLeave={() => setHoverRating(0)}
                 onClick={() => setRating(star)}
               >
                 <Star 
                   className={cn(
-                    "h-8 w-8 transition-colors", 
+                    "h-9 w-9 transition-colors", 
                     (hoverRating || rating) >= star ? "fill-warning text-warning" : "text-muted-foreground/20"
                   )} 
                 />
@@ -83,16 +87,16 @@ export function ReviewDialog({ isOpen, setIsOpen, productName, title = 'Califica
             placeholder="Escribe un comentario (opcional)..." 
             value={review}
             onChange={(e) => setReview(e.target.value)}
-            className="w-full resize-none"
+            className="w-full resize-none rounded-xl"
             rows={3}
           />
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isSubmitting}>
+          <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isSubmitting} className="h-11 rounded-full">
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={rating === 0 || isSubmitting}>
+          <Button onClick={handleSubmit} disabled={rating === 0 || isSubmitting} className="h-11 rounded-full">
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Enviar Reseña
           </Button>

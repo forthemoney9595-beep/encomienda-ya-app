@@ -10,24 +10,25 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { TINOGASTA_CENTER, type GeoCoords } from '@/lib/geo';
 
-// Mismo estilo de ícono que order-map.tsx (divIcon con emoji, sin assets externos).
+// Mismo estilo de ícono que order-map.tsx (divIcon con emoji, sin assets externos). 40 px
+// (vidrio, 9/11/2026): el pin se arrastra con el pulgar; a 34 px quedaba bajo el mínimo de 36.
 const pinIcon = L.divIcon({
   className: 'custom-icon',
   html: `<div style="
       background-color: #0F6376;
-      width: 34px;
-      height: 34px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
       border: 2px solid white;
       box-shadow: 0 2px 6px rgba(0,0,0,0.4);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      font-size: 20px;
       cursor: grab;
   ">📍</div>`,
-  iconSize: [34, 34],
-  iconAnchor: [17, 17],
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
 });
 
 interface LocationPickerMapProps {

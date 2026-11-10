@@ -10,11 +10,11 @@ import BuyerOrdersView from '@/app/orders/buyer-orders-view';
 export default function MyPurchasesPage() {
   return (
     <div className="container mx-auto max-w-3xl py-6 px-4">
-      <h1 className="text-2xl font-bold mb-1">Mis Compras</h1>
+      <h1 className="font-headline text-4xl font-extrabold leading-none mb-1">Mis Compras</h1>
       <p className="text-sm text-muted-foreground mb-6">
         Lo que pediste como cliente, aparte de tu panel de trabajo.
       </p>
-      <BuyerOrdersView />
+      <BuyerOrdersView showHeader={false} />
     </div>
   );
 }

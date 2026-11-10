@@ -157,7 +157,7 @@ export function InboxList(props: InboxListProps) {
   })();
 
   return (
-    <div className={cn('min-w-0 overflow-hidden rounded-lg border border-border bg-card', className)} data-testid="inbox-list">
+    <div className={cn('min-w-0 overflow-hidden glass rounded-card', className)} data-testid="inbox-list">
       {errors.length > 0 && (
         <ul className="divide-y divide-border border-b border-border">
           {errors.map((e, i) => {
@@ -174,7 +174,7 @@ export function InboxList(props: InboxListProps) {
         <div className="space-y-2 p-4" aria-busy="true"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
       ) : shown.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-6 py-10 text-center" data-testid="inbox-empty">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-success-ink"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
           <p className="font-medium">{emptyTitle}</p>
           <p className="text-xs text-muted-foreground">{emptyDescription ?? `Revisado a las ${new Date(now).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}</p>
         </div>

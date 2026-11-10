@@ -106,7 +106,7 @@ function SystemChip() {
       aria-label={maintenance ? 'Estado del sistema: en mantenimiento' : 'Estado del sistema: en vivo'}
       className={cn(
         'hidden h-9 items-center gap-2 rounded-full px-3 text-sm font-medium sm:inline-flex',
-        maintenance ? 'bg-warning/15 text-warning-ink' : 'bg-success/15 text-success-ink',
+        maintenance ? 'bg-warning/15 text-warning-ink' : 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink',
       )}
     >
       <span className={cn('h-2 w-2 rounded-full', maintenance ? 'bg-warning' : 'bg-success', live && !maintenance && 'animate-pulse motion-reduce:animate-none')} aria-hidden="true" />
@@ -323,7 +323,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
       {/* Drawer (celular/tablet) */}
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent side="left" className="w-72 overflow-y-auto bg-admin-chrome p-0" data-testid="admin-drawer">
+        <SheetContent side="left" data-surface="admin" className="glass-strong inset-y-2 left-2 h-auto w-72 overflow-y-auto rounded-card bg-[var(--glass-strong)] p-0" data-testid="admin-drawer">
           <SheetHeader className="h-14 justify-center border-b border-border px-4 text-left">
             <SheetTitle className="text-base">Menú</SheetTitle>
           </SheetHeader>

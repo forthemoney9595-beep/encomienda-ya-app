@@ -10,21 +10,20 @@ import {
   doc, serverTimestamp, deleteField, writeBatch, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { authedFetch } from '@/lib/authed-fetch';
-import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Search, MoreHorizontal, Shield, Trash2, Users, Eye, Store, Bike, ChevronDown } from 'lucide-react';
+import { Loader2, MoreHorizontal, Shield, Trash2, Users, Eye, Store, Bike, ChevronDown, MailCheck, MailWarning, Phone } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import AdminAuthGuard from '../admin-auth-guard';
 import { logAdminAction } from '@/lib/admin-audit';
 import { UserDetailDialog } from './user-detail-dialog';
+import { AdminPage } from '@/components/admin/admin-page';
+import { GlassSearch, ListCard, ListGroupHeader, ListRow, PersonTile, RowIconButton, SlidingChips } from '@/components/admin/admin-list';
+import { SOFT_BADGE } from '@/components/admin/status-badge';
+import { EmptyState } from '@/components/admin/empty-state';
+import { useConfirm } from '@/components/admin/confirm-dialog';
 import { fetchUsersForSearch, userMatchesSearch, invalidateUserSearchCache, ADMIN_SEARCH_CAP } from '@/lib/admin-user-search';
 
 const PAGE_SIZE = 25;
@@ -44,6 +43,7 @@ function AdminUsersPage() {
   const { user: currentUser, isFullAdmin } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const confirmDialog = useConfirm();
   const searchParams = useSearchParams();
   const qParam = searchParams.get('q') || '';
   // Precarga desde la búsqueda global admin (⌘K) -- ej. tocar un cliente ahí navega acá
@@ -249,12 +249,12 @@ function AdminUsersPage() {
     }
 
     const confirmMessage = promotingToAdmin
-        ? `⚠️ Le vas a dar acceso de administrador ${level === 'full' ? 'TOTAL' : 'de SOPORTE (operativo, sin plata/config/broadcast)'} a este usuario. ¿Confirmás?`
+        ? `Le vas a dar acceso de administrador ${level === 'full' ? 'TOTAL' : 'de SOPORTE (operativo, sin plata/config/broadcast)'} a este usuario. ¿Confirmás?`
         : demotingFromAdmin
         ? '¿Confirmás quitarle el acceso de administrador a este usuario?'
         : `¿Estás seguro de cambiar el rol de este usuario a ${newRole}?`;
 
-    if (!confirm(confirmMessage)) return;
+    if (!(await confirmDialog({ title: confirmMessage, tone: demotingFromAdmin ? 'destructive' : 'default', confirmLabel: 'Confirmar' })).ok) return;
 
     try {
         // role en users/{uid} es lo que decide la UI del lado del cliente,
@@ -293,9 +293,12 @@ function AdminUsersPage() {
         toast({ variant: 'destructive', title: 'No autorizado', description: 'Necesitás acceso completo de administrador para esto.' });
         return;
     }
-    if (!confirm(newLevel === 'support'
-        ? '¿Bajar a este admin a nivel Soporte (sin plata/config/broadcast/borrar cuentas)?'
-        : '¿Darle a este admin acceso TOTAL?')) return;
+    if (!(await confirmDialog({
+        title: newLevel === 'support'
+          ? '¿Bajar a este admin a nivel Soporte (sin plata/config/broadcast/borrar cuentas)?'
+          : '¿Darle a este admin acceso TOTAL?',
+        confirmLabel: 'Confirmar',
+    })).ok) return;
 
     try {
         // Batch atómico (Fase PP-P4): la UI (users.adminLevel) y el acceso real
@@ -320,16 +323,14 @@ function AdminUsersPage() {
         toast({ variant: 'destructive', title: 'No autorizado', description: 'Necesitás acceso completo de administrador para esto.' });
         return;
     }
-    if (!confirm("⚠️ ¿Estás seguro? Esto elimina la cuenta permanentemente (Firebase Auth + Firestore).")) return;
+    if (!(await confirmDialog({ title: '¿Eliminar la cuenta?', description: 'Se borra permanentemente (Firebase Auth + Firestore). No se puede deshacer.', tone: 'destructive', confirmLabel: 'Eliminar cuenta' })).ok) return;
 
     try {
         let res = await authedFetch('/api/admin/delete-user', currentUser, { userId });
         let data = await res.json();
         // 409 = la cuenta tiene plata sin cobrar (ver /api/admin/delete-user).
         if (res.status === 409 && data.needsForce) {
-            if (!confirm(`${data.error}
-
-¿Borrar igual? La deuda se pierde y queda registrada en el log.`)) return;
+            if (!(await confirmDialog({ title: '¿Borrar igual?', description: `${data.error} La deuda se pierde y queda registrada en el log.`, tone: 'destructive', confirmLabel: 'Borrar igual' })).ok) return;
             res = await authedFetch('/api/admin/delete-user', currentUser, { userId, force: true });
             data = await res.json();
         }
@@ -344,269 +345,200 @@ function AdminUsersPage() {
     }
   };
 
+  const roleLabel = (r?: string) => r === 'store' ? 'Tienda' : r === 'delivery' ? 'Repartidor' : r === 'admin' ? 'Admin' : 'Cliente';
+  const storeOf = (u: any) => storeByOwner[u.id] || (u.storeId ? Object.values(storeByOwner).find(s => s.id === u.storeId) : undefined);
+
+  const renderUserRow = (user: any, i: number) => {
+    const store = user.role === 'store' ? storeOf(user) : undefined;
+    const approvalTone = user.isApproved ? 'success' : user.status === 'Suspendido' ? 'destructive' : 'warning';
+    const approvalLabel = user.isApproved ? 'Aprobado' : user.status === 'Suspendido' ? 'Suspendido' : 'Pendiente';
+    const who = user.displayName || user.name || user.email || 'la cuenta';
+    return (
+      <ListRow
+        key={user.id}
+        index={i}
+        testId="user-row"
+        leading={<PersonTile role={user.role} photo={user.photoURL || user.profileImageUrl} />}
+        title={user.displayName || user.name || 'Sin nombre'}
+        subtitle={
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="min-w-0 truncate">{user.email}</span>
+            {/* Estado del mail como etiqueta propia, bien visible (punto 1 de la prueba). */}
+            {emailVerified[user.id] === true && (
+              <span className="inline-flex h-[22px] items-center gap-1 rounded-full bg-success/15 px-2 text-xs font-semibold text-[hsl(142_80%_20%)] dark:text-success-ink"><MailCheck className="h-3.5 w-3.5" aria-hidden="true" /> Mail verificado</span>
+            )}
+            {emailVerified[user.id] === false && (
+              <span className="inline-flex h-[22px] items-center gap-1 rounded-full bg-warning/15 px-2 text-xs font-semibold text-warning-ink"><MailWarning className="h-3.5 w-3.5" aria-hidden="true" /> Mail sin verificar</span>
+            )}
+          </span>
+        }
+        meta={
+          <>
+            <span className="flex flex-wrap justify-end gap-1">
+              <span className={cn('inline-flex h-[22px] items-center rounded-full px-2 text-xs font-semibold', user.role === 'admin' ? 'bg-primary/15 text-primary-ink' : 'bg-muted text-foreground')} data-testid="user-role">{roleLabel(user.role)}</span>
+              {user.role === 'admin' && <span className="inline-flex h-[22px] items-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">{user.adminLevel === 'support' ? 'Soporte' : 'Completo'}</span>}
+            </span>
+            {(user.role === 'store' || user.role === 'delivery') && (
+              <span className={cn('inline-flex h-[22px] items-center rounded-full px-2 text-xs font-semibold', SOFT_BADGE[approvalTone])}>{approvalLabel}</span>
+            )}
+          </>
+        }
+        actions={
+          <>
+            {/* Ficha COMPLETA del negocio (pedidos, plata, CBU): el ojito muestra a la persona. */}
+            {store && <RowIconButton label={`Ficha de ${store.name}`} href={`/admin/stores/${store.id}`}><Store className="h-4 w-4" aria-hidden="true" /></RowIconButton>}
+            {user.role === 'delivery' && <RowIconButton label="Ficha del repartidor" href={`/admin/delivery/${user.id}`}><Bike className="h-4 w-4" aria-hidden="true" /></RowIconButton>}
+            <RowIconButton label="Ver detalle de la persona" onClick={() => setDetailUser(user)}><Eye className="h-4 w-4" aria-hidden="true" /></RowIconButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground" aria-label={`Más acciones para ${who}`}>
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel>Cambiar rol</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'buyer', user.role)}>Convertir en Cliente</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'store', user.role)}>Convertir en Tienda</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'delivery', user.role)}>Convertir en Repartidor</DropdownMenuItem>
+                {/* Otorgar/quitar admin y cambiar nivel: solo admin 'full' (ver isFullAdmin) --
+                    firestore.rules lo exige igual, pero ocultarlo evita que un 'support' lo
+                    intente y deje al usuario en un estado a medias (role sin roles_admin real). */}
+                {isFullAdmin && user.role === 'admin' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Nivel de admin</DropdownMenuLabel>
+                    {user.adminLevel === 'support' ? (
+                      <DropdownMenuItem onClick={() => handleLevelChange(user.id, 'full')}>Dar acceso completo</DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => handleLevelChange(user.id, 'support')}>Bajar a Soporte</DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleRoleChange(user.id, 'buyer', user.role)}>
+                      Quitar acceso de Admin
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {isFullAdmin && user.role !== 'admin' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-primary font-bold focus:text-primary focus:bg-primary/10" onClick={() => handleRoleChange(user.id, 'admin', user.role, 'full')}>
+                      <Shield className="mr-2 h-4 w-4" /> Hacer Admin (completo)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-primary focus:text-primary focus:bg-primary/10" onClick={() => handleRoleChange(user.id, 'admin', user.role, 'support')}>
+                      <Shield className="mr-2 h-4 w-4" /> Hacer Admin (soporte)
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {isFullAdmin && user.id !== currentUser?.uid && (
+              <RowIconButton label="Eliminar usuario" tone="destructive" onClick={() => handleDeleteUser(user.id)}><Trash2 className="h-4 w-4" aria-hidden="true" /></RowIconButton>
+            )}
+          </>
+        }
+      >
+        {/* Info específica del rol, para distinguir de un vistazo */}
+        {user.phoneNumber && (user.role === 'buyer' || user.role === 'store') && (
+          <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><Phone className="h-3 w-3" aria-hidden="true" /> {user.phoneNumber}</div>
+        )}
+        {user.role === 'delivery' && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className={cn('h-2 w-2 rounded-full', user.isOnline !== false ? 'bg-success' : 'bg-muted-foreground/60')} aria-hidden="true" />
+              {user.isOnline !== false ? 'Disponible' : 'No disponible'}
+            </span>
+            {(() => {
+              const v = user.vehicle;
+              const txt = typeof v === 'string' ? v : v?.type ? `${v.type}${v.plate ? ' · ' + v.plate : ''}` : null;
+              return txt ? <span className="capitalize">· {txt}</span> : null;
+            })()}
+          </div>
+        )}
+        {/* Qué tienda es de esta persona — antes solo se veía a la PERSONA */}
+        {store && (
+          <Link href={`/admin/stores/${store.id}`} className="mt-0.5 inline-flex min-h-[24px] items-center gap-1 text-xs font-medium text-primary-ink hover:underline">
+            <Store className="h-3 w-3" aria-hidden="true" /> {store.name}
+          </Link>
+        )}
+        {/* En celular angosto la columna derecha se esconde: rol debajo. */}
+        <span className="mt-1 inline-flex h-[22px] items-center rounded-full bg-muted px-2 text-xs font-semibold min-[380px]:hidden">{roleLabel(user.role)}</span>
+      </ListRow>
+    );
+  };
+
   return (
-    <div className="container mx-auto space-y-6">
-      <PageHeader
-        title="Gestión de Usuarios"
-        description="Administra clientes, asigna roles y mantén limpia la base de datos."
-      />
+    <AdminPage
+      title="Cuentas"
+      subtitle={<span data-testid="users-kline"><b className="tabular-nums text-foreground">{cAll === null ? '…' : roleCounts.all.toLocaleString('es-AR')}</b> cuentas en la base · clientes, tiendas, repartidores y admins</span>}
+    >
+      <div className="space-y-3">
+        <GlassSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre, email, teléfono o DNI"
+          label="Buscar cuentas"
+          testId="users-search"
+          hint={debouncedSearch && !isLoading ? (
+            <>
+              {displayed.length} resultado{displayed.length === 1 ? '' : 's'} para «{search.trim()}» en toda la base
+              {searchCapped && ` — la base superó los ${ADMIN_SEARCH_CAP.toLocaleString('es-AR')} usuarios, la búsqueda puede estar incompleta (avisar a Claude: toca migrar a un índice de búsqueda)`}
+            </>
+          ) : 'Busca en toda la base (nombre o email por partes, teléfono o DNI/CUIT).'}
+        />
+        <SlidingChips
+          chips={[
+            { value: 'all', label: 'Todos', icon: Users, count: cAll === null ? null : roleCounts.all },
+            ...ROLE_GROUPS.map(g => ({ value: g.k, label: g.label, icon: g.icon, count: roleCounts[g.k] })),
+          ]}
+          value={roleFilter}
+          onChange={(v) => setRoleFilter(v as typeof roleFilter)}
+          label="Filtrar cuentas por rol"
+          testId="users-chips"
+        />
+      </div>
 
-      <Card>
-        <CardHeader>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5" /> Base de Usuarios ({roleCounts.all})
-                    </CardTitle>
-                </div>
-                <div className="relative w-full sm:w-72">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Buscar por nombre, email, teléfono o DNI..."
-                        className="pl-8"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
-                </div>
-            </div>
-            {debouncedSearch && !isLoading && (
-                <p className="text-xs text-muted-foreground mt-2">
-                    {displayed.length} resultado{displayed.length === 1 ? '' : 's'} para «{search.trim()}» en toda la base
-                    {searchCapped && ` — ⚠️ la base superó los ${ADMIN_SEARCH_CAP.toLocaleString('es-AR')} usuarios, la búsqueda puede estar incompleta (avisar a Claude: toca migrar a un índice de búsqueda)`}
-                </p>
-            )}
-            <div className="flex gap-1.5 flex-wrap mt-3">
-                {[
-                    { k: 'all', label: 'Todos', icon: Users, chip: 'bg-primary text-primary-foreground' },
-                    ...ROLE_GROUPS.map(g => ({ k: g.k, label: g.label, icon: g.icon, chip: g.chip })),
-                ].map(({ k, label, icon: Icon, chip }) => (
-                    <button key={k} onClick={() => setRoleFilter(k as any)}
-                        className={cn('inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all',
-                            roleFilter === k ? chip : 'bg-muted text-muted-foreground hover:bg-muted/70'
-                        )}>
-                        <Icon className="h-3 w-3" />
-                        {label} ({roleCounts[k as keyof typeof roleCounts]})
-                    </button>
-                ))}
-            </div>
-        </CardHeader>
-        <CardContent>
-            <div className="rounded-md border overflow-hidden">
-                <Table>
-                    <TableHeader className="bg-muted/50">
-                        <TableRow>
-                            <TableHead>Usuario</TableHead>
-                            <TableHead>Rol Actual</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={4} className="text-center py-10">
-                                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-                                </TableCell>
-                            </TableRow>
-                        ) : (() => {
-                        const renderUserRow = (user: any) => (
-                            <TableRow key={user.id}>
-                                <TableCell className={cn('flex items-center gap-3 border-l-4', groupOf(user.role).border)}>
-                                    <Avatar className={cn('h-9 w-9 border-2', groupOf(user.role).ring)}>
-                                        <AvatarImage src={user.photoURL || user.profileImageUrl} />
-                                        <AvatarFallback>{user.displayName?.charAt(0) || user.name?.charAt(0) || 'U'}</AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <div className="font-medium text-sm">{user.displayName || user.name || 'Sin Nombre'}</div>
-                                        <div className="text-xs text-muted-foreground">{user.email}</div>
-                                        {/* Estado del mail como badge propio, bien visible (punto 1) */}
-                                        {emailVerified[user.id] === true && (
-                                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-xs font-medium">
-                                                ✉️ Mail verificado
-                                            </span>
-                                        )}
-                                        {emailVerified[user.id] === false && (
-                                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 text-xs font-medium">
-                                                ⚠️ Mail sin verificar
-                                            </span>
-                                        )}
-                                        {/* Info específica del rol, para distinguir de un vistazo */}
-                                        {user.phoneNumber && (user.role === 'buyer' || user.role === 'store') && (
-                                            <div className="text-xs text-muted-foreground">📞 {user.phoneNumber}</div>
-                                        )}
-                                        {user.role === 'delivery' && (
-                                            <div className="mt-0.5 flex items-center gap-2 text-xs">
-                                                <span className={cn('inline-flex items-center gap-1', user.isOnline !== false ? 'text-success' : 'text-muted-foreground')}>
-                                                    <span className={cn('h-1.5 w-1.5 rounded-full', user.isOnline !== false ? 'bg-success' : 'bg-muted-foreground')} />
-                                                    {user.isOnline !== false ? 'Disponible' : 'No disponible'}
-                                                </span>
-                                                {(() => {
-                                                    const v = user.vehicle;
-                                                    const txt = typeof v === 'string' ? v : v?.type ? `${v.type}${v.plate ? ' · ' + v.plate : ''}` : null;
-                                                    return txt ? <span className="text-muted-foreground">· {txt}</span> : null;
-                                                })()}
-                                            </div>
-                                        )}
-                                        {/* Qué tienda es de esta persona — antes solo se veía a la PERSONA */}
-                                        {user.role === 'store' && (storeByOwner[user.id] || (user.storeId && Object.values(storeByOwner).find(s => s.id === user.storeId))) && (
-                                            <Link
-                                                href={`/admin/stores/${(storeByOwner[user.id] || Object.values(storeByOwner).find(s => s.id === user.storeId))!.id}`}
-                                                className="mt-0.5 inline-flex items-center gap-1 text-xs text-info hover:underline"
-                                            >
-                                                <Store className="h-3 w-3" />
-                                                {(storeByOwner[user.id] || Object.values(storeByOwner).find(s => s.id === user.storeId))!.name}
-                                            </Link>
-                                        )}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                        <Badge variant="outline" className={
-                                            user.role === 'admin' ? 'border-primary/50 text-primary bg-primary/10' :
-                                            user.role === 'store' ? 'border-info/50 text-info bg-info/10' :
-                                            user.role === 'delivery' ? 'border-warning/50 text-warning bg-warning/10' :
-                                            'bg-muted text-muted-foreground border-border'
-                                        }>
-                                            {user.role === 'buyer' ? 'Cliente' : user.role === 'store' ? 'Tienda' : user.role === 'delivery' ? 'Repartidor' : 'Admin'}
-                                        </Badge>
-                                        {user.role === 'admin' && (
-                                            <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border">
-                                                {user.adminLevel === 'support' ? 'Soporte' : 'Completo'}
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    {user.role === 'store' || user.role === 'delivery' ? (
-                                        <Badge variant={user.isApproved ? 'default' : 'secondary'} className="text-xs">
-                                            {user.isApproved ? 'Aprobado' : user.status === 'Suspendido' ? 'Suspendido' : 'Pendiente'}
-                                        </Badge>
-                                    ) : (
-                                        <span className="text-xs text-muted-foreground">-</span>
-                                    )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <div className="flex items-center justify-end gap-2">
-                                        {/* Ficha COMPLETA del negocio (pedidos, plata, CBU) — el ojito muestra a
-                                            la persona; esto lleva a la tienda / repartidor como operación. */}
-                                        {user.role === 'store' && storeByOwner[user.id] && (
-                                            <Link href={`/admin/stores/${storeByOwner[user.id].id}`}>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" title={`Ficha de ${storeByOwner[user.id].name}`}>
-                                                    <Store className="h-4 w-4 text-info" />
-                                                </Button>
-                                            </Link>
-                                        )}
-                                        {user.role === 'delivery' && (
-                                            <Link href={`/admin/delivery/${user.id}`}>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" title="Ficha del repartidor">
-                                                    <Bike className="h-4 w-4 text-warning" />
-                                                </Button>
-                                            </Link>
-                                        )}
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalle de la persona" onClick={() => setDetailUser(user)}>
-                                            <Eye className="h-4 w-4 text-muted-foreground" />
-                                        </Button>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-52">
-                                                <DropdownMenuLabel>Cambiar Rol</DropdownMenuLabel>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'buyer', user.role)}>Convertir en Cliente</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'store', user.role)}>Convertir en Tienda</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'delivery', user.role)}>Convertir en Repartidor</DropdownMenuItem>
-                                                {/* Otorgar/quitar admin y cambiar nivel: solo admin 'full' (ver isFullAdmin) --
-                                                    firestore.rules lo exige igual, pero ocultarlo evita que un 'support' lo
-                                                    intente y deje al usuario en un estado a medias (role sin roles_admin real). */}
-                                                {isFullAdmin && user.role === 'admin' && (
-                                                    <>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuLabel className="text-xs text-muted-foreground">Nivel de admin</DropdownMenuLabel>
-                                                        {user.adminLevel === 'support' ? (
-                                                            <DropdownMenuItem onClick={() => handleLevelChange(user.id, 'full')}>Dar acceso completo</DropdownMenuItem>
-                                                        ) : (
-                                                            <DropdownMenuItem onClick={() => handleLevelChange(user.id, 'support')}>Bajar a Soporte</DropdownMenuItem>
-                                                        )}
-                                                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleRoleChange(user.id, 'buyer', user.role)}>
-                                                            Quitar acceso de Admin
-                                                        </DropdownMenuItem>
-                                                    </>
-                                                )}
-                                                {isFullAdmin && user.role !== 'admin' && (
-                                                    <>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem className="text-primary font-bold focus:text-primary focus:bg-primary/10" onClick={() => handleRoleChange(user.id, 'admin', user.role, 'full')}>
-                                                            <Shield className="mr-2 h-4 w-4" /> Hacer Admin (completo)
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem className="text-primary focus:text-primary focus:bg-primary/10" onClick={() => handleRoleChange(user.id, 'admin', user.role, 'support')}>
-                                                            <Shield className="mr-2 h-4 w-4" /> Hacer Admin (soporte)
-                                                        </DropdownMenuItem>
-                                                    </>
-                                                )}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-
-                                        {isFullAdmin && user.id !== currentUser?.uid && (
-                                            <Button variant="destructive" size="icon" className="h-8 w-8 opacity-70 hover:opacity-100" onClick={() => handleDeleteUser(user.id)} title="Eliminar Usuario">
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        );
-                        // Con un rol filtrado, lista plana; en "Todos", secciones
-                        // colapsables por rol (Clientes / Tiendas / Repartidores / Admins).
-                        if (roleFilter !== 'all') return displayed.map(renderUserRow);
-                        return ROLE_GROUPS.map(g => {
-                            const rows = displayed.filter(u => (u.role || 'buyer') === g.k);
-                            if (rows.length === 0) return null;
-                            const collapsed = collapsedGroups.has(g.k);
-                            const Icon = g.icon;
-                            return (
-                                <Fragment key={g.k}>
-                                    <TableRow className="bg-muted/40 hover:bg-muted/60 cursor-pointer select-none" onClick={() => toggleGroup(g.k)}>
-                                        <TableCell colSpan={4} className="py-2">
-                                            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-                                                <Icon className={cn('h-4 w-4', g.text)} />
-                                                <span className={g.text}>{g.label}</span>
-                                                <span className="text-muted-foreground font-normal normal-case">— {rows.length} en esta página</span>
-                                                <ChevronDown className={cn('h-4 w-4 ml-auto text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
-                                            </span>
-                                        </TableCell>
-                                    </TableRow>
-                                    {!collapsed && rows.map(renderUserRow)}
-                                </Fragment>
-                            );
-                        });
-                        })()}
-                        {!isLoading && displayed.length === 0 && (
-                            <TableRow>
-                                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                    {debouncedSearch
-                                        ? <>No se encontraron usuarios para &quot;{debouncedSearch}&quot; (busca por nombre, email, teléfono o DNI).</>
-                                        : 'No hay usuarios para mostrar.'}
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-            {hasMore && !debouncedSearch && (
-                <div className="flex justify-center mt-4">
-                    <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-                        {loadingMore ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cargando...</> : 'Cargar más'}
-                    </Button>
-                </div>
-            )}
-        </CardContent>
-      </Card>
+      <ListCard testId="users-list">
+        {isLoading ? (
+          <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Cargando cuentas" /></div>
+        ) : displayed.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title={debouncedSearch ? `No se encontraron cuentas para «${debouncedSearch}»` : 'No hay cuentas para mostrar'}
+            description={debouncedSearch ? 'Busca por nombre, email, teléfono o DNI.' : undefined}
+          />
+        ) : roleFilter !== 'all' ? (
+          // Con un rol filtrado, lista plana; en "Todos", secciones colapsables por rol.
+          displayed.map(renderUserRow)
+        ) : (
+          ROLE_GROUPS.map(g => {
+            const groupRows = displayed.filter(u => (u.role || 'buyer') === g.k);
+            if (groupRows.length === 0) return null;
+            const collapsed = collapsedGroups.has(g.k);
+            const Icon = g.icon;
+            return (
+              <Fragment key={g.k}>
+                <ListGroupHeader onClick={() => toggleGroup(g.k)} expanded={!collapsed} className="border-t border-foreground/10 first:border-t-0">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  <span className="text-foreground">{g.label}</span>
+                  <span className="font-normal normal-case">· {groupRows.length} en esta página</span>
+                  <ChevronDown className={cn('ml-auto h-4 w-4 transition-transform', collapsed && '-rotate-90')} aria-hidden="true" />
+                </ListGroupHeader>
+                {!collapsed && groupRows.map(renderUserRow)}
+              </Fragment>
+            );
+          })
+        )}
+      </ListCard>
+      {hasMore && !debouncedSearch && (
+        <div className="flex justify-center">
+          <Button variant="outline" className="min-h-[44px]" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />Cargando…</> : 'Cargar más'}
+          </Button>
+        </div>
+      )}
 
       <UserDetailDialog user={detailUser} onClose={() => setDetailUser(null)} />
-    </div>
+    </AdminPage>
   );
 }
 

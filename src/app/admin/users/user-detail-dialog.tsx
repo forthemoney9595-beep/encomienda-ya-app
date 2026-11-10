@@ -51,7 +51,7 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
 
   return (
     <Dialog open={!!user} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-surface="admin">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <Avatar className="h-10 w-10 border">
@@ -71,9 +71,9 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
         {/* Métricas del usuario como comprador */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-2">
           {[
-            { label: 'Pedidos', value: stats.total, icon: ShoppingBag, color: 'text-info' },
-            { label: 'Entregados', value: stats.delivered, icon: ShoppingBag, color: 'text-success' },
-            { label: 'Cancelados', value: stats.cancelled, icon: XCircle, color: 'text-destructive' },
+            { label: 'Pedidos', value: stats.total, icon: ShoppingBag, color: 'text-info-ink' },
+            { label: 'Entregados', value: stats.delivered, icon: ShoppingBag, color: 'text-success-ink' },
+            { label: 'Cancelados', value: stats.cancelled, icon: XCircle, color: 'text-destructive-ink' },
             { label: 'Gastado (neto, últ. 30 pedidos)', value: `${money(stats.spent)}`, icon: DollarSign, color: 'text-primary' },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="rounded-lg border bg-muted/30 p-2.5">
@@ -89,7 +89,7 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
         {claims && claims.length > 0 && (
           <div className="space-y-2">
             <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
-              <MessageSquareWarning className="h-3.5 w-3.5 text-warning" />
+              <MessageSquareWarning className="h-3.5 w-3.5 text-warning-ink" />
               Reclamos ({claims.length}
               {claims.filter(c => c.resolution === 'refunded').length > 0 &&
                 `, ${claims.filter(c => c.resolution === 'refunded').length} con reembolso`})
@@ -99,8 +99,8 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
                 <div key={c.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                   <Badge variant="outline" className={cn('text-xs shrink-0',
                     c.resolved
-                      ? (c.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success')
-                      : 'border-warning/40 text-warning')}>
+                      ? (c.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success-ink')
+                      : 'border-warning/40 text-warning-ink')}>
                     {c.resolved ? (c.resolution === 'rejected' ? 'Rechazado' : c.resolution === 'refunded' ? 'Reembolsado' : 'Resuelto') : 'Pendiente'}
                   </Badge>
                   <span className="truncate">{CLAIM_TYPES[c.type as ClaimType]?.label || c.type}</span>
@@ -134,7 +134,7 @@ export function UserDetailDialog({ user, onClose }: { user: any | null; onClose:
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="font-bold">{money((o.total || 0))}</span>
                     {o.refunded && (
-                      <Badge variant="outline" className="text-xs border-info/40 text-info">
+                      <Badge variant="outline" className="text-xs border-info/40 text-info-ink">
                         Reemb. {money(Math.round(o.refundAmount || 0))}
                       </Badge>
                     )}

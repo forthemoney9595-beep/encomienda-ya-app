@@ -37,6 +37,10 @@ import { fmtDate } from '@/lib/format-date';
 import { StoreComplianceCard } from '@/components/store-compliance-card';
 import { SuspendAccountDialog } from '@/components/admin/suspend-account-dialog';
 import { SuspensionPanel } from '@/components/admin/suspension-panel';
+import { CategoryTile } from '@/components/category-tile';
+import { formatCategoryLabel } from '@/lib/category-style';
+import { SOFT_BADGE } from '@/components/admin/status-badge';
+import { useAdminCrumbs } from '@/components/admin/admin-chrome';
 import type { AccountSuspension } from '@/lib/suspension';
 
 const formatDate = (ts: any) => {
@@ -62,6 +66,8 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     // Datos de la tienda
     const storeRef = useMemoFirebase(() => firestore ? doc(firestore, 'stores', storeId) : null, [firestore, storeId]);
     const { data: store, isLoading: storeLoading } = useDoc<any>(storeRef);
+    // Migas de la topbar: Operación › Tiendas › {nombre} (la ficha no usa AdminPage).
+    useAdminCrumbs([{ label: 'Operación' }, { label: 'Tiendas', href: '/admin/stores' }, { label: store?.name || 'Tienda' }]);
 
     // 🔒 El CBU de la tienda vive en el user doc del DUEÑO (seguridad, ago 2026: stores/{id}
     // es de lectura pública, no puede tener datos bancarios). Se lee/escribe ahí.
@@ -260,23 +266,28 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
     return (
         <div className="container mx-auto pb-20 space-y-6">
             {/* Header — flex-wrap (Fase YY): con "Pausar 1 h" los botones no entraban a 430 px */}
-            <div className="flex flex-wrap items-start gap-4">
-                <Avatar className="h-16 w-16 rounded-xl border">
-                    <AvatarImage src={store.imageUrl || store.bannerImageUrl} />
-                    <AvatarFallback><Store className="h-7 w-7" /></AvatarFallback>
-                </Avatar>
+            <div className="glass flex flex-wrap items-start gap-4 rounded-card p-4 sm:p-5" data-testid="store-ficha-header">
+                {(store.imageUrl || store.bannerImageUrl) ? (
+                    <Avatar className="h-16 w-16 rounded-[1rem]">
+                        <AvatarImage src={store.imageUrl || store.bannerImageUrl} alt="" />
+                        <AvatarFallback><Store className="h-7 w-7" /></AvatarFallback>
+                    </Avatar>
+                ) : (
+                    <CategoryTile category={store.category} size="lg" />
+                )}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <h1 className="text-2xl font-bold">{store.name}</h1>
-                        <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-xs">
+                        <h1 className="font-headline text-[1.75rem] font-extrabold leading-tight tracking-tight">{store.name}</h1>
+                        <span className={cn('inline-flex h-[22px] items-center rounded-full px-2 text-xs font-semibold', store.isApproved ? SOFT_BADGE.success : storeSuspended ? SOFT_BADGE.destructive : SOFT_BADGE.warning)}>
                             {store.isApproved ? 'Aprobada' : storeSuspended ? 'Suspendida' : 'No aprobada'}
-                        </Badge>
+                        </span>
                         {paused && (
-                            <Badge variant="outline" className="text-xs border-warning/40 text-warning">
+                            <span className={cn('inline-flex h-[22px] items-center rounded-full px-2 text-xs font-semibold', SOFT_BADGE.warning)}>
                                 {pausedUntil ? `Pausada hasta las ${fmtDate(pausedUntil, 'time')}` : 'Pausada'}
-                            </Badge>
+                            </span>
                         )}
                     </div>
+                    {store.category && <p className="mt-0.5 text-sm font-medium text-foreground/80">{formatCategoryLabel(store.category)}</p>}
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                         <MapPin className="h-3.5 w-3.5" /> {store.address}
                     </p>
@@ -301,22 +312,22 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
                     {!paused && (
                         <Button size="sm" variant="outline" onClick={() => handleTogglePause(60)} disabled={togglingPause} className="gap-1.5">
-                            <Pause className="h-3.5 w-3.5 text-warning" /> Pausar 1 h
+                            <Pause className="h-3.5 w-3.5 text-warning-ink" /> Pausar 1 h
                         </Button>
                     )}
                     <Button size="sm" variant="outline" onClick={() => handleTogglePause()} disabled={togglingPause} className="gap-1.5">
                         {togglingPause ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : paused ? <Play className="h-3.5 w-3.5 text-success" /> : <Pause className="h-3.5 w-3.5 text-warning" />}
+                            : paused ? <Play className="h-3.5 w-3.5 text-success-ink" /> : <Pause className="h-3.5 w-3.5 text-warning-ink" />}
                         {paused ? 'Reactivar' : 'Pausar'}
                     </Button>
                     {store.isApproved && store.ownerId && (
                         <Button size="sm" variant="outline" onClick={() => setSuspendOpen(true)} className="gap-1.5" data-testid="open-suspend">
-                            <XCircle className="h-3.5 w-3.5 text-destructive" /> Suspender
+                            <XCircle className="h-3.5 w-3.5 text-destructive-ink" /> Suspender
                         </Button>
                     )}
                     {!store.isApproved && !storeSuspended && (
                         <Button size="sm" variant="outline" onClick={handleApprove} className="gap-1.5">
-                            <Check className="h-3.5 w-3.5 text-success" /> Aprobar
+                            <Check className="h-3.5 w-3.5 text-success-ink" /> Aprobar
                         </Button>
                     )}
                 </div>
@@ -341,11 +352,11 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
             <div>
                 <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-5">
                     {[
-                        { label: 'Ventas brutas', value: `$${Math.round(metrics.revenue).toLocaleString('es-AR')}`, icon: TrendingUp, color: 'text-success' },
-                        { label: 'Entregados',    value: metrics.delivered,  icon: ShoppingBag,   color: 'text-info' },
-                        { label: 'Cancelados',    value: metrics.cancelled,  icon: XCircle,       color: 'text-destructive' },
+                        { label: 'Ventas brutas', value: `$${Math.round(metrics.revenue).toLocaleString('es-AR')}`, icon: TrendingUp, color: 'text-success-ink' },
+                        { label: 'Entregados',    value: metrics.delivered,  icon: ShoppingBag,   color: 'text-info-ink' },
+                        { label: 'Cancelados',    value: metrics.cancelled,  icon: XCircle,       color: 'text-destructive-ink' },
                         { label: 'Comisión plat.', value: `$${Math.round(metrics.commission).toLocaleString('es-AR')}`, icon: Wallet, color: 'text-primary' },
-                        { label: 'Ticket prom.',  value: `$${Math.round(metrics.avgTicket).toLocaleString('es-AR')}`, icon: Star, color: 'text-warning' },
+                        { label: 'Ticket prom.',  value: `$${Math.round(metrics.avgTicket).toLocaleString('es-AR')}`, icon: Star, color: 'text-warning-ink' },
                     ].map(({ label, value, icon: Icon, color }) => (
                         <Card key={label} className="shadow-sm">
                             <CardContent className="pt-3 pb-3">
@@ -378,7 +389,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 <Card className="shadow-sm border-l-4 border-l-warning">
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-base">
-                            <MessageSquareWarning className="h-4 w-4 text-warning" /> Reclamos de clientes
+                            <MessageSquareWarning className="h-4 w-4 text-warning-ink" /> Reclamos de clientes
                             <span className="text-xs font-normal text-muted-foreground">({storeClaims.length} recientes)</span>
                         </CardTitle>
                         <CardDescription>
@@ -390,8 +401,8 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                             <div key={c.id} className="flex items-center gap-2 text-sm rounded-lg border px-3 py-2">
                                 <Badge variant="outline" className={cn('text-xs shrink-0',
                                     c.resolved
-                                        ? (c.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success')
-                                        : 'border-warning/40 text-warning')}>
+                                        ? (c.resolution === 'rejected' ? 'text-muted-foreground' : 'border-success/40 text-success-ink')
+                                        : 'border-warning/40 text-warning-ink')}>
                                     {c.resolved ? (c.resolution === 'rejected' ? 'Rechazado' : 'Resuelto') : 'Pendiente'}
                                 </Badge>
                                 <span className="truncate">{CLAIM_TYPES[c.type as ClaimType]?.label || c.type}</span>
@@ -422,7 +433,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                     </CardHeader>
                     <CardContent className="space-y-3">
                         {!(ownerDoc?.payoutCbu || store.payoutCbu) && (
-                            <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg p-2.5">
+                            <div className="flex items-center gap-2 text-xs text-warning-ink bg-warning/10 border border-warning/30 rounded-lg p-2.5">
                                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                                 Esta tienda no recibirá liquidaciones automáticas hasta que se configure un CBU.
                             </div>
@@ -449,7 +460,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
                 <Card className="shadow-sm">
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-base">
-                            <Star className="h-4 w-4 text-warning" /> Reseñas recientes
+                            <Star className="h-4 w-4 text-warning-ink" /> Reseñas recientes
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -479,7 +490,7 @@ function AdminStoreDetailPage({ params }: { params: { storeId: string } }) {
             <Card className="shadow-md">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
-                        <ShoppingBag className="h-4 w-4 text-info" /> Últimos pedidos
+                        <ShoppingBag className="h-4 w-4 text-info-ink" /> Últimos pedidos
                         <span className="text-xs font-normal text-muted-foreground">(50 de {orders?.length ?? 0} cargados)</span>
                     </CardTitle>
                 </CardHeader>

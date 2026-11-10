@@ -24,7 +24,7 @@ export function ConfirmCountdown({ timeoutAt, variant, className }: { timeoutAt:
     <div
       data-testid="confirm-countdown"
       className={cn(
-        'flex items-start gap-2 rounded-lg border p-3 text-sm',
+        'flex items-start gap-2.5 rounded-2xl border p-3.5 text-sm',
         expired || left <= 3 ? 'border-destructive/40 bg-destructive/10' : 'border-warning/40 bg-warning/10',
         className,
       )}

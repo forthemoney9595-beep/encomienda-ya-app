@@ -20,7 +20,7 @@ export function DailyNetChart({ days, loading }: { days: DailyStatsDay[]; loadin
   const many = data.length > 45;
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-4" data-testid="daily-chart" aria-busy={loading || undefined}>
+    <section className="min-w-0 overflow-hidden glass rounded-card p-4" data-testid="daily-chart" aria-busy={loading || undefined}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-semibold">Neto de la app por día</h2>
         <span className="text-xs text-muted-foreground">tarifas + comisiones, netas de reembolsos · por fecha de creación del pedido</span>

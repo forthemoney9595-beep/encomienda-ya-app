@@ -44,7 +44,7 @@ export function Breadcrumbs({ items, backHref = '/', className }: BreadcrumbsPro
         variant="outline"
         size="icon"
         onClick={goBack}
-        className="h-9 w-9 shrink-0 rounded-full"
+        className="glass h-11 w-11 shrink-0 rounded-full border-[color:var(--glass-line)] bg-[color:var(--glass)] hover:bg-foreground/[0.06]"
         aria-label="Volver"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -56,7 +56,7 @@ export function Breadcrumbs({ items, backHref = '/', className }: BreadcrumbsPro
             const isLast = i === items.length - 1;
             const Icon = item.icon;
             return (
-              <li key={`${item.label}-${i}`} className="flex min-w-0 items-center gap-1">
+              <li key={`${item.label}-${i}`} className={cn('flex items-center gap-1', isLast || !item.href ? 'min-w-0' : 'shrink-0')}>
                 {i > 0 && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
                 {isLast || !item.href ? (
                   <span aria-current="page" className="truncate font-medium text-foreground">
@@ -66,13 +66,18 @@ export function Breadcrumbs({ items, backHref = '/', className }: BreadcrumbsPro
                 ) : (
                   <Link
                     href={item.href}
-                    className="flex shrink-0 items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+                    title={item.label}
+                    aria-label={Icon ? item.label : undefined}
+                    className="flex min-h-[36px] min-w-[36px] items-center justify-center gap-1 rounded-full px-1.5 text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
                   >
-                    {Icon && <Icon className="h-3.5 w-3.5" />}
-                    <span className="hidden sm:inline">{item.label}</span>
-                    {/* En celular los niveles intermedios se acortan para que la miga
-                        no empuje el nombre de la tienda fuera de pantalla. */}
-                    {!Icon && <span className="sm:hidden">{item.label.slice(0, 12)}</span>}
+                    {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
+                    {/* Vidrio (9/11/2026): antes en celular se cortaba con slice(0, 12) y
+                        "Comida Rápida" quedaba "Comida Rápid". Ahora el nivel intermedio va
+                        entero (con tope de ancho y puntos suspensivos solo si no entra) y el
+                        que cede espacio es el nombre de la página actual. */}
+                    {Icon
+                      ? <span className="hidden sm:inline">{item.label}</span>
+                      : <span className="max-w-[10rem] truncate sm:max-w-none">{item.label}</span>}
                   </Link>
                 )}
               </li>

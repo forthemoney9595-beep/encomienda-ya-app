@@ -265,7 +265,7 @@ export function FinanceView() {
           const active = circuit === value;
           return (
             <button key={value} type="button" onClick={() => setCircuit(value)} aria-pressed={active} data-circuit={value}
-              className={cn('rounded-lg border p-3 text-left transition-colors', active ? 'border-primary/50 bg-primary/10' : 'border-border bg-card hover:bg-admin-row-hover')}>
+              className={cn('rounded-lg border p-3 text-left transition-colors', active ? 'border-primary/50 bg-primary/10' : 'glass hover:bg-admin-row-hover')}>
               <span className="flex items-center gap-2"><Icon className={cn('h-4 w-4 shrink-0', active ? 'text-primary-ink' : 'text-muted-foreground')} aria-hidden="true" /><span className={cn('text-sm font-semibold', active && 'text-primary-ink')}>{label}</span></span>
               <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span>
             </button>

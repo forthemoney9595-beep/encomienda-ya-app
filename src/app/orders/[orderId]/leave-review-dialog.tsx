@@ -47,7 +47,7 @@ export function LeaveReviewDialog({ isOpen, setIsOpen, productName, onSubmit }: 
                 key={star}
                 className={cn(
                   'h-8 w-8 cursor-pointer transition-colors',
-                  (hoverRating || rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/50'
+                  (hoverRating || rating) >= star ? 'text-warning fill-warning' : 'text-muted-foreground/50'
                 )}
                 onClick={() => setRating(star)}
                 onMouseEnter={() => setHoverRating(star)}

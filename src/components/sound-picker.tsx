@@ -19,9 +19,16 @@ export function SoundPicker() {
     playSound(id);
   };
 
+  // Lista agrupada de vidrio (rediseño 9/11/2026): una tarjeta con filas de 56 px, el ícono en
+  // un cuadradito y la marca de elegida que aparece con un pequeño salto. Tocar la elegida de
+  // nuevo la vuelve a hacer sonar (sirve para probar el volumen).
   return (
-    <div role="radiogroup" aria-label="Sonido de los avisos" className="space-y-2">
-      {SOUND_OPTIONS.map((o) => {
+    <div
+      role="radiogroup"
+      aria-label="Sonido de los avisos"
+      className="overflow-hidden rounded-2xl border border-foreground/10 bg-background/40"
+    >
+      {SOUND_OPTIONS.map((o, i) => {
         const active = selected === o.id;
         const Icon = o.id === 'silencio' ? VolumeX : Play;
         return (
@@ -32,16 +39,35 @@ export function SoundPicker() {
             aria-checked={active}
             onClick={() => pick(o.id)}
             className={cn(
-              'flex min-h-12 w-full items-center gap-3 rounded-lg border-2 px-3 text-left transition-colors',
-              active ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted',
+              'relative flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-200',
+              'focus-visible:z-[1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              i > 0 && 'border-t border-foreground/10',
+              active ? 'bg-primary/10' : 'hover:bg-foreground/5',
             )}
           >
-            <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} aria-hidden />
-            <span className="flex-1">
-              <span className="block text-sm font-semibold">{o.label}</span>
-              <span className="block text-xs text-muted-foreground">{o.hint}</span>
+            {/* Barrita de la elegida: crece desde el centro */}
+            <span
+              aria-hidden="true"
+              className={cn(
+                'absolute inset-y-2 left-0 w-1 rounded-r-full bg-primary transition-transform duration-300 ease-spring motion-reduce:transition-none',
+                active ? 'scale-y-100' : 'scale-y-0',
+              )}
+            />
+            <span
+              className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors duration-200',
+                active ? 'bg-primary text-primary-foreground' : 'bg-foreground/5 text-muted-foreground',
+              )}
+            >
+              <Icon className="h-5 w-5" aria-hidden />
             </span>
-            {active && <Check className="h-5 w-5 shrink-0 text-primary" aria-hidden />}
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-semibold leading-tight">{o.label}</span>
+              <span className="block text-sm leading-snug text-muted-foreground">{o.hint}</span>
+            </span>
+            {active && (
+              <Check className="h-5 w-5 shrink-0 text-primary animate-in zoom-in-50 fade-in-0 duration-200 motion-reduce:animate-none" aria-hidden />
+            )}
           </button>
         );
       })}

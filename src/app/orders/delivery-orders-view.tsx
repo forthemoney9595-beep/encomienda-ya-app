@@ -1,37 +1,33 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/lib/firebase';
 import { collection, query, where, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { OrderService, MAX_ACTIVE_ORDERS, DRIVER_ACTIVE_STATUSES } from '@/lib/order-service';
 import { authedFetch } from '@/lib/authed-fetch';
-import { gmapsDirectionsUrl, distanceMeters, formatDistance, isValidCoords } from '@/lib/geo';
-import { DeliveryTripInfo } from '@/components/delivery-trip-info';
+import { gmapsDirectionsUrl, isValidCoords } from '@/lib/geo';
+import { driverNetForOrder } from '@/lib/money';
 import { DeliveryOnlineToggle } from '@/components/delivery-online-toggle';
+import { DriverJobCard, DriverPendingNotice, cleanStoreAddress } from '@/components/driver-job-card';
+import { DriverTabsList } from '@/components/driver-tabs';
+import { useDriverTakeOrder } from '@/hooks/driver-take-order';
 import { LocationTracker } from '@/components/location-tracker';
 import { ConfirmDeliveryDialog } from '@/components/confirm-delivery-dialog';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import {
-  MapPin,
   Navigation,
   CheckCircle2,
   DollarSign,
   Truck,
-  CreditCard,
-  Wallet,
-  Clock,
   Map as MapIcon,
   PackageCheck,
   Loader2,
   XCircle,
   AlertTriangle,
-  Eye,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -111,8 +107,6 @@ export default function DeliveryOrdersView() {
     if (tab === 'available' || tab === 'active') setActiveTab(tab);
   }, [searchParams]);
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
-  const [takingId, setTakingId] = useState<string | null>(null);
-  const takingRef = useRef(false);
 
   // Soltar pedido (antes de retirar) / Reportar problema (después de retirar) -- un
   // mismo diálogo para las dos, ver /api/orders/release y /api/orders/report-problem.
@@ -193,63 +187,11 @@ export default function DeliveryOrdersView() {
 
   // --- ACCIONES DEL PROCESO ---
 
-  // A. TOMAR PEDIDO -> Pasa a 'En camino'
-  const handleTakeOrder = async (order: Order) => {
-    if (!user || !firestore) return;
-    // Doble toque (prueba del 9/11): con la respuesta lenta salían DOS pedidos a la API; uno
-    // lo tomaba y el otro volvía 409 → el repartidor veía "Pedido ya tomado" aunque era suyo.
-    if (takingRef.current) return;
-    if ((order as any).userId === user.uid) {
-      toast({ variant: 'destructive', title: 'Este pedido es tuyo', description: 'Tu propio pedido lo lleva otro repartidor.' });
-      return;
-    }
-    if (!isApprovedDriver) {
-      toast({
-        variant: 'destructive',
-        title: isSuspended ? 'Cuenta suspendida' : 'Cuenta pendiente de aprobación',
-        description: isSuspended
-          ? 'No podés tomar pedidos nuevos mientras dure la suspensión. Mirá el motivo arriba y, si no estás de acuerdo, apelá.'
-          : 'Un administrador debe aprobar tu cuenta antes de que puedas tomar pedidos.',
-      });
-      return;
-    }
-    if (myActiveOrders.length >= MAX_ACTIVE_ORDERS) {
-      toast({
-        variant: 'destructive',
-        title: 'Ya tenés el máximo de pedidos en curso',
-        description: `Terminá alguno de tus ${MAX_ACTIVE_ORDERS} pedidos activos antes de tomar otro.`,
-      });
-      return;
-    }
-    takingRef.current = true;
-    setTakingId(order.id);
-    try {
-      // Tomar el pedido va por /api/orders/take (AUTHZ-001): asigna en una tx claim-once Y
-      // espeja deliveryPersonId en order_private (para que el repartidor pueda leer la PII sin
-      // el lag del get() de reglas). Antes era un updateDoc directo del cliente.
-      const res = await authedFetch('/api/orders/take', user, { orderId: order.id });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast({ variant: 'destructive', title: res.status === 409 ? 'Pedido ya tomado' : 'No se pudo tomar', description: data.error || 'Probá de nuevo.' });
-        return;
-      }
-      toast({ title: "¡Pedido Asignado!", description: "Ve a la tienda a retirarlo." });
-      setActiveTab('active');
-    } catch (error: any) {
-      console.error(error);
-      const isPermissionDenied = error?.code === 'permission-denied';
-      toast({
-        variant: "destructive",
-        title: isPermissionDenied ? "Pedido ya tomado" : "Error",
-        description: isPermissionDenied
-          ? "Otro repartidor ya tomó este pedido justo antes que tú."
-          : "No se pudo tomar el pedido.",
-      });
-    } finally {
-      takingRef.current = false;
-      setTakingId(null);
-    }
-  };
+  // A. TOMAR PEDIDO -> Pasa a 'En camino'. La lógica vive en hooks/driver-take-order.ts y
+  // es la MISMA que usa el dashboard /delivery (lección R1: un solo camino): antidoble-toque,
+  // su propio pedido no, solo aprobados, tope MAX_ACTIVE_ORDERS y /api/orders/take.
+  const onTaken = useCallback(() => setActiveTab('active'), []);
+  const take = useDriverTakeOrder({ activeCount: myActiveOrders.length, onTaken });
 
   // B. CONFIRMAR RETIRO -> Pasa a 'En reparto'
   const handlePickupOrder = async (order: Order) => {
@@ -325,17 +267,10 @@ export default function DeliveryOrdersView() {
     }
   };
 
-  // ✅ FUNCIÓN DE LIMPIEZA VISUAL (NUEVO)
-  const cleanAddress = (rawAddress: string | undefined) => {
-      if (!rawAddress) return 'Dirección de tienda';
-      if (rawAddress.includes('Ubicación GPS') || rawAddress.includes('lat:') || rawAddress.includes('(-28.')) {
-          return 'Ver ubicación en mapa'; // Texto amigable si es coordenada fea
-      }
-      return rawAddress;
-  };
+  const cleanAddress = cleanStoreAddress;
 
   return (
-    <div className="container mx-auto pb-24">
+    <div className="mx-auto w-full max-w-3xl pb-24">
 
       {/* Tracking GPS desde el PANEL (Fase RR bis): el tracker vivía solo en la página
           de detalle del pedido — pero el repartidor opera desde acá (tomar/retirar/
@@ -346,266 +281,201 @@ export default function DeliveryOrdersView() {
         <LocationTracker key={`tracker-${o.id}`} orderId={o.id} isDriver={true} status={o.status} />
       ))}
 
-      <div className="flex items-center justify-between mb-6 gap-3">
-          <h2 className="text-2xl font-bold tracking-tight">Panel de Repartidor</h2>
-          <div className="flex items-center gap-3">
-              <Badge variant="outline" className="hidden sm:flex">{isApprovedDriver ? 'Zona Activa' : isSuspended ? 'Suspendida' : 'Pendiente'}</Badge>
-              {isApprovedDriver && <DeliveryOnlineToggle />}
-          </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-headline text-3xl font-extrabold leading-none tracking-tight">Panel de Repartidor</h1>
+          {isApprovedDriver && <DeliveryOnlineToggle className="glass rounded-full py-1.5 pl-3.5 pr-2" />}
       </div>
 
-      {isSuspended && <SuspensionNotice className="mb-6" />}
+      {isSuspended && <SuspensionNotice className="mb-4" />}
 
-      {!isApprovedDriver && !isSuspended && (
-        <div className="mb-6 rounded-xl border border-warning/40 bg-warning/10 p-4 flex items-start gap-3">
-          <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-sm text-warning">Tu cuenta está pendiente de aprobación</p>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Un administrador tiene que revisar y aprobar tus datos (vehículo y licencia) antes de que
-              puedas tomar pedidos. Asegurate de haber subido las 3 fotos de tu licencia en tu perfil.
-            </p>
-          </div>
-        </div>
-      )}
+      {!isApprovedDriver && !isSuspended && <DriverPendingNotice className="mb-4" detailed />}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="available">
-            Disponibles ({availableOrders?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="active">
-            En Curso ({myActiveOrders?.length || 0}/{MAX_ACTIVE_ORDERS})
-          </TabsTrigger>
-        </TabsList>
+        <DriverTabsList
+          value={activeTab}
+          className="mb-4"
+          items={[
+            { value: 'available', label: `Disponibles (${availableOrders?.length || 0})`, testId: 'tab-available' },
+            { value: 'active', label: `En curso (${myActiveOrders?.length || 0}/${MAX_ACTIVE_ORDERS})`, testId: 'tab-active' },
+          ]}
+        />
 
         {/* --- PESTAÑA: PEDIDOS DISPONIBLES --- */}
-        <TabsContent value="available" className="space-y-4">
+        <TabsContent value="available" className="mt-0 space-y-3">
           {/* 🔒 BUG-301: gate de carga. Antes no se destructuraba isLoading, así que en el
               primer render (data = []) el repartidor veía "No hay pedidos disponibles" un
               instante aunque hubiera pedidos — podía cerrar la app y perder entregas. */}
           {availableLoading ? (
-            <div className="text-center py-12">
+            <div className="glass rounded-card py-12 text-center">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mt-2">Buscando pedidos disponibles…</p>
+                <p className="mt-2 text-muted-foreground">Buscando pedidos disponibles…</p>
             </div>
           ) : availableOrders?.length === 0 ? (
-            <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed">
-                <Truck className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
-                <h3 className="text-lg font-medium">No hay pedidos disponibles</h3>
-                <p className="text-sm text-muted-foreground">Mantente atento a nuevas alertas.</p>
+            <div className="glass rounded-card px-5 py-10 text-center">
+                <span className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-foreground/[0.06] text-muted-foreground">
+                    <Truck className="h-7 w-7" aria-hidden="true" />
+                </span>
+                <h3 className="font-headline text-2xl font-extrabold">No hay pedidos disponibles</h3>
+                <p className="mt-1 text-muted-foreground">Te avisamos cuando entre uno.</p>
             </div>
           ) : (
-            availableOrders?.map(order => (
-              <Card key={order.id} className="overflow-hidden hover:shadow-md transition-shadow border-l-4 border-l-primary">
-                <CardHeader className="pb-3 bg-muted/10">
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-1">
-                        <CardTitle className="text-base flex items-center gap-2">
-                            {order.storeName}
-                        </CardTitle>
-                        <div className="flex gap-2">
-                            <Badge variant="outline" className="text-xs font-normal flex items-center gap-1">
-                                {order.paymentMethod === 'Efectivo' ? <Wallet className="h-3 w-3" /> : <CreditCard className="h-3 w-3" />}
-                                {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : order.paymentMethod}
-                            </Badge>
-                        </div>
-                    </div>
-                    <Badge className="bg-success text-success-foreground hover:bg-success/90">
-                        +{money(order.deliveryFee || 0)}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="py-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                        <MapPin className="h-5 w-5 text-info shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-xs font-bold uppercase text-muted-foreground">Retirar en:</p>
-                            {/* ✅ USAMOS LA FUNCIÓN DE LIMPIEZA */}
-                            <p className="text-sm">{cleanAddress(order.storeAddress)}</p>
-                        </div>
-                    </div>
-                    {/* 🔒 La dirección EXACTA del cliente ya no se muestra antes de tomar el
-                        pedido (auditoría de privacidad ago 2026, estándar Rappi): para decidir
-                        alcanza con la tienda + la distancia de abajo. Al aceptar se ve todo. */}
-                    {/* Zona + km por ruta + minutos en moto (9/11/2026): lo que hace falta
-                        para decidir si tomarlo, sin la dirección exacta. Pedidos legacy sin
-                        distancia guardada: fallback a la recta con las coords embebidas. */}
-                    {(() => {
-                      const distM = typeof order.deliveryDistanceM === 'number'
-                        ? order.deliveryDistanceM
-                        : (isValidCoords(order.storeCoords) && isValidCoords(order.customerCoords)
-                            ? distanceMeters(order.storeCoords!, order.customerCoords!) : null);
-                      return (
-                        <DeliveryTripInfo
-                          zone={order.deliveryZone}
-                          distanceM={distM}
-                          durationS={order.deliveryDurationS}
-                          source={order.deliveryDistanceSource ?? (distM != null ? 'line' : null)}
-                        />
-                      );
-                    })()}
-                </CardContent>
-                <CardFooter className="flex-col gap-2">
-                    <Button
-                        className="w-full"
-                        size="lg"
-                        onClick={() => handleTakeOrder(order)}
-                        disabled={!isApprovedDriver || myActiveOrders.length >= MAX_ACTIVE_ORDERS || takingId !== null}
-                    >
-                        {takingId === order.id
-                          ? 'Tomando el pedido…'
-                          : !isApprovedDriver
-                          ? (isSuspended ? 'Cuenta suspendida' : 'Cuenta pendiente de aprobación')
-                          : myActiveOrders.length >= MAX_ACTIVE_ORDERS
-                          ? `Ya tenés ${MAX_ACTIVE_ORDERS} pedidos en curso`
-                          : 'Tomar Pedido'}
-                    </Button>
-                    {/* Ver qué lleva el pedido ANTES de tomarlo (pedido de la prueba, 15/8):
-                        el detalle solo existía en las tarjetas de "En Curso". */}
-                    <Button variant="secondary" size="sm" className="w-full" onClick={() => goToDetails(order.id)}>
-                        <Eye className="mr-2 h-4 w-4" /> Ver detalle del pedido
-                    </Button>
-                </CardFooter>
-              </Card>
+            availableOrders?.map((order, i) => (
+              <DriverJobCard
+                key={order.id}
+                index={i}
+                order={order}
+                taking={take.takingId === order.id}
+                takeLabel={take.takeLabel(order.id)}
+                takeDisabled={take.takeDisabled}
+                onTake={() => take.takeOrder(order)}
+                onDetail={() => goToDetails(order.id)}
+              />
             ))
           )}
         </TabsContent>
 
         {/* --- PESTAÑA: PEDIDOS EN CURSO --- */}
-        <TabsContent value="active" className="space-y-4">
+        <TabsContent value="active" className="mt-0 space-y-4">
             {myOrdersLoading ? (
-                <div className="text-center py-12">
+                <div className="glass rounded-card py-12 text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mt-2">Cargando tus pedidos…</p>
+                    <p className="mt-2 text-muted-foreground">Cargando tus pedidos…</p>
                 </div>
             ) : myActiveOrders?.length === 0 ? (
-                <div className="text-center py-12 bg-muted/20 rounded-xl">
-                    <CheckCircle2 className="mx-auto h-12 w-12 text-success mb-3" />
-                    <h3 className="text-lg font-medium">Estás libre</h3>
-                    <p className="text-sm text-muted-foreground">Ve a la pestaña &quot;Disponibles&quot; para tomar un viaje.</p>
+                <div className="glass rounded-card px-5 py-10 text-center">
+                    <span className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-success/15 text-success">
+                        <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
+                    </span>
+                    <h3 className="font-headline text-2xl font-extrabold">Estás libre</h3>
+                    <p className="mt-1 text-muted-foreground">Andá a &quot;Disponibles&quot; para tomar un viaje.</p>
                 </div>
             ) : (
-                myActiveOrders?.map(order => (
-                    // Rediseño 2 (Toldo): pensado para usarse al sol y con una mano. Los dos
-                    // pasos claros (retirar, entregar), la dirección GRANDE en letra de cartel
-                    // y botones de 56-72 px. Sin borde lateral ni insignia que late.
-                    <Card key={order.id} className={`overflow-hidden border-2 ${order.paymentMethod === 'Efectivo' ? 'border-warning' : 'border-foreground'}`}>
-                        <div className="flex items-center justify-between gap-3 bg-foreground px-4 py-2.5 text-background">
-                            <span className="font-headline text-lg font-extrabold">Pedido en curso</span>
+                myActiveOrders?.map(order => {
+                    const picked = order.status === 'En reparto';
+                    const cash = order.paymentMethod === 'Efectivo';
+                    return (
+                    // Para usarse al sol y con una mano: vidrio OPACO (glass-strong) con la
+                    // franja oscura arriba, los dos pasos claros (retirar, entregar), la
+                    // dirección GRANDE en letra de cartel y botones de 56-72 px.
+                    <article
+                        key={order.id}
+                        data-testid="driver-active-order"
+                        className={cn('glass-strong overflow-hidden rounded-card animate-in fade-in-0 slide-in-from-bottom-2 duration-500 motion-reduce:animate-none', cash && 'border-2 border-warning')}
+                    >
+                        <div className="flex items-center justify-between gap-3 bg-foreground px-4 py-3 text-background">
+                            <span className="shrink-0 font-headline text-lg font-extrabold">{picked ? 'En reparto' : 'Pedido en curso'}</span>
                             <span className="truncate font-headline text-lg font-extrabold">{order.storeName}</span>
                         </div>
-                        <CardContent className="space-y-0 p-0">
-                            {(() => {
-                                const picked = order.status === 'En reparto';
-                                return (
-                                    <>
-                                        <div className={cn('flex gap-3 border-b px-4 py-3', picked && 'text-muted-foreground')}>
-                                            <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-lg border-2 border-foreground font-headline text-lg font-extrabold', picked && 'bg-foreground text-background')}>
-                                                {picked ? <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> : '1'}
-                                            </span>
-                                            <div className="min-w-0">
-                                                <p className="font-headline text-xl font-extrabold leading-tight text-foreground">{picked ? 'Retiraste en ' : 'Retirá en '}{order.storeName}</p>
-                                                <p className="text-sm">{cleanAddress(order.storeAddress)}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-3 border-b px-4 py-3">
-                                            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border-2 border-foreground font-headline text-lg font-extrabold">2</span>
-                                            <div className="min-w-0">
-                                                <p className="font-headline text-xl font-extrabold leading-tight">Llevalo a {order.customerName}</p>
-                                                <p className="my-1 break-words font-headline text-4xl font-extrabold leading-none tracking-tight">{custAddress(order) || 'Cargando dirección…'}</p>
-                                                <p className="text-sm text-muted-foreground">Al entregar, pedile su código de 4 números.</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-baseline justify-between border-b px-4 py-3">
-                                            <span className="text-base">Ganás por este envío</span>
-                                            <span className="font-headline text-3xl font-extrabold text-success tabular-nums">{money(order.deliveryFee || 0)}</span>
-                                        </div>
-                                    </>
-                                );
-                            })()}
-                            <div className="space-y-3 p-4">
+                        <ol className="divide-y divide-foreground/10" aria-label="Pasos de la entrega">
+                            <li className={cn('flex gap-3 px-4 py-3.5', picked && 'text-muted-foreground')} aria-current={!picked ? 'step' : undefined}>
+                                <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-full font-headline text-lg font-extrabold',
+                                    picked ? 'bg-success text-success-foreground' : 'bg-foreground text-background')}>
+                                    {picked ? <CheckCircle2 className="h-5 w-5" aria-label="Hecho" /> : '1'}
+                                </span>
+                                <div className="min-w-0">
+                                    <p className="font-headline text-xl font-extrabold leading-tight text-foreground">{picked ? 'Retiraste en ' : 'Retirá en '}{order.storeName}</p>
+                                    <p className="break-words">{cleanAddress(order.storeAddress)}</p>
+                                </div>
+                            </li>
+                            <li className="flex gap-3 px-4 py-3.5" aria-current={picked ? 'step' : undefined}>
+                                <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-full font-headline text-lg font-extrabold',
+                                    picked ? 'bg-foreground text-background' : 'bg-foreground/[0.08] text-foreground')}>2</span>
+                                <div className="min-w-0">
+                                    <p className="font-headline text-xl font-extrabold leading-tight">Llevalo a {order.customerName}</p>
+                                    <p className="my-1 break-words font-headline text-4xl font-extrabold leading-none tracking-tight">{custAddress(order) || 'Cargando dirección…'}</p>
+                                    <p className="text-sm text-muted-foreground">Al entregar, pedile su código de 4 números.</p>
+                                </div>
+                            </li>
+                            <li className="flex items-baseline justify-between gap-3 px-4 py-3.5">
+                                <span className="text-base">Ganás por este envío</span>
+                                <span className="font-headline text-3xl font-extrabold tabular-nums text-success">{money(driverNetForOrder(order))}</span>
+                            </li>
+                        </ol>
 
+                        <div className="space-y-3 px-4 pb-1">
                             {/* ALERTA DE COBRO EN EFECTIVO */}
-                            {order.paymentMethod === 'Efectivo' && order.status === 'En reparto' && (
-                                <div className="p-4 bg-warning/10 rounded-lg border-2 border-warning flex items-start gap-3 animate-in fade-in zoom-in">
-                                    <div className="bg-warning/20 p-2 rounded-full">
-                                        <DollarSign className="h-6 w-6 text-warning" />
-                                    </div>
+                            {cash && picked && (
+                                <div className="flex items-start gap-3 rounded-2xl border-2 border-warning bg-warning/10 p-4 animate-in fade-in zoom-in-95 motion-reduce:animate-none">
+                                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-warning/20 text-warning">
+                                        <DollarSign className="h-6 w-6" aria-hidden="true" />
+                                    </span>
                                     <div>
-                                        <p className="font-bold text-warning uppercase text-sm">Cobrar al cliente</p>
-                                        <p className="text-sm text-foreground font-medium">
-                                            Tenés que recibir <span className="text-lg font-bold">{money(order.total || 0)}</span> en efectivo.
+                                        <p className="text-sm font-bold uppercase">Cobrar al cliente</p>
+                                        <p className="font-medium">
+                                            Tenés que recibir <span className="font-headline text-2xl font-extrabold">{money(order.total || 0)}</span> en efectivo.
                                         </p>
                                     </div>
                                 </div>
                             )}
 
-                             {/* AVISO DE PAGO ONLINE */}
-                             {order.paymentMethod === 'mercadopago' && (
-                                <div className="p-3 bg-success/10 rounded-lg border border-success/30 flex items-center gap-3">
-                                    <CheckCircle2 className="h-5 w-5 text-success" />
-                                    <p className="text-sm text-foreground font-medium">
+                            {/* AVISO DE PAGO ONLINE */}
+                            {order.paymentMethod === 'mercadopago' && (
+                                <div className="flex items-center gap-3 rounded-2xl bg-success/10 p-3">
+                                    <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+                                    <p className="font-medium">
                                         Pagado por MercadoPago: <strong>no cobrás nada</strong>.
                                     </p>
                                 </div>
                             )}
-                            </div>
-                        </CardContent>
-                        <CardFooter className="flex flex-col gap-2">
+                        </div>
+
+                        <div className="flex flex-col gap-2.5 p-4">
                             {/* NAVEGAR CON GOOGLE MAPS (Fase RR): deep link a la app de mapas del
                                 teléfono — a la TIENDA mientras va a retirar, al CLIENTE una vez
                                 retirado. Es como navegan los repartidores de Rappi/PedidosYa. */}
                             {(() => {
-                                const goingToStore = order.status !== 'En reparto';
+                                const goingToStore = !picked;
                                 const dest = goingToStore ? order.storeCoords : custCoords(order);
                                 if (!isValidCoords(dest)) return null;
                                 return (
-                                    <Button asChild variant="outline" className="w-full h-14 border-2 border-foreground text-base font-bold">
+                                    <Button asChild variant="outline" className="h-14 w-full rounded-2xl border-2 border-foreground/70 bg-transparent text-lg font-bold">
                                         <a href={gmapsDirectionsUrl(dest)} target="_blank" rel="noopener noreferrer">
-                                            <Navigation className="mr-2 h-4 w-4" />
+                                            <Navigation className="h-5 w-5" aria-hidden="true" />
                                             Navegar {goingToStore ? 'a la tienda' : 'al cliente'}
                                         </a>
                                     </Button>
                                 );
                             })()}
 
-                            <Button variant="secondary" className="w-full h-12" onClick={() => goToDetails(order.id)}>
-                                <MapIcon className="mr-2 h-4 w-4" /> Ver detalle, mapa y chat
+                            <Button variant="secondary" className="h-12 w-full rounded-2xl text-base" onClick={() => goToDetails(order.id)}>
+                                <MapIcon className="h-5 w-5" aria-hidden="true" /> Ver detalle, mapa y chat
                             </Button>
 
                             {/* ✅ BOTONES DE FLUJO */}
                             {(order.status === 'En camino' || order.status === 'Aceptado' || order.status === 'Listo para recoger') ? (
-                                <Button className="w-full h-16 bg-primary font-headline text-2xl font-extrabold text-primary-foreground hover:bg-primary/90" onClick={() => handlePickupOrder(order)}>
-                                    <PackageCheck className="mr-2 h-6 w-6" aria-hidden="true" /> Ya lo retiré
+                                <Button className="h-16 w-full rounded-2xl font-headline text-2xl font-extrabold [&_svg]:size-6" onClick={() => handlePickupOrder(order)}>
+                                    <PackageCheck aria-hidden="true" /> Ya lo retiré
                                 </Button>
                             ) : (
-                                <Button className={`w-full h-[4.5rem] font-headline text-2xl font-extrabold ${order.paymentMethod === 'Efectivo' ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : 'bg-success hover:bg-success/90 text-success-foreground'}`} onClick={() => handleFinishDeliveryClick(order)}>
-                                    <CheckCircle2 className="mr-2 h-5 w-5" />
-                                    {order.paymentMethod === 'Efectivo' ? 'Ya cobré y lo entregué' : 'Ya lo entregué'}
+                                <Button className={cn('h-[4.5rem] w-full rounded-2xl font-headline text-2xl font-extrabold [&_svg]:size-6',
+                                    cash ? 'bg-warning text-warning-foreground hover:bg-warning/90' : 'bg-success text-success-foreground hover:bg-success/90')}
+                                    onClick={() => handleFinishDeliveryClick(order)}>
+                                    <CheckCircle2 aria-hidden="true" />
+                                    {cash ? 'Ya cobré y lo entregué' : 'Ya lo entregué'}
                                 </Button>
                             )}
 
                             {/* Soltar (solo antes de retirar) / Reportar problema (solo después de retirar) */}
                             {order.status === 'En camino' && (
-                                <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => openIncidentDialog(order, 'release')}>
-                                    <XCircle className="mr-2 h-4 w-4" /> No puedo con este pedido
+                                <Button variant="ghost" className="h-12 w-full rounded-2xl text-base text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => openIncidentDialog(order, 'release')}>
+                                    <XCircle className="h-5 w-5" aria-hidden="true" /> No puedo con este pedido
                                 </Button>
                             )}
-                            {order.status === 'En reparto' && (
+                            {picked && (
                                 order.hasReportedProblem ? (
-                                    <p className="text-xs text-center text-warning font-medium flex items-center justify-center gap-1.5">
-                                        <AlertTriangle className="h-3.5 w-3.5" /> Problema reportado — esperando al admin
+                                    <p className="flex items-center justify-center gap-1.5 py-2 text-center text-sm font-medium">
+                                        <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" /> Problema reportado: esperando al admin
                                     </p>
                                 ) : (
-                                    <Button variant="outline" size="sm" className="w-full text-warning border-warning/30 hover:bg-warning/10" onClick={() => openIncidentDialog(order, 'report')}>
-                                        <AlertTriangle className="mr-2 h-4 w-4" /> Reportar problema
+                                    <Button variant="ghost" className="h-12 w-full rounded-2xl text-base hover:bg-warning/10" onClick={() => openIncidentDialog(order, 'report')}>
+                                        <AlertTriangle className="h-5 w-5 text-warning" aria-hidden="true" /> Reportar problema
                                     </Button>
                                 )
                             )}
-                        </CardFooter>
-                    </Card>
-                ))
+                        </div>
+                    </article>
+                    );
+                })
             )}
         </TabsContent>
       </Tabs>
@@ -620,26 +490,28 @@ export default function DeliveryOrdersView() {
       />
 
       <Dialog open={!!incidentDialog} onOpenChange={(open) => !open && setIncidentDialog(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100%-1.5rem)] rounded-card sm:max-w-md sm:rounded-card">
             <DialogHeader>
-                <DialogTitle>
+                <DialogTitle className="font-headline text-2xl font-extrabold">
                     {incidentDialog?.kind === 'release' ? 'Soltar este pedido' : 'Reportar un problema'}
                 </DialogTitle>
                 <DialogDescription>
                     {incidentDialog?.kind === 'release'
-                        ? 'El pedido vuelve al pool para que otro repartidor lo tome. Contanos por qué.'
+                        ? 'El pedido vuelve a la lista de disponibles para que lo tome otro repartidor. Contanos por qué.'
                         : 'El admin va a revisar esto y decidir cómo seguir (no cancela el pedido por vos).'}
                 </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-3 py-1">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Motivos frecuentes">
                     {(incidentDialog?.kind === 'release' ? RELEASE_REASONS : PROBLEM_REASONS).map(preset => (
                         <button
                             key={preset}
                             type="button"
+                            aria-pressed={incidentReason === preset}
                             onClick={() => setIncidentReason(preset)}
-                            className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary hover:text-primary transition-colors"
+                            className={cn('min-h-[2.75rem] rounded-full border px-4 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                incidentReason === preset ? 'border-primary bg-primary text-primary-foreground' : 'border-foreground/15 bg-foreground/[0.04] hover:border-primary')}
                         >
                             {preset}
                         </button>
@@ -650,12 +522,15 @@ export default function DeliveryOrdersView() {
                     onChange={(e) => setIncidentReason(e.target.value)}
                     placeholder="Contanos qué pasó..."
                     rows={3}
+                    className="rounded-2xl text-base"
+                    aria-label="Motivo"
                 />
             </div>
 
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setIncidentDialog(null)} disabled={isSubmittingIncident}>Cancelar</Button>
+            <DialogFooter className="gap-2">
+                <Button variant="outline" className="h-12 rounded-2xl" onClick={() => setIncidentDialog(null)} disabled={isSubmittingIncident}>Cancelar</Button>
                 <Button
+                    className="h-12 rounded-2xl"
                     variant={incidentDialog?.kind === 'release' ? 'destructive' : 'default'}
                     onClick={submitIncident}
                     disabled={isSubmittingIncident || !incidentReason.trim()}

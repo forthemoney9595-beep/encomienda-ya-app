@@ -18,6 +18,8 @@ import { useRouter } from 'next/navigation';
 import { capturePosition, formatDistance, type GeoCoords } from '@/lib/geo';
 import { LocationPicker } from '@/components/location-picker';
 import { deliveryDistanceMeters, computeDeliveryFee, isBeyondDeliveryLimit, type DeliveryPricingConfig } from '@/lib/delivery-pricing';
+import { cn } from '@/lib/utils';
+import { DIALOG_CLOSE_BIG, DIALOG_SHELL } from '@/components/buyer-motion';
 
 // Fallback si config/platform.deliveryFee no está cargado (mismo default que el resto
 // de la app, ver DEFAULT_DELIVERY_FEE en /api/orders/create).
@@ -347,11 +349,11 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
   if (isSuccess) {
       return (
         <Dialog open={open} onOpenChange={() => {}}>
-            <DialogContent className="sm:max-w-md text-center py-10">
-                <div className="mx-auto w-16 h-16 bg-success/15 rounded-full flex items-center justify-center mb-4 animate-in zoom-in duration-300">
-                    <CheckCircle2 className="h-8 w-8 text-success" />
+            <DialogContent className={cn('sm:max-w-md text-center py-10', DIALOG_SHELL)}>
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-success/15 motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:duration-300">
+                    <CheckCircle2 className="h-10 w-10 text-success" aria-hidden="true" />
                 </div>
-                <DialogTitle className="text-2xl font-bold text-success">Pedido enviado</DialogTitle>
+                <DialogTitle className="font-headline text-3xl font-extrabold">Pedido enviado</DialogTitle>
                 <DialogDescription>
                     <strong>{storeName}</strong> está revisando que tenga todo.
                     <br/>
@@ -367,23 +369,24 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
       {/* FE-C-003 (auditoría oct 2026): el diálogo medía más que la pantalla (981/808 px) y el
           botón + el total quedaban bajo el fold incluso en escritorio. Ahora el cuerpo scrollea
           y el footer con el total es fijo. */}
-      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col gap-0 p-0">
-        <DialogHeader className="px-6 pt-6 pb-2">
+      <DialogContent className={cn('sm:max-w-md max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0', DIALOG_SHELL, DIALOG_CLOSE_BIG)}>
+        <DialogHeader className="px-6 pb-2 pr-14 pt-6 text-left">
           {/* Rediseño 2, Tanda 0: "Solicitar Disponibilidad" / "Solicitar a Tienda" eran
               palabras del sistema. El cliente hace un pedido; que la tienda confirme antes de
               cobrar se explica en la bajada. */}
-          <DialogTitle>Tu pedido a {storeName}</DialogTitle>
+          <DialogTitle className="font-headline text-3xl font-extrabold leading-none">Tu pedido a {storeName}</DialogTitle>
           <DialogDescription>
             Primero la tienda confirma que tiene todo. Recién ahí pagás.
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto px-6 pb-4 min-h-0">
         
-        <div className="grid gap-6 py-2">
+        <div className="grid gap-4 py-2">
           
           {/* SECCIÓN DE DIRECCIÓN Y GPS */}
-          <div className="space-y-3 bg-muted/20 p-4 rounded-xl border">
-            <h4 className="font-semibold text-sm flex items-center gap-2"><MapPin className="h-4 w-4 text-primary"/> ¿Dónde entregamos?</h4>
+          {/* Vidrio (9/11/2026): secciones en paneles suaves redondeados (antes cajas con borde). */}
+          <div className="space-y-3 rounded-card bg-foreground/[0.04] p-4">
+            <h4 className="flex items-center gap-2.5 font-headline text-xl font-extrabold"><span className="grid h-8 w-8 place-items-center rounded-xl bg-primary/10"><MapPin className="h-4 w-4 text-primary" aria-hidden="true"/></span> ¿Dónde entregamos?</h4>
 
             {/* DIRECCIONES GUARDADAS: si ya tenés una con GPS cargado, no hace falta
                 volver a pedirlo -- mismo patrón que Rappi/PedidosYa (la dirección
@@ -395,24 +398,26 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                             key={addr.id}
                             type="button"
                             onClick={() => selectAddress(addr.id)}
-                            className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5 ${
+                            aria-pressed={selectedAddressId === addr.id}
+                            className={`flex min-h-[40px] items-center gap-1.5 rounded-full border px-3.5 text-sm transition-colors ${
                                 selectedAddressId === addr.id
-                                    ? 'border-primary bg-primary/10 text-primary font-medium'
-                                    : 'border-border hover:border-primary/50'
+                                    ? 'border-primary bg-primary text-primary-foreground font-semibold'
+                                    : 'border-border bg-popover hover:border-primary/50'
                             }`}
                         >
-                            <MapPin className="h-3 w-3" />
+                            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
                             {addr.street}
-                            {!addr.coords && <AlertTriangle className="h-3 w-3 text-warning" />}
+                            {!addr.coords && <AlertTriangle className="h-3.5 w-3.5 text-warning" aria-label="Sin GPS cargado" />}
                         </button>
                     ))}
                     <button
                         type="button"
                         onClick={() => selectAddress('new')}
-                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        aria-pressed={selectedAddressId === 'new'}
+                        className={`min-h-[40px] rounded-full border px-3.5 text-sm transition-colors ${
                             selectedAddressId === 'new'
-                                ? 'border-primary bg-primary/10 text-primary font-medium'
-                                : 'border-border hover:border-primary/50'
+                                ? 'border-primary bg-primary text-primary-foreground font-semibold'
+                                : 'border-border bg-popover hover:border-primary/50'
                         }`}
                     >
                         + Nueva ubicación
@@ -428,7 +433,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                     onClick={handleGetLocation}
                     disabled={isLocating}
                     variant="default"
-                    className="w-full justify-start bg-info hover:bg-info/90 text-info-foreground"
+                    className="h-12 w-full justify-start rounded-full bg-info text-info-foreground hover:bg-info/90"
                 >
                     {isLocating ? (
                         <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Obteniendo GPS...</>
@@ -438,14 +443,14 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 </Button>
             )}
             {locationStatus === 'success' && (
-                <div className="flex items-center gap-2 text-sm text-success bg-success/10 border border-success/30 rounded-md px-3 py-2">
+                <div className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                     {selectedAddressId !== 'new' ? 'Usando el GPS de tu dirección guardada.' : 'Ubicación marcada correctamente.'}
                 </div>
             )}
 
             {locationStatus === 'error' && (
-                <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No pudimos obtener tu ubicación. Podés marcarla a mano en el mapa.</p>
+                <p className="flex items-center gap-1.5 text-sm text-destructive"><AlertTriangle className="h-4 w-4 shrink-0"/> No pudimos obtener tu ubicación. Podés marcarla a mano en el mapa.</p>
             )}
 
             {/* PIN AJUSTABLE (Fase RR): si hay coords (del GPS o de la dirección guardada)
@@ -465,7 +470,7 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                 <button
                     type="button"
                     onClick={() => setShowManualMap(true)}
-                    className="text-xs text-info underline underline-offset-2 w-full text-left"
+                    className="min-h-[44px] w-full text-left text-sm font-semibold text-info underline underline-offset-2"
                 >
                     ¿Sin GPS? Marcá tu ubicación a mano en el mapa
                 </button>
@@ -473,15 +478,15 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
 
             {/* 🚧 Cerco anti-disparate: el pin quedó absurdamente lejos (GPS erróneo) */}
             {outOfZone && (
-                <p className="text-xs text-destructive flex items-center gap-1.5 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <p className="flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
                     El pin quedó muy lejos de la tienda ({deliveryDistM ? formatDistance(deliveryDistM) : ''}). Revisalo — puede que el GPS haya marcado otro lugar.
                 </p>
             )}
 
             {/* INPUT REFERENCIA VISUAL */}
             <div className="space-y-1">
-                <label htmlFor="checkout-address" className="text-xs font-medium text-muted-foreground ml-1">Referencias visuales (Casa, portón, etc)</label>
+                <label htmlFor="checkout-address" className="ml-1 text-sm font-medium text-muted-foreground">Referencias visuales (Casa, portón, etc)</label>
                 <Input
                     id="checkout-address"
                     ref={addressRef}
@@ -490,13 +495,13 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                     onChange={(e) => { setAddress(e.target.value); if (fieldErrors.address) setFieldErrors({}); }}
                     aria-invalid={fieldErrors.address || undefined}
                     aria-describedby={fieldErrors.address ? 'checkout-address-error' : undefined}
-                    className={fieldErrors.address ? 'border-destructive focus-visible:ring-destructive' : undefined}
+                    className={cn('h-12 rounded-xl bg-popover', fieldErrors.address && 'border-destructive focus-visible:ring-destructive')}
                 />
-                {fieldErrors.address && <p id="checkout-address-error" className="text-xs text-destructive ml-1">Escribí una referencia de tu casa (ej: portón negro).</p>}
+                {fieldErrors.address && <p id="checkout-address-error" className="ml-1 text-sm text-destructive">Escribí una referencia de tu casa (ej: portón negro).</p>}
             </div>
 
             <div className="space-y-1">
-                <label htmlFor="checkout-phone" className="text-xs font-medium text-muted-foreground ml-1">Teléfono de contacto para la entrega</label>
+                <label htmlFor="checkout-phone" className="ml-1 text-sm font-medium text-muted-foreground">Teléfono de contacto para la entrega</label>
                 <Input
                     id="checkout-phone"
                     ref={phoneRef}
@@ -508,24 +513,24 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                     onChange={(e) => { setPhone(e.target.value); if (fieldErrors.phone) setFieldErrors({}); }}
                     aria-invalid={fieldErrors.phone || undefined}
                     aria-describedby={fieldErrors.phone ? 'checkout-phone-error' : undefined}
-                    className={fieldErrors.phone ? 'border-destructive focus-visible:ring-destructive' : undefined}
+                    className={cn('h-12 rounded-xl bg-popover', fieldErrors.phone && 'border-destructive focus-visible:ring-destructive')}
                 />
-                {fieldErrors.phone && <p id="checkout-phone-error" className="text-xs text-destructive ml-1">Ingresá un número válido con código de área (mínimo 8 dígitos).</p>}
+                {fieldErrors.phone && <p id="checkout-phone-error" className="ml-1 text-sm text-destructive">Ingresá un número válido con código de área (mínimo 8 dígitos).</p>}
             </div>
           </div>
 
-          <div className="bg-info/10 p-4 rounded-lg border border-info/30 flex items-start gap-3">
+          <div className="flex items-start gap-3 rounded-card bg-info/10 p-4">
               <ShoppingBag className="h-5 w-5 text-info mt-0.5 shrink-0" />
               <div>
-                  <p className="font-bold text-foreground text-sm">Primero confirmamos Stock</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                      Al solicitar, la tienda verificará si tiene los productos. Luego podrás pagar.
+                  <p className="font-bold text-foreground">Primero la tienda confirma</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                      Al hacer el pedido, la tienda revisa que tenga todo. Después te avisamos para que pagues.
                   </p>
               </div>
           </div>
 
           {/* ✅ DESGLOSE DE PRECIO EXACTO */}
-          <div className="bg-muted/50 p-4 rounded-lg space-y-2 text-sm border">
+          <div className="space-y-2 rounded-card bg-foreground/[0.04] p-4 text-sm">
              <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
                 <span>{money(cartSubtotal)}</span>
@@ -549,20 +554,22 @@ export function CheckoutDialog({ open, onOpenChange }: CheckoutDialogProps) {
                  </div>
              )}
              
-             <div className="border-t pt-2 mt-2 flex justify-between font-bold text-base text-primary">
-                <span>Total Estimado</span>
-                <span>{money(finalTotal)}</span>
+             <div className="mt-2 flex justify-between border-t border-dashed border-border pt-2 text-base font-bold">
+                <span>Total estimado</span>
+                <span className="tabular-nums">{money(finalTotal)}</span>
             </div>
           </div>
         </div>
 
         </div>
-        <DialogFooter className="border-t bg-background px-6 py-4 flex-col sm:flex-col gap-3 sm:space-x-0">
-          <div className="flex justify-between items-baseline w-full">
+        {/* Pie fijo con el total y la acción (vidrio 9/11/2026: mismo fondo que el diálogo,
+            antes bg-background lo pintaba de otro gris en modo claro). */}
+        <DialogFooter className="flex-col gap-3 border-t border-border/60 bg-popover px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 sm:flex-col sm:space-x-0">
+          <div className="flex w-full items-baseline justify-between">
             <span className="text-sm text-muted-foreground">Total estimado</span>
-            <span className="text-xl font-bold text-primary">{money(finalTotal)}</span>
+            <span className="font-headline text-3xl font-extrabold tabular-nums">{money(finalTotal)}</span>
           </div>
-          <Button onClick={handleRequestOrder} className="w-full h-12 text-lg font-bold" disabled={isProcessing}>
+          <Button onClick={handleRequestOrder} className="h-12 w-full rounded-full text-lg font-bold" disabled={isProcessing}>
             {isProcessing ? (
                 <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Enviando...</>
             ) : (

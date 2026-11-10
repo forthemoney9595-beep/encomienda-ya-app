@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { MoreVertical, Edit, Trash2, CheckCircle, XCircle, Loader2, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '@/context/auth-context';
 
 interface PersonnelActionsProps {
     driver: DeliveryPersonnel;
@@ -18,6 +19,8 @@ interface PersonnelActionsProps {
 
 export function PersonnelActions({ driver, onStatusUpdate, onEdit, onDelete, onSuspend }: PersonnelActionsProps) {
   const [isUpdating, setIsUpdating] = useState(false);
+  // Borrar cuentas exige admin 'full' (la API lo rechaza igual): a 'support' no se le muestra.
+  const { isFullAdmin } = useAuth();
 
   const handleStatusUpdate = async (personnelId: string, status: 'approved' | 'rejected') => {
     setIsUpdating(true);
@@ -29,7 +32,7 @@ export function PersonnelActions({ driver, onStatusUpdate, onEdit, onDelete, onS
     <AlertDialog>
       <DropdownMenu>
           <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" disabled={isUpdating}>
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground" disabled={isUpdating} aria-label={`Más acciones para ${driver.name || 'el repartidor'}`} data-testid="driver-actions">
                   {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
               </Button>
           </DropdownMenuTrigger>
@@ -61,17 +64,19 @@ export function PersonnelActions({ driver, onStatusUpdate, onEdit, onDelete, onS
                   <Edit className="mr-2 h-4 w-4" />
                   Editar
               </DropdownMenuItem>
-              <AlertDialogTrigger asChild>
-                <DropdownMenuItem className="text-destructive">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Eliminar
-                </DropdownMenuItem>
-              </AlertDialogTrigger>
+              {isFullAdmin && (
+                <AlertDialogTrigger asChild>
+                  <DropdownMenuItem className="text-destructive">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Eliminar
+                  </DropdownMenuItem>
+                </AlertDialogTrigger>
+              )}
           </DropdownMenuContent>
       </DropdownMenu>
        <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>¿Estás seguro que quieres eliminar a {driver.name}?</AlertDialogTitle>
+          <AlertDialogTitle>¿Eliminar a {driver.name}?</AlertDialogTitle>
           <AlertDialogDescription>
             Esta acción no se puede deshacer. Se eliminará permanentemente la cuenta del repartidor.
           </AlertDialogDescription>

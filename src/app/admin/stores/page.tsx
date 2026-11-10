@@ -1,33 +1,54 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import PageHeader from '@/components/page-header';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useCollection, useFirestore, useMemoFirebase } from '@/lib/firebase';
+import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/lib/firebase';
 import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { Store, Loader2, Plus, Search, MapPin, Trash2, Edit, Eye, Star, Pause, Download } from 'lucide-react';
-import Link from 'next/link';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Store, Plus, Trash2, Edit, Eye, Star, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { logAdminAction } from '@/lib/admin-audit';
 import { setAccountApproval } from '@/lib/approval-service';
 import { downloadCsv } from '@/lib/csv-export';
-import { cn } from '@/lib/utils';
-import { isStorePaused } from '@/lib/store-hours';
+import { getStoreOpenStatus, isStorePaused, normalizeSchedule } from '@/lib/store-hours';
+import { formatCategoryLabel } from '@/lib/category-style';
+import { PLATFORM_DEFAULTS } from '@/lib/money';
+import { money } from '@/lib/format-money';
+import { CategoryTile } from '@/components/category-tile';
 import { ManageStoreDialog } from './manage-store-dialog';
 import AdminAuthGuard from '../admin-auth-guard';
 import { SuspendAccountDialog, type SuspendTarget } from '@/components/admin/suspend-account-dialog';
+import { AdminPage } from '@/components/admin/admin-page';
+import { GlassSearch, ListCard, ListRow, RowIconButton, SlidingChips } from '@/components/admin/admin-list';
+import { SOFT_BADGE } from '@/components/admin/status-badge';
+import { EmptyState } from '@/components/admin/empty-state';
+import { useConfirm } from '@/components/admin/confirm-dialog';
+import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
-type StoreFilter = 'all' | 'approved' | 'pending' | 'paused';
+type StoreFilter = 'all' | 'open' | 'paused' | 'pending' | 'suspended' | 'rejected';
+type StoreState = 'open' | 'closed' | 'paused' | 'pending' | 'suspended' | 'rejected';
+
+/** Estado único de la fila (orden de prioridad: suspendida > pendiente/rechazada > pausada > horario). */
+function storeState(s: any): StoreState {
+  if (s.status === 'Suspendida' || s.suspension?.active === true) return 'suspended';
+  if (!s.isApproved) return s.status === 'Rechazada' ? 'rejected' : 'pending';
+  if (isStorePaused(s)) return 'paused';
+  return getStoreOpenStatus(normalizeSchedule(s)).isOpen ? 'open' : 'closed';
+}
+const STATE_LABEL: Record<StoreState, { label: string; tone: keyof typeof SOFT_BADGE }> = {
+  open: { label: 'Abierta', tone: 'success' },
+  closed: { label: 'Cerrada', tone: 'neutral' },
+  paused: { label: 'Pausada', tone: 'warning' },
+  pending: { label: 'Pendiente', tone: 'warning' },
+  suspended: { label: 'Suspendida', tone: 'destructive' },
+  rejected: { label: 'Rechazada', tone: 'neutral' },
+};
 
 function AdminStoresPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const confirmDialog = useConfirm();
   const { user: adminUser, userProfile: adminProfile } = useAuth();
   // Borrar tienda y editar comisión son plata: solo admin 'full' (Fase PP-P1).
   const isSupport = (adminProfile as any)?.adminLevel === 'support';
@@ -47,24 +68,29 @@ function AdminStoresPage() {
   const storesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'stores') : null, [firestore]);
   const { data: stores, isLoading } = useCollection<any>(storesQuery);
 
+  // Comisión por defecto de la plataforma (las tiendas sin tarifa propia pagan esta).
+  const cfgRef = useMemoFirebase(() => firestore ? doc(firestore, 'config', 'platform') : null, [firestore]);
+  const { data: cfg } = useDoc<{ defaultCommissionRate?: number }>(cfgRef);
+  const defaultRate = Number(cfg?.defaultCommissionRate) > 0 ? Number(cfg?.defaultCommissionRate) : PLATFORM_DEFAULTS.commissionRate;
+
   // 2. Filtrar (búsqueda + estado). Set chico, filtrado en memoria sin problema.
+  // El estado se calcula una vez por tienda (horario + pausa), no dentro de cada filtro.
+  const withState = useMemo(() => (stores || []).map(s => ({ s, state: storeState(s) })), [stores]);
   const filteredStores = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return (stores || []).filter(s => {
-      if (term && !(`${s.name || ''} ${s.category || ''}`).toLowerCase().includes(term)) return false;
-      if (statusFilter === 'approved' && !s.isApproved) return false;
-      if (statusFilter === 'pending' && s.isApproved) return false;
-      if (statusFilter === 'paused' && !isStorePaused(s)) return false;
-      return true;
-    });
-  }, [stores, search, statusFilter]);
+    return withState.filter(({ s, state }) => {
+      if (term && !(`${s.name || ''} ${s.category || ''} ${formatCategoryLabel(s.category || '')}`).toLowerCase().includes(term)) return false;
+      if (statusFilter === 'all') return true;
+      return state === statusFilter;
+    }).map(x => x.s);
+  }, [withState, search, statusFilter]);
+  const stateOf = useMemo(() => new Map(withState.map(x => [x.s.id, x.state])), [withState]);
 
-  const counts = useMemo(() => ({
-    all: stores?.length || 0,
-    approved: (stores || []).filter(s => s.isApproved).length,
-    pending: (stores || []).filter(s => !s.isApproved).length,
-    paused: (stores || []).filter(s => isStorePaused(s)).length,
-  }), [stores]);
+  const counts = useMemo(() => {
+    const c = { all: withState.length, open: 0, closed: 0, paused: 0, pending: 0, suspended: 0, rejected: 0 };
+    withState.forEach(x => { c[x.state]++; });
+    return c;
+  }, [withState]);
 
   const handleExportCsv = () => {
     downloadCsv(filteredStores.map((s: any) => ({
@@ -171,14 +197,20 @@ function AdminStoresPage() {
                   toast({
                       variant: 'destructive',
                       title: 'Tiene un pago pendiente',
-                      description: `${name || 'Esta tienda'} pidió $${total.toLocaleString('es-AR')} y todavía no se le pagó. Resolvé el retiro en Finanzas antes de borrarla.`,
+                      description: `${name || 'Esta tienda'} pidió ${money(total)} y todavía no se le pagó. Resolvé el retiro en Finanzas antes de borrarla.`,
                   });
                   return;
               }
           } catch { /* si la consulta falla, seguimos con la confirmación normal */ }
       }
 
-      if (!confirm(`¿Eliminar "${name || 'esta tienda'}"?\n\nSe borra el registro de la tienda, pero sus pedidos históricos quedan en la base. IMPORTANTE: si le quedaba saldo sin retirar, deja de ser calculable. Si solo querés que deje de operar, mejor pausala o quitale la aprobación.`)) return;
+      const { ok } = await confirmDialog({
+        title: `¿Eliminar "${name || 'esta tienda'}"?`,
+        description: 'Se borra el registro de la tienda, pero sus pedidos históricos quedan en la base. IMPORTANTE: si le quedaba saldo sin retirar, deja de ser calculable. Si solo querés que deje de operar, mejor pausala o suspendela.',
+        tone: 'destructive',
+        confirmLabel: 'Eliminar tienda',
+      });
+      if (!ok) return;
       try {
           await deleteDoc(doc(firestore, 'stores', id));
           if (adminUser) logAdminAction(firestore, adminUser.uid, 'delete_store', id, name || '');
@@ -188,134 +220,112 @@ function AdminStoresPage() {
       }
   };
 
-  if (isLoading) return <div className="flex justify-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  const chips = [
+    { value: 'all' as const, label: 'Todas', count: isLoading ? null : counts.all },
+    { value: 'open' as const, label: 'Abiertas', count: isLoading ? null : counts.open },
+    { value: 'paused' as const, label: 'Pausadas', count: isLoading ? null : counts.paused },
+    { value: 'pending' as const, label: 'Pendientes', count: isLoading ? null : counts.pending },
+    // Solo si hay: no ensucian la fila de chips cuando no aplican.
+    ...(counts.suspended > 0 || statusFilter === 'suspended' ? [{ value: 'suspended' as const, label: 'Suspendidas', count: counts.suspended }] : []),
+    ...(counts.rejected > 0 || statusFilter === 'rejected' ? [{ value: 'rejected' as const, label: 'Rechazadas', count: counts.rejected }] : []),
+  ];
 
   return (
-    <div className="container mx-auto space-y-6">
-      <PageHeader title="Gestión de Tiendas" description="Administra comisiones y estados." />
+    <AdminPage
+      title="Tiendas"
+      subtitle={isLoading ? 'Cargando…' : (
+        <span data-testid="stores-kline">
+          <b className="tabular-nums text-foreground">{counts.all}</b> tiendas · <b className="tabular-nums text-foreground">{counts.open}</b> abiertas ahora · <b className="tabular-nums text-foreground">{counts.paused}</b> pausadas
+          {counts.pending > 0 && <> · <b className="tabular-nums text-warning-ink">{counts.pending}</b> esperando aprobación</>}
+        </span>
+      )}
+      actions={
+        <>
+          <Button variant="outline" className="min-h-[44px]" onClick={handleExportCsv} disabled={filteredStores.length === 0}>
+            <Download className="mr-2 h-4 w-4" aria-hidden="true" /> CSV
+          </Button>
+          <Button className="min-h-[44px]" onClick={() => { setSelectedStore(null); setIsDialogOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Nueva tienda
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <GlassSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre o rubro"
+          label="Buscar tiendas"
+          testId="stores-search"
+          hint="Busca entre todas las tiendas de la plataforma (nombre o rubro)."
+        />
+        <SlidingChips chips={chips} value={statusFilter} onChange={setStatusFilter} label="Filtrar tiendas por estado" testId="stores-chips" />
+      </div>
 
-      <Card>
-        <CardHeader>
-            <div className="flex flex-col gap-4">
-                <div className="flex flex-col sm:flex-row justify-between gap-4">
-                    <div className="relative w-full sm:w-72">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Buscar por nombre o rubro..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" onClick={handleExportCsv} disabled={filteredStores.length === 0}>
-                            <Download className="mr-2 h-4 w-4" /> CSV
-                        </Button>
-                        {/* Botón opcional para crear tiendas manuales */}
-                        <Button onClick={() => { setSelectedStore(null); setIsDialogOpen(true); }}>
-                            <Plus className="mr-2 h-4 w-4" /> Nueva Tienda
-                        </Button>
-                    </div>
-                </div>
-                <div className="flex gap-1.5 flex-wrap">
-                    {([
-                        { k: 'all', label: 'Todas' },
-                        { k: 'pending', label: 'Pendientes' },
-                        { k: 'approved', label: 'Aprobadas' },
-                        { k: 'paused', label: 'Pausadas' },
-                    ] as { k: StoreFilter; label: string }[]).map(({ k, label }) => (
-                        <button key={k} onClick={() => setStatusFilter(k)}
-                            className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all',
-                                statusFilter === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70')}>
-                            {label} ({counts[k]})
-                        </button>
-                    ))}
-                </div>
+      {isLoading ? (
+        <ListCard>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="flex items-center gap-3 px-3.5 py-3">
+              <Skeleton className="h-9 w-9 rounded-[0.75rem]" />
+              <div className="flex-1 space-y-1.5"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-3 w-1/4" /></div>
             </div>
-        </CardHeader>
-        <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Tienda</TableHead>
-                        <TableHead className="hidden lg:table-cell">Dirección</TableHead>
-                        <TableHead>Rating</TableHead>
-                        <TableHead>Comisión</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {filteredStores.length === 0 && (
-                        <TableRow>
-                            <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                                No hay tiendas con ese filtro.
-                            </TableCell>
-                        </TableRow>
+          ))}
+        </ListCard>
+      ) : filteredStores.length === 0 ? (
+        <ListCard>
+          <EmptyState icon={Store} title="Ninguna tienda coincide con ese filtro" description={search ? `No hay tiendas para «${search.trim()}».` : undefined} />
+        </ListCard>
+      ) : (
+        <ListCard testId="stores-list">
+          {filteredStores.map((store, i) => {
+            const state = stateOf.get(store.id) ?? 'pending';
+            const st = STATE_LABEL[state];
+            const ownRate = typeof store.commissionRate === 'number' && store.commissionRate > 0;
+            return (
+              <ListRow
+                key={store.id}
+                index={i}
+                testId="store-row"
+                highlight={state === 'pending' ? 'warning' : undefined}
+                leading={<CategoryTile category={store.category} size="sm" />}
+                title={store.name || 'Sin nombre'}
+                href={`/admin/stores/${store.id}`}
+                subtitle={
+                  <span className="block sm:truncate">
+                    {store.category ? formatCategoryLabel(store.category) : 'Sin rubro'}
+                    {' · comisión '}
+                    <span className="tabular-nums">{ownRate ? `${store.commissionRate} %` : `${defaultRate} % (default)`}</span>
+                  </span>
+                }
+                meta={
+                  <>
+                    <span className={cn('inline-flex h-[22px] items-center whitespace-nowrap rounded-full px-2 text-xs font-semibold', SOFT_BADGE[st.tone])} data-testid="store-state">{st.label}</span>
+                    {store.rating ? (
+                      <span className="inline-flex items-center gap-1" aria-label={`Calificación ${Number(store.rating).toFixed(1)} de 5, ${store.ratingCount || 0} reseñas`}>
+                        <Star className="h-3.5 w-3.5 fill-warning text-warning" aria-hidden="true" />
+                        <span className="font-semibold tabular-nums text-foreground">{Number(store.rating).toFixed(1).replace('.', ',')}</span>
+                        <span className="tabular-nums">({store.ratingCount || 0})</span>
+                      </span>
+                    ) : <span aria-label="Sin calificaciones">—</span>}
+                  </>
+                }
+                actions={
+                  <>
+                    <RowIconButton label="Ver detalle" className="hidden sm:inline-flex" href={`/admin/stores/${store.id}`}><Eye className="h-4 w-4" aria-hidden="true" /></RowIconButton>
+                    <RowIconButton label="Editar" onClick={() => { setSelectedStore(store); setIsDialogOpen(true); }}><Edit className="h-4 w-4" aria-hidden="true" /></RowIconButton>
+                    {!isSupport && (
+                      <RowIconButton label="Eliminar" tone="destructive" onClick={() => handleDelete(store.id, store.name, store.ownerId)}><Trash2 className="h-4 w-4" aria-hidden="true" /></RowIconButton>
                     )}
-                    {filteredStores.map((store) => (
-                        <TableRow key={store.id} className={cn(!store.isApproved && 'bg-warning/5')}>
-                            <TableCell className="font-medium">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8 rounded-md">
-                                        <AvatarImage src={store.imageUrl} />
-                                        <AvatarFallback><Store className="h-4 w-4" /></AvatarFallback>
-                                    </Avatar>
-                                    <div className="min-w-0">
-                                        <p className="truncate">{store.name}</p>
-                                        {/* El rubro se había perdido de esta tabla pese a ser el
-                                            filtro principal del home del comprador. */}
-                                        {store.category && <p className="text-xs text-muted-foreground truncate">{store.category}</p>}
-                                    </div>
-                                </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
-                                <div className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" /> {store.address}</div>
-                            </TableCell>
-                            <TableCell>
-                                {store.rating ? (
-                                    <span className="flex items-center gap-1 text-sm">
-                                        <Star className="h-3.5 w-3.5 fill-warning text-warning" />
-                                        {Number(store.rating).toFixed(1)}
-                                        <span className="text-xs text-muted-foreground">({store.ratingCount || 0})</span>
-                                    </span>
-                                ) : <span className="text-xs text-muted-foreground">—</span>}
-                            </TableCell>
-                            <TableCell>
-                                <Badge variant="outline" className="border-info/30 text-info bg-info/10">
-                                    {store.commissionRate || 0}%
-                                </Badge>
-                            </TableCell>
-                            <TableCell>
-                                <div className="flex flex-col gap-1 items-start">
-                                    <Badge variant={store.isApproved ? 'default' : 'destructive'} className="text-xs">
-                                        {store.isApproved ? 'Aprobado' : store.status === 'Suspendida' ? 'Suspendida' : 'Pendiente/Rechazado'}
-                                    </Badge>
-                                    {isStorePaused(store) && (
-                                        <Badge variant="outline" className="text-xs border-warning/40 text-warning gap-1">
-                                            <Pause className="h-3 w-3" /> Pausada
-                                        </Badge>
-                                    )}
-                                </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                    <Button size="sm" variant="ghost" title="Ver detalle" asChild>
-                                        <Link href={`/admin/stores/${store.id}`}>
-                                            <Eye className="h-4 w-4 text-muted-foreground" />
-                                        </Link>
-                                    </Button>
-                                    <Button size="sm" variant="ghost" title="Editar" onClick={() => { setSelectedStore(store); setIsDialogOpen(true); }}>
-                                        <Edit className="h-4 w-4 text-info" />
-                                    </Button>
-                                    {!isSupport && (
-                                        <Button size="sm" variant="ghost" title="Eliminar" onClick={() => handleDelete(store.id, store.name, store.ownerId)}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                    )}
-                                </div>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </CardContent>
-      </Card>
+                  </>
+                }
+              >
+                {/* En celular angosto la columna de estado se esconde: el estado va debajo. */}
+                <span className={cn('mt-1 inline-flex h-[22px] items-center rounded-full px-2 text-xs font-semibold min-[380px]:hidden', SOFT_BADGE[st.tone])}>{st.label}</span>
+              </ListRow>
+            );
+          })}
+        </ListCard>
+      )}
 
       {/* MODAL DE EDICIÓN */}
       <ManageStoreDialog
@@ -333,7 +343,7 @@ function AdminStoresPage() {
         onOpenChange={(o) => { if (!o) setSuspendTarget(null); }}
         target={suspendTarget}
       />
-    </div>
+    </AdminPage>
   );
 }
 

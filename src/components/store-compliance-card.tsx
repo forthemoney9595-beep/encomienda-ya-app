@@ -57,7 +57,7 @@ export function StoreComplianceCard({ storeId, enabled = true, variant }: { stor
   return (
     <Card className="min-w-0 overflow-hidden" data-testid="store-compliance">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">{variant === 'owner' ? 'Tu cumplimiento, últimos 30 días' : 'Cumplimiento del comercio, últimos 30 días'}</CardTitle>
+        <CardTitle className="font-headline text-2xl font-extrabold">{variant === 'owner' ? 'Tu cumplimiento, últimos 30 días' : 'Cumplimiento del comercio, últimos 30 días'}</CardTitle>
         <CardDescription>
           {variant === 'owner'
             ? 'Cuántos pedidos aceptás y qué tan rápido. Confirmar a tiempo evita que el pedido se cancele solo y que el cliente se vaya a otra tienda.'
@@ -67,9 +67,9 @@ export function StoreComplianceCard({ storeId, enabled = true, variant }: { stor
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {tiles.map(({ key, label, value, icon: Icon, tone }) => (
-            <div key={key} className="min-w-0 rounded-lg border bg-card p-3" data-testid={`compliance-${key}`} aria-busy={value === '…'}>
-              <Icon className={cn('mb-1 h-4 w-4', tone)} aria-hidden="true" />
-              <div className={cn('truncate text-lg font-bold tabular-nums', tone)}>{value}</div>
+            <div key={key} className="min-w-0 rounded-2xl bg-foreground/[0.05] p-3" data-testid={`compliance-${key}`} aria-busy={value === '…'}>
+              <Icon className={cn('mb-1.5 h-5 w-5', tone)} aria-hidden="true" />
+              <div className={cn('truncate font-headline text-2xl font-extrabold leading-tight tabular-nums', tone)}>{value}</div>
               <div className="text-xs text-muted-foreground">{label}</div>
             </div>
           ))}

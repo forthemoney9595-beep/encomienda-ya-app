@@ -2,16 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminAuthGuard from '../admin-auth-guard';
-import PageHeader from '@/components/page-header';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card } from '@/components/ui/card';
+import { AdminPage } from '@/components/admin/admin-page';
+import { FilterBar } from '@/components/admin/filter-bar';
+import { EmptyState } from '@/components/admin/empty-state';
 import { useFirestore } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, startAfter, getDocs, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Loader2, ShieldCheck, Search, AlertTriangle } from 'lucide-react';
+import { Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -19,41 +18,41 @@ import { cn } from '@/lib/utils';
 // (ver grep de `logAdminAction(` antes de esta fase -- faltaban approve_withdrawal y
 // refund_order, que existían pero nunca tuvieron label: se veían como texto crudo).
 const ACTION_LABELS: Record<string, { label: string; color: string }> = {
-  approve_withdrawal:      { label: 'Retiro aprobado',        color: 'bg-success/15 text-success border-success/30' },
-  reject_withdrawal:       { label: 'Retiro rechazado',       color: 'bg-destructive/15 text-destructive border-destructive/30' },
-  change_role:              { label: 'Rol cambiado',           color: 'bg-info/15 text-info border-info/30' },
-  change_admin_level:       { label: 'Nivel de admin cambiado', color: 'bg-info/15 text-info border-info/30' },
-  delete_user:              { label: 'Usuario eliminado',      color: 'bg-destructive/15 text-destructive border-destructive/30' },
-  delete_review:            { label: 'Reseña eliminada',       color: 'bg-warning/15 text-warning border-warning/30' },
-  refund_order:             { label: 'Pedido reembolsado',     color: 'bg-warning/15 text-warning border-warning/30' },
-  resolve_payment_mismatch: { label: 'Discrepancia resuelta',  color: 'bg-success/15 text-success border-success/30' },
-  resolve_driver_incident:  { label: 'Incidente resuelto',     color: 'bg-success/15 text-success border-success/30' },
-  resolve_claim:            { label: 'Reclamo resuelto',       color: 'bg-success/15 text-success border-success/30' },
-  reconcile_repair:         { label: 'Pago recuperado (conciliación)', color: 'bg-info/15 text-info border-info/30' },
+  approve_withdrawal:      { label: 'Retiro aprobado',        color: 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink border-success/30' },
+  reject_withdrawal:       { label: 'Retiro rechazado',       color: 'bg-destructive/15 text-destructive-ink border-destructive/30' },
+  change_role:              { label: 'Rol cambiado',           color: 'bg-info/15 text-info-ink border-info/30' },
+  change_admin_level:       { label: 'Nivel de admin cambiado', color: 'bg-info/15 text-info-ink border-info/30' },
+  delete_user:              { label: 'Usuario eliminado',      color: 'bg-destructive/15 text-destructive-ink border-destructive/30' },
+  delete_review:            { label: 'Reseña eliminada',       color: 'bg-warning/15 text-warning-ink border-warning/30' },
+  refund_order:             { label: 'Pedido reembolsado',     color: 'bg-warning/15 text-warning-ink border-warning/30' },
+  resolve_payment_mismatch: { label: 'Discrepancia resuelta',  color: 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink border-success/30' },
+  resolve_driver_incident:  { label: 'Incidente resuelto',     color: 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink border-success/30' },
+  resolve_claim:            { label: 'Reclamo resuelto',       color: 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink border-success/30' },
+  reconcile_repair:         { label: 'Pago recuperado (conciliación)', color: 'bg-info/15 text-info-ink border-info/30' },
   // 🧪 SOLO PRUEBAS — la acción desaparece junto con la ruta antes del lanzamiento,
   // pero la etiqueta queda para poder leer el historial de la gran prueba.
-  approve_test_payment:     { label: '🧪 Pago de PRUEBA aprobado', color: 'bg-warning/15 text-warning border-warning/30' },
+  approve_test_payment:     { label: '🧪 Pago de PRUEBA aprobado', color: 'bg-warning/15 text-warning-ink border-warning/30' },
   // Fase GG: acciones sensibles que se ejecutaban sin dejar NINGÚN rastro (aprobar una
   // tienda/repartidor, pausar una tienda, cancelar un pedido, cambiar un CBU o los fees
   // globales, mandar un broadcast a toda la plataforma).
-  approve_account:          { label: 'Cuenta aprobada',        color: 'bg-success/15 text-success border-success/30' },
-  reject_account:           { label: 'Cuenta rechazada',       color: 'bg-destructive/15 text-destructive border-destructive/30' },
-  pause_store:              { label: 'Tienda pausada',         color: 'bg-warning/15 text-warning border-warning/30' },
-  unpause_store:            { label: 'Tienda reactivada',      color: 'bg-success/15 text-success border-success/30' },
+  approve_account:          { label: 'Cuenta aprobada',        color: 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink border-success/30' },
+  reject_account:           { label: 'Cuenta rechazada',       color: 'bg-destructive/15 text-destructive-ink border-destructive/30' },
+  pause_store:              { label: 'Tienda pausada',         color: 'bg-warning/15 text-warning-ink border-warning/30' },
+  unpause_store:            { label: 'Tienda reactivada',      color: 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink border-success/30' },
   // Suspensión con debido proceso (Fase YY ter) — todas las escribe el servidor.
-  suspend_account:          { label: 'Cuenta suspendida',      color: 'bg-destructive/15 text-destructive border-destructive/30' },
-  lift_suspension:          { label: 'Suspensión levantada',   color: 'bg-success/15 text-success border-success/30' },
-  resolve_appeal:           { label: 'Apelación resuelta',     color: 'bg-info/15 text-info border-info/30' },
+  suspend_account:          { label: 'Cuenta suspendida',      color: 'bg-destructive/15 text-destructive-ink border-destructive/30' },
+  lift_suspension:          { label: 'Suspensión levantada',   color: 'bg-success/15 text-[hsl(142_80%_20%)] dark:text-success-ink border-success/30' },
+  resolve_appeal:           { label: 'Apelación resuelta',     color: 'bg-info/15 text-info-ink border-info/30' },
   suspension_expired:       { label: 'Suspensión vencida',     color: 'bg-muted text-muted-foreground border-border' },
-  edit_driver:              { label: 'Repartidor editado',     color: 'bg-info/15 text-info border-info/30' },
-  edit_cbu:                 { label: 'CBU modificado',         color: 'bg-warning/15 text-warning border-warning/30' },
-  cancel_order:             { label: 'Pedido cancelado',       color: 'bg-destructive/15 text-destructive border-destructive/30' },
-  update_config:            { label: 'Configuración global',   color: 'bg-warning/15 text-warning border-warning/30' },
-  send_broadcast:           { label: 'Broadcast enviado',      color: 'bg-info/15 text-info border-info/30' },
+  edit_driver:              { label: 'Repartidor editado',     color: 'bg-info/15 text-info-ink border-info/30' },
+  edit_cbu:                 { label: 'CBU modificado',         color: 'bg-warning/15 text-warning-ink border-warning/30' },
+  cancel_order:             { label: 'Pedido cancelado',       color: 'bg-destructive/15 text-destructive-ink border-destructive/30' },
+  update_config:            { label: 'Configuración global',   color: 'bg-warning/15 text-warning-ink border-warning/30' },
+  send_broadcast:           { label: 'Broadcast enviado',      color: 'bg-info/15 text-info-ink border-info/30' },
   // Faltaban desde siempre: `edit_store` es justo la acción que cambia la COMISIÓN de una
   // tienda (o sea, cuánta plata cobra), y se veía como texto crudo en el log.
-  edit_store:               { label: 'Tienda editada',         color: 'bg-warning/15 text-warning border-warning/30' },
-  delete_store:             { label: 'Tienda eliminada',       color: 'bg-destructive/15 text-destructive border-destructive/30' },
+  edit_store:               { label: 'Tienda editada',         color: 'bg-warning/15 text-warning-ink border-warning/30' },
+  delete_store:             { label: 'Tienda eliminada',       color: 'bg-destructive/15 text-destructive-ink border-destructive/30' },
 };
 
 const PAGE_SIZE = 50;
@@ -137,37 +136,35 @@ function AdminAuditLogPage() {
   }, [entries, search]);
 
   return (
-    <div className="container mx-auto pb-20 space-y-6">
-      <PageHeader
-        title="Log de Acciones Admin"
-        description="Historial completo de acciones sensibles del panel. No se puede editar ni borrar."
-      />
-
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por detalle, ID o admin..." className="pl-9" />
-        </div>
-        <Select value={actionFilter} onValueChange={setActionFilter}>
-          <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="Todas las acciones" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las acciones</SelectItem>
-            {Object.entries(ACTION_LABELS).map(([value, meta]) => (
-              <SelectItem key={value} value={value}>{meta.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {search.trim() && (
-        <p className="text-xs text-muted-foreground">
-          La búsqueda por texto solo mira las {entries.length} entradas ya cargadas.
-          {hasMore && ' Usá "Cargar más" para ampliar la ventana, o filtrá por tipo de acción (eso sí busca en todo el histórico).'}
-        </p>
-      )}
-
+    <AdminPage
+      title="Auditoría"
+      subtitle="Historial de las acciones sensibles del panel. No se puede editar ni borrar."
+      filters={
+        <FilterBar
+          selects={[{
+            key: 'action',
+            label: 'Acción',
+            allLabel: 'Todas las acciones',
+            value: actionFilter,
+            onChange: setActionFilter,
+            options: Object.entries(ACTION_LABELS).map(([value, meta]) => ({ value, label: meta.label })),
+            hint: 'Filtrar por tipo de acción busca en todo el histórico.',
+          }]}
+          search={{
+            value: search,
+            onChange: setSearch,
+            placeholder: 'Buscar por detalle, ID o admin',
+            scope: 'page',
+            hint: search.trim()
+              ? `La búsqueda por texto solo mira las ${entries.length} entradas ya cargadas.${hasMore ? ' Usá "Cargar más" para ampliar la ventana, o filtrá por tipo de acción (eso sí busca en todo el histórico).' : ''}`
+              : 'El texto busca en lo ya cargado; el tipo de acción, en todo el histórico.',
+          }}
+          onClear={() => { setSearch(''); setActionFilter('all'); }}
+        />
+      }
+    >
       {loadError && (
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="flex items-start gap-2 rounded-card border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-ink" role="alert">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{loadError}</span>
         </div>
@@ -179,21 +176,19 @@ function AdminAuditLogPage() {
 
       {!isLoading && filtered.length === 0 && (
         <Card>
-          <CardContent className="text-center py-12 text-muted-foreground space-y-2">
-            <ShieldCheck className="h-8 w-8 mx-auto opacity-30" />
-            <p>{entries && entries.length > 0 ? 'Sin resultados con ese filtro.' : 'No hay acciones registradas todavía.'}</p>
-            {!(entries && entries.length > 0) && (
-              <p className="text-xs">El log se activa a partir de las próximas acciones sensibles (aprobar retiros, cambiar roles, etc.).</p>
-            )}
-          </CardContent>
+          <EmptyState
+            icon={ShieldCheck}
+            title={entries && entries.length > 0 ? 'Sin resultados con ese filtro' : 'No hay acciones registradas todavía'}
+            description={!(entries && entries.length > 0) ? 'El log se activa a partir de las próximas acciones sensibles (aprobar retiros, cambiar roles, etc.).' : undefined}
+          />
         </Card>
       )}
 
       {filtered.length > 0 && (
-        <Card className="overflow-hidden">
+        <Card className="min-w-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b bg-muted/30">
+              <thead className="border-b border-foreground/10">
                 <tr>
                   <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Fecha</th>
                   <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Acción</th>
@@ -202,18 +197,18 @@ function AdminAuditLogPage() {
                   <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Admin UID</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-foreground/10">
                 {filtered.map(entry => {
                   const meta = ACTION_LABELS[entry.action];
                   return (
-                    <tr key={entry.id} className="hover:bg-muted/20 transition-colors">
+                    <tr key={entry.id} className="transition-colors hover:bg-admin-row-hover">
                       <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(entry.createdAt)}</td>
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className={cn('text-xs', meta?.color ?? 'bg-muted text-muted-foreground')}>
+                        <span className={cn('inline-flex h-[22px] items-center whitespace-nowrap rounded-full border px-2 text-xs font-semibold', meta?.color ?? 'border-transparent bg-muted text-muted-foreground')}>
                           {meta?.label ?? entry.action}
-                        </Badge>
+                        </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground max-w-[200px] truncate">{entry.detail || '—'}</td>
+                      <td className="max-w-[320px] truncate px-4 py-3 text-foreground/80" title={entry.detail || undefined}>{entry.detail || '—'}</td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{entry.targetId?.slice(0, 12)}…</td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{entry.adminUid?.slice(0, 12)}…</td>
                     </tr>
@@ -223,8 +218,8 @@ function AdminAuditLogPage() {
             </table>
           </div>
           {hasMore && (
-            <div className="flex justify-center border-t py-3">
-              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+            <div className="flex justify-center border-t border-foreground/10 py-3">
+              <Button variant="outline" className="min-h-[44px]" onClick={loadMore} disabled={loadingMore}>
                 {loadingMore && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Cargar más
               </Button>
@@ -232,7 +227,7 @@ function AdminAuditLogPage() {
           )}
         </Card>
       )}
-    </div>
+    </AdminPage>
   );
 }
 
